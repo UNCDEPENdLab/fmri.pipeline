@@ -75,7 +75,7 @@ finalize_pipeline_configuration <- function(fma) {
   fma$workdir <- file.path(fma$root_workdir, fma$outdir) #temp folder for each analysis variant
   fma$pipeline_cpus <- length(fma$sceptic_run_variants) #number of workers to setup at the pipeline level (i.e., over run variants)
   if (is.null(fma$l2_cpus)) { fma$l2_cpus <- 20 } #number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
-  if (is.null(fma$pipeline_home)) { fma$pipeline_home <- "/gpfs/group/mnh5174/default/clock_analysis/fmri/fsl_pipeline" }
+  if (is.null(fma$pipeline_home)) { fma$pipeline_home <- "/proj/mnhallqlab/clock_analysis/fmri/fsl_pipeline" }
   if (is.null(fma$group_output_dir)) { fma$group_output_dir <- file.path(dirname(fma$fmri_dir), "group_analyses", fma$analysis_name) }
   if (is.null(fma$center_l3_predictors)) { fma$center_l3_predictors <- TRUE }
   if (is.null(fma$badids)) { fma$badids <- c() }

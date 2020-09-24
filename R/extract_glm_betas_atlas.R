@@ -22,9 +22,9 @@ extract_glm_betas_atlas <- function(
   library(tidyverse)
   library(oro.nifti)
   library(reshape2)
-  library(robust)
-  library(car)
-  library(dependlab)
+  #library(robust)
+  #library(car)
+  #library(dependlab)
   library(oro.nifti)
   library(parallel)
   library(foreach)
@@ -52,13 +52,20 @@ extract_glm_betas_atlas <- function(
   n_l1_copes <- fsl_model_arguments$n_l1_copes[run_model_index] #number of l1 copes determines number of FEAT LVL3 analyses to run (1 per LVL1 cope)
   l1_cope_names <- fsl_model_arguments$l1_cope_names[[run_model_index]] #names of l1 copes (used for folder naming)
   
-  #load(file.path(fsl_model_arguments$pipeline_home, "configuration_files", paste0(paste(fsl_model_arguments$analysis_name, feat_run_outdir, "lvl2_inputs", sep="_"), ".RData")))
-  
+  load(file.path(fsl_model_arguments$pipeline_home, "configuration_files", paste0(paste(fsl_model_arguments$analysis_name, feat_run_outdir, "lvl2_inputs", sep="_"), ".RData")))
+
+    ## tmp fix
+    new_root <- "/proj/mnhallqlab/studies"
+    old_root <- "/gpfs/group/mnh5174/default"
+
+    feat_l2_inputs_df$feat_dir <- sub(old_root, new_root, feat_l2_inputs_df$feat_dir)
+
+    
   #overriding argument for now
   #ncpus <- fsl_model_arguments$n_cluster_beta_cpus
   
   if (ncpus > 1L) {
-    cl <- makeCluster(fsl_model_arguments$n_cluster_beta_cpus)
+    cl <- makeCluster(ncpus, type="FORK")
     registerDoParallel(cl)  
   } else {
     registerDoSEQ()  
@@ -102,7 +109,6 @@ extract_glm_betas_atlas <- function(
     l1_contrast_name <- l1_cope_names[l1]
     model_output_dir <- file.path(feat_lvl3_outdir, l1_contrast_name)
     
-    browser()
     l1_subinfo <- mdf %>% dplyr::filter(cope==l1) %>% dplyr::mutate(numid=1:n())
     subject_inputs <- l1_subinfo$fsldir
     
@@ -130,7 +136,7 @@ extract_glm_betas_atlas <- function(
     #l2_loop_outputs <- list()
     #for (l2 in 1:n_l2_contrasts) {
     
-    #parallel version
+    ##parallel version
     l2_loop_outputs <- foreach(l2=iter(1:n_l2_contrasts), .packages=c("oro.nifti", "dplyr")) %dopar% {
       l2_loop_rois <- list()
       l2_loop_bs <- list()
@@ -167,9 +173,10 @@ extract_glm_betas_atlas <- function(
         #reshape into data.frame with beta, numeric numid, and vnum
         dv_name <- ifelse(isTRUE(extract_z), "zstat", "beta")
         coef_df <- reshape2::melt(coef_mat, varnames=c("numid", "vnum"), value.name="value") %>%
-          inner_join(a_coordinates, by="vnum") %>% select(-i, -j, -k)
+            inner_join(a_coordinates, by="vnum") %>% select(-i, -j, -k)
+
         if (is_int_mask && aggregate) {
-          coef_df %>% group_by(numid, atlas_value) %>%
+          coef_df <- coef_df %>% group_by(numid, atlas_value) %>%
             summarize(value=aggFUN(value)) %>% ungroup()
         }
         
@@ -211,6 +218,7 @@ extract_glm_betas_atlas <- function(
     all_rois <- all_rois %>% arrange(l1_contrast, l2_contrast)
     
     fsuffix <- ifelse(isTRUE(extract_z), "_atlas_zstats.csv.gz", "_atlas_betas.csv.gz")
+    message("writing: ", file.path(model_output_dir, paste0(l1_contrast_name, fsuffix)))
     readr::write_csv(x=all_rois, file.path(model_output_dir, paste0(l1_contrast_name, fsuffix)))
     
     if (extract_beta_series) {
@@ -222,21 +230,45 @@ extract_glm_betas_atlas <- function(
 
 }
 
-setwd("/Users/michael/Data_Analysis/r_packages/fmri.pipeline/example_files")
-load("MMClock_aroma_preconvolve_fse_groupfixed_sceptic-clock-feedback-pe_max-preconvolve_fse_groupfixed_lvl2_inputs.RData")
+#setwd("/proj/mnhallqlab/users/michael/fmri.pipeline/example_files")
+#load("MMClock_aroma_preconvolve_fse_groupfixed_sceptic-clock-feedback-pe_max-preconvolve_fse_groupfixed_lvl2_inputs.RData")
+#load("MMClock_aroma_preconvolve_fse_groupfixed.RData")
+setwd("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/configuration_files")
 load("MMClock_aroma_preconvolve_fse_groupfixed.RData")
 
-feat_l2_inputs_df$feat_dir <- sub("/gpfs/group/mnh5174/default", "/Users/michael/longleaf/studies", feat_l2_inputs_df$feat_dir)
+## new_root <- "/proj/mnhallqlab/studies"
+## old_root <- "/gpfs/group/mnh5174/default"
 
-fsl_model_arguments$pipeline_home <- sub("/gpfs/group/mnh5174/default", "/Users/michael/longleaf/studies", fsl_model_arguments$pipeline_home)
-fsl_model_arguments$group_output_dir <- sub("/gpfs/group/mnh5174/default", "/Users/michael/longleaf/studies", fsl_model_arguments$group_output_dir)
-fsl_model_arguments$subject_covariates$mr_dir <- sub("/gpfs/group/mnh5174/default", "/Users/michael/longleaf/studies", fsl_model_arguments$subject_covariates$mr_dir)
-fsl_model_arguments$fmri_dir <- sub("/gpfs/group/mnh5174/default", "/Users/michael/longleaf/studies", fsl_model_arguments$fmri_dir, fixed=TRUE)
+## feat_l2_inputs_df$feat_dir <- sub(old_root, new_root, feat_l2_inputs_df$feat_dir)
 
-atlas_files <- c("/Users/michael/Data_Analysis/clock_analysis/fmri/pfc_entropy/masks/Schaefer_136_2.3mm.nii.gz")
+## fsl_model_arguments$pipeline_home <- sub(old_root, new_root, fsl_model_arguments$pipeline_home)
+## fsl_model_arguments$group_output_dir <- sub(old_root, new_root, fsl_model_arguments$group_output_dir)
+## fsl_model_arguments$subject_covariates$mr_dir <- sub(old_root, new_root, fsl_model_arguments$subject_covariates$mr_dir)
+## fsl_model_arguments$fmri_dir <- sub(old_root, new_root, fsl_model_arguments$fmri_dir, fixed=TRUE)
+
+mean_nz <- function(x) {
+    nzvals <- abs(x - 0) > .Machine$double.eps*2
+    x <- mean(x[nzvals], na.rm=TRUE)
+    return(x)
+}
+
+atlas_files <- c("/proj/mnhallqlab/projects/clock_analysis/fmri/pfc_entropy/masks/Schaefer_136_2.3mm.nii.gz")
 extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=1, extract_z=FALSE,
-  extract_beta_series=FALSE, ncpus=1, aggregate=TRUE, aggFUN=mean)
-  
+  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
+
+extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=2, extract_z=FALSE,
+  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
+
+
+extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=3, extract_z=FALSE,
+  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
+
+extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=4, extract_z=FALSE,
+  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
+
+extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=5, extract_z=FALSE,
+  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
+
 
 
 #load the master configuration file
@@ -264,7 +296,7 @@ extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=1, ext
 #load("/gpfs/group/mnh5174/default/clock_analysis/fmri/fsl_pipeline/configuration_files/MMClock_aroma_preconvolve_fse_groupfixed.RData") #current arguments
 #run_model_index <- 1
 
-source(file.path(fsl_model_arguments$pipeline_home, "functions", "glm_helper_functions.R"))
+#source(file.path(fsl_model_arguments$pipeline_home, "functions", "glm_helper_functions.R"))
 
 #1) load spatial maps RData object
 #2) rebuild into 4d cube (where fourth dimension is run/subject)

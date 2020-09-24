@@ -6,7 +6,7 @@ library(doParallel)
 library(plyr)
 library(tidyverse)
 
-scripts_dir <- "/gpfs/group/mnh5174/default/clock_analysis/fmri/fsl_pipeline"
+scripts_dir <- "/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline"
 setwd(scripts_dir)
 
 source(file.path(scripts_dir, "functions", "push_pipeline.R"))
@@ -15,9 +15,9 @@ source(file.path(scripts_dir, "functions", "finalize_pipeline_configuration.R"))
 
 trial_df <- get_mmy3_trial_df(model="selective", groupfixed=TRUE)
 
-subject_df <- read.table("/gpfs/group/mnh5174/default/clock_analysis/fmri/data/mmy3_demographics.tsv", header=TRUE) %>%
+subject_df <- read.table("/proj/mnhallqlab/projects/clock_analysis/fmri/data/mmy3_demographics.tsv", header=TRUE) %>%
   rename(id=lunaid, Age=age, Female=female, ScanDate=scandate) %>%
-  mutate(mr_dir = paste0("/gpfs/group/mnh5174/default/MMClock/MR_Proc/", id, "_", format((as.Date(ScanDate, format="%Y-%m-%d")), "%Y%m%d")), #convert to Date, then reformat YYYYMMDD
+  mutate(mr_dir = paste0("/proj/mnhallqlab/studies/MMClock/MR_Proc/", id, "_", format((as.Date(ScanDate, format="%Y-%m-%d")), "%Y%m%d")), #convert to Date, then reformat YYYYMMDD
     I_Age = -1000*1/Age,
     I_Age_c = I_Age - mean(I_Age, na.rm=TRUE),
     Age_c = Age - mean(Age, na.rm=TRUE),
@@ -41,7 +41,7 @@ fsl_model_arguments <- list(
   trial_statistics = trial_df,
   subject_covariates = subject_df,
   id_col = "id",
-  fmri_dir = "/gpfs/group/mnh5174/default/MMClock/MR_Proc",
+  fmri_dir = "/proj/mnhallqlab/studies/MMClock/MR_Proc",
   expectdir = "mni_5mm_aroma", #subfolder name for processed data
   expectfile = "nfaswuktm_clock[0-9]_5.nii.gz", #expected file name for processed clock data
   #expectdir = "mni_nosmooth_aroma",
@@ -52,7 +52,11 @@ fsl_model_arguments <- list(
   tr=1.0, #seconds
   spikeregressors=FALSE, #don't include spike regressors in nuisance variables since we are using AROMA
   sceptic_run_variants=list(
-#    c("clock", "feedback", "u_chosen_quantile")
+      c("clock", "feedback", "u_chosen_quantile"),
+      c("clock", "feedback", "v_chosen"), #individual regressors
+      c("clock", "feedback", "v_entropy"), #clock-aligned
+      c("clock", "feedback", "rt_vmax_change"),
+      c("clock", "feedback", "pe_max")
 #    c("clock", "feedback", "u_chosen"),
 #    c("clock", "feedback", "u_chosen_sqrt"),
 #    c("clock", "feedback", "u_chosen_change"),
@@ -64,13 +68,10 @@ fsl_model_arguments <- list(
 #    c("clock_bs", "feedback")
 #    c("clock", "feedback", "v_chosen", "v_entropy", "d_auc", "pe_max"), #all signals with entropy of weights
 #    c("clock", "feedback", "v_chosen", "v_entropy_func", "d_auc", "pe_max"), #all signals with entropy of evaluated function
-#    c("clock", "feedback", "v_chosen"), #individual regressors
-#    c("clock", "feedback", "v_entropy"), #clock-aligned
 #    c("clock", "feedback", "v_entropy_feedback"), #feedback-aligned
 #    c("clock", "feedback", "v_entropy_func"),
 #    c("clock", "feedback", "d_auc"), #feedback-aligned
 #    c("clock", "feedback", "d_auc_clock"), #clock-aligned
-#    c("clock", "feedback", "pe_max")
 #    c("clock", "feedback", "v_entropy_no5"),
 #    c("clock", "feedback", "v_auc"),
 #    c("clock", "feedback", "d_auc_sqrt"),
@@ -81,7 +82,7 @@ fsl_model_arguments <- list(
 #    c("clock", "feedback", "intrinsic_discrepancy"),
 #    c("clock", "feedback", "mean_kld_feedback"),
 #    c("clock", "feedback", "intrinsic_discrepancy_feedback"),
-#    c("clock", "feedback", "rt_vmax_change"),
+
 #    c("clock", "feedback", "rt_vmax_change_dir"),
 #    c("clock", "feedback", "v_trial_fixed"),
 #    c("clock", "feedback", "pe_trial_fixed")    
@@ -94,9 +95,9 @@ fsl_model_arguments <- list(
 #    m2=c("clock", "feedback", "v_entropy_1h", "v_entropy_2h"),
 #    c("clock", "feedback", "v_entropy", "pe_max"), #simultaneous model
 #    c("clock", "feedback", "pe_trial_fixed_p05"), #fixed lr v .05
-    c("clock", "feedback", "pe_trial_fixed_p10"), #fixed lr v .1
+#    c("clock", "feedback", "pe_trial_fixed_p10"), #fixed lr v .1
 #    c("clock", "feedback", "pe_trial_fixed_p15"), #fixed lr v .15
-    c("clock", "feedback", "pe_trial_fixed_p20") #fixed lr v .2
+#    c("clock", "feedback", "pe_trial_fixed_p20") #fixed lr v .2
   ),
   group_model_variants=list(
     c("Intercept"),
@@ -119,7 +120,7 @@ fsl_model_arguments <- list(
   #model_suffix="_fse", #factorized, selective, equal generalization width
   model_suffix="_fse_groupfixed", #factorized, selective, equal generalization width
   #model_suffix="_fixed_groupfixed", #fixed lr v model at group mean params
-  root_workdir="/gpfs/scratch/mnh5174/run_fsl_pipeline_qsub_tmp",
+  root_workdir="/pine/scr/m/n/mnhallq/run_fsl_pipeline_qsub_tmp",
   n_cluster_beta_cpus=8, #should be number of l2 contrasts, or lower
   badids = c(11335, #low IQ, ADHD Hx, loss of consciousness
     11332, #should be excluded, but scan was terminated early due to repeated movement
