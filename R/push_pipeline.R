@@ -5,8 +5,8 @@
 
 push_pipeline <- function(fsl_model_arguments, ncpus=1) { #should this read from the fsl list, which also has ncpus??
   #this helper script walks through each variant of the level1 model and calls scripts to run the full analysis pipeline
-  #this amounts to iterating over each of the sceptic_run_variants
-  stopifnot(length(fsl_model_arguments$outdir) == length(fsl_model_arguments$sceptic_run_variants))
+  #this amounts to iterating over each of the l1_model_variants
+  stopifnot(length(fsl_model_arguments$outdir) == length(fsl_model_arguments$l1_model_variants))
   stopifnot(is.numeric(ncpus) && ncpus >= 1)
   
   require(parallel)

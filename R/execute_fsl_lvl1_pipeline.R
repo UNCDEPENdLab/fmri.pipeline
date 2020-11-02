@@ -22,8 +22,8 @@ source(file.path(fsl_model_arguments$pipeline_home, "functions", "spm_sceptic_mo
 source(file.path(fsl_model_arguments$pipeline_home, "functions", "glm_helper_functions.R"))
 
 #specify the run model for the current batch, based on run_model_index (see run_fsl_pipeline.R)
-fsl_model_arguments$sceptic_run_signals <- fsl_model_arguments$sceptic_run_variants[[run_model_index]]
-fsl_model_arguments$sceptic_run_variants <- NULL #the broader set of model variants is not handled by subsidary scripts (i.e., all assume a single variant)
+fsl_model_arguments$sceptic_run_signals <- fsl_model_arguments$l1_model_variants[[run_model_index]]
+fsl_model_arguments$l1_model_variants <- NULL #the broader set of model variants is not handled by subsidary scripts (i.e., all assume a single variant)
 fsl_model_arguments$l1_contrasts <- fsl_model_arguments$l1_contrasts[[run_model_index]] #relevant contrasts for this model
 fsl_model_arguments$outdir <- fsl_model_arguments$outdir[run_model_index]
 fsl_model_arguments$workdir <- NULL

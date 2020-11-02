@@ -85,7 +85,7 @@ fsl_model_arguments <- list(
   tr=1.0, #seconds
   spikeregressors=FALSE, #don't include spike regressors in nuisance variables since we are using AROMA
   glm_software="spm", #will run SPM GLMs
-  sceptic_run_variants=list(
+  l1_model_variants=list(
     c("clock", "feedback", "v_entropy", "pe_max") #core DCM model
   ),
   group_model_variants=list(
@@ -110,7 +110,7 @@ fsl_model_arguments <- finalize_pipeline_configuration(fsl_model_arguments)
 
 save(fsl_model_arguments, file=paste0("configuration_files/", fsl_model_arguments$analysis_name, ".RData"))
 
-#this pushes the full analysis pipeline in parallel, where parallelism is across sceptic_run_variants
+#this pushes the full analysis pipeline in parallel, where parallelism is across l1_model_variants
 #push_pipeline(fsl_model_arguments, ncpus=fsl_model_arguments$pipeline_cpus)
 
 

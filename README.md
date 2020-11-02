@@ -15,7 +15,7 @@ For the pipeline to work, processed MRI data should be structured as follows:
 
 For descriptions of these field names, see documentation below for `run_fsl_pipeline.R`.
 
-In general, most scripts in the pipeline expect at least two environment variables to be set (passed using qsub -v in the cluster environment). The first, `fsl_pipeline_file` is the full path to the analysis specifications defined in `run_fsl_pipeline.R` and saved to an RData object in the configuration_files subfolder. The second, `run_model_index` specific element within `sceptic_run_variants` that is the current object of analysis. That is parallelization is achieved in part by spawning many jobs that are split in terms of which level 1 model is being executed. These environment variables should be passed by the `push_pipeline` function called in run_fsl_pipeline.R, but knowing about their existence is helpful for setting up or debugging subsidiary scripts (e.g., the beta extraction scripts).
+In general, most scripts in the pipeline expect at least two environment variables to be set (passed using qsub -v in the cluster environment). The first, `fsl_pipeline_file` is the full path to the analysis specifications defined in `run_fsl_pipeline.R` and saved to an RData object in the configuration_files subfolder. The second, `run_model_index` specific element within `l1_model_variants` that is the current object of analysis. That is parallelization is achieved in part by spawning many jobs that are split in terms of which level 1 model is being executed. These environment variables should be passed by the `push_pipeline` function called in run_fsl_pipeline.R, but knowing about their existence is helpful for setting up or debugging subsidiary scripts (e.g., the beta extraction scripts).
 
 ## core scripts
 
@@ -98,15 +98,15 @@ The fsl_model_arguments file gets saved by run_fsl_pipeline.R and is a critical 
 
 - spikeregressors: a boolean controlling whether 1/0 regressors for each large head movement are added as confound regressors in the GLM. Handled downstream in model_clock_fmri.
 
-- sceptic_run_variants: a list where each element is a vector of signals that should be included simultaneously in the level 1 analysis. For each element of the list, the level 1 data are analyzed with the requested combination of regressors, and group models for this combination are also conducted. Thus, the total number of models is the product of sceptic_run_variants (level 1) and group_model_variants (level 3).
+- l1_model_variants: a list where each element is a vector of signals that should be included simultaneously in the level 1 analysis. For each element of the list, the level 1 data are analyzed with the requested combination of regressors, and group models for this combination are also conducted. Thus, the total number of models is the product of l1_model_variants (level 1) and group_model_variants (level 3).
 
 - group_model_variants: a list where each element is a vector of covariates that should be included in a group analysis. The names refer to columns in the `subject_covariates` data.frame.
 
-- l1_contrasts: a named list whose elements are lists specifying a set of level 1 contrasts that should be included. The name of the vector is used to cross-reference the corresponding name in `sceptic_run_variants`. For example, if a model is named 'm1' in `sceptic_run_variants`, you can add level 1 contrasts to this model using 'm1' as the name of the list in `l1_contrasts`.
+- l1_contrasts: a named list whose elements are lists specifying a set of level 1 contrasts that should be included. The name of the vector is used to cross-reference the corresponding name in `l1_model_variants`. For example, if a model is named 'm1' in `l1_model_variants`, you can add level 1 contrasts to this model using 'm1' as the name of the list in `l1_contrasts`.
 
 - execute_feat: a boolean indicating whether to execute FEAT for the level 1 analysis after creating the FSF file. This is somewhat vestigial from a pipeline variant that was run on a desktop computer. For cluster-based execution, this should be FALSE, which creates the FSF file, but hands off execution to the scheduler.
 
-- model_suffix: an optional string that is appended to the folder names for each output the level 1 analyses specified in `sceptic_run_variants`. This is useful if you are running two or more models with the same level 1 regressors, but the model is nevertheless somewhat different (e.g., different contrasts).
+- model_suffix: an optional string that is appended to the folder names for each output the level 1 analyses specified in `l1_model_variants`. This is useful if you are running two or more models with the same level 1 regressors, but the model is nevertheless somewhat different (e.g., different contrasts).
 
 - root_workdir: location for temporary job scripts generated for each run and model. These are not cleaned up after the pipeline completes (since it is distribted), but they can be deleted manually if you don't need them.
 

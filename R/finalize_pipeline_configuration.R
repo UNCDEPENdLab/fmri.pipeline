@@ -3,7 +3,7 @@
 #N.B. fma is a shorthand abbreviation for fsl_model_arguments, to save typing
 finalize_pipeline_configuration <- function(fma) {
 
-  fma$outdir <- sapply(fma$sceptic_run_variants, function(x) {
+  fma$outdir <- sapply(fma$l1_model_variants, function(x) {
     paste0("sceptic-", paste(x, collapse="-"), #define output directory based on combination of signals requested
       ifelse(fma$usepreconvolve, "-preconvolve", ""),
       fma$model_suffix)
@@ -15,27 +15,27 @@ finalize_pipeline_configuration <- function(fma) {
   fma$l1_cope_names <- list() #names of level 1 copes per model
   final_l1_cmats <- list() #for holding contrast matrices after setup
   
-  #populate model names for sceptic_run_variants
-  if (is.null(names(fma$sceptic_run_variants))) {
-    names(fma$sceptic_run_variants) <- sapply(fma$sceptic_run_variants, function(x) { paste(x, collapse="-") })
+  #populate model names for l1_model_variants
+  if (is.null(names(fma$l1_model_variants))) {
+    names(fma$l1_model_variants) <- sapply(fma$l1_model_variants, function(x) { paste(x, collapse="-") })
   } else {
-    names(fma$sceptic_run_variants) <- sapply(1:length(fma$sceptic_run_variants), function(i) {
-      if (names(fma$sceptic_run_variants)[i] == "") {
-        return(paste(fma$sceptic_run_variants[[i]], collapse="-")) #default name to collapse of individual EVs
+    names(fma$l1_model_variants) <- sapply(1:length(fma$l1_model_variants), function(i) {
+      if (names(fma$l1_model_variants)[i] == "") {
+        return(paste(fma$l1_model_variants[[i]], collapse="-")) #default name to collapse of individual EVs
       } else {
-        return(names(fma$sceptic_run_variants)[i]) #unchanged user nomenclature for model name
+        return(names(fma$l1_model_variants)[i]) #unchanged user nomenclature for model name
       }
     })
   }
   
-  for (ii in 1:length(fma$sceptic_run_variants)) {
+  for (ii in 1:length(fma$l1_model_variants)) {
     #generate a diagonal matrix of contrasts
-    regressors <- fma$sceptic_run_variants[[ii]]
+    regressors <- fma$l1_model_variants[[ii]]
     
     cmat <- diag(length(regressors))
     rownames(cmat) <- colnames(cmat) <- regressors
 
-    mname <- names(fma$sceptic_run_variants)[ii]
+    mname <- names(fma$l1_model_variants)[ii]
 
     #are there additional l1 contrasts?
     if (!is.null(fma$l1_contrasts[[mname]])) {
@@ -69,11 +69,11 @@ finalize_pipeline_configuration <- function(fma) {
   }
 
   #remove user-specified contrasts and supplant them with computed contrast matrices
-  #use of final_l1_cmats temp variable ensures that the length of $l1_contrasts is the same as other elements like $sceptic_run_variants
+  #use of final_l1_cmats temp variable ensures that the length of $l1_contrasts is the same as other elements like $l1_model_variants
   fma$l1_contrasts <- final_l1_cmats
   
   fma$workdir <- file.path(fma$root_workdir, fma$outdir) #temp folder for each analysis variant
-  fma$pipeline_cpus <- length(fma$sceptic_run_variants) #number of workers to setup at the pipeline level (i.e., over run variants)
+  fma$pipeline_cpus <- length(fma$l1_model_variants) #number of workers to setup at the pipeline level (i.e., over run variants)
   if (is.null(fma$l2_cpus)) { fma$l2_cpus <- 20 } #number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
   if (is.null(fma$pipeline_home)) { fma$pipeline_home <- "/proj/mnhallqlab/clock_analysis/fmri/fsl_pipeline" }
   if (is.null(fma$group_output_dir)) { fma$group_output_dir <- file.path(dirname(fma$fmri_dir), "group_analyses", fma$analysis_name) }
@@ -85,7 +85,7 @@ finalize_pipeline_configuration <- function(fma) {
   if (is.null(fma$glm_software)) { fma$glm_software <- "fsl" } #default to FSL FEAT
   
   #ensure that the user has specified some sort of clock event in the model
-  for (v in fma$sceptic_run_variants) {
+  for (v in fma$l1_model_variants) {
     if (!any(c("clock", "clock_bs") %in% v)) {
       stop("No clock event is in the model: ", paste(v, collapse=","))
     }
