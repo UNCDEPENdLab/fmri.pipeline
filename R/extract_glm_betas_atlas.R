@@ -18,6 +18,8 @@
 extract_glm_betas_atlas <- function(
   config_file, atlas_files, run_model_index=1, extract_z=FALSE,
   extract_beta_series=FALSE, ncpus=1, aggregate=TRUE, aggFUN=mean) {
+
+  #TODO: compare NIfTI header of atlas against maps from which you're extracting
   
   library(tidyverse)
   library(oro.nifti)
@@ -133,11 +135,11 @@ extract_glm_betas_atlas <- function(
                                      ")/.*"), "\\1/sceptic-clock_bs-feedback-preconvolve_fse_groupfixed", subject_inputs)
     
     #loop over l2 contrasts
-    #l2_loop_outputs <- list()
-    #for (l2 in 1:n_l2_contrasts) {
+    l2_loop_outputs <- list()
+    for (l2 in 1:n_l2_contrasts) {
     
     ##parallel version
-    l2_loop_outputs <- foreach(l2=iter(1:n_l2_contrasts), .packages=c("oro.nifti", "dplyr")) %dopar% {
+    #l2_loop_outputs <- foreach(l2=iter(1:n_l2_contrasts), .packages=c("oro.nifti", "dplyr")) %do% {
       l2_loop_rois <- list()
       l2_loop_bs <- list()
       
@@ -158,7 +160,7 @@ extract_glm_betas_atlas <- function(
       atlas_df <- list()
       
       #should not need l3 in case of atlas
-      for (ai in 1:length(atlas_imgs)) {
+      for (ai in 1:length(atlas_imgs)) {          
         aimg <- atlas_imgs[[ai]]
         atlas_name <- sub("(\\.nii)*(\\.gz)*$", "", basename(atlas_files[ai]))
         a_indices <- which(aimg != 0, arr.ind=TRUE)
@@ -167,7 +169,7 @@ extract_glm_betas_atlas <- function(
         a_coordinates <- cbind(a_indices, t(apply(a_indices, 1, function(r) { translateCoordinate(i=r, nim=aimg, verbose=FALSE) })))
         a_coordinates <- as.data.frame(a_coordinates) %>% setNames(c("i", "j", "k", "x", "y", "z")) %>%
           mutate(vnum=1:n(), atlas_value=aimg[a_indices], atlas_name=basename(atlas_files[ai])) %>% select(vnum, atlas_value, everything())
-        
+
         #get coefficients for each voxel in the mask for each subject
         coef_mat <- apply(a_coordinates[,c("i", "j", "k")], 1, function(r) { copeconcat[r["i"], r["j"], r["k"], ] })
         
@@ -176,9 +178,10 @@ extract_glm_betas_atlas <- function(
         coef_df <- reshape2::melt(coef_mat, varnames=c("numid", "vnum"), value.name="value") %>%
             inner_join(a_coordinates, by="vnum") %>% select(-i, -j, -k)
 
+
         if (is_int_mask && aggregate) {
           coef_df <- coef_df %>% group_by(numid, atlas_value) %>%
-            summarize(value=aggFUN(value)) %>% ungroup()
+            summarize(atlas_name=atlas_name[1], value=aggFUN(value)) %>% ungroup()
         }
         
         coef_df <- coef_df %>% 
@@ -207,8 +210,8 @@ extract_glm_betas_atlas <- function(
       l2_loop_rois[[paste(l1, l2, sep=".")]] <- atlas_df
       l2_loop_bs[[paste(l1, l2, sep=".")]] <- beta_series_df
       
-      #l2_loop_outputs[[l2]] <- list(rois=l2_loop_rois, beta_series=l2_loop_bs) #serial version
-      return(list(rois=l2_loop_rois, beta_series=l2_loop_bs))
+      l2_loop_outputs[[l2]] <- list(rois=l2_loop_rois, beta_series=l2_loop_bs) #serial version
+      #return(list(rois=l2_loop_rois, beta_series=l2_loop_bs))
     }
     
     #tack on roi betas from this l2 contrast to the broader set
@@ -218,15 +221,15 @@ extract_glm_betas_atlas <- function(
     #organize models intelligently
     all_rois <- all_rois %>% arrange(l1_contrast, l2_contrast)
     
-    fsuffix <- ifelse(isTRUE(extract_z), paste0("_", atlas_name, "_zstats.csv.gz"), paste0("_", atlas_name, "_betas.csv.gz"))
+    #fsuffix <- ifelse(isTRUE(extract_z), paste0("_", atlas_name, "_zstats.csv.gz"), paste0("_", atlas_name, "_betas.csv.gz"))
+    fsuffix <- ifelse(isTRUE(extract_z), "_atlas_zstats.csv.gz", "_betas.csv.gz")
     message("writing: ", file.path(model_output_dir, paste0(l1_contrast_name, fsuffix)))
     readr::write_csv(x=all_rois, file.path(model_output_dir, paste0(l1_contrast_name, fsuffix)))
     
     if (extract_beta_series) {
       all_beta_series <- all_beta_series %>% arrange(l1_contrast, l2_contrast, run, trial)
       readr::write_csv(x=all_beta_series, file.path(model_output_dir, paste0(l1_contrast_name, "_", atlas_name, "_beta_series.csv.gz")))
-    }
-    
+    }  
   }
 
 }
@@ -255,7 +258,7 @@ mean_nz <- function(x) {
 
 atlas_files <- c("/proj/mnhallqlab/projects/clock_analysis/fmri/pfc_entropy/masks/Schaefer_136_2.3mm.nii.gz",
                  "/proj/mnhallqlab/projects/clock_analysis/fmri/vmpfc_ah/vmpfc_ba_max_2.3mm_filled.nii.gz",
-                 "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/pauli_da_midbrain.nii.gz",
+                 "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/pauli_da_midbrain_2.3mm.nii.gz",
                  "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/bilateral_striatum_tight_7Networks_2.3mm.nii.gz",
                  "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/pauli_combined_integermask_2.3mm.nii.gz")
 
