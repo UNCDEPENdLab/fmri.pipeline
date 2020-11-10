@@ -3,6 +3,9 @@
 #' @param niftis A vector of processed fMRI timeseries images (4D files) to be deconvolved
 #' @param add_metadata A data.frame with one row per value of \code{niftis}. Columns of this data.frame are added to the output file for identification.
 #' @param out_dir Base output directory for deconvolved time series files. Default is \code{getwd()}.
+#' @param out_file_expression Expression evaluated to resolve the filename for the deconvolved csv files. Default is to convert the \code{niftis} value
+#'    for a given subject into a filename by replacing slashes with periods and adding the atlas image name. Note that the suffix \code{_deconvolved.csv.gz}
+#'    or \code{_original.csv.gz} will be added to the expression, so don't pass this piece.
 #' @param log_file Name (and path) of log file for any deconvolution errors or messages
 #' @param TR the repetition time of the sequence in seconds. Required
 #' @param time_offset The number of seconds that will be subtracted or added to the time field. Default: 0. Useful if some number of volumes
@@ -21,7 +24,22 @@
 #' @details The Bush 2011 algorithm is implemented in a compiled binary called deconvolvefilter (https://github.com/UNCDEPENdLab/deconvolution-filtering)
 #'   that is much faster than the pure R (or original MATLAB) version. We recommend using this for whole-brain deconvolution. The package includes a binary for
 #'   the Linux x86_64 architecture.
-#' 
+#'
+#'   If you want to use subject metadata to name the output file, use \code{this_subj} in your \code{out_file_expression}, which will give you access to a one-row
+#'   data.frame containing the metadata for the current subject in the loop.
+#'
+#' @examples
+#'   \dontrun{
+#'
+#'     #name outputs according to subject metadata
+#'     xx <- voxelwise_deconvolution(
+#'       niftis="/proj/mnhallqlab/user/michael/test_nifti.nii.gz",
+#'       out_dir="/proj/mnhallqlab/user/michael/decon_outputs",
+#'       out_file_expression=expression(paste0(this_subj$subid, "_run", this_subj$run_num, "_", atlas_img_name))
+#'     )
+#'   }
+#'
+#' @return Nothing (invisible NULL).
 #' @importFrom doparallel registerDoParallel
 #' @importFrom parallel makeCluster
 #' @importFrom data.table fread
@@ -31,7 +49,7 @@
 #' @importFrom foreach foreach
 #' @importFrom dplyr mutate mutate_at select left_join
 #' @importFrom readr write_delim
-voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), log_file=file.path(out_dir, "deconvolve_errors"),
+voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), out_file_expression=NULL, log_file=file.path(out_dir, "deconvolve_errors"),
                                     TR=NULL, time_offset=0, atlas_files=NULL, mask=NULL, nprocs=20, save_original_ts=TRUE, algorithm="bush2011",
                                     decon_settings=list(nev_lr = .01, #neural events learning rate (default in algorithm)
                                       epsilon = .005, #convergence criterion (default)
@@ -91,13 +109,21 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
     atlas_img_name <- basename(sub(".nii(.gz)*", "", atlas_files[ai], perl=TRUE))
     dir.create(file.path(out_dir, atlas_img_name, "deconvolved"), showWarnings=FALSE, recursive=TRUE)
     if (isTRUE(save_original_ts)) { dir.create(file.path(out_dir, atlas_img_name, "original"), showWarnings=FALSE, recursive=TRUE) }
+
+    #set a default filename based on the nifti -- hopefully this will not collide with other subjects/runs
+    if (is.null(out_file_expression)) {
+      out_file_expression <- expression(paste0(gsub("[/\\]", ".", niftis[si]), "_", atlas_img_name))
+    }
+
     
     #loop over niftis in parallel
     ff <- foreach(si = 1:length(niftis), .packages=c("dplyr", "readr", "data.table", "reshape2", "dependlab", "foreach", "iterators"),
       .export=c("niftis", "decon_settings")) %dopar% {
-        
-        this_subj <- feat_l2_inputs_df %>% select(subid, run_num, contingency, emotion, drop_volumes) %>% dplyr::slice(si)
-        out_name <- file.path(out_dir, atlas_img_name, "deconvolved", with(this_subj[1,,drop=F], paste0(subid, "_run", run_num, "_", atlas_img_name, "_deconvolved.csv.gz")))
+
+         #get the si-th row of the metadata to match nifti, allow one to use this_subj in out_file_expression
+        if (!is.null(add_metadata)) { this_subj <- add_metadata %>% dplyr::slice(si) }
+
+        out_name <- file.path(out_dir, atlas_img_name, "deconvolved", paste0(eval(out_file_expression), "_deconvolved.csv.gz"))
         
         if (file.exists(out_name)) {
           message("Deconvolved file already exists: ", out_name)
@@ -140,7 +166,7 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
             return(reg)
           }
         } else {
-          #use C++ implementation of Bush 2011 algorithm
+          #use C++ implementation of Bush 2011 algorithm, if possible
           decon_bin <- NULL #default to pure R algorithm          
           if (is.null(decon_settings$bush2011_binary)) {            
             ss <- Sys.info()
@@ -161,6 +187,8 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
               return(reg)
             }
           } else {
+            checkmate::assert_file_exists(decon_bin)
+            
             #fo argument is 1/TR: https://github.com/UNCDEPENdLab/deconvolution-filtering/blob/f26df0ea1eb30f2019795f17f93e713517a220e4/ref/backup/deconvolve_filter.m
             #Looking at spm_hrf, it generates a vector of 33 values for the HRF for 1s TR. deconvolvefilter pads the time series at the beginning by this length
             #if you don't return a convolved result, it doesn't do the trimming for you...
@@ -184,14 +212,13 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
         deconv_melt <- reshape2::melt(deconv_mat, value.name="decon", varnames=c("vnum", "time"))
         deconv_melt$time <- (deconv_melt$time - 1)*TR + time_offset #convert back to seconds; first volume is time 0
         
-        deconv_df <- deconv_melt %>% mutate(vnum=as.numeric(vnum)) %>% left_join(a_coordinates, by="vnum") %>%
+        deconv_df <- deconv_melt %>% mutate(vnum=as.numeric(vnum)) %>%
+          left_join(a_coordinates, by="vnum") %>%
           mutate(nifti=niftis[si]) %>%
           select(-i, -j, -k) #omitting i, j, k for now
 
-        if (!is.null(add_metadata)) {
-          this_subj <- add_metadata %>% dplyr::slice(si) #get the si-th row of the metadata to match nifti
-          deconv_df <- deconv_df %>% cbind(this_subj)
-        }
+        #add subject metadata, if relevant
+        if (!is.null(add_metadata)) { deconv_df <- deconv_df %>% cbind(this_subj) }
 
         write_csv(deconv_df, path=out_name)
         
@@ -200,20 +227,21 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
           to_deconvolve_melt <- reshape2::melt(to_deconvolve, value.name="BOLD_z", varnames=c("vnum", "time"))
           to_deconvolve_melt$time <- (to_deconvolve_melt$time - 1)*TR + time_offset #convert back to seconds; first volume is time 0
           
-          orig_df <- to_deconvolve_melt %>% mutate(vnum=as.numeric(vnum)) %>% left_join(a_coordinates, by="vnum") %>%
+          orig_df <- to_deconvolve_melt %>% mutate(vnum=as.numeric(vnum)) %>%
+            left_join(a_coordinates, by="vnum") %>%
             mutate(nifti=niftis[si]) %>%
             select(-i, -j, -k) #omitting i, j, k for now
 
-          if (!is.null(add_metadata)) {
-            orig_df <- orig_df %>% cbind(this_subj)
-          }
+          if (!is.null(add_metadata)) { orig_df <- orig_df %>% cbind(this_subj) }
 
-          out_name <- file.path(out_dir, atlas_img_name, "original", with(this_subj[1,,drop=F], paste0(subid, "_run", run_num, "_", atlas_img_name, "_original.csv.gz")))
+          #update output file for original
+          out_name <- file.path(out_dir, atlas_img_name, "original", paste0(eval(out_file_expression), "_original.csv.gz"))
           write_csv(orig_df, path=out_name)
-
         }
         
       }
   }
+
+  return(invisible(NULL))
  
 }
