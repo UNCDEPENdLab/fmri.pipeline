@@ -34,6 +34,7 @@ subject_df <- read.table("/proj/mnhallqlab/projects/clock_analysis/fmri/data/mmy
 
 #Setup the global configuration for the full FSL pipeline
 fsl_model_arguments <- list(
+  scheduler="slurm", #handles downstream queueing
   #analysis_name="MMClock_aroma_preconvolve_fse",
   analysis_name="MMClock_aroma_preconvolve_fse_groupfixed",
   #analysis_name="MMClock_fixed_aroma_preconvolved",

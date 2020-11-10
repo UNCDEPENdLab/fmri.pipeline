@@ -4,7 +4,7 @@
 finalize_pipeline_configuration <- function(fma) {
 
   fma$outdir <- sapply(fma$l1_model_variants, function(x) {
-    paste0("sceptic-", paste(x, collapse="-"), #define output directory based on combination of signals requested
+    paste0("l1-", paste(x, collapse="-"), #define output directory based on combination of signals requested
       ifelse(fma$usepreconvolve, "-preconvolve", ""),
       fma$model_suffix)
   })
@@ -79,7 +79,8 @@ finalize_pipeline_configuration <- function(fma) {
   if (is.null(fma$group_output_dir)) { fma$group_output_dir <- file.path(dirname(fma$fmri_dir), "group_analyses", fma$analysis_name) }
   if (is.null(fma$center_l3_predictors)) { fma$center_l3_predictors <- TRUE }
   if (is.null(fma$badids)) { fma$badids <- c() }
-
+  if (is.null(fma$scheduler)) { fma$scheduler <- "slurm" } #HPC batch system
+  
   if (is.null(fma$zthresh)) { fma$zthresh <- 3.09 }  #1-tailed p=.001 for z stat
   if (is.null(fma$clustsize)) { fma$clustsize <- 34 } #based on 3dClustSim using ACFs for first-level FEAT runs
   if (is.null(fma$glm_software)) { fma$glm_software <- "fsl" } #default to FSL FEAT

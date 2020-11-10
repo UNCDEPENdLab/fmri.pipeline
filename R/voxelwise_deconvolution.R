@@ -1,0 +1,219 @@
+#' Function to perform voxelwise deconvolution on an fMRI dataset using the fMRI model arguments object
+#'
+#' @param niftis A vector of processed fMRI timeseries images (4D files) to be deconvolved
+#' @param add_metadata A data.frame with one row per value of \code{niftis}. Columns of this data.frame are added to the output file for identification.
+#' @param out_dir Base output directory for deconvolved time series files. Default is \code{getwd()}.
+#' @param log_file Name (and path) of log file for any deconvolution errors or messages
+#' @param TR the repetition time of the sequence in seconds. Required
+#' @param time_offset The number of seconds that will be subtracted or added to the time field. Default: 0. Useful if some number of volumes
+#'   have been dropped from the NIfTI data prior to deconvolution.
+#' @param atlas an optional character vector specifying voxels used in deconvolution. If omitted, perform whole-brain deconvolution
+#' @param mask an optional character string specifying a mask that should be used to constrain bounds of deconvolution.
+#' @param nprocs The number of processors to use simultaneously for deconvolution
+#' @param save_original_ts Whether to save the voxelwise BOLD data prior to deconvolution (for comparison/diagnosis). Default: TRUE
+#' @param algorithm Which deconvolution algorithm to use for deconvolving voxelwise time series. Default: "bush2011". Alternative is
+#'   "bush2015", which implements a resampling approach as well. If you use "bush2011", the function will try to call on a fast compiled
+#'   version of the algorithm to support whole-brain processing.
+#' @param decon_settings A list of settings passed to the deconvolution algorithm. If you have a compiled deconvolvefilter binary,
+#'   pass it as \code{bush2011_binary}, which will be used in deconvolution.
+#' @param afni_dir Full path to directory containing AFNI binaries (this function uses 3dMaskdump).
+#'
+#' @details The Bush 2011 algorithm is implemented in a compiled binary called deconvolvefilter (https://github.com/UNCDEPENdLab/deconvolution-filtering)
+#'   that is much faster than the pure R (or original MATLAB) version. We recommend using this for whole-brain deconvolution. The package includes a binary for
+#'   the Linux x86_64 architecture.
+#' 
+#' @importFrom doparallel registerDoParallel
+#' @importFrom parallel makeCluster
+#' @importFrom data.table fread
+#' @importFrom oro.nifti readNIfTI translateCoordinate
+#' @importFrom checkmate assert_file_exists
+#' @importFrom dependlab deconvolve_nlreg_resample runAFNICommand
+#' @importFrom foreach foreach
+#' @importFrom dplyr mutate mutate_at select left_join
+#' @importFrom readr write_delim
+voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), log_file=file.path(out_dir, "deconvolve_errors"),
+                                    TR=NULL, time_offset=0, atlas_files=NULL, mask=NULL, nprocs=20, save_original_ts=TRUE, algorithm="bush2011",
+                                    decon_settings=list(nev_lr = .01, #neural events learning rate (default in algorithm)
+                                      epsilon = .005, #convergence criterion (default)
+                                      kernel = spm_hrf(TR)$hrf, #canonical SPM difference of gammas
+                                      Nresample = 25)) #for Bush 2015 only
+{
+  sapply(niftis, checkmate::assert_file_exists)
+  checkmate::assert_data_frame(add_metadata, nrows=length(niftis), null.ok=TRUE)
+  sapply(atlas_files, checkmate::assert_file_exists)  
+  checkmate::assert_numeric(TR, lower=0.01)
+
+  if (!is.null(decon_settings$kernel)) {
+    hrf_pad <- length(decon_settings$kernel)
+  } else {
+    stop("At present no alternative way to set hrf_pad if $kernel not passed in decon_settings")
+  }
+  
+  if (is.null(atlas_files)) {
+    message("Performing whole-brain voxelwise deconvolution")
+    if (is.null(mask)) {
+      stop("Cannot conduct voxelwise deconvolution without a relevant mask")
+    } else {
+      checkmate::assert_file_exists(mask)
+    }
+    
+    atlas_files <- mask
+  }
+
+  zero_thresh <- 1e-4 #for binarizing/indexing
+  atlas_imgs <- lapply(atlas_files, readNIfTI, reorient=FALSE)
+  if (!is.null(mask)) {
+    checkmate::assert_file_exists(mask)
+    mask <- readNIfTI(mask, reorient=FALSE) #go from mask as character to the mask image itself
+
+    #ensure that mask is binary
+    mask[mask < zero_thresh] <- 0.0
+    mask[mask >= zero_thresh] <- 1.0
+  }
+  
+  #loop over atlas files
+  for (ai in 1:length(atlas_files)) {
+    cat("Working on atlas: ", atlas_files[ai], "\n")
+    aimg <- atlas_imgs[[ai]]
+
+    if (!is.null(mask)) { aimg <- aimg*mask } #multiply against binary mask to apply it
+
+    #get indices of mask within matrix (ijk)
+    a_indices <- which(aimg > zero_thresh, arr.ind=TRUE)
+
+    #look up spatial coordinates of voxels in atlas (xyz)
+    a_coordinates <- cbind(a_indices, t(apply(a_indices, 1, function(r) { translateCoordinate(i=r, nim=aimg, verbose=FALSE) })))
+    a_coordinates <- as.data.frame(a_coordinates) %>% setNames(c("i", "j", "k", "x", "y", "z")) %>%
+      mutate(vnum=1:n(), atlas_value=aimg[a_indices], atlas_name=basename(atlas_files[ai])) %>%
+      mutate_at(vars(x,y,z), round, 2) %>% select(vnum, atlas_value, everything())
+
+    #setup output subdirectories for deconvolved files, named according to atlas
+    atlas_img_name <- basename(sub(".nii(.gz)*", "", atlas_files[ai], perl=TRUE))
+    dir.create(file.path(out_dir, atlas_img_name, "deconvolved"), showWarnings=FALSE, recursive=TRUE)
+    if (isTRUE(save_original_ts)) { dir.create(file.path(out_dir, atlas_img_name, "original"), showWarnings=FALSE, recursive=TRUE) }
+    
+    #loop over niftis in parallel
+    ff <- foreach(si = 1:length(niftis), .packages=c("dplyr", "readr", "data.table", "reshape2", "dependlab", "foreach", "iterators"),
+      .export=c("niftis", "decon_settings")) %dopar% {
+        
+        this_subj <- feat_l2_inputs_df %>% select(subid, run_num, contingency, emotion, drop_volumes) %>% dplyr::slice(si)
+        out_name <- file.path(out_dir, atlas_img_name, "deconvolved", with(this_subj[1,,drop=F], paste0(subid, "_run", run_num, "_", atlas_img_name, "_deconvolved.csv.gz")))
+        
+        if (file.exists(out_name)) {
+          message("Deconvolved file already exists: ", out_name)
+          return(NULL)
+        }
+
+        cat("  Deconvolving subject: ", niftis[si], "\n")
+        dump_out <- tempfile()
+        afnistat <- runAFNICommand(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]))
+        ts_out <- data.table::fread(dump_out) #read time series
+
+        #to_deconvolve is a voxels x time matrix
+        to_deconvolve <- as.matrix(ts_out[, -1:-3]) #remove ijk
+
+        to_deconvolve <- t(apply(to_deconvolve, 1, scale)) #need to unit normalize for algorithm not to choke on near-constant 100-normed data
+        #to_deconvolve <- t(apply(to_deconvolve, 1, function(x) { scale(x, scale=FALSE) })) #just demean, which will rescale to percent signal change around 0 (this matches Bush 2015)
+        #to_deconvolve <- t(apply(to_deconvolve, 1, function(x) { x/mean(x)*100 - 100 })) #pct signal change around 0
+
+        temp_i <- tempfile()
+        temp_o <- tempfile()
+
+        #to_deconvolve %>%  as_tibble() %>% write_delim(path=temp_i, col_names=FALSE)
+
+        #zero pad tail end (based on various readings, but not original paper)
+        #this was decided on because we see the deconvolved signal dropping to 0.5 for all voxels
+
+        to_deconvolve %>% cbind(matrix(0, nrow=nrow(to_deconvolve), ncol=hrf_pad)) %>% as_tibble() %>% write_delim(path=temp_i, col_names=FALSE)
+
+        #test1 <- deconvolve_nlreg(to_deconvolve[117,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
+        #test2 <- deconvolve_nlreg(to_deconvolve[118,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
+
+        if (algorithm == "bush2015") {
+          #use R implementation of Bush 2015 algorithm
+          alg_input <- as.matrix(read.table(temp_i))
+          deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("dependlab")) %do% {
+            reg <- tryCatch(deconvolve_nlreg_resample(as.vector(vox_ts), kernel=decon_settings$kernel, nev_lr=nev_lr, epsilon=decon_settings$epsilon, Nresample=decon_settings$Nresample),
+              error=function(e) { cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE); return(rep(NA, length(vox_ts))) })
+
+            if (is.list(reg)) { reg <- reg$NEVmean } #just keep the mean resampled events vector
+            return(reg)
+          }
+        } else {
+          #use C++ implementation of Bush 2011 algorithm
+          decon_bin <- NULL #default to pure R algorithm          
+          if (is.null(decon_settings$bush2011_binary)) {            
+            ss <- Sys.info()
+            if (ss["sysname"] == "Linux") {
+              if (ss["machine"] == "x86_64") {
+                decon_bin <- system.file("bin", "linux_x64", "deconvolvefilter", package = "fmri.pipeline")
+              }
+            }
+          } else {
+            decon_bin <- decon_settings$bush2011_binary
+          }
+
+          if (is.null(decon_bin)) {
+            alg_input <- as.matrix(read.table(temp_i))
+            deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("dependlab")) %do% {
+              reg <- tryCatch(deconvolve_nlreg(as.vector(vox_ts), kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon),
+                error=function(e) { cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE); return(rep(NA, length(vox_ts))) })
+              return(reg)
+            }
+          } else {
+            #fo argument is 1/TR: https://github.com/UNCDEPENdLab/deconvolution-filtering/blob/f26df0ea1eb30f2019795f17f93e713517a220e4/ref/backup/deconvolve_filter.m
+            #Looking at spm_hrf, it generates a vector of 33 values for the HRF for 1s TR. deconvolvefilter pads the time series at the beginning by this length
+            #if you don't return a convolved result, it doesn't do the trimming for you...
+            res <- system(paste0(decon_bin, " -i=", temp_i, " -o=", temp_o, " -convolved=0 -fo=", 1/TR, " -thread=2"), intern=FALSE)
+            if (res != 0) {
+              cat("Problem deconvolving: ", niftis[si], "\n", file=log_file, append=TRUE)
+              deconv_mat <- matrix(NA, nrow=nrow(to_deconvolve), ncol=ncol(to_deconvolve))
+            } else {
+              deconv_mat <- as.matrix(read.table(temp_o, header=FALSE)) %>% unname()  #remove names to avoid confusion in melt
+
+              #NB. 17Apr2019. I modified the compiled C++ program to chop the leading zeros itself for all outputs (rather than leaving the leading hrf_pad)
+              #deconv_mat <- deconv_mat[,c(-1*1:hrf_pad, seq(-ncol(deconv_mat), -ncol(deconv_mat)+hrf_pad-1))] #trim leading and trailing padding
+            }
+          }
+        }
+
+        #trim hrf end-padding for both C++ and R variants
+        deconv_mat <- deconv_mat[,c(seq(-ncol(deconv_mat), -ncol(deconv_mat)+hrf_pad-1))] #trim trailing padding added above
+
+        #melt this for combination
+        deconv_melt <- reshape2::melt(deconv_mat, value.name="decon", varnames=c("vnum", "time"))
+        deconv_melt$time <- (deconv_melt$time - 1)*TR + time_offset #convert back to seconds; first volume is time 0
+        
+        deconv_df <- deconv_melt %>% mutate(vnum=as.numeric(vnum)) %>% left_join(a_coordinates, by="vnum") %>%
+          mutate(nifti=niftis[si]) %>%
+          select(-i, -j, -k) #omitting i, j, k for now
+
+        if (!is.null(add_metadata)) {
+          this_subj <- add_metadata %>% dplyr::slice(si) #get the si-th row of the metadata to match nifti
+          deconv_df <- deconv_df %>% cbind(this_subj)
+        }
+
+        write_csv(deconv_df, path=out_name)
+        
+        #handle output of original time series (before deconvolution) -- mostly useful for debugging
+        if (isTRUE(save_original_ts)) {
+          to_deconvolve_melt <- reshape2::melt(to_deconvolve, value.name="BOLD_z", varnames=c("vnum", "time"))
+          to_deconvolve_melt$time <- (to_deconvolve_melt$time - 1)*TR + time_offset #convert back to seconds; first volume is time 0
+          
+          orig_df <- to_deconvolve_melt %>% mutate(vnum=as.numeric(vnum)) %>% left_join(a_coordinates, by="vnum") %>%
+            mutate(nifti=niftis[si]) %>%
+            select(-i, -j, -k) #omitting i, j, k for now
+
+          if (!is.null(add_metadata)) {
+            orig_df <- orig_df %>% cbind(this_subj)
+          }
+
+          out_name <- file.path(out_dir, atlas_img_name, "original", with(this_subj[1,,drop=F], paste0(subid, "_run", run_num, "_", atlas_img_name, "_original.csv.gz")))
+          write_csv(orig_df, path=out_name)
+
+        }
+        
+      }
+  }
+ 
+}
