@@ -123,12 +123,17 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
     if (is.null(out_file_expression)) {
       out_file_expression <- expression(paste0(gsub("[/\\]", ".", niftis[si]), "_", atlas_img_name))
     }
+
+    if (!is.null(add_metadata)) { add_metadata$.nifti <- NA_character_ } #initialize empty nifti string for population
     
     #loop over niftis in parallel
     ff <- foreach(si = 1:length(niftis), .packages=c("dplyr", "readr", "data.table", "reshape2", "dependlab", "foreach", "iterators")) %dopar% {
 
          #get the si-th row of the metadata to match nifti, allow one to use this_subj in out_file_expression
-        if (!is.null(add_metadata)) { this_subj <- add_metadata %>% dplyr::slice(si) }
+      if (!is.null(add_metadata)) {
+        this_subj <- add_metadata %>% dplyr::slice(si)
+        add_metadata$.nifti[si] <- niftis[si]
+      }
 
         out_name <- file.path(out_dir, atlas_img_name, "deconvolved", paste0(eval(out_file_expression), "_deconvolved.csv.gz"))
         
@@ -222,7 +227,7 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
         
         deconv_df <- deconv_melt %>% mutate(vnum=as.numeric(vnum)) %>%
           left_join(a_coordinates, by="vnum") %>%
-          mutate(nifti=niftis[si]) %>%
+          #mutate(nifti=niftis[si]) %>%
           select(-i, -j, -k) #omitting i, j, k for now
 
         #add subject metadata, if relevant
@@ -237,7 +242,7 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
           
           orig_df <- to_deconvolve_melt %>% mutate(vnum=as.numeric(vnum)) %>%
             left_join(a_coordinates, by="vnum") %>%
-            mutate(nifti=niftis[si]) %>%
+            #mutate(nifti=niftis[si]) %>%
             select(-i, -j, -k) #omitting i, j, k for now
 
           #if (!is.null(add_metadata)) { orig_df <- orig_df %>% cbind(this_subj) }
