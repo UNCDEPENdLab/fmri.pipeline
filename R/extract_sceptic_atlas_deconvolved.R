@@ -1,5 +1,5 @@
 #this script is not dependent on run_model_index because it reads raw data at l1
-Sys.setenv(fsl_pipeline_file="/gpfs/group/mnh5174/default/clock_analysis/fmri/fsl_pipeline/configuration_files/MMClock_aroma_preconvolve_fse_groupfixed.RData")
+Sys.setenv(fsl_pipeline_file="/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/configuration_files/MMClock_aroma_preconvolve_fse_groupfixed.RData")
 Sys.setenv(run_model_index=1)
 
 to_run <- Sys.getenv("fsl_pipeline_file")
@@ -11,6 +11,7 @@ if (is.na(run_model_index)) { stop("Couldn't identify usable run_model_index var
 
 load(to_run)
 
+source("voxelwise_deconvolution.R")
 source(file.path(fsl_model_arguments$pipeline_home, "functions", "glm_helper_functions.R"))
 #source(file.path(fsl_model_arguments$pipeline_home, "functions", "deconvolve_funcs.R"))
 #source(file.path(fsl_model_arguments$pipeline_home, "functions", "spm_funcs.R"))
@@ -26,8 +27,6 @@ library(foreach)
 library(doParallel)
 library(readr)
 
-
-
 #####
 #vestiges of things that should be passed in
 
@@ -42,13 +41,11 @@ feat_lvl3_outdir <- file.path(fsl_model_arguments$group_output_dir, feat_run_out
 load(file.path(fsl_model_arguments$pipeline_home, "configuration_files", "MMClock_aroma_preconvolve_fse_groupfixed_sceptic-clock-feedback-pe_max-preconvolve_fse_groupfixed_lvl2_inputs.RData"))
 
 #registerDoSEQ()
-cl <- makeCluster(20) #hard code for now
-registerDoParallel(cl)
+#cl <- makeCluster(2) #hard code for now
+#registerDoParallel(cl)
 #clusterExport(cl, c("sigmoid", "spm_hrf", "generate_feature", "dsigmoid", "deconvolve_nlreg", "deconvolve_nlreg_resample")) #make sure functions are available
 
 subinfo$dir_found <- file.exists(subinfo$mr_dir)
-
-hrf_pad <- 32 #based on spm_hrf for 1.0 second TR. Used to chop output of deconvolvefilter
 
 #Schaefer 400
 #NB: this is not an NN-interpolated file. So, fractional values get dumped by -thr -uthr below
@@ -72,7 +69,7 @@ master <- "/gpfs/group/mnh5174/default/clock_analysis/fmri/hippo_voxelwise/Schae
 #system(paste0("fslmaths ", master, " -thr 18 -uthr 18 -bin /gpfs/group/mnh5174/default/clock_analysis/fmri/hippo_voxelwise/masks/l_v1_2.3mm -odt char"))
 #system(paste0("fslmaths ", master, " -thr 215 -uthr 215 -bin /gpfs/group/mnh5174/default/clock_analysis/fmri/hippo_voxelwise/masks/r_v1_2.3mm -odt char"))
 
-hippo_dir <- "/gpfs/group/mnh5174/default/clock_analysis/fmri/hippo_voxelwise"
+hippo_dir <- "/proj/mnhallqlab/projects/clock_analysis/fmri/hippo_voxelwise"
 mask_dir <- file.path(hippo_dir, "masks")
 
 ## atlas_files <- c(
@@ -88,12 +85,21 @@ mask_dir <- file.path(hippo_dir, "masks")
 ## )
 
 #Just the new cobra-based long axis masks
-atlas_files <- c(
-  file.path(mask_dir, "long_axis_l_cobra_2.3mm.nii.gz"),
-  file.path(mask_dir, "long_axis_r_cobra_2.3mm.nii.gz")
-)
+## atlas_files <- c(
+##   file.path(mask_dir, "long_axis_l_cobra_2.3mm.nii.gz"),
+##   file.path(mask_dir, "long_axis_r_cobra_2.3mm.nii.gz")
+## )
 
-atlas_imgs <- lapply(atlas_files, readNIfTI, reorient=FALSE)
+atlas_files <- Sys.getenv("atlas")
+if (atlas_files=="") {
+  stop("Did not receive atlas as environment variable")
+}
+
+## atlas_files <- c("/proj/mnhallqlab/projects/clock_analysis/fmri/pfc_entropy/masks/Schaefer_136_2.3mm.nii.gz",
+##                  "/proj/mnhallqlab/projects/clock_analysis/fmri/vmpfc_ah/vmpfc_ba_max_2.3mm_filled.nii.gz",
+##                  "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/pauli_da_midbrain_2.3mm.nii.gz",
+##                  "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/bilateral_striatum_tight_7Networks_2.3mm.nii.gz",
+##                  "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/pauli_combined_integermask_2.3mm.nii.gz")
 
 #whether to use unsmoothed data
 data_type <- "smooth_in_mask" #alternatives "unsmoothed" "smoothed"
@@ -107,6 +113,8 @@ l1_inputs <- feat_l2_inputs_df$feat_dir
 
 TR <- 1.0 #seconds
 
+l1_inputs <- sub("/gpfs/group/mnh5174/default", "/proj/mnhallqlab/studies", l1_inputs)
+
 #determine nifti files for atlas
 l1_niftis <- sapply(l1_inputs, function(x) {
   fsf <- readLines(file.path(x, "design.fsf"))
@@ -115,6 +123,8 @@ l1_niftis <- sapply(l1_inputs, function(x) {
   nifti <- paste0(sub("set feat_files\\(1\\) \"([^\"]+)\"", "\\1", nifti, perl=TRUE), ".nii.gz")
   return(nifti)
 })
+
+l1_niftis <- sub("/gpfs/group/mnh5174/default", "/proj/mnhallqlab/studies", l1_niftis)
 
 
 #handle unsmoothed or smooth in mask: create truncated files that match smoothed side
@@ -130,7 +140,7 @@ if (data_type != "smoothed") {
   #strip smoothing suffix
   l1_niftis <- sub("(_clock\\d+)_5", "\\1", l1_niftis)
 
-  novalue <- foreach(x=iter(l1_niftis), .packages="RNifti") %dopar% {
+  novalue <- foreach(x=iter(l1_niftis), .packages="RNifti") %do% {
     if (!file.exists(x)) {
       orig_file <- sub("_drop\\d+(_trunc\\d+)*", "", x, perl=TRUE)
       dropn <- as.numeric(sub(".*drop(\\d+).*", "\\1", x, perl=TRUE))
@@ -145,6 +155,7 @@ if (data_type != "smoothed") {
     return(x)
   }
 }
+
 
 #l1_niftis should now contain the unsmoothed nifti files of the same length as the smoothed side
 
@@ -161,4 +172,7 @@ if (!all(fexists <- file.exists(l1_niftis))) {
 #l1_niftis <- l1_niftis[1:5]
 
 #call voxelwise_deconvolution here
-voxelwise_deconvolution(l1_niftis, subinfo, TR=1, time_offset=4.0, atlas_files=atlas_files, mask=NULL, nprocs=2, save_original_ts=FALSE)
+metadata <- feat_l2_inputs_df %>% dplyr::select(subid, run_num, contingency, emotion)
+
+voxelwise_deconvolution(l1_niftis, metadata, out_dir="/proj/mnhallqlab/users/michael/sceptic_decon", TR=1, time_offset=2.0, atlas_files=atlas_files, mask=NULL, nprocs=12, save_original_ts=FALSE,
+  out_file_expression=expression(paste0("sub", this_subj$subid, "_run", this_subj$run_num, "_", atlas_img_name)))

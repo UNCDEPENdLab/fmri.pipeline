@@ -88,6 +88,15 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
     mask[mask < zero_thresh] <- 0.0
     mask[mask >= zero_thresh] <- 1.0
   }
+
+  #setup cluster
+  if (nprocs > 1) {    
+    cl <- makeCluster(nprocs)
+    registerDoParallel(cl)
+    on.exit(try(stopCluster(cl)))
+  } else {
+    registerDoSEQ()
+  }
   
   #loop over atlas files
   for (ai in 1:length(atlas_files)) {
@@ -114,11 +123,9 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
     if (is.null(out_file_expression)) {
       out_file_expression <- expression(paste0(gsub("[/\\]", ".", niftis[si]), "_", atlas_img_name))
     }
-
     
     #loop over niftis in parallel
-    ff <- foreach(si = 1:length(niftis), .packages=c("dplyr", "readr", "data.table", "reshape2", "dependlab", "foreach", "iterators"),
-      .export=c("niftis", "decon_settings")) %dopar% {
+    ff <- foreach(si = 1:length(niftis), .packages=c("dplyr", "readr", "data.table", "reshape2", "dependlab", "foreach", "iterators")) %dopar% {
 
          #get the si-th row of the metadata to match nifti, allow one to use this_subj in out_file_expression
         if (!is.null(add_metadata)) { this_subj <- add_metadata %>% dplyr::slice(si) }
@@ -172,7 +179,8 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
             ss <- Sys.info()
             if (ss["sysname"] == "Linux") {
               if (ss["machine"] == "x86_64") {
-                decon_bin <- system.file("bin", "linux_x64", "deconvolvefilter", package = "fmri.pipeline")
+                #decon_bin <- system.file("bin", "linux_x64", "deconvolvefilter", package = "fmri.pipeline")
+                decon_bin <- "/proj/mnhallqlab/users/michael/fmri.pipeline/inst/bin/linux_x64/deconvolvefilter"
               }
             }
           } else {
@@ -192,7 +200,7 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
             #fo argument is 1/TR: https://github.com/UNCDEPENdLab/deconvolution-filtering/blob/f26df0ea1eb30f2019795f17f93e713517a220e4/ref/backup/deconvolve_filter.m
             #Looking at spm_hrf, it generates a vector of 33 values for the HRF for 1s TR. deconvolvefilter pads the time series at the beginning by this length
             #if you don't return a convolved result, it doesn't do the trimming for you...
-            res <- system(paste0(decon_bin, " -i=", temp_i, " -o=", temp_o, " -convolved=0 -fo=", 1/TR, " -thread=2"), intern=FALSE)
+            res <- system(paste0(decon_bin, " -i=", temp_i, " -o=", temp_o, " -convolved=0 -fo=", 1/TR, " -thread=2 >/dev/null"), intern=FALSE)
             if (res != 0) {
               cat("Problem deconvolving: ", niftis[si], "\n", file=log_file, append=TRUE)
               deconv_mat <- matrix(NA, nrow=nrow(to_deconvolve), ncol=ncol(to_deconvolve))
@@ -218,7 +226,7 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
           select(-i, -j, -k) #omitting i, j, k for now
 
         #add subject metadata, if relevant
-        if (!is.null(add_metadata)) { deconv_df <- deconv_df %>% cbind(this_subj) }
+        #if (!is.null(add_metadata)) { deconv_df <- deconv_df %>% cbind(this_subj) }
 
         write_csv(deconv_df, path=out_name)
         
@@ -232,14 +240,20 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
             mutate(nifti=niftis[si]) %>%
             select(-i, -j, -k) #omitting i, j, k for now
 
-          if (!is.null(add_metadata)) { orig_df <- orig_df %>% cbind(this_subj) }
-
+          #if (!is.null(add_metadata)) { orig_df <- orig_df %>% cbind(this_subj) }
+          
           #update output file for original
           out_name <- file.path(out_dir, atlas_img_name, "original", paste0(eval(out_file_expression), "_original.csv.gz"))
           write_csv(orig_df, path=out_name)
         }
-        
-      }
+    }
+
+    #write metadata as single data.frame that can be merged selectively, cutting down on storage demands in individual files
+    if (!is.null(add_metadata)) {
+      out_name <- file.path(out_dir, atlas_img_name, paste0(atlas_img_name, "_metadata.csv"))
+      write_csv(add_metadata, path=out_name)
+    }
+      
   }
 
   return(invisible(NULL))
