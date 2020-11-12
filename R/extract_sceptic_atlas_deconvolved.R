@@ -102,7 +102,7 @@ if (atlas_files=="") {
 ##                  "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/pauli_combined_integermask_2.3mm.nii.gz")
 
 #whether to use unsmoothed data
-data_type <- "smooth_in_mask" #alternatives "unsmoothed" "smoothed"
+data_type <- "smoothed" #alternatives "unsmoothed" "smoothed"
 bush2015 <- FALSE #whether to use Bush 2015 algorithm or 2011 algorithm
 
 out_dir <- file.path(hippo_dir, "deconvolved_timeseries", data_type)
@@ -174,5 +174,5 @@ if (!all(fexists <- file.exists(l1_niftis))) {
 #call voxelwise_deconvolution here
 metadata <- feat_l2_inputs_df %>% dplyr::select(subid, run_num, contingency, emotion)
 
-voxelwise_deconvolution(l1_niftis, metadata, out_dir="/proj/mnhallqlab/users/michael/sceptic_decon", TR=1, time_offset=2.0, atlas_files=atlas_files, mask=NULL, nprocs=12, save_original_ts=FALSE,
+voxelwise_deconvolution(l1_niftis, metadata, out_dir="/proj/mnhallqlab/users/michael/sceptic_decon", TR=1, time_offset=2.0, atlas_files=atlas_files, mask=NULL, nprocs=18, save_original_ts=FALSE,
   out_file_expression=expression(paste0("sub", this_subj$subid, "_run", this_subj$run_num, "_", atlas_img_name)))

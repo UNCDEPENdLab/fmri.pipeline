@@ -129,7 +129,7 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
     #loop over niftis in parallel
     ff <- foreach(si = 1:length(niftis), .packages=c("dplyr", "readr", "data.table", "reshape2", "dependlab", "foreach", "iterators")) %dopar% {
 
-         #get the si-th row of the metadata to match nifti, allow one to use this_subj in out_file_expression
+      #get the si-th row of the metadata to match nifti, allow one to use this_subj in out_file_expression
       if (!is.null(add_metadata)) {
         this_subj <- add_metadata %>% dplyr::slice(si)
         add_metadata$.nifti[si] <- niftis[si]
@@ -205,7 +205,7 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
             #fo argument is 1/TR: https://github.com/UNCDEPENdLab/deconvolution-filtering/blob/f26df0ea1eb30f2019795f17f93e713517a220e4/ref/backup/deconvolve_filter.m
             #Looking at spm_hrf, it generates a vector of 33 values for the HRF for 1s TR. deconvolvefilter pads the time series at the beginning by this length
             #if you don't return a convolved result, it doesn't do the trimming for you...
-            res <- system(paste0(decon_bin, " -i=", temp_i, " -o=", temp_o, " -convolved=0 -fo=", 1/TR, " -thread=2 >/dev/null"), intern=FALSE)
+            res <- system(paste0(decon_bin, " -i=", temp_i, " -o=", temp_o, " -convolved=0 -fo=", 1/TR, " -thread=2 >/dev/null 2>/dev/null"), intern=FALSE)
             if (res != 0) {
               cat("Problem deconvolving: ", niftis[si], "\n", file=log_file, append=TRUE)
               deconv_mat <- matrix(NA, nrow=nrow(to_deconvolve), ncol=ncol(to_deconvolve))
