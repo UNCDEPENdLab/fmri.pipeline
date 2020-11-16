@@ -1,7 +1,7 @@
-get_mmy3_trial_df <- function(model="selective", groupfixed=TRUE, allow_cache=TRUE) {
+get_mmy3_trial_df <- function(cache_dir="/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline", model="selective", groupfixed=TRUE, allow_cache=TRUE) {
   require(tidyverse)
 
-  expect_file <- paste0("mmy3_trial_df_", model, "_", ifelse(groupfixed, "groupfixed", "subjspecific"), ".rds")
+  expect_file <- file.path(cache_dir, paste0("mmy3_trial_df_", model, "_", ifelse(groupfixed, "groupfixed", "subjspecific"), ".rds"))
   if (allow_cache) {
     if (file.exists(expect_file)) {
       message("Reading cached trial_df from: ", expect_file)
@@ -18,16 +18,17 @@ get_mmy3_trial_df <- function(model="selective", groupfixed=TRUE, allow_cache=TR
   if (model=="fixed") {
     #fixed LR V analysis (not selective maintenance)
     if (groupfixed) {
-      trial_df <- read.csv("/gpfs/group/mnh5174/default/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_fixed_fixedparams_fmri_ffx_trial_statistics.csv.gz")
+      #trial_df <- read.csv("/gpfs/group/mnh5174/default/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_fixed_fixedparams_fmri_ffx_trial_statistics.csv.gz")
+      trial_df <- read.csv("/proj/mnhallqlab/users/michael/default/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_fixed_fixedparams_fmri_ffx_trial_statistics.csv.gz")
     } else {
-      trial_df <- read.csv("/gpfs/group/mnh5174/default/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_fixed_mfx_trial_statistics.csv.gz")
+      trial_df <- read.csv("/proj/mnhallqlab/users/michael/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_fixed_mfx_trial_statistics.csv.gz")
     }
   } else if (model=="fixed_uv") {
     #this is the fixed_uv analysis
     if (groupfixed) {
-      trial_df <- read.csv("/gpfs/group/mnh5174/default/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_fixed_uv_ureset_fixedparams_fmri_ffx_trial_statistics.csv.gz")
+      trial_df <- read.csv("/proj/mnhallqlab/users/michael/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_fixed_uv_ureset_fixedparams_fmri_ffx_trial_statistics.csv.gz")
     } else {
-      trial_df <- read.csv("/gpfs/group/mnh5174/default/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_fixed_uv_ureset_mfx_trial_statistics.csv.gz")
+      trial_df <- read.csv("/proj/mnhallqlab/users/michael/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_fixed_uv_ureset_mfx_trial_statistics.csv.gz")
     }
     
     trial_df <- trial_df %>% 
@@ -42,13 +43,13 @@ get_mmy3_trial_df <- function(model="selective", groupfixed=TRUE, allow_cache=TR
   } else if (model=="selective") {
     #factorized, selective maintenance, equal basis-generalization width
     if (groupfixed) {
-      trial_df <- read.csv("/gpfs/group/mnh5174/default/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_decay_factorize_selective_psequate_fixedparams_ffx_trial_statistics.csv.gz")
+      trial_df <- read.csv("/proj/mnhallqlab/users/michael/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_decay_factorize_selective_psequate_fixedparams_ffx_trial_statistics.csv.gz")
     } else {
-      trial_df <- read.csv("/gpfs/group/mnh5174/default/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_decay_factorize_selective_psequate_mfx_trial_statistics.csv.gz") #may have gotten moved
+      trial_df <- read.csv("/proj/mnhallqlab/users/michael/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_decay_factorize_selective_psequate_mfx_trial_statistics.csv.gz") #may have gotten moved
 
       #old naming scheme
-      #trial_df <- read.csv("/gpfs/group/mnh5174/default/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_decay_factorize_mfx_trial_statistics.csv.gz")
-      #trial_df <- read.csv("/gpfs/group/mnh5174/default/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_decay_mfx_trial_statistics.csv.gz")
+      #trial_df <- read.csv("/proj/mnhallqlab/users/michael/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_decay_factorize_mfx_trial_statistics.csv.gz")
+      #trial_df <- read.csv("/proj/mnhallqlab/users/michael/temporal_instrumental_agent/clock_task/vba_fmri/vba_out/compiled_outputs/mmclock_fmri_decay_mfx_trial_statistics.csv.gz")
     }
   }
 
