@@ -129,7 +129,7 @@ fsl_model_arguments <- list(
   model_suffix="_fse_groupfixed", #factorized, selective, equal generalization width
   root_workdir="/gpfs/scratch/mnh5174/run_fsl_pipeline_qsub_tmp",
   n_cluster_beta_cpus=8, #should be number of l2 contrasts, or lower
-  badids = c(
+  bad_ids = c(
     83,  #I think there are reconstruction problems here -- need to revisit
     23,  #Lied about age (older than stated)
     34,  #Bailed on scan due to claustrophobic reaction

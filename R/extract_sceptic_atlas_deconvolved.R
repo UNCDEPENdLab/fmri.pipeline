@@ -31,7 +31,7 @@ library(readr)
 #vestiges of things that should be passed in
 
 #verify that mr_dir is present as expected
-subinfo <- fsl_model_arguments$subject_covariates
+subinfo <- fsl_model_arguments$subject_data
 feat_run_outdir <- fsl_model_arguments$outdir[run_model_index] #the name of the subfolder for the current run-level model
 feat_lvl3_outdir <- file.path(fsl_model_arguments$group_output_dir, feat_run_outdir) #output directory for this run-level model
 

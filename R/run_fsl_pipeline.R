@@ -25,6 +25,9 @@ subject_df <- read.table("/proj/mnhallqlab/projects/clock_analysis/fmri/data/mmy
     Q_Age_c = Q_Age - mean(Q_Age, na.rm=TRUE)
   )
 
+
+
+
 #Jun2017: further ICAs on the MMClock data suggest a short steady-state problem. Drop 2 volumes for good measure.
 
 #from 2017:
@@ -40,7 +43,7 @@ fsl_model_arguments <- list(
   #analysis_name="MMClock_fixed_aroma_preconvolved",
   #analysis_name="MMClock_aroma_preconvolve_fse_groupfixed_unsmoothed",
   trial_statistics = trial_df,
-  subject_covariates = subject_df,
+  subject_data = subject_df,
   id_col = "id",
   fmri_dir = "/proj/mnhallqlab/studies/MMClock/MR_Proc",
   expectdir = "mni_5mm_aroma", #subfolder name for processed data
@@ -123,7 +126,7 @@ fsl_model_arguments <- list(
   #model_suffix="_fixed_groupfixed", #fixed lr v model at group mean params
   root_workdir="/pine/scr/m/n/mnhallq/run_fsl_pipeline_qsub_tmp",
   n_cluster_beta_cpus=8, #should be number of l2 contrasts, or lower
-  badids = c(11335, #low IQ, ADHD Hx, loss of consciousness
+  bad_ids = c(11335, #low IQ, ADHD Hx, loss of consciousness
     11332, #should be excluded, but scan was terminated early due to repeated movement
     11282, #RTs at the floor for essentially all runs. Not appropriate
     11246, #huge movement and RTs at floor

@@ -74,7 +74,7 @@ subject_df <- read.table("/gpfs/group/mnh5174/default/clock_analysis/fmri/data/m
 fsl_model_arguments <- list(
   analysis_name="MMClock_aroma_preconvolve_fse_groupfixed",
   trial_statistics = trial_df,
-  subject_covariates = subject_df,
+  subject_data = subject_df,
   id_col = "id",
   fmri_dir = "/gpfs/group/mnh5174/default/MMClock/MR_Proc",
   expectdir = "mni_5mm_aroma", #subfolder name for processed data
@@ -96,7 +96,7 @@ fsl_model_arguments <- list(
   model_suffix="_fse_groupfixed", #factorized, selective, equal generalization width
   root_workdir="/gpfs/scratch/mnh5174/run_fsl_pipeline_qsub_tmp",
   n_cluster_beta_cpus=8, #should be number of l2 contrasts, or lower
-  badids = c(11335, #low IQ, ADHD Hx, loss of consciousness
+  bad_ids = c(11335, #low IQ, ADHD Hx, loss of consciousness
     11332, #should be excluded, but scan was terminated early due to repeated movement
     11282, #RTs at the floor for essentially all runs. Not appropriate
     11246, #huge movement and RTs at floor

@@ -19,7 +19,7 @@ library(tidyverse)
 library(dependlab)
 
 #verify that mr_dir is present as expected
-subinfo <- fsl_model_arguments$subject_covariates
+subinfo <- fsl_model_arguments$subject_data
 id_col <- fsl_model_arguments$id_col
 feat_run_outdir <- fsl_model_arguments$outdir[run_model_index] #the name of the subfolder for the current run-level model
 feat_lvl3_outdir <- file.path(fsl_model_arguments$group_output_dir, feat_run_outdir) #output directory for this run-level model
@@ -62,7 +62,7 @@ names(copedf)[1] <- id_col #for matching
 mdf <- merge(subinfo, copedf, by=id_col, all.y=TRUE)
 
 #remove bad ids
-mdf <- mdf %>% filter(!id %in% fsl_model_arguments$badids)
+mdf <- mdf %>% filter(!id %in% fsl_model_arguments$bad_ids)
 mdf <- arrange(mdf, id, model, cope) #should really use !!id_col here?
 
 ##fsl constructs models by cope

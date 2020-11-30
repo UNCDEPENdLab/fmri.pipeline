@@ -41,13 +41,13 @@ extract_glm_betas_atlas <- function(
   
   
   checkmate::assert_list(config_file)
-  checkmate::assert_data_frame(config_file$subject_covariates)
+  checkmate::assert_data_frame(config_file$subject_data)
   checkmate::assert_numeric(config_file$n_l1_copes)
   checkmate::assert_list(config_file$l1_cope_names)
   stopifnot(length(config_file$l1_cope_names) == length(config_file$n_l1_copes))
   sapply(atlas_files, checkmate::check_file_exists)
   
-  subinfo <- fsl_model_arguments$subject_covariates
+  subinfo <- fsl_model_arguments$subject_data
   feat_run_outdir <- fsl_model_arguments$outdir[run_model_index] #the name of the subfolder for the current run-level model
   
   feat_lvl3_outdir <- file.path(fsl_model_arguments$group_output_dir, feat_run_outdir) #output directory for this run-level model
@@ -101,7 +101,7 @@ extract_glm_betas_atlas <- function(
   mdf <- merge(subinfo, copedf, by="id", all.y=TRUE)
   
   #remove bad ids
-  mdf <- mdf %>% filter(!id %in% fsl_model_arguments$badids)
+  mdf <- mdf %>% filter(!id %in% fsl_model_arguments$bad_ids)
   mdf <- arrange(mdf, id, model, cope)
   
   atlas_imgs <- lapply(atlas_files, readNIfTI, reorient=FALSE)
@@ -247,7 +247,7 @@ load("MMClock_aroma_preconvolve_fse_groupfixed.RData")
 
 ## fsl_model_arguments$pipeline_home <- sub(old_root, new_root, fsl_model_arguments$pipeline_home)
 ## fsl_model_arguments$group_output_dir <- sub(old_root, new_root, fsl_model_arguments$group_output_dir)
-## fsl_model_arguments$subject_covariates$mr_dir <- sub(old_root, new_root, fsl_model_arguments$subject_covariates$mr_dir)
+## fsl_model_arguments$subject_data$mr_dir <- sub(old_root, new_root, fsl_model_arguments$subject_data$mr_dir)
 ## fsl_model_arguments$fmri_dir <- sub(old_root, new_root, fsl_model_arguments$fmri_dir, fixed=TRUE)
 
 mean_nz <- function(x) {
@@ -262,21 +262,25 @@ atlas_files <- c("/proj/mnhallqlab/projects/clock_analysis/fmri/pfc_entropy/mask
                  "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/bilateral_striatum_tight_7Networks_2.3mm.nii.gz",
                  "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/pauli_combined_integermask_2.3mm.nii.gz")
 
+#pe max z > 4.41 clusters (break up posterior mega-cluster)
+atlas_files <- "/proj/mnhallqlab/studies/MMClock/group_analyses/MMClock_aroma_preconvolve_fse_groupfixed/sceptic-clock-feedback-pe_max-preconvolve_fse_groupfixed/pe_max/pe_z4p417_k50_clusters.nii.gz"
+
+
 #u_chosen_quantile
-extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=1, extract_z=FALSE,
-  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
+#extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=1, extract_z=FALSE,
+#  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
 
 #v_chosen
-extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=2, extract_z=FALSE,
-  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
+#extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=2, extract_z=FALSE,
+#  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
 
 #v_entropy
-extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=3, extract_z=FALSE,
-  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
+#extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=3, extract_z=FALSE,
+#  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
 
 #rt_vmax_change
-extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=4, extract_z=FALSE,
-  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
+#extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=4, extract_z=FALSE,
+#  extract_beta_series=FALSE, ncpus=4, aggregate=TRUE, aggFUN=mean_nz)
 
 #pe_max at present
 extract_glm_betas_atlas(fsl_model_arguments, atlas_files, run_model_index=5, extract_z=FALSE,

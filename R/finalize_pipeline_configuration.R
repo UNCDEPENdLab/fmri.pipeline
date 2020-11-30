@@ -78,7 +78,7 @@ finalize_pipeline_configuration <- function(fma) {
   if (is.null(fma$pipeline_home)) { fma$pipeline_home <- "/proj/mnhallqlab/clock_analysis/fmri/fsl_pipeline" }
   if (is.null(fma$group_output_dir)) { fma$group_output_dir <- file.path(dirname(fma$fmri_dir), "group_analyses", fma$analysis_name) }
   if (is.null(fma$center_l3_predictors)) { fma$center_l3_predictors <- TRUE }
-  if (is.null(fma$badids)) { fma$badids <- c() }
+  if (is.null(fma$bad_ids)) { fma$bad_ids <- c() }
   if (is.null(fma$scheduler)) { fma$scheduler <- "slurm" } #HPC batch system
   
   if (is.null(fma$zthresh)) { fma$zthresh <- 3.09 }  #1-tailed p=.001 for z stat
@@ -96,8 +96,8 @@ finalize_pipeline_configuration <- function(fma) {
   }  
 
   #remove bad ids before running anything further
-  if (!is.null(fma$badids) && length(fma$badids) > 0L) {
-    fma$subject_covariates <- fma$subject_covariates %>% filter(!id %in% fma$badids) #remove bad ids
+  if (!is.null(fma$bad_ids) && length(fma$bad_ids) > 0L) {
+    fma$subject_data <- fma$subject_data %>% filter(!id %in% fma$bad_ids) #remove bad ids
   }
   
   return(fma)

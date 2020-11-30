@@ -14,14 +14,14 @@ setup_feat_lvl2_inputs <- function(fsl_model_arguments, run_model_index) {
   expectdir <- fsl_model_arguments$expectdir #the subfolder for each subject such as mni_5mm_aroma
   odir <- fsl_model_arguments$outdir[run_model_index] #the expect subfolder name for outputs of this model
   n_l1_copes <- fsl_model_arguments$n_l1_copes[run_model_index]
-  subject_covariates <- fsl_model_arguments$subject_covariates
+  subject_data <- fsl_model_arguments$subject_data
   id_col <- fsl_model_arguments$id_col
   
   #setup inputs for all LVL2 analyses for the current model
-  feat_runs <- do.call(rbind, lapply(1:nrow(subject_covariates), function(s) {
-    rr <- system(paste0("find ", file.path(subject_covariates$mr_dir[s], expectdir), " -mindepth 2 -iname \"FEAT_LVL1_run*.feat\" -ipath \"*/", odir, "/*\" -type d"), intern=TRUE)
+  feat_runs <- do.call(rbind, lapply(1:nrow(subject_data), function(s) {
+    rr <- system(paste0("find ", file.path(subject_data$mr_dir[s], expectdir), " -mindepth 2 -iname \"FEAT_LVL1_run*.feat\" -ipath \"*/", odir, "/*\" -type d"), intern=TRUE)
     if (length(rr) < 1L) { return(NULL) } # subjects with no results will fall out in the rbind
-    dd <- data.frame(subid=subject_covariates[[id_col]][s], mr_dir=subject_covariates$mr_dir[s], feat_dir=rr, run_num=as.integer(sub(".*FEAT_LVL1_run(\\d+)\\.feat.*", "\\1", rr, perl=TRUE)), stringsAsFactors=FALSE)
+    dd <- data.frame(subid=subject_data[[id_col]][s], mr_dir=subject_data$mr_dir[s], feat_dir=rr, run_num=as.integer(sub(".*FEAT_LVL1_run(\\d+)\\.feat.*", "\\1", rr, perl=TRUE)), stringsAsFactors=FALSE)
     return(dd)
   }))
   
