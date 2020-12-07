@@ -1,45 +1,45 @@
-#This is a small helper function to validate the fsl_model_arguments list structure.
+#This is a small helper function to validate the glm_model_arguments list structure.
 #It adds a few details such as the output directory to make it less burdensome for to setup a pipeline
-#N.B. fma is a shorthand abbreviation for fsl_model_arguments, to save typing
-finalize_pipeline_configuration <- function(fma) {
+#N.B. gma is a shorthand abbreviation for glm_model_arguments, to save typing
+finalize_pipeline_configuration <- function(gma) {
 
-  fma$outdir <- sapply(fma$l1_model_variants, function(x) {
+  gma$outdir <- sapply(gma$l1_model_variants, function(x) {
     paste0("l1-", paste(x, collapse="-"), #define output directory based on combination of signals requested
-      ifelse(fma$usepreconvolve, "-preconvolve", ""),
-      fma$model_suffix)
+      ifelse(gma$use_preconvolve, "-preconvolve", ""),
+      gma$model_suffix)
   })
 
   #setup l1 copes, cope names, and contrasts.
   #for now, always create a diagonal contrast matrix so that we start with 1 cope per EV
-  fma$n_l1_copes <- c() #number of level 1 copes per model
-  fma$l1_cope_names <- list() #names of level 1 copes per model
+  gma$n_l1_copes <- c() #number of level 1 copes per model
+  gma$l1_cope_names <- list() #names of level 1 copes per model
   final_l1_cmats <- list() #for holding contrast matrices after setup
   
   #populate model names for l1_model_variants
-  if (is.null(names(fma$l1_model_variants))) {
-    names(fma$l1_model_variants) <- sapply(fma$l1_model_variants, function(x) { paste(x, collapse="-") })
+  if (is.null(names(gma$l1_model_variants))) {
+    names(gma$l1_model_variants) <- sapply(gma$l1_model_variants, function(x) { paste(x, collapse="-") })
   } else {
-    names(fma$l1_model_variants) <- sapply(1:length(fma$l1_model_variants), function(i) {
-      if (names(fma$l1_model_variants)[i] == "") {
-        return(paste(fma$l1_model_variants[[i]], collapse="-")) #default name to collapse of individual EVs
+    names(gma$l1_model_variants) <- sapply(1:length(gma$l1_model_variants), function(i) {
+      if (names(gma$l1_model_variants)[i] == "") {
+        return(paste(gma$l1_model_variants[[i]], collapse="-")) #default name to collapse of individual EVs
       } else {
-        return(names(fma$l1_model_variants)[i]) #unchanged user nomenclature for model name
+        return(names(gma$l1_model_variants)[i]) #unchanged user nomenclature for model name
       }
     })
   }
   
-  for (ii in 1:length(fma$l1_model_variants)) {
+  for (ii in 1:length(gma$l1_model_variants)) {
     #generate a diagonal matrix of contrasts
-    regressors <- fma$l1_model_variants[[ii]]
+    regressors <- gma$l1_model_variants[[ii]]
     
     cmat <- diag(length(regressors))
     rownames(cmat) <- colnames(cmat) <- regressors
 
-    mname <- names(fma$l1_model_variants)[ii]
+    mname <- names(gma$l1_model_variants)[ii]
 
     #are there additional l1 contrasts?
-    if (!is.null(fma$l1_contrasts[[mname]])) {
-      l1_contrasts <- fma$l1_contrasts[[mname]]
+    if (!is.null(gma$l1_contrasts[[mname]])) {
+      l1_contrasts <- gma$l1_contrasts[[mname]]
       #l1_contrasts should be a list of named vectors
       #each element of the list is a new contrast to be added to the current l1 model
       #the names of the elements become the contrast names
@@ -62,31 +62,31 @@ finalize_pipeline_configuration <- function(fma) {
     }
 
     final_l1_cmats[[mname]] <- cmat
-    fma$n_l1_copes[mname] <- nrow(cmat)
+    gma$n_l1_copes[mname] <- nrow(cmat)
     l1_cope_names <- rownames(cmat)
     names(l1_cope_names) <- paste0("cope", 1:length(l1_cope_names)) #names attribute holds cope numbering scheme in FSL
-    fma$l1_cope_names[[mname]] <- l1_cope_names
+    gma$l1_cope_names[[mname]] <- l1_cope_names
   }
 
   #remove user-specified contrasts and supplant them with computed contrast matrices
   #use of final_l1_cmats temp variable ensures that the length of $l1_contrasts is the same as other elements like $l1_model_variants
-  fma$l1_contrasts <- final_l1_cmats
+  gma$l1_contrasts <- final_l1_cmats
   
-  fma$workdir <- file.path(fma$root_workdir, fma$outdir) #temp folder for each analysis variant
-  fma$pipeline_cpus <- length(fma$l1_model_variants) #number of workers to setup at the pipeline level (i.e., over run variants)
-  if (is.null(fma$l2_cpus)) { fma$l2_cpus <- 20 } #number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
-  if (is.null(fma$pipeline_home)) { fma$pipeline_home <- "/proj/mnhallqlab/clock_analysis/fmri/fsl_pipeline" }
-  if (is.null(fma$group_output_dir)) { fma$group_output_dir <- file.path(dirname(fma$fmri_dir), "group_analyses", fma$analysis_name) }
-  if (is.null(fma$center_l3_predictors)) { fma$center_l3_predictors <- TRUE }
-  if (is.null(fma$bad_ids)) { fma$bad_ids <- c() }
-  if (is.null(fma$scheduler)) { fma$scheduler <- "slurm" } #HPC batch system
+  gma$workdir <- file.path(gma$root_workdir, gma$outdir) #temp folder for each analysis variant
+  gma$pipeline_cpus <- length(gma$l1_model_variants) #number of workers to setup at the pipeline level (i.e., over run variants)
+  if (is.null(gma$l2_cpus)) { gma$l2_cpus <- 20 } #number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
+  if (is.null(gma$pipeline_home)) { gma$pipeline_home <- "/proj/mnhallqlab/clock_analysis/fmri/fsl_pipeline" }
+  if (is.null(gma$group_output_dir)) { gma$group_output_dir <- file.path(dirname(gma$fmri_dir), "group_analyses", gma$analysis_name) }
+  if (is.null(gma$center_l3_predictors)) { gma$center_l3_predictors <- TRUE }
+  if (is.null(gma$bad_ids)) { gma$bad_ids <- c() }
+  if (is.null(gma$scheduler)) { gma$scheduler <- "slurm" } #HPC batch system
   
-  if (is.null(fma$zthresh)) { fma$zthresh <- 3.09 }  #1-tailed p=.001 for z stat
-  if (is.null(fma$clustsize)) { fma$clustsize <- 34 } #based on 3dClustSim using ACFs for first-level FEAT runs
-  if (is.null(fma$glm_software)) { fma$glm_software <- "fsl" } #default to FSL FEAT
+    if (is.null(gma$zthresh)) { gma$zthresh <- 3.09 }  #1-tailed p=.001 for z stat
+  if (is.null(gma$clustsize)) { gma$clustsize <- 34 } #based on 3dClustSim using ACFs for first-level FEAT runs
+  if (is.null(gma$glm_software)) { gma$glm_software <- "fsl" } #default to FSL FEAT
   
   #ensure that the user has specified some sort of clock event in the model
-  for (v in fma$l1_model_variants) {
+  for (v in gma$l1_model_variants) {
     if (!any(c("clock", "clock_bs") %in% v)) {
       stop("No clock event is in the model: ", paste(v, collapse=","))
     }
@@ -96,9 +96,9 @@ finalize_pipeline_configuration <- function(fma) {
   }  
 
   #remove bad ids before running anything further
-  if (!is.null(fma$bad_ids) && length(fma$bad_ids) > 0L) {
-    fma$subject_data <- fma$subject_data %>% filter(!id %in% fma$bad_ids) #remove bad ids
+  if (!is.null(gma$bad_ids) && length(gma$bad_ids) > 0L) {
+    gma$subject_data <- gma$subject_data %>% filter(!id %in% gma$bad_ids) #remove bad ids
   }
   
-  return(fma)
+  return(gma)
 }
