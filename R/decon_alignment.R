@@ -18,7 +18,10 @@ source("event_lock_timeseries.R")
 #setwd(file.path(getMainDir(), "projects", "clock_analysis", "fmri", "hippo_voxelwise"))
 setwd(file.path(getMainDir(), "users", "michael", "sceptic_decon"))
 
-trial_df <- get_mmy3_trial_df(model="selective", groupfixed=TRUE)
+trial_df <- get_mmy3_trial_df(model="selective", groupfixed=TRUE) %>%
+  mutate(rt_time=clock_onset + rt_csv/1000, #should be pretty redundant with isi_onset, but still
+    rt_vmax=rt_vmax/10, #to put into seconds
+    rt_vmax_cum=clock_onset + rt_vmax)
 
 ## trial_df <- read_csv(file.path(getMainDir(), "clock_analysis/fmri/data/mmclock_fmri_decay_factorize_selective_psequate_mfx_trial_statistics.csv.gz"))
 ## trial_df <- trial_df %>%
@@ -54,9 +57,12 @@ base_dir <- file.path(getMainDir(), "users/michael/sceptic_decon")
 atlas_dirs <- list.dirs(base_dir, recursive=FALSE)
 atlases <- file.path("/proj/mnhallqlab/projects/clock_analysis/fmri/pfc_entropy/masks", paste0(basename(atlas_dirs), ".nii.gz"))
 
+atlas_dirs <- grep("Schaefer", atlas_dirs, value=TRUE)
+atlases <- grep("Schaefer", atlases, value=TRUE)
+
 #hard code DAN for a bit
-atlas_dirs <- atlas_dirs[7]
-atlases <- atlases[7]
+#atlas_dirs <- atlas_dirs[7]
+#atlases <- atlases[7]
 
 ncores <- Sys.getenv("ncores")
 ncores <- ifelse(ncores == "", 20, as.numeric(ncores))
@@ -65,7 +71,7 @@ cl <- makeCluster(ncores)
 registerDoParallel(cl)
 on.exit(stopCluster(cl))
 
-events <- c("clock_onset", "feedback_onset", "clock_long", "feedback_long") #"rt_vmax_cum", 
+events <- c("clock_onset", "feedback_onset", "clock_long", "feedback_long", "rt_long", "rt_vmax_cum")
 nbins <- 12 #splits along axis
 
 for (a in 1:length(atlas_dirs)) {
@@ -90,12 +96,16 @@ for (a in 1:length(atlas_dirs)) {
   for (e in events) {
     if (e == "clock_long") {
       evt_col <- "clock_onset"
-      time_before=-1
+      time_before=-5
       time_after=10
     } else if (e == "feedback_long") {
       evt_col <- "feedback_onset"
       time_before=-1
       time_after=10
+    } else if (e == "rt_long") {
+      evt_col <- "rt_time"
+      time_before=-4
+      time_after=7
     } else {
       evt_col <- e
       time_before=-3
