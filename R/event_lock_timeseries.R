@@ -95,14 +95,25 @@ event_lock_decon <- function(ts_data, run_df,
 
 }
 
-#' worker function for taking a list of windowed time series by mask value, interpolating them onto a time grid,
+#' front-end function for taking a list of windowed time series by mask value, interpolating them onto a time grid,
 #' and (optionally) averaging across voxels/units within a value to derive the mean interpolated time series
-get_medusa_interpolated_ts <- function(t_by_value, idcol="id", runcol="run", trialcol="run_trial",
-                                       time_before=-3, time_after=3, tr=1.0, output_resolution=tr,
-                                       logfile="evtlockerrors.txt") {
+get_medusa_interpolated_ts <-  function(ts_data, run_df, time_before=-3, time_after=3, tr=1.0, output_resolution=tr,
+                                        vm=c(id="id", run="run", trial="trial", run_trial="trial", time="time", atlas_value="atlas_value")
+                                        aggregate=TRUE, logfile="evtlockerrors.txt") {
+  
+  checkmate::assert_data_frame(ts_data)
+  checkmate::assert_data_frame(run_df)
 
-  checkmate::assert_list(t_by_value)
-  windowed_ts <- event_lock_decon(t_by_value, 
+  #divide ts_data into usable chunks that can be passed to group_modify
+  grouping <- c()
+  #if (vm["id"] %in% names(ts_data)) { }
+
+  #dynamically group, then pass chunks to the interpolation fnct
+  res <- ts_data %>% group_by(grouping) %>%
+    group_modify(interp(.x))
+    
+  
+  windowed_ts <- event_lock_decon(ts_data
     subj_df, event = evt_col, time_before=time_before, time_after=time_after),
 
   #interpolate and aggregate
