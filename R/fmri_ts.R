@@ -5,10 +5,6 @@ library(R6)
 # - metadata: id, trial, events (trials x signals)
 # - time -> unit mapping: vnum, atlas_value, region etc. (units x grouping)
 
-
-
-
-
 #ts_data
 # $time: time index
 # $signal: only used if there is more than one value column (multivariate ts)
@@ -20,6 +16,11 @@ library(R6)
 #' @importFrom R6 R6Class
 #' @export
 fmri_ts <- R6::R6Class("fmri_ts",
+  private=list(
+    cvars=NULL, #internal names of cluster variables
+    vvars=NULL, #internal names of value variables
+    vmvec=NULL  #mapping between input names and internal names
+  ),
   public=list(
     #' @field ts_data time x signals data.table
     ts_data=NULL,
@@ -30,23 +31,60 @@ fmri_ts <- R6::R6Class("fmri_ts",
     #' @field event_data trial x event data, used for aligning time series with events
     event_data=NULL,
 
-    #' @vm a list of variable mappings between internal constructs and input variable names
+    #' @field vm a list of variable mappings between internal constructs and input variable names
     vm=NULL,
+
+    #' @field tr the repetition time (TR) of the fMRI sequence in seconds
+    tr=NULL,
 
     #' @description Create a new fmri_ts object
     #' @param ts_data a data.frame or data.table containing time series
     #' @param event_data a data.frame containing trial-level events that occurred in the time period represented by \code{ts_data}
     #' @param vm a list of variable names used in \code{ts_data} and \code{event_data} that map onto internal constructs
-    initialize = function(ts_data=NULL, event_data=NULL, vm=NULL) {
-      default_vm <- list(id="id", run="run", trial="trial", run_trial="trial", time="time", value="value", cluster="cluster")
+    initialize = function(ts_data=NULL, event_data=NULL, vm=NULL, tr=NULL) {
+      if (is.null(tr)) { stop("tr must be provided at object initialization") }
+      checkmate::assert_numeric(tr, lower=1e-2, null.ok=FALSE)
+      
+      default_vm <- list(id="id", run="run", trial="trial", run_trial="run_trial", time="time", value="value")
+      if ("cluster" %in% names(ts_data)) { default_vm[["cluster"]] <- "cluster" } #add default cluster mapping if clustered
       for (nn in names(default_vm)) { #populate default variable mappings if not provided in input vector
         if (!nn %in% names(vm)) { vm[nn] <- default_vm[nn] }
       }
 
       checkmate::assert_data_frame(ts_data)
-      checkmate::assert_data_frame(event_data)
-      #stopifnot(all(vm[c("time", "signal")] %in% names(ts_data)))
+      checkmate::assert_data_frame(event_data, null.ok=TRUE)
 
+      #setup standardized naming
+      private$vmvec <- unlist(vm) #yields cluster1, cluster2, etc.
+      if ("cluster" %in% names(vm)) { private$cvars <- paste0("cluster", 1:length(vm$cluster)) }
+      if ("value" %in% names(vm)) { private$vvars <- paste0("value", 1:length(vm$value)) }
+      
+      if (!is.null(event_data)) {
+        if (!is.null(vm$id)) {
+          stopifnot(vm$id %in% names(event_data))
+          if (length(unique(event_data[[vm$id]])) > 1L) {
+            stop("fmri_ts objects only support single runs of data for single IDs. You can combine fmri_ts objects using combine_ts()")
+          }
+        }
+        if (!is.null(vm$run)) {
+          stopifnot(vm$run %in% names(event_data))
+          if (length(unique(event_data[[vm$run]])) > 1L) {
+            stop("fmri_ts objects only support single runs of data for single IDs. You can combine fmri_ts objects using combine_ts()")
+          }
+        }
+        
+        checkmate::assert_string(vm$trial) #singular string
+        stopifnot(vm$trial %in% names(event_data))
+
+        event_data <- data.table(event_data)
+        
+        #handle internal renaming to make programming with these objects easy
+        setnames(event_data, private$vmvec, names(private$vmvec), skip_absent=TRUE)
+
+        setorderv(event_data, vm$trial) #order by trial
+      }
+      
+      #verify presence of required columns      
       sapply(vm[c("time", "value", "cluster")], function(x) { stopifnot(all(x %in% names(ts_data))) } )
       
       #always make ts_data long/tidy? this is nice, but a) double or quadruples RAM demand, and b) adds compute time
@@ -60,10 +98,15 @@ fmri_ts <- R6::R6Class("fmri_ts",
       #conclusion: for internal object storage, sort by clustering variables, then use RLE encoding of keys to compress object
       #  add method $get_ts that returns the rehydrated data (with inverse.rle)
 
+      #convert to data table for speed, memory management
       ts_data <- data.table(ts_data)
-      setorderv(ts_data, vm[["cluster"]])
-      ts_keys <- sapply(vm[["cluster"]], function(x) { rle(ts_data[[x]]) }, simplify=FALSE)
-      ts_data[,vm[["cluster"]]:=NULL] #drop key columns
+
+      #handle internal renaming to make programming with these objects easy
+      setnames(ts_data, private$vmvec, names(private$vmvec), skip_absent=TRUE)
+
+      setorderv(ts_data, private$cvars)
+      ts_keys <- sapply(private$cvars, function(x) { rle(ts_data[[x]]) }, simplify=FALSE)
+      ts_data[, private$cvars := NULL] #drop key columns
 
       self$ts_data <- ts_data
       self$ts_keys <- ts_keys
@@ -71,14 +114,22 @@ fmri_ts <- R6::R6Class("fmri_ts",
       self$vm <- vm
     },
 
-    #helper function to get rehydrated object with key values
-    get_ts = function() {
-      tsd <- self$ts_data
+    #' @description method to get rehydrated time series object with key values
+    #' @param orig_names boolean indicating whether to return data.table with original naming scheme. Default: FALSE
+    get_ts = function(orig_names=FALSE) {
+      tsd <- data.table::copy(self$ts_data) #ensure that we copy the object to avoid altering $ts_data
       for (kk in 1:length(self$ts_keys)) { tsd[, names(self$ts_keys)[kk] := inverse.rle(self$ts_keys[[kk]])] }
-      setcolorder(tsd, self$vm[["cluster"]]) #put clustering variables first in object
+      setcolorder(tsd, private$cvars) #put clustering variables first in object
+      if (isTRUE(orig_names)) { setnames(tsd, names(private$vmvec), private$vmvec, skip_absent=TRUE) }
+      return(tsd)
+    },
+    get_cvars = function() { #simple get method to allow access to cluster variables
+      return(private$cvars)
     },
     export = function(filename) {
       
     }
   )
 )
+
+
