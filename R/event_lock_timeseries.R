@@ -26,7 +26,7 @@ g#' function to get interpolated event locked data
 event_lock_decon <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
                              collide_before=NULL, collide_after=NULL, pad_before=-1, pad_after=1) {
 
-  ts_data <- fmri_obj$get_ts()
+  ts_data <- fmri_obj$get_ts(orig_names=TRUE) #so that vm pass-through to returned object works
   run_df <- fmri_obj$event_data
   vm <- fmri_obj$vm
   
@@ -47,7 +47,7 @@ event_lock_decon <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
 
   if (any(tt <- table(run_df[[ vm[["trial"]] ]]) > 1L)) {
     print(tt[tt > 1L])
-    stop("run_df contains duplicated trials. Cannot figure out how to event-lock based on this.")
+   stop("run_df contains duplicated trials. Cannot figure out how to event-lock based on this.")
   }
   
   trials <- run_df[[ vm[["trial"]] ]] %>% sort() #sorted vector of trials
@@ -83,16 +83,27 @@ event_lock_decon <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
     
     #enforce colliding subsequent event
     if (evt_after < Inf) { trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) < evt_after) }
+
+    #populate trial field
+    trial_ts[[ vm[["trial"]] ]] <- trials[t]
     
     #add these data to trial list
     tlist[[t]] <- trial_ts
+
   }
 
   names(tlist) <- trials
   
   #combine rows to stack trial-locked time series for this atlas value
-  #tdf <- bind_rows(tlist)
-  return(tlist)
+  tdf <- bind_rows(tlist)
+
+  #convert to a clustered fmri_ts object for consistency
+  res <- fmri_ts$new(ts_data=tdf, event_data=fmri_obj$event_data, vm=fmri_obj$vm, tr=fmri_obj$tr)
+
+  #add trial as keying variable
+  res$add_clusters(vm[["trial"]])
+  
+  return(res)
 
 }
 
@@ -115,8 +126,8 @@ get_medusa_interpolated_ts <- function(fmri_obj, event=NULL, time_before=-3.0, t
   talign <- event_lock_decon(fmri_obj, event=event, time_before=time_before, time_after=time_after,
     pad_before=pad_before, pad_after=pad_after, collide_before=collide_before, collide_after=collide_after)
 
-  #talign is list of aligned data by trial
-
+  #talign is now an fmri_ts object keyed by trial (and other clustering variables)
+  
   #need to interpolate by cluster variables
   decon_res <- interpolate_decon(talign, time_before=time_before, time_after=time_after, output_resolution=output_resolution)
   
@@ -141,15 +152,61 @@ get_medusa_compression_score <- function() {
 }
 
 
-interpolate_decon <- function(trial_list, time_before=-3, time_after=3, output_resolution=1.0, aggregate=TRUE) {
+interpolate_decon <- function(a_obj, evt_time="time_map", time_before=-3, time_after=3, output_resolution=1.0, group_by=NULL) {
+  #basically need to split align_obj on clustering units, then interpolate within clusters
 
+  #worker to apply a set of 
+  interpolate_worker <- function(to_interpolate, funs=list(mean=mean, median=median, sd=sd)) {
+    #For now, we only support linear interpolation.
+    #Because of this, interpolation of a mean time series is the same is the mean of interpolated time series.
+    #But the former is faster to compute
+    #https://math.stackexchange.com/questions/15596/mean-of-interpolated-data-or-interpolation-of-means-in-geostatistics
+
+    interp_agg <- to_interpolate %>% group_by(across(evt_time)) %>%
+      summarize(across("value", funs), .groups="drop")
+
+    #abc <- to_interpolate[, by=evt_time]
+    
+    #rare, but if we have no data at tail end of run, we may not be able to interpolate
+    if (nrow(to_interpolate) < 2) {
+      #cat("For subject:", trial_df[[idcol]][1], ", insufficient interpolation data for run:",
+      #  trial_df[[runcol]][1], ", trial:", trials[t], "\n", file=logfile, append=TRUE)
+      next
+    }
+
+    vcols <- grep("value_.*", names(interp_agg), value=TRUE)
+    tout <- seq(time_before, time_after, by=output_resolution)
+    df <- data.frame(time_map=tout, sapply(vcols, function(cname) {
+      approx(x=interp_agg[[evt_time]], y=interp_agg[[cname]], xout=tout)$y
+    }, simplify=FALSE))
+
+    return(df)
+  }
+
+  #we need to ensure that multivariate outcomes are stored as a key-value pair of columns, rather than
+  # in wide format. This allows .SD to be the entire data.table per grouped chunk
+
+  output_dt <- a_obj$get_ts(orig_names=TRUE) %>%
+    melt(measure.vars=a_obj$vm$value, variable.name="ts_key", values.name="value")
+
+  output_dt <- output_dt[, interpolate_worker(.SD), by=c("ts_key", group_by)]
+
+  #reshape multiple signals to wide format again
+  xx <- dcast(output_dt, formula = ... ~ ts_key, value.var=grep("value_.*", names(output_dt), value=TRUE), sep="|")
+  names(xx) <- sub("value_([^|]+)\\|(.+)", "\\2_\\1", names(xx), perl=TRUE)
+
+  return(xx)
+}
+
+
+  
   ##yy <- yy %>% group_by(across(matches("cluster\\d+")))
-  interpolated_result <- lapply(trial_list, function(bytrial) {
+  interpolated_result <- lapply(align_obj, function(bytrial) {
     
     #add dummy cluster column if not clustered data
     if (!any(grepl("cluster\\d+", names(bytrial), perl=TRUE))) { bytrial[, cluster1 := 1] }
     
-    #convert multivariate value columns to long form
+    #convert multivariate value columns to long form for grouped interpolation
     bytrial <- bytrial %>% pivot_longer(cols=matches("value\\d+"), names_to="key", values_to="value")
 
     group_string <- c(grep("cluster\\d+", names(bytrial), perl=TRUE, value=TRUE), "key", "time_map")
@@ -180,11 +237,6 @@ interpolate_decon <- function(trial_list, time_before=-3, time_after=3, output_r
   
 }
 
-mean
-
-
-      
-      
       interp_all <- interp %>% left_join(interp_sd, by="evt_time") %>% 
         mutate("{trialcol}" := trials[t], atlas_value=this_data$atlas_value[1])
       

@@ -7,15 +7,15 @@
 #' @export
 rle_dt <- R6::R6Class("rle_dt",
   private=list(
-    key_metadata=NULL #at present, levels of factor and whether ordered
-  ),
-  public=list(
     #' @field keyed data.table object
     data=NULL,
 
     #' @field keys RLE-encoded clustering/keying variables
     keys=NULL,
 
+    key_metadata=NULL, #at present, levels of factor and whether ordered
+  ),
+  public=list(
     #' @description Create an RLE-encoded copy of the data
     #' @param data A data.frame or data.table object containing original data
     #' @keys A character vector of keys within \code{data} that should be RLE-encoded
@@ -60,23 +60,23 @@ rle_dt <- R6::R6Class("rle_dt",
         setorderv(dt, perms[best_order,])
         
         dt[, (keys) := NULL] #drop key columns
-        self$keys <- klist[[best_order]] #set keys field
+        private$keys <- klist[[best_order]] #set keys field
       }
 
       #set data field
-      self$data <- dt
+      private$data <- dt
     },
 
     #' @description Simple method to return the data.table with all columns in their original form.
     #' @detail Note that the data are modified slightly in that the keys columns are placed first,
     #'   and the data are ordered in the order of the keys (as originally provided, left-to-right)
     get = function() {
-      dd <- data.table::copy(self$data) #ensure that we copy the object to avoid altering $data
+      dd <- data.table::copy(private$data) #ensure that we copy the object to avoid altering $data
 
       #rehydrate key columns
-      if (!is.null(self$keys)) {
-        for (kk in names(self$keys)) {
-          dd[, (kk) := inverse.rle(self$keys[[kk]])]
+      if (!is.null(private$keys)) {
+        for (kk in names(private$keys)) {
+          dd[, (kk) := inverse.rle(private$keys[[kk]])]
 
           #handle factors
           if (!is.null(meta <- private$key_metadata[[kk]])) {
@@ -87,8 +87,8 @@ rle_dt <- R6::R6Class("rle_dt",
             }
           }
         }
-        setcolorder(dd, names(self$keys)) #put clustering variables first in object
-        setorderv(dd, names(self$keys)) #order by original key inputs
+        setcolorder(dd, names(private$keys)) #put clustering variables first in object
+        setorderv(dd, names(private$keys)) #order by original key inputs
       }
       return(dd)
     }

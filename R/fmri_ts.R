@@ -112,6 +112,7 @@ fmri_ts <- R6::R6Class("fmri_ts",
       self$ts_keys <- ts_keys
       self$event_data <- event_data
       self$vm <- vm
+      self$tr <- tr
     },
 
     #' @description method to get rehydrated time series object with key values
@@ -123,6 +124,24 @@ fmri_ts <- R6::R6Class("fmri_ts",
       if (isTRUE(orig_names)) { setnames(tsd, names(private$vmvec), private$vmvec, skip_absent=TRUE) }
       return(tsd)
     },
+
+    #' @description method to add a variable in ts_data to the set of clustering variables for further use
+    add_clusters = function(cv) {
+      stopifnot(all(cv %in% names(self$ts_data)))
+      for (vname in cv) {
+        nclus <- length(private$cvars)
+        newvar <- paste0("cluster", nclus+1)
+        private$cvars <- c(private$cvars, newvar)
+        self$ts_keys[[newvar]] <- rle(self$ts_data[[vname]])      
+        
+      }
+
+      self$vm[["cluster"]] <- c(self$vm[["cluster"]], cv)
+      private$vmvec <- unlist(self$vm) #yields cluster1, cluster2, etc.
+
+      self$ts_data[, (cv) := NULL] #drop new keys
+    },
+    
     get_cvars = function() { #simple get method to allow access to cluster variables
       return(private$cvars)
     },
