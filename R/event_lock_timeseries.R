@@ -1,12 +1,8 @@
-g#' function to get interpolated event locked data
-#' @param t_by_value List of time series data where each element is a bin (cutting continuous variable) or
-#'   unique mask value (integer mask)
-#' @param trial_df Trial-level data frame containing timing of events, used for event-locking time series.
-#'   This should be a data frame only for the time series passed in for this subject/run (i.e., \code{t_by_value}).
-#' @param idcol Column name of the unique participant identifier in \code{trial_df}.
-#' @param runcol Column name of the fMRI run identifier (for multi-run datasets) in \code{trial_df}. If
-#'   NULL is passed, a run column with a value of 1 is added for consistency in outputs.
-#' @param event Name of column in \code{trial_df} that identifies onset for event of interest
+#' function to get interpolated event locked data
+#' @param fmri_obj An fmri_ts object containing time series data that are optionally keyed on one or more
+#'   grouping variables (e.g., ROI). The fmri_obj must also contain trial-level data (in the $event_data field)
+#'   for event-locking to proceed.
+#' @param event Name of column in \code{fmri_obj$event_data} that identifies onset for event of interest
 #' @param time_before How many seconds before the \code{event} do we want data. Default: -3
 #' @param time_after How many seconds after the \code{event} do we want data. Default: 3
 #' @param collide_before An optional vector of column names in \code{trial_df} that set a boundary on the earliest
@@ -15,16 +11,18 @@ g#' function to get interpolated event locked data
 #' @param collide_after An optional vector of column names in \code{trial_df} that set a boundary on the latest
 #'   time point used in interpolation. This effectively truncates the time series for interpolation to a smaller window
 #'   than specified by \code{time_after}.
-#' @param tr the repetition time of the scanning sequence, in seconds.
-#' @param output_resolution the sampling frequency (in seconds) of the interpolated data. Defaults to be
-#'   the same as \code{tr}.
+#' @param pad_before Number of seconds to include in the epoch time window before the event of interest. Interpolation
+#'   spans the window from \code{time_before} to \code{time_after}, but padding includes data points at the
+#'   boundary that can help to have sufficient data to interpolate early and late times within the epoch.
+#' @param pad_after Number of seconds to include in the epoch time window after the event of interest.
 #' @param logfile Name of log file containing event-locking problems
 #' 
 #' @importFrom dplyr filter pull bind_rows
+#' @importFrom checkmate assert_numeric assert_data_frame assert_string assert_subset
 #' 
 #' @export
-event_lock_decon <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
-                             collide_before=NULL, collide_after=NULL, pad_before=-1, pad_after=1) {
+event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
+                          collide_before=NULL, collide_after=NULL, pad_before=-1, pad_after=1) {
 
   ts_data <- fmri_obj$get_ts(orig_names=TRUE) #so that vm pass-through to returned object works
   run_df <- fmri_obj$event_data
@@ -47,7 +45,7 @@ event_lock_decon <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
 
   if (any(tt <- table(run_df[[ vm[["trial"]] ]]) > 1L)) {
     print(tt[tt > 1L])
-   stop("run_df contains duplicated trials. Cannot figure out how to event-lock based on this.")
+    stop("run_df contains duplicated trials. Cannot figure out how to event-lock based on this.")
   }
   
   trials <- run_df[[ vm[["trial"]] ]] %>% sort() #sorted vector of trials
@@ -73,10 +71,10 @@ event_lock_decon <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
     }
    
     if (is.na(evt_onset)) { next } #times are missing for some events on early trials (like rt_vmax_cum)
-    ts_data$time_map <- ts_data[[ vm[["time"]] ]] - evt_onset
+    ts_data$evt_time <- ts_data[[ vm[["time"]] ]] - evt_onset
 
     #add time on either side of interpolation grid to have preceding time points that inform linear interp
-    trial_ts <- ts_data %>% filter(time_map > time_before - pad_before & time_map < time_after + pad_after)
+    trial_ts <- ts_data %>% filter(evt_time > time_before + pad_before & evt_time < time_after + pad_after)
 
     #enforce colliding preceding event
     if (evt_before > -Inf) { trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) > evt_before) }
@@ -97,11 +95,12 @@ event_lock_decon <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
   #combine rows to stack trial-locked time series for this atlas value
   tdf <- bind_rows(tlist)
 
-  #convert to a clustered fmri_ts object for consistency
+  #convert to a keyed fmri_ts object for consistency
   res <- fmri_ts$new(ts_data=tdf, event_data=fmri_obj$event_data, vm=fmri_obj$vm, tr=fmri_obj$tr)
-
+  res$replace_vm(time="evt_time")
+  
   #add trial as keying variable
-  res$add_clusters(vm[["trial"]])
+  res$add_keys(vm[["trial"]])
   
   return(res)
 
@@ -109,64 +108,90 @@ event_lock_decon <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
 
 #' front-end function for taking a list of windowed time series by mask value, interpolating them onto a time grid,
 #' and (optionally) averaging across voxels/units within a value to derive the mean interpolated time series
-#event_lock_decon <- function(ts_data, run_df,
+#event_lock_ts <- function(ts_data, run_df,
 #                             vm=c(id="id", run="run", trial="trial", run_trial="trial", time="time", atlas_value="atlas_value"),
 #                             event=NULL, time_before=-3, time_after=3, collide_before=NULL, collide_after=NULL,
 #                             pad_before=-1.5*tr, pad_after=1.5*tr, tr=1.0) {
 
-get_medusa_interpolated_ts <- function(fmri_obj, event=NULL, time_before=-3.0, time_after=3.0, collide_before=NULL, collide_after=NULL,
-                                       pad_before=-4.5, pad_after=4.5, output_resolution=1.0,
+#' @param output_resolution the sampling frequency (in seconds) of the interpolated data. Defaults to be
+#'   the same as \code{tr}.
+
+get_medusa_interpolated_ts <- function(fmri_obj, event=NULL, time_before=-3.0, time_after=3.0,
+                                       collide_before=NULL, collide_after=NULL,
+                                       pad_before=-1.5, pad_after=1.5, output_resolution=NULL,
                                        group_by="trial", logfile="evtlockerrors.txt") {
 
   stopifnot(inherits(fmri_obj, "fmri_ts"))
 
-  #divide ts_data into usable chunks that can be passed to group_modify
-
+  #make default output_resolution equal to fmri TR
+  if (is.null(output_resolution)) { output_resolution <- fmri_obj$tr }
+  
   #align to event of interest
-  talign <- event_lock_decon(fmri_obj, event=event, time_before=time_before, time_after=time_after,
+  talign <- event_lock_ts(fmri_obj, event=event, time_before=time_before, time_after=time_after,
     pad_before=pad_before, pad_after=pad_after, collide_before=collide_before, collide_after=collide_after)
 
-  #talign is now an fmri_ts object keyed by trial (and other clustering variables)
+  #talign is now an fmri_ts object keyed by trial (and other keying variables)
   
-  #need to interpolate by cluster variables
-  decon_res <- interpolate_decon(talign, time_before=time_before, time_after=time_after, output_resolution=output_resolution)
-  
-  res <- ts_data %>% group_by(grouping) %>%
-    group_modify(interp(.x))
-      
-  windowed_ts <- event_lock_decon(ts_data
-    subj_df, event = evt_col, time_before=time_before, time_after=time_after),
+  #need to interpolate by key variables
+  interpolated_epochs <- interpolate_fmri_epochs(talign, time_before=time_before, time_after=time_after,
+    output_resolution=output_resolution, group_by=group_by)  
 
-  #interpolate and aggregate
-  
+  return(interpolated_epochs)
 }
 
-get_medusa_compression_score <- function() {
-  #get event-locked windowed data
-  windowed_ts <- event_lock_decon(t_by_value)
+get_medusa_compression_score <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
+                                         collide_before=NULL, collide_after=NULL,
+                                         group_by=NULL, signals=NULL) {
 
+  #input validation
+  checkmate::assert_string(event)
+  checkmate::assert_numeric(time_before, upper=-1e-2, max.len=1)
+  checkmate::assert_numeric(time_after, lower=1e-2, max.len=1)
+    
+  #get event-locked windowed data
+  stopifnot(inherits(fmri_obj, "fmri_ts"))
+
+  #align to event of interest
+  talign <- event_lock_ts(fmri_obj, event=event, time_before=time_before, time_after=time_after,
+    pad_before=0, pad_after=0, collide_before=collide_before, collide_after=collide_after)
+
+  #talign is now an fmri_ts object keyed by trial (and other keying variables)
+  browser()
+  
   compress_output <- lapply(windowed_ts, function(byval) {
-    byval <- byval %>% group_by() %>%
+    byval <- byval %>% group_by()
       
   })
+
+  
 }
 
+#' Interpolate an aligned fmri_ts object onto a consistent time grid with respect to a target event
+#'
+#' @param a_obj an fmri_ts object that has data aligned to an event of interest
+#' @param evt_time
+#' @param time_before The earliest time point (in seconds) relative to the event to be output in interpolation
+#' @param time_after The latest time point (in seconds) relative to the event to be output in interpolation
+#' @param output_resolution The timestep (in seconds) used for interpolation
+#' @param group_by a character vector of keying variables used for aggregation of data prior to interpolation
+#'
+#' @author Michael Hallquist
+#' @keywords internal
+interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, time_after=3,
+                                    output_resolution=1.0, group_by=NULL) {
+  #basically need to split align_obj on keying units, then interpolate within keys
 
-interpolate_decon <- function(a_obj, evt_time="time_map", time_before=-3, time_after=3, output_resolution=1.0, group_by=NULL) {
-  #basically need to split align_obj on clustering units, then interpolate within clusters
-
-  #worker to apply a set of 
+  stopifnot(inherits(a_obj, "fmri_ts"))
+  
+  #worker to apply a set of summary functions to each timepoint within a given cluster/unit
   interpolate_worker <- function(to_interpolate, funs=list(mean=mean, median=median, sd=sd)) {
-    #For now, we only support linear interpolation.
-    #Because of this, interpolation of a mean time series is the same is the mean of interpolated time series.
-    #But the former is faster to compute
+    #For now, we only support linear interpolation. Because of this, interpolation of a mean time
+    #  series is the same is the mean of interpolated time series. But the former is faster to compute.
     #https://math.stackexchange.com/questions/15596/mean-of-interpolated-data-or-interpolation-of-means-in-geostatistics
 
     interp_agg <- to_interpolate %>% group_by(across(evt_time)) %>%
       summarize(across("value", funs), .groups="drop")
 
-    #abc <- to_interpolate[, by=evt_time]
-    
     #rare, but if we have no data at tail end of run, we may not be able to interpolate
     if (nrow(to_interpolate) < 2) {
       #cat("For subject:", trial_df[[idcol]][1], ", insufficient interpolation data for run:",
@@ -176,7 +201,7 @@ interpolate_decon <- function(a_obj, evt_time="time_map", time_before=-3, time_a
 
     vcols <- grep("value_.*", names(interp_agg), value=TRUE)
     tout <- seq(time_before, time_after, by=output_resolution)
-    df <- data.frame(time_map=tout, sapply(vcols, function(cname) {
+    df <- data.frame(evt_time=tout, sapply(vcols, function(cname) {
       approx(x=interp_agg[[evt_time]], y=interp_agg[[cname]], xout=tout)$y
     }, simplify=FALSE))
 
@@ -184,80 +209,29 @@ interpolate_decon <- function(a_obj, evt_time="time_map", time_before=-3, time_a
   }
 
   #we need to ensure that multivariate outcomes are stored as a key-value pair of columns, rather than
-  # in wide format. This allows .SD to be the entire data.table per grouped chunk
+  # in wide format. This allows .SD to refer to the entire data.table per grouped chunk
 
-  output_dt <- a_obj$get_ts(orig_names=TRUE) %>%
-    melt(measure.vars=a_obj$vm$value, variable.name="ts_key", values.name="value")
+  interp_dt <- a_obj$get_ts(orig_names=TRUE) %>%
+    melt(measure.vars=a_obj$vm$value, variable.name=".vkey", values.name="value")
 
-  output_dt <- output_dt[, interpolate_worker(.SD), by=c("ts_key", group_by)]
+  interp_dt <- interp_dt[, interpolate_worker(.SD), by=c(".vkey", group_by)]
 
   #reshape multiple signals to wide format again
-  xx <- dcast(output_dt, formula = ... ~ ts_key, value.var=grep("value_.*", names(output_dt), value=TRUE), sep="|")
-  names(xx) <- sub("value_([^|]+)\\|(.+)", "\\2_\\1", names(xx), perl=TRUE)
+  output_dt <- dcast(interp_dt, formula = ... ~ .vkey, value.var=grep("value_.*", names(interp_dt), value=TRUE), sep="|")
 
-  return(xx)
+  #make names more readable: like decon_mean, not value_mean_decon
+  setnames(output_dt, names(output_dt), sub("value_([^|]+)\\|(.+)", "\\2_\\1", names(output_dt), perl=TRUE))
+
+  return(output_dt)
 }
 
-
-  
-  ##yy <- yy %>% group_by(across(matches("cluster\\d+")))
-  interpolated_result <- lapply(align_obj, function(bytrial) {
-    
-    #add dummy cluster column if not clustered data
-    if (!any(grepl("cluster\\d+", names(bytrial), perl=TRUE))) { bytrial[, cluster1 := 1] }
-    
-    #convert multivariate value columns to long form for grouped interpolation
-    bytrial <- bytrial %>% pivot_longer(cols=matches("value\\d+"), names_to="key", values_to="value")
-
-    group_string <- c(grep("cluster\\d+", names(bytrial), perl=TRUE, value=TRUE), "key", "time_map")
-
-    to_interpolate <- bytrial %>% 
-      select(key, value, time_map, matches("cluster\\d+")) %>% group_by(across(group_string)) %>%
-      summarize(vox_sd=sd(value, na.rm=TRUE), decon=mean(value, na.rm=TRUE), .groups="drop") #, decon_med=median(decon, na.rm=TRUE))
-    
-    #for checking heterogeneity
-    #ggplot(to_interpolate, aes(x=time_map, y=decon, color=factor(vnum))) + geom_line()
-
-    #rare, but if we have no data at tail end of run, we may not be able to interpolate
-    if (nrow(to_interpolate) < 2) {
-      cat("For subject:", trial_df[[idcol]][1], ", insufficient interpolation data for run:",
-        trial_df[[runcol]][1], ", trial:", trials[t], "\n", file=logfile, append=TRUE)
-      next
-    }
-    
-    #put everything onto same time grid (colliding events generate NAs, which is good)
-    interp <- approx(x=to_interpolate$time_map, y=to_interpolate$decon, xout=seq(time_before, time_after, by=output_resolution)) %>%
-      as.data.frame() %>% setNames(c("evt_time", "decon_interp"))
-    interp_sd <- approx(x=to_interpolate$time_map, y=to_interpolate$vox_sd, xout=seq(time_before, time_after, by=output_resolution)) %>%
-      as.data.frame() %>% setNames(c("evt_time", "sd_interp"))
-
-
-    
-  })
-  
-}
-
-      interp_all <- interp %>% left_join(interp_sd, by="evt_time") %>% 
-        mutate("{trialcol}" := trials[t], atlas_value=this_data$atlas_value[1])
-      
-      tlist[[t]] <- interp_all
-    }
-    
-    tdf <- bind_rows(tlist)
-    return(tdf)
-  })
-
-  results <- bind_rows(results) %>%
-    mutate("{idcol}" := trial_df[[idcol]][1], #tack on identifying columns
-      "{runcol}" := trial_df[[runcol]][1]) %>%
-    arrange(!!sym(idcol), !!sym(runcol), atlas_value, !!sym(trialcol), evt_time) %>%
-    mutate(event=!!event) %>% select(!!idcol, !!runcol, atlas_value, !!trialcol, event, evt_time, everything())
-  
-  return(results)
-}
 
 #' helper function for computing time series compression
 #'
+#' @param mts multivariate time series structured time x signals
+#' @param pexp_target Proportion of variance explained by principal components
+#' @param scale_columns whether to z-score the time series prior to eigendecomposition (recommended)
+#' 
 compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
   if (isTRUE(scale_columns)) { mts <- scale(mts) } #z-score columns of matrix before compression (standard practice)
   dd <- svd(mts)

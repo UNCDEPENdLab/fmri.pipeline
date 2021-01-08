@@ -9,7 +9,7 @@ library(R6)
 # $time: time index
 # $signal: only used if there is more than one value column (multivariate ts)
 # $value: DV value of time series
-# $cluster: 
+# $key: 
 
 #' R6 class representing a multivariate time series object for fMRI analysis
 #'
@@ -17,7 +17,7 @@ library(R6)
 #' @export
 fmri_ts <- R6::R6Class("fmri_ts",
   private=list(
-    cvars=NULL, #internal names of cluster variables
+    kvars=NULL, #internal names of key variables
     vvars=NULL, #internal names of value variables
     vmvec=NULL  #mapping between input names and internal names
   ),
@@ -25,7 +25,7 @@ fmri_ts <- R6::R6Class("fmri_ts",
     #' @field ts_data time x signals data.table
     ts_data=NULL,
 
-    #' @field ts_keys RLE-encoded clustering/keying variables
+    #' @field ts_keys RLE-encoded keying variables
     ts_keys=NULL,
 
     #' @field event_data trial x event data, used for aligning time series with events
@@ -46,7 +46,7 @@ fmri_ts <- R6::R6Class("fmri_ts",
       checkmate::assert_numeric(tr, lower=1e-2, null.ok=FALSE)
       
       default_vm <- list(id="id", run="run", trial="trial", run_trial="run_trial", time="time", value="value")
-      if ("cluster" %in% names(ts_data)) { default_vm[["cluster"]] <- "cluster" } #add default cluster mapping if clustered
+      if ("key" %in% names(ts_data)) { default_vm[["key"]] <- "key" } #add default key mapping if keyed
       for (nn in names(default_vm)) { #populate default variable mappings if not provided in input vector
         if (!nn %in% names(vm)) { vm[nn] <- default_vm[nn] }
       }
@@ -55,18 +55,20 @@ fmri_ts <- R6::R6Class("fmri_ts",
       checkmate::assert_data_frame(event_data, null.ok=TRUE)
 
       #setup standardized naming
-      private$vmvec <- unlist(vm) #yields cluster1, cluster2, etc.
-      if ("cluster" %in% names(vm)) { private$cvars <- paste0("cluster", 1:length(vm$cluster)) }
+      private$vmvec <- unlist(vm) #yields key1, key2, etc.
+      if ("key" %in% names(vm)) { private$kvars <- paste0("key", 1:length(vm$key)) }
       if ("value" %in% names(vm)) { private$vvars <- paste0("value", 1:length(vm$value)) }
       
       if (!is.null(event_data)) {
         if (!is.null(vm$id)) {
+          checkmate::assert_string(vm$id)
           stopifnot(vm$id %in% names(event_data))
           if (length(unique(event_data[[vm$id]])) > 1L) {
             stop("fmri_ts objects only support single runs of data for single IDs. You can combine fmri_ts objects using combine_ts()")
           }
         }
         if (!is.null(vm$run)) {
+          checkmate::assert_string(vm$run)
           stopifnot(vm$run %in% names(event_data))
           if (length(unique(event_data[[vm$run]])) > 1L) {
             stop("fmri_ts objects only support single runs of data for single IDs. You can combine fmri_ts objects using combine_ts()")
@@ -85,18 +87,7 @@ fmri_ts <- R6::R6Class("fmri_ts",
       }
       
       #verify presence of required columns      
-      sapply(vm[c("time", "value", "cluster")], function(x) { stopifnot(all(x %in% names(ts_data))) } )
-      
-      #always make ts_data long/tidy? this is nice, but a) double or quadruples RAM demand, and b) adds compute time
-      #if (length(vm[["signal"]] > 1L)) { ts_data <- ts_data %>% tidyr::pivot_longer(cols=vm[["signal"]], names_to="signal", values_to="value") }
-      #if (length(vm[["cluster"]] > 1L)) { ts_data <- ts_data2 %>% tidyr::pivot_longer(cols=vm[["cluster"]], names_to="cluster_var", values_to="cluster") }
-
-      #we could convert to data.table, then split. If we drop the key columns, we can get the RAM pressure down 20-30%
-      #but, it generates a complicated data structure and slows down per-group calculations
-      #dd <- split(xx, by=vm[["cluster"]], keep.by=T)
-
-      #conclusion: for internal object storage, sort by clustering variables, then use RLE encoding of keys to compress object
-      #  add method $get_ts that returns the rehydrated data (with inverse.rle)
+      sapply(vm[c("time", "value", "key")], function(x) { stopifnot(all(x %in% names(ts_data))) } )
 
       #convert to data table for speed, memory management
       ts_data <- data.table(ts_data)
@@ -104,9 +95,9 @@ fmri_ts <- R6::R6Class("fmri_ts",
       #handle internal renaming to make programming with these objects easy
       setnames(ts_data, private$vmvec, names(private$vmvec), skip_absent=TRUE)
 
-      setorderv(ts_data, private$cvars)
-      ts_keys <- sapply(private$cvars, function(x) { rle(ts_data[[x]]) }, simplify=FALSE)
-      ts_data[, private$cvars := NULL] #drop key columns
+      setorderv(ts_data, private$kvars)
+      ts_keys <- sapply(private$kvars, function(x) { rle(ts_data[[x]]) }, simplify=FALSE)
+      ts_data[, private$kvars := NULL] #drop key columns
 
       self$ts_data <- ts_data
       self$ts_keys <- ts_keys
@@ -120,30 +111,48 @@ fmri_ts <- R6::R6Class("fmri_ts",
     get_ts = function(orig_names=FALSE) {
       tsd <- data.table::copy(self$ts_data) #ensure that we copy the object to avoid altering $ts_data
       for (kk in 1:length(self$ts_keys)) { tsd[, names(self$ts_keys)[kk] := inverse.rle(self$ts_keys[[kk]])] }
-      setcolorder(tsd, private$cvars) #put clustering variables first in object
+      setcolorder(tsd, private$kvars) #put keying variables first in object
       if (isTRUE(orig_names)) { setnames(tsd, names(private$vmvec), private$vmvec, skip_absent=TRUE) }
       return(tsd)
     },
 
-    #' @description method to add a variable in ts_data to the set of clustering variables for further use
-    add_clusters = function(cv) {
-      stopifnot(all(cv %in% names(self$ts_data)))
-      for (vname in cv) {
-        nclus <- length(private$cvars)
-        newvar <- paste0("cluster", nclus+1)
-        private$cvars <- c(private$cvars, newvar)
-        self$ts_keys[[newvar]] <- rle(self$ts_data[[vname]])      
-        
+    #' @description method to add a variable in ts_data to the set of keying variables for further use
+    add_keys = function(kv) {
+      stopifnot(all(kv %in% names(self$ts_data)))
+      for (vname in kv) {
+        nkeys <- length(private$kvars)
+        newvar <- paste0("key", nkeys+1)
+        private$kvars <- c(private$kvars, newvar)
+        self$ts_keys[[newvar]] <- rle(self$ts_data[[vname]]) # RLE-compress the new key        
       }
 
-      self$vm[["cluster"]] <- c(self$vm[["cluster"]], cv)
-      private$vmvec <- unlist(self$vm) #yields cluster1, cluster2, etc.
+      self$vm[["key"]] <- c(self$vm[["key"]], kv)
+      private$vmvec <- unlist(self$vm) #yields key1, key2, etc.
 
-      self$ts_data[, (cv) := NULL] #drop new keys
+      self$ts_data[, (kv) := NULL] #drop new keys from rectangular data
     },
-    
-    get_cvars = function() { #simple get method to allow access to cluster variables
-      return(private$cvars)
+
+    #' @description method to replace one or more variable mappings in the object
+    #  TODO: create a private validate_vm method and run both initialize and replace through it
+    replace_vm = function(...) {
+      replist <- list(...)
+      repfields <- names(replist)
+      stopifnot(all(repfields %in% self$vm)) #must be replacement
+      
+      for (rr in 1:length(replist)) {
+        this_field <- repfields[rr]
+        self$vm[[this_field]] <- replist[[rr]]
+      }
+
+      #update internal renaming scheme
+      private$vmvec <- unlist(self$vm) #yields key1, key2, etc.
+
+      #oldnames
+      #handle internal renaming
+      setnames(self_data, private$vmvec, names(private$vmvec), skip_absent=TRUE)
+    },
+    get_kvars = function() { #simple get method to allow access to key variables
+      return(private$kvars)
     },
     export = function(filename) {
       
