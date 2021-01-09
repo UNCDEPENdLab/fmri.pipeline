@@ -10,16 +10,14 @@ example$decon2 <- example$decon
 
 run_df <- trial_df %>% filter(id==11350 & run==1)
 
-x <- fmri_ts$new(ts_data=example, event_data=run_df, vm=list(value=c("decon", "decon2"), key=c("vnum", "atlas_value")), tr=1.0)
-vv <- x$get_ts(orig_names=TRUE)
+x <- fmri_ts$new(ts_data=example, event_data=run_df, tr=1.0,
+  vm=list(value=c("decon", "decon2"), key=c("vnum", "atlas_value")))
 
+rm(example)
 
-test <- event_lock_decon(x, event="clock_onset", collide_before="clock_onset")
+#vv <- x$get_ts(orig_names=TRUE)
 
-int_dt2 <- get_medusa_interpolated_ts(x, event="clock_onset", time_before=-3.0, time_after=3.0,
-  collide_before="clock_onset", collide_after=NULL,
-  pad_before=-1.5, pad_after=1.5, output_resolution=1.0,
-  group_by=c("atlas_value"), logfile="evtlockerrors.txt")
+test <- event_lock_ts(x, event="clock_onset", collide_before="clock_onset")
 
 int_dt2 <- get_medusa_interpolated_ts(x, event="clock_onset", time_before=-3.0, time_after=3.0,
   collide_before="clock_onset", collide_after=NULL,
@@ -27,8 +25,7 @@ int_dt2 <- get_medusa_interpolated_ts(x, event="clock_onset", time_before=-3.0, 
   group_by=c("atlas_value"), logfile="evtlockerrors.txt")
 
 compress <- get_medusa_compression_score(x, event="clock_onset", time_before=-3.0, time_after=3.0,
-  collide_before="clock_onset", collide_after=NULL,
-  group_by=c("atlas_value"))
+  collide_before="clock_onset", collide_after=NULL, group_by=c("atlas_value", "trial"))
 
 
 
