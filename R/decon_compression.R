@@ -22,11 +22,12 @@ test <- event_lock_ts(x, event="clock_onset", collide_before="clock_onset")
 int_dt2 <- get_medusa_interpolated_ts(x, event="clock_onset", time_before=-3.0, time_after=3.0,
   collide_before="clock_onset", collide_after=NULL,
   pad_before=-1.5, pad_after=1.5, output_resolution=1.0,
-  group_by=c("atlas_value"), logfile="evtlockerrors.txt")
+  group_by=c("atlas_value", "trial"))
 
 compress <- get_medusa_compression_score(x, event="clock_onset", time_before=-3.0, time_after=3.0,
   collide_before="clock_onset", collide_after=NULL, group_by=c("atlas_value", "trial"))
 
+compress[, .(tcor = cor(decon_compress_0.9, trial)), by=atlas_value]
 
 
 

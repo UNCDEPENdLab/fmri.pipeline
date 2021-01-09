@@ -3,6 +3,8 @@ library(foreach)
 library(iterators)
 library(parallel)
 library(doParallel)
+library(data.table)
+library(checkmate)
 
 getMainDir <- function(institution="UNC") {
   if (institution == "UNC") {
@@ -12,8 +14,10 @@ getMainDir <- function(institution="UNC") {
   }
 }
 
+setwd("/proj/mnhallqlab/users/michael/fmri.pipeline/R")
 source("get_mmy3_trial_df.R")
 source("event_lock_timeseries.R")
+source("fmri_ts.R")
 
 #setwd(file.path(getMainDir(), "projects", "clock_analysis", "fmri", "hippo_voxelwise"))
 setwd(file.path(getMainDir(), "users", "michael", "sceptic_decon"))
@@ -24,26 +28,6 @@ trial_df <- get_mmy3_trial_df(model="selective", groupfixed=TRUE) %>%
     rt_vmax_cum=clock_onset + rt_vmax)
 
 ## trial_df <- read_csv(file.path(getMainDir(), "clock_analysis/fmri/data/mmclock_fmri_decay_factorize_selective_psequate_mfx_trial_statistics.csv.gz"))
-## trial_df <- trial_df %>%
-##   group_by(id, run) %>%  
-##   dplyr::mutate(rt_swing = abs(c(NA, diff(rt_csv))), #compute rt_swing within run and subject
-##                 rt_swing_lr = abs(log(rt_csv/lag(rt_csv))),
-##                 rt_lag = lag(rt_csv) ,
-##                 omission_lag = lag(score_csv==0),
-##                 rt_vmax_lag = lag(rt_vmax),
-##                 v_entropy_wi = scale(v_entropy),
-##                 run_trial=case_when(
-##                   trial >= 1 & trial <= 50 ~ trial,
-##                   trial >= 51 & trial <= 100 ~ trial - 50, #dplyr/rlang has gotten awfully picky about data types!!
-##                   trial >= 101 & trial <= 150 ~ trial - 100,
-##                   trial >= 151 & trial <= 200 ~ trial - 150,
-##                   trial >= 201 & trial <= 250 ~ trial - 200,
-##                   trial >= 251 & trial <= 300 ~ trial - 250,
-##                   trial >= 301 & trial <= 350 ~ trial - 300,
-##                   trial >= 351 & trial <= 400 ~ trial - 350,
-##                   TRUE ~ NA_real_)) %>% ungroup() %>%
-##   dplyr::mutate(rt_csv=rt_csv/1000, rt_vmax=rt_vmax/10) %>% 
-##       mutate(rt_vmax_cum=clock_onset + rt_vmax)
     
 ## base_dir <- "/gpfs/group/mnh5174/default/clock_analysis/fmri/hippo_voxelwise"
 
@@ -71,7 +55,10 @@ cl <- makeCluster(ncores)
 registerDoParallel(cl)
 on.exit(stopCluster(cl))
 
-events <- c("clock_onset", "feedback_onset", "clock_long", "feedback_long", "rt_long", "rt_vmax_cum")
+#registerDoSEQ()
+
+#events <- c("clock_onset", "feedback_onset", "clock_long", "feedback_long", "rt_long", "rt_vmax_cum")
+events <- c("clock_long")
 nbins <- 12 #splits along axis
 
 for (a in 1:length(atlas_dirs)) {
@@ -93,11 +80,17 @@ for (a in 1:length(atlas_dirs)) {
   
   afiles <- list.files(file.path(atlas_dirs[a], "deconvolved"), full.names = TRUE)
 
+  pad_before <- -1.5 #seconds before earliest event, to aid in interpolation
+  pad_after <- 1.5
+  collide_before <- collide_after <- NULL #default to no censoring
+  
   for (e in events) {
     if (e == "clock_long") {
       evt_col <- "clock_onset"
       time_before=-5
       time_after=10
+      collide_before <- "clock_onset" #censor data at trial boundaries (prior clock onset, next clock onset)
+      collide_after <- "clock_onset"
     } else if (e == "feedback_long") {
       evt_col <- "feedback_onset"
       time_before=-1
@@ -130,27 +123,58 @@ for (a in 1:length(atlas_dirs)) {
       if (isTRUE(continuous)) {
         d <- d %>% mutate(atlas_value=cut(atlas_value, bin_cuts))
       } else {
-        d <- d %>% mutate(atlas_value=factor(atlas_value))
+        #d <- d %>% mutate(atlas_value=factor(atlas_value))
+        d <- d %>% mutate(atlas_value=as.numeric(atlas_value))
       }
       
-      dsplit <- split(d, d$atlas_value)
-      rm(d) #garbage cleanup
-
+      #run data
       subj_df <- trial_df %>% filter(id==!!id & run==!!run)
+
+      tsobj <- fmri_ts$new(ts_data=d, event_data=subj_df, tr=1.0,
+        vm=list(value=c("decon"), key=c("vnum", "atlas_value")))
+
+      ## dsplit <- split(d, d$atlas_value)
+      ## rm(d) #garbage cleanup
+
+      ## subj_lock <- tryCatch(event_lock_decon(dsplit, subj_df, event = evt_col, time_before=time_before, time_after=time_after),
+      ##   error=function(err) {
+      ##     cat("Problems with event locking ", fname, " for event: ", e, "\n  ",
+      ##       as.character(err), "\n\n", file="evtlockerrors.txt", append=TRUE); return(NULL)
+      ##   }
+      ## )
+
+      subj_lock <- get_medusa_interpolated_ts(tsobj, event=evt_col,
+        time_before=time_before, time_after=time_after,
+        collide_before=collide_before, collide_after=collide_after,
+        pad_before=pad_before, pad_after=pad_after, output_resolution=1.0,
+        group_by=c("atlas_value", "trial")) #one time series per region and trial
+
+      #tack on run and id
+      subj_lock[,id := id]
+      subj_lock[,run := run]
+
+      compress <- get_medusa_compression_score(tsobj, event=evt_col,
+        time_before=time_before, time_after=time_after,
+        collide_before=collide_before, collide_after=collide_after,
+        group_by=c("atlas_value", "trial"))
+
+      #tack on run and id
+      compress[, id := id]
+      compress[, run := run]
       
-      subj_lock <- tryCatch(event_lock_decon(dsplit, subj_df, event = evt_col, time_before=time_before, time_after=time_after),
-        error=function(err) {
-          cat("Problems with event locking ", fname, " for event: ", e, "\n  ",
-            as.character(err), "\n\n", file="evtlockerrors.txt", append=TRUE); return(NULL)
-        }
-      )
-      return(subj_lock)
+      return(list(ts=subj_lock, compress=compress))
     }
     
-    all_e <- bind_rows(elist)
+    all_e <- bind_rows(lapply(elist, "[[", "ts"))
     all_e$atlas <- aname
     message("Writing output: ", out_name)
     write_csv(all_e, path=out_name)
+
+    all_c <- bind_rows(lapply(elist, "[[", "compress"))
+    all_c$atlas <- aname
+    com_out <- sub("_decon_locked.csv.gz", "_compression.csv.gz", out_name, fixed=TRUE)
+    message("Writing output: ", com_out)
+    write_csv(all_c, path=com_out)
   }
 }
 
