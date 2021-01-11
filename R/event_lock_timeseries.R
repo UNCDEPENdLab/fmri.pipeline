@@ -214,7 +214,7 @@ get_medusa_compression_score <- function(fmri_obj, event=NULL, time_before=-3, t
 
   #find the key variables that are not in the group_by
   other_keys <- setdiff(talign$vm$key, group_by)
-  
+
   #so, on the columns of the dcast, it's all keys that are not in the group_by... making them simultaneous columns
   #xyz <- interp_dt[, compress_mts_pca(.SD, pexp_target=0.9, scale_columns=TRUE), by=c(".vkey", group_by)]
   comp_calc <- interp_dt[, calculate_compression(.SD, keys=other_keys, pexp_target=0.9, scale_columns=TRUE), by=c(".vkey", group_by)]
@@ -255,15 +255,15 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
     #  https://math.stackexchange.com/questions/15596/mean-of-interpolated-data-or-interpolation-of-means-in-geostatistics
 
     interp_agg <- to_interpolate %>% group_by(across(evt_time)) %>%
-      summarize(across("value", funs), .groups="drop")
+      summarize(across("value", funs, na.rm=TRUE), .groups="drop")
 
     #rare, but if we have no data at tail end of run, we may not be able to interpolate
-    if (nrow(to_interpolate) < 2) {
+    if (nrow(interp_agg) < 2) {
       #cat("For subject:", trial_df[[idcol]][1], ", insufficient interpolation data for run:",
       #  trial_df[[runcol]][1], ", trial:", trials[t], "\n", file=logfile, append=TRUE)
       next
     }
-
+    
     vcols <- grep("value_.*", names(interp_agg), value=TRUE)
     tout <- seq(time_before, time_after, by=output_resolution)
     df <- data.frame(evt_time=tout, sapply(vcols, function(cname) {
@@ -319,8 +319,23 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
   checkmate::assert_matrix(mts)
   checkmate::assert_numeric(pexp_target, lower=1e-2, upper=1.0, unique=TRUE)
   checkmate::assert_logical(scale_columns, max.len=1L)
+
+  #orig <- mts
+  mts <- mts[,!apply(mts, 2, function(x) all(is.na(x)))] #drop columns/time series that are all NA (edge of brain)
+  mts <- na.omit(mts) #now drop rows that have NAs (event censoring)
+
+  #screen for lousy time series (no variation or extreme means)
+  mms <- apply(mts, 2, mean)
+  sds <- apply(mts, 2, sd)
+
+  bad <- sds < 1e-3 | mms < 1e-6 #very small SD or super-low mean
+  mts <- mts[,!bad]
   
-  if (isTRUE(scale_columns)) { mts <- scale(mts) } #z-score columns of matrix before compression (standard practice)
+  #if (isTRUE(scale_columns)) { mts <- scale(mts) } #z-score columns of matrix before compression (standard practice)
+  if (isTRUE(scale_columns)) { #for some reason, scale is blowing up svd (infinite/missing values -- just use manual z-scoring)
+    mts <- apply(mts, 2, function(x) {  (x - mean(x))/mean(x) })
+  }
+    
   dd <- svd(mts)
   pexp <- cumsum(dd$d^2)/sum(dd$d^2) #proportion of variance explained
 

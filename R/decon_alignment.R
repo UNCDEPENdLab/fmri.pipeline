@@ -110,8 +110,8 @@ for (a in 1:length(atlas_dirs)) {
       message("Output file already exists: ", out_name)
       next
     }
-
-    elist <- foreach(fname=iter(afiles), .packages = c("dplyr", "readr")) %dopar% {
+    
+    elist <- foreach(fname=iter(afiles), .packages = c("dplyr", "readr", "data.table")) %dopar% {
 
       #add sub and run for now since I screwed this up in the outputs...
       id <- as.numeric(sub("^.*/sub(\\d+)_.*", "\\1", fname))
@@ -143,24 +143,40 @@ for (a in 1:length(atlas_dirs)) {
       ##   }
       ## )
 
-      subj_lock <- get_medusa_interpolated_ts(tsobj, event=evt_col,
+      subj_lock <- tryCatch(get_medusa_interpolated_ts(tsobj, event=evt_col,
         time_before=time_before, time_after=time_after,
         collide_before=collide_before, collide_after=collide_after,
         pad_before=pad_before, pad_after=pad_after, output_resolution=1.0,
-        group_by=c("atlas_value", "trial")) #one time series per region and trial
+        group_by=c("atlas_value", "trial")), #one time series per region and trial
+        
+        error=function(err) {
+          cat("Problems with event locking ", fname, " for event: ", e, "\n  ",
+            as.character(err), "\n\n", file="evtlockerrors.txt", append=TRUE); return(NULL)
+        }
+      )
+      
+      if (!is.null(subj_lock)) { 
+        #tack on run and id
+        subj_lock[,id := id]
+        subj_lock[,run := run]
+      }
 
-      #tack on run and id
-      subj_lock[,id := id]
-      subj_lock[,run := run]
-
-      compress <- get_medusa_compression_score(tsobj, event=evt_col,
+      compress <- tryCatch(get_medusa_compression_score(tsobj, event=evt_col,
         time_before=time_before, time_after=time_after,
         collide_before=collide_before, collide_after=collide_after,
-        group_by=c("atlas_value", "trial"))
+        group_by=c("atlas_value", "trial")),
+        
+        error=function(err) {
+          cat("Problems with compression of ", fname, " for event: ", e, "\n  ",
+            as.character(err), "\n\n", file="evtlockerrors.txt", append=TRUE); return(NULL)
+        }
+      )
 
-      #tack on run and id
-      compress[, id := id]
-      compress[, run := run]
+      if (!is.null(compress)) { 
+        #tack on run and id
+        compress[, id := id]
+        compress[, run := run]
+      }
       
       return(list(ts=subj_lock, compress=compress))
     }
@@ -180,5 +196,3 @@ for (a in 1:length(atlas_dirs)) {
 
 #Times in the deconvolved files should reflect the +2 seconds for the dropped volumes
 #So, this should align with the rt_csv columns appropriately.
-
-
