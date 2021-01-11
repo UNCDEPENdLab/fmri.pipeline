@@ -76,8 +76,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
                                drop_volumes=0L,
                                l1_model_variants=NULL, l1_contrasts=NULL, l1_include_diagonal_contrasts=TRUE,
                                l2_model_variants=NULL, l2_contrasts=NULL, l2_include_diagonal_contrasts=TRUE,
-                               l3_model_variants=NULL, l3_contrasts=NULL, l3_include_diagonal_contrasts=TRUE,
-                               
+                               l3_model_variants=NULL, l3_contrasts=NULL, l3_include_diagonal_contrasts=TRUE,                               
                                glm_software="fsl",
                                use_preconvolve=TRUE, 
                                additional=list()) {
@@ -180,8 +179,6 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
 
   #validate and populate any other pipeline details before execution
   fsl_model_arguments <- finalize_pipeline_configuration(fsl_model_arguments)
-
-  
 }
 
 setup_glm_pipeline(analysis_name="testing", scheduler="slurm", working_directory = tempdir(),
@@ -189,16 +186,25 @@ setup_glm_pipeline(analysis_name="testing", scheduler="slurm", working_directory
   tr=1.0, nuisance_file_regex = "confounds.txt",
   l1_model_variants=list(
     entropy=c("clock", "feedback", "v_entropy"),
-    value=c("clock")
+    value=c("clock", "feedback", "v_chosen")
+  )
+)
+
+l1_mods <- list(
+  l1_model_variants=list(
   )
 )
 
 #' helper function to build an l1 model specification interactively
+#'
+#' @param trial_data a subjects x trials data frame containing all signals to model at L1 in fMRI
+#'
+#' @export
+#' 
 build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
-                           onset_cols=NULL, event_regex=".*(onset|time).*", duration_regex=".*duration.*") {
+                           onset_cols=NULL, parametric_cols=NULL, signal_names=NULL, event_regex=".*(onset|time).*", duration_regex=".*duration.*") {
 
   #maybe allow glm object to be passed in that would have trial_data and variable_mapping. I guess that would be like "add_l1_model"
-  
   checkmate::assert_data_frame(trial_data)
   checkmate::assert_subset(onset_cols, names(trial_data)) #make sure that all event columns are in the data frame
 
@@ -234,14 +240,79 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     oval <- menu(choices=choices)
     if (oval==1) {
       duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", oo, ": ")))
-      checkmate::assert_number(duration, na.ok=FALSE)
+      checkmate::assert_number(duration, na.ok=FALSE, lower=0, upper=1000)
       if (duration > 50) { warning("Duration more than 50s specified. Make sure that your durations are in seconds, not milliseconds!") }
       event_list[[oo]] <- event_list[[oo]] %>% mutate(duration=duration)
     } else {
-      event_list[[oo]] <- event_list[[oo]] %>% mutate(duration=trial_data[[choices[oval] ]])
+      event_list[[oo]] <- event_list[[oo]] %>% mutate(duration=trial_data[[ choices[oval] ]])
+      if (any(event_list[[oo]]$duration > 50)) {
+        warning("A duration of more than 50s found in ", choices[oval], ". Make sure that your durations are in seconds, not milliseconds!")
+      }
     }
   }
+    
+  cat("Now, we will build up signals of interest\n")
+  #handle signals
+  signal_list <- list()
+  if (is.null(signal_names)) {
+    while (TRUE) {
+      this_entry <- readline("Enter the name of the signal (press RETURN to finish entry): ")
+      if (this_entry=="") {
+        break  #end loop
+      } else {
+        signal_list[[make.names(this_entry)]] <- list(name=this_entry)
+      }      
+    }
+  } else {
+    for (nn in signal_names) {
+      signal_list[[make.names(nn)]] <- list(name=nn)
+    }
+  }
+   
+  for (ss in signal_list) {
+    this_name <- ss$name
+    cat("Choose an event with which ", this_name, " is aligned\n")
+    oval <- menu(choices=onset_cols)
+    this_event <- onset_cols[oval]
+    
+    cat("Choose the height/value of ", this_name, ".\nThe unit regressor is standard for simple stimulus onset\n")
+    choices <- c("Unit regressor (1.0)", names(trial_data))
+    oval <- menu(choices=choices)
+    this_value <- ifelse(oval==1, 1.0, trial_data %>% select(!!oval, !!variable_mapping[c("id", "run", "run_trial")]))
+    
+    cat("Choose the HRF normalization method for ", this_name, ": \n")
+    oval <- menu(choices=c("none", "durmax_1 (normalize HRF max to 1.0 for long events)", "evtmax_1 (normalize HRF for each event to 1.0)"))
+    this_normalization <- switch(oval, `1`="none", `2`="durmax_1", `3`="evtmax_1")
+    
+    cat("Rescale ", this_name, " to max of 1.0 after convolution? \n")
+    oval <- menu(choices=c("No", "Yes"))
+    this_convmax <- ifelse(oval==1, FALSE, TRUE)
+    
+    cat("Should ", this_name, " be a beta series regressor (one regressor per trial)?\n")
+    oval <- menu(choices=c("No", "Yes"))
+    this_bs <- ifelse(oval==1, FALSE, TRUE)
+    
+    this_signal <- list(
+      event=this_event,
+      value=this_value,
+      normalization=this_normalization,
+      convmax_1=this_convmax,
+      beta_series=this_bs
+    )
+    
+    signal_list[[this_entry]] <- this_signal
+     
+  }
+  
 
-  cat("Now, we will build up ")
-  return(event_list)
+  l1_obj <- list(
+    events=event_list,
+    signals=signal_list
+  )
+  
+  return(l1_obj)
 }
+
+trial_df <- readRDS("/Users/hallquist/Data_Analysis/clock_analysis/fmri/mmy3_trial_df_selective_groupfixed.rds")
+build_l1_model(trial_df, onset_cols = c("clock_onset", "feedback_onset"))
+  signals = c("clock", "feedback", "pe_max"))
