@@ -58,7 +58,7 @@ on.exit(stopCluster(cl))
 #registerDoSEQ()
 
 #events <- c("clock_onset", "feedback_onset", "clock_long", "feedback_long", "rt_long", "rt_vmax_cum")
-events <- c("clock_long")
+events <- c("whole_trial")
 nbins <- 12 #splits along axis
 
 for (a in 1:length(atlas_dirs)) {
@@ -95,6 +95,12 @@ for (a in 1:length(atlas_dirs)) {
       evt_col <- "feedback_onset"
       time_before=-1
       time_after=10
+    } else if (e == "whole_trial") {
+      evt_col <- "clock_onset"
+      time_before=0
+      time_after=12
+      collide_before <- NULL #irrelevant
+      collide_after <- "clock_onset"    
     } else if (e == "rt_long") {
       evt_col <- "rt_time"
       time_before=-4

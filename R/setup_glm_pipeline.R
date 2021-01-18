@@ -60,7 +60,6 @@
 #' @param l3_contrasts An optional list of contrasts to be included in level 3 (aka group-level) voxelwise GLM analyses.
 #'   Elements should be named, and names should match a single model in \code{l3_model_variants} so that models and
 #'   contrasts can be combined properly to form contrasts of parameter estimates (COPEs in FSL-speak).
-#'
 #' @param glm_software Which fMRI analysis package to use in the analysis. Options are "FSL", "SPM", or "AFNI"
 #'   (case insensitive).
 #' @param additional A list of additional metadata that will be added to the \code{glm.pipeline} object returned
@@ -76,8 +75,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
                                drop_volumes=0L,
                                l1_model_variants=NULL, l1_contrasts=NULL, l1_include_diagonal_contrasts=TRUE,
                                l2_model_variants=NULL, l2_contrasts=NULL, l2_include_diagonal_contrasts=TRUE,
-                               l3_model_variants=NULL, l3_contrasts=NULL, l3_include_diagonal_contrasts=TRUE,
-                               
+                               l3_model_variants=NULL, l3_contrasts=NULL, l3_include_diagonal_contrasts=TRUE,                               
                                glm_software="fsl",
                                use_preconvolve=TRUE, 
                                additional=list()) {
@@ -184,64 +182,12 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   
 }
 
-setup_glm_pipeline(analysis_name="testing", scheduler="slurm", working_directory = tempdir(),
-  subject_data=NULL, run_data=NULL, trial_data=trial_df,
-  tr=1.0, nuisance_file_regex = "confounds.txt",
-  l1_model_variants=list(
-    entropy=c("clock", "feedback", "v_entropy"),
-    value=c("clock")
-  )
-)
+## setup_glm_pipeline(analysis_name="testing", scheduler="slurm", working_directory = tempdir(),
+##   subject_data=NULL, run_data=NULL, trial_data=trial_df,
+##   tr=1.0, nuisance_file_regex = "confounds.txt",
+##   l1_model_variants=list(
+##     entropy=c("clock", "feedback", "v_entropy"),
+##     value=c("clock")
+##   )
+## )
 
-#' helper function to build an l1 model specification interactively
-build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
-                           onset_cols=NULL, event_regex=".*(onset|time).*", duration_regex=".*duration.*") {
-
-  #maybe allow glm object to be passed in that would have trial_data and variable_mapping. I guess that would be like "add_l1_model"
-  
-  checkmate::assert_data_frame(trial_data)
-  checkmate::assert_subset(onset_cols, names(trial_data)) #make sure that all event columns are in the data frame
-
-  possible_cols <- names(trial_data)
-  possible_cols <- possible_cols[!names(possible_cols) %in% variable_mapping]
-  
-  if (is.null(onset_cols)) {
-    reselect <- 2
-    onset_cols <- c()
-    while(reselect==2) {
-      onset_cols <- select.list(names(trial_data), multiple=TRUE, preselect=onset_cols,
-        title="Choose all columns denoting event onset times\n(Command/Control-click to select multiple)")
-      cat("The following columns were chosen as event onset times.\n  These will be used as onset time options for each regressor.\n\n")
-      cat("  ", paste(onset_cols, collapse=", "), "\n\n")
-
-      reselect <- menu(c("Yes", "No (reselect events)"), title="Are you done selecting all event onset times?")
-    }
-  }
-
-  #basal data frame for each event
-  metadata_df <- trial_data %>% dplyr::select(!!variable_mapping[c("id", "run", "run_trial")]) %>%
-    setNames(c("id", "run", "trial"))
-  
-  #build a list of data frames, one per event (to be rbind'ed later)
-  event_list <- lapply(onset_cols, function(xx) {
-    metadata_df %>% bind_cols(trial_data %>% select(xx) %>% setNames("onset") %>% mutate(event=xx))
-  }) %>% setNames(onset_cols)
-      
-  #handle durations
-  for (oo in onset_cols) {
-    cat("Specify a duration value or column for the event onset: ", oo, "\n")
-    choices <- c("Specify fixed duration", names(trial_data))
-    oval <- menu(choices=choices)
-    if (oval==1) {
-      duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", oo, ": ")))
-      checkmate::assert_number(duration, na.ok=FALSE)
-      if (duration > 50) { warning("Duration more than 50s specified. Make sure that your durations are in seconds, not milliseconds!") }
-      event_list[[oo]] <- event_list[[oo]] %>% mutate(duration=duration)
-    } else {
-      event_list[[oo]] <- event_list[[oo]] %>% mutate(duration=trial_data[[choices[oval] ]])
-    }
-  }
-
-  cat("Now, we will build up ")
-  return(event_list)
-}

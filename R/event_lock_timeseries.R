@@ -29,9 +29,9 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
   vm <- fmri_obj$vm
   
   #input validation
-  checkmate::assert_numeric(time_before, upper=-1e-2, max.len=1)
-  checkmate::assert_numeric(time_after, lower=1e-2, max.len=1)
-  stopifnot(time_after > time_before)
+  checkmate::assert_numeric(time_before, upper=0, max.len=1)
+  checkmate::assert_numeric(time_after, lower=0, max.len=1)
+  stopifnot(time_after >= time_before)
   checkmate::assert_data_frame(ts_data)
   checkmate::assert_data_frame(run_df)
   checkmate::assert_string(event)
@@ -182,8 +182,8 @@ get_medusa_compression_score <- function(fmri_obj, event=NULL, time_before=-3, t
 
   #input validation
   checkmate::assert_string(event)
-  checkmate::assert_numeric(time_before, upper=-1e-2, max.len=1)
-  checkmate::assert_numeric(time_after, lower=1e-2, max.len=1)
+  checkmate::assert_numeric(time_before, upper=0, max.len=1)
+  checkmate::assert_numeric(time_after, lower=0, max.len=1)
   checkmate::assert_character(collide_before, null.ok=TRUE, unique=TRUE)
   checkmate::assert_character(collide_after, null.ok=TRUE, unique=TRUE)
   
