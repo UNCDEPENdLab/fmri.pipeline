@@ -6,7 +6,9 @@ library(doParallel)
 library(plyr)
 library(tidyverse)
 
-scripts_dir <- "/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline"
+#scripts_dir <- "/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline"
+scripts_dir <- "/Users/hallquist/clock_analysis/fmri/fsl_pipeline"
+
 setwd(scripts_dir)
 
 source(file.path(scripts_dir, "functions", "push_pipeline.R"))

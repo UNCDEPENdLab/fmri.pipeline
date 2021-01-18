@@ -178,8 +178,6 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
 
   #validate and populate any other pipeline details before execution
   fsl_model_arguments <- finalize_pipeline_configuration(fsl_model_arguments)
-
-  
 }
 
 ## setup_glm_pipeline(analysis_name="testing", scheduler="slurm", working_directory = tempdir(),
