@@ -13,8 +13,7 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
   checkmate::assert_string(onset_regex, null.ok=TRUE)
   checkmate::assert_string(duration_regex, null.ok=TRUE)
   checkmate::assert_subset(value_cols, names(trial_data)) #make sure all parametric regressor columns are in the data frame
-  
-  
+    
   possible_cols <- names(trial_data)
   possible_cols <- possible_cols[!names(possible_cols) %in% variable_mapping]
   
@@ -68,18 +67,18 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
   }
   
   ## setup signals
-  cat("Now, we will build up a set of signals to be included as regressor in the level 1 model\n")
+  cat("\nNow, we will build up a set of signals to be included as regressor in the level 1 model.\n")
   cat("First, select all columns that contain parametric signals to be used for regressors\n")
-  cat("If you wish to use a fixed value (e.g., 1.0, a unit-height regressor), this will be entered in the next step\n")
-
+  cat("If you wish to use a fixed value (e.g., 1.0, a unit-height regressor), this will be entered in the next step\n\n")
 
   reselect <- 2
-  while(reselect==2) {
+  while(reselect == 2L) {
     value_cols <- select.list(c("None (no parametric modulators)", names(trial_data)), multiple=TRUE, preselect=value_cols,
       title="Choose all columns denoting regressor values\n(Command/Control-click to select multiple)")
 
     if (any(value_cols %in% c(0, 1))) {
       value_cols <- c() #no parametric modulators
+      reselect <- 0 #drop loop
     } else {     
       cat("The following columns were chosen as regressor values.\n  These will be used as possible values for each signal.\n\n")
       cat("  ", paste(value_cols, collapse=", "), "\n\n")
@@ -93,27 +92,27 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     lapply(1:length(sl), function(ii) {
       this <- sl[[ii]]
       cat("--------\nSignal ", ii, "\n\n")
-      cat("  Name: ", this$name, "\n")
-      cat("  Event alignment: ", this$event, "\n")
+      cat("  Name:", this$name, "\n")
+      cat("  Event alignment:", this$event, "\n")
       if (length(this$value) == 1L && is.numeric(this$value[1L])) {
         cat("  Regressor value (constant): ", this$value[1L], "\n")
       } else {
-        cat("  Parametric value, mean [min -- max]: ",
-          round(mean(this$value$value, na.rm=TRUE), 2), " [",
-          round(min(this$value$value, na.rm=TRUE), 2), " -- ",
+        cat("  Parametric value, mean [min -- max]:",
+          round(mean(this$value$value, na.rm=TRUE), 2), "[",
+          round(min(this$value$value, na.rm=TRUE), 2), "--",
           round(max(this$value$value, na.rm=TRUE), 2), "]\n")
       }
-      cat("  HRF Normalization: ", this$normalization, "\n")
-      cat("  Add signal derivative: ", as.character(this$add_deriv), "\n")
-      cat("  Demean convolved signal: ", as.character(this$demean_convolved), "\n")
-      cat("  Generate beta series: ", as.character(this$beta_series), "\n")
-      cat("  Multiply convolved regressor against time series: ",
+      cat("  HRF Normalization:", this$normalization, "\n")
+      cat("  Add signal derivative:", as.character(this$add_deriv), "\n")
+      cat("  Demean convolved signal:", as.character(this$demean_convolved), "\n")
+      cat("  Generate beta series:", as.character(this$beta_series), "\n")
+      cat("  Multiply convolved regressor against time series:",
         ifelse(this$ts_multipliers == FALSE || is.null(this$ts_multipliers),
           "FALSE", this$ts_multipliers), "\n")
       cat("\n--------\n")      
     })
   }
-  
+
   signal_list <- list()
   add_more <- 1
   while (add_more != 3) {
@@ -128,7 +127,7 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
       which_del <- menu(names(signal_list), title="Which signal would you like to delete?")
       if (which_del > 0) {
         proceed <- menu(c("Proceed", "Cancel"),
-          title="Are you sure you want to delete ", names(signal_list)[which_del])
+          title=paste0("Are you sure you want to delete ", names(signal_list)[which_del], "?"))
         if (proceed==1) {
           cat("  Deleting ", names(signal_list)[which_del], "\n")
           signal_list[[which_del]] <- NULL
@@ -146,8 +145,9 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
       }
 
       #alignment
-      while (is.null(ss$event) || ss$event == 0) {
-        ss$event <- menu(names(event_list), title="With which event is this signal aligned?")
+      while (is.null(ss$event)) {
+        res <- menu(names(event_list), title="With which event is this signal aligned?")
+        if (res > 0) { ss$event <- names(event_list)[res] }
       }
 
       #value
@@ -159,63 +159,166 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
         if (regtype == 1) {
           ss$value <- 1.0
         } else if (regtype == 2) {
-          ss$value <- -1
+          ss$value <- NULL
           while(!test_number(ss$value)) {
             ss$value <- as.numeric(readline("Enter the regressor value/height (pre-convolution): "))
           }          
         } else if (regtype == 3) {
           val <- 0L
-          while(valfound == 0L) {
+          while(val == 0L) {
             val <- menu(value_cols, c("Which value should be used for this signal?"))
             if (val > 0) {
               #TODO: have build_design matrix support a simple value vector, which requires
               #same number of rows as metadata (avoid redundancy)
-              ss$value <- metadata_df %>% bind_cols(trial_data[[ value_cols[val] ]])
+              ss$value <- metadata_df %>% bind_cols(value = trial_data[[ value_cols[val] ]])
             }
           }
         }
       }
       
       #hrf normalization
-      while (is.null(ss$normalization) || ss$normalization == 0) {
-        ss[["normalization"]] <- menu(c("none",
+      while (is.null(ss$normalization)) {
+        opt <- c("none", "evtmax_1", "durmax_1")
+        res <- menu(c("none",
           "evtmax_1 (aka dmUBLOCK(1); HRF max of 1.0 for each event, regardless of duration)",
           "durmax_1 (aka dmUBLOCK; HRF maxing at 1.0 as events become longer (1.0 around 15 sec)"),
           title="How should the HRF be normalized in convolution?")
+        if (res > 0) { ss$normalization <- opt[res] }
       }
 
       #derivative
-      while (is.null(ss$add_deriv) || ss$add_deriv == 0L) {
-        ss$add_deriv <- menu(c("No", "Yes"), title="Add temporal derivative?")
-        if (ss$add_deriv == 1L) { ss$add_deriv <- FALSE
-        } else if (ss$add_deriv == 2L) { ss$add_deriv <- TRUE }
+      while (is.null(ss$add_deriv)) {
+        res <- menu(c("No", "Yes"), title="Add temporal derivative?")
+        if (res == 1L) { ss$add_deriv <- FALSE
+        } else if (res == 2L) { ss$add_deriv <- TRUE }
       }
 
       #demean
-      while (is.null(ss$demean_convolved) || ss$demean_convolved == 0L) {
-        ss$demean_convolved <- menu(c("No", "Yes"), title="Demean signal post-convolution?")
-        if (ss$demean_convolved == 1L) { ss$demean_convolved <- FALSE
-        } else if (ss$demean_convolved == 2L) { ss$demean_convolved <- TRUE }
+      while (is.null(ss$demean_convolved)) {
+        res <- menu(c("No", "Yes"), title="Demean signal post-convolution?")
+        if (res == 1L) { ss$demean_convolved <- FALSE
+        } else if (res == 2L) { ss$demean_convolved <- TRUE }
       }      
 
       #beta series
-      while (is.null(ss$beta_series) || ss$beta_series == 0L) {
-        ss$beta_series <- menu(c("No", "Yes"),
+      while (is.null(ss$beta_series)) {
+        res <- menu(c("No", "Yes"),
           title="Generate beta series for this signal (one regressor per trial)?")
-        if (ss$beta_series == 1L) { ss$beta_series <- FALSE
-        } else if (ss$beta_series == 2L) { ss$beta_series <- TRUE }
+        if (res == 1L) { ss$beta_series <- FALSE
+        } else if (res == 2L) { ss$beta_series <- TRUE }
       }
 
       #ts multiplier [not quite there]
-      ## while (is.null(ss$beta_series) || ss$beta_series == 0L) {
-      ##   ss$beta_series <- menu(c("No", "Yes"),
+      ## while (is.null(ss$beta_series)) {
+      ##   res <- menu(c("No", "Yes"),
       ##     title="Generate beta series for this signal (one regressor per trial)?")
-      ##   if (ss$beta_series == 1L) { ss$beta_series <- FALSE
-      ##   } else if (ss$beta_series == 2L) { ss$beta_series <- TRUE }
+      ##   if (res == 1L) { ss$beta_series <- FALSE
+      ##   } else if (res == 2L) { ss$beta_series <- TRUE }
       ## }      
-      
+
+      signal_list[[ss$name]] <- ss
     }
   }
+
+  ############### BUILD MODELS FROM SIGNALS AND EVENTS
+
+  summarize_models <- function(ml) {
+    if (length(ml) == 0L) { return(invisible(NULL)) }
+    lapply(1:length(ml), function(ii) {
+      this <- ml[[ii]]
+      cat("--------\nModel ", ii, "\n\n")
+      cat("  Name:", this$name, "\n")
+      cat("  Signals:", paste(this$signals, collapse=", "), "\n")
+      cat("  Contrasts:\n")
+      print(this$contrasts)
+      cat("\n--------\n")      
+    })
+  }
+
+  #add, edit, rename, delete contrasts
+  specify_contrasts <- function(cmat) {
+
+  }
   
-  return(event_list)
+  create_new_model <- function(signal_list) {
+    mm <- list()
+    
+    #model name
+    while(is.null(mm$name) || mm$name == "") {
+      res <- trimws(readline("Enter the model name: "))
+      if (res != "") {
+        res <- make.names(res)
+        if (res %in% names(model_list)) {
+          cat("\nModel name:", res, "already exists. Names must be unique.\n")
+          cat("Current models:", paste(names(model_list), collapse=", "), "\n")
+        } else {
+          mm$name <- res
+        }
+      }
+    }
+
+    #signals
+    summarize_signals(signal_list) #print summary
+
+    while(TRUE) {  
+      model_signals <- select.list(names(signal_list), multiple=TRUE, 
+        title="Choose all signals to include in this model\n(Command/Control-click to select multiple)")
+
+      if (length(model_signals) == 0L) {
+        proceed <- menu(c("Yes", "No"), title="Nothing entered. Do you want to cancel model setup?")
+        if (proceed == 1L) {
+          return(invisible(NULL)) #return nothing from function
+        }
+      } else {
+        model_signals <- names(signal_list)[model_signals] #want actual names, not numeric positions
+        break
+      }
+    }
+
+    #handle contrasts
+    use_diagonals <- menu(c("Yes", "No"), title="Do you want to include diagonal contrasts for each regressor?")
+    if (use_diagonal == 1L) {
+      cmat <- diag(length(model_signals))
+      rownames(cmat) <- model_signals #simple contrast naming
+    } else {
+      cmat <- c()
+    }
+    
+    #contrast editor
+    cmat <- specify_contrasts(cmat)
+  }
+  
+  model_list <- list()
+  add_more <- 1
+  while (add_more != 3) {
+    summarize_signals(signal_list)
+    
+    add_more <- menu(c("Add model", "Delete model", "Done with l1 model setup"),
+      title="Level 1 model setup menu")
+
+    if (add_more == 1L) {
+
+      mm <- create_new_model(signal_list)
+      
+
+      
+
+    } else if (add_more == 2L) {
+      which_del <- menu(names(model), title="Which model would you like to delete?")
+      if (which_del > 0) {
+        proceed <- menu(c("Proceed", "Cancel"),
+          title=paste0("Are you sure you want to delete ", names(model_list)[which_del], "?"))
+        if (proceed==1) {
+          cat("  Deleting ", names(model_list)[which_del], "\n")
+          model_list[[which_del]] <- NULL
+        } else {
+          cat("  Not deleting ", names(model_list)[which_del], "\n")
+        }
+      }
+
+    }
+    
+  }
+  
+  return(list(events=event_list, signals=signal_list))
 }
