@@ -92,3 +92,8 @@ np9 <- approx(y=1:length(decomp$d), x=cc1, xout=0.9)$y
 
 #external compression
 write.csv(round(example, 3), file="test_decon.csv", row.names=F, col.names=F)
+
+
+### build glm
+trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>% mutate(rt_sec=rt_csv/1000)
+result <- build_l1_model(trial_df, value_cols=c("pe_max", "v_chosen", "v_entropy"))

@@ -65,9 +65,13 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
       event_list[[oo]] <- event_list[[oo]] %>% mutate(duration=trial_data[[choices[oval] ]])
     }
   }
+
+  ## initialize overall l1 design object (holds events, signals, and models)
+  l1_model_set <- list(event_list=event_list)
+  class(l1_model_set) <- c("list", "l1_model_set")
   
-  ## setup signals
-  cat("\nNow, we will build up a set of signals to be included as regressor in the level 1 model.\n")
+  ####### setup signals
+  cat("\nNow, we will build up a set of signals that can be included as regressors in the level 1 model.\n")
   cat("First, select all columns that contain parametric signals to be used for regressors\n")
   cat("If you wish to use a fixed value (e.g., 1.0, a unit-height regressor), this will be entered in the next step\n\n")
 
@@ -87,6 +91,7 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     }
   }
 
+  #helper function to print current signal setup
   summarize_signals <- function(sl) {
     if (length(sl) == 0L) { return(invisible(NULL)) }
     lapply(1:length(sl), function(ii) {
@@ -220,6 +225,8 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     }
   }
 
+  l1_model_set$signal_list <- signal_list
+  
   ############### BUILD MODELS FROM SIGNALS AND EVENTS
 
   summarize_models <- function(ml) {
@@ -236,8 +243,84 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
   }
 
   #add, edit, rename, delete contrasts
-  specify_contrasts <- function(cmat) {
+  specify_contrasts <- function(mobj=NULL, l1_model_set=NULL, include_diagonal=include_diagonal) {
+    checkmate::assert_class(mobj, "l1_model_spec") #verify that we have an object of known structure
+    checkmate::assert_class(l1_model_set, "l1_model_set") #insist on having events and signals
 
+    cmat <- mobj$contrasts
+
+    if (isTRUE(include_diagonal)) {
+      if (is.null(cmat)) {
+        cmat <- diag(length(mobj$model_regressors))
+        rownames(cmat) <- mobj$model_regressors #simple contrast naming for each regressor        
+      }
+    }
+
+    if (is.null(cmat)) {
+      cmat <- matrix(numeric(0), nrow=0, ncol=length(mobj$model_regressors), dimnames=list(NULL, mobj$regressors))
+    }
+    
+    #syntax of contrast
+    cat("\n\n-----\nContrast editor\n\n")
+    cat("When entering contrasts, you have two options:\n")
+    cat("1) enter a vector of numeric values, one for each regressor, or\n2) enter name=value pairs for relevant coefficients\n")
+
+    summarize_contrasts <- function(cmat) {
+      sapply(1:nrow(cmat), function(x) {
+        con_name <- rownames(cmat)[x]
+        cvec <- cmat[x,]
+        nzcols <- which(cvec != 0)
+        cols <- colnames(cmat)[nzcols]
+        cat("Contrast: ", con_name, "\n")
+        for (ii in 1:length(cols)) {
+          cat(cols[ii], "=", cvec[ii], "\n")
+        }
+        cat("-----\n")
+      })
+    }
+
+    add_more <- 1
+    while (add_more != 4) {
+      add_more <- menu(c("Add contrast", "Show contrasts", "Delete contrast", "Done with contrast setup"),
+        title="Contrast setup menu")
+
+      if (add_more == 1L) {
+        cname <- readline("Enter contrast name: ")
+        cat("Columns of contrast matrix (one per regressor)\n")
+        cat(colnames(cmat), "\n")
+        centry <- readline("Enter contrast syntax: ")
+        if (grepl("=", centry)) {
+          #split into pairs
+          centry <- gsub("([^\\s])+\\s*=\\s*([^\\s]+)", "\\1=\\2", centry, perl=TRUE)
+          csplit <- do.call(rbind, strsplit(strsplit(centry, "\\s+")[[1L]], "=")) #first element is name, second is value
+          cvec <- rep(0, ncol(cmat)) %>% setNames(colnames(cmat))
+          for (ii in 1:nrow(csplit)) { cvec[csplit[ii, 1]] <- as.numeric(csplit[ii, 2]) }
+          cmat <- rbind(cmat, cvec)
+          rownames(cmat)[nrow(cmat)] <- cname
+        } else {
+          csplit <- sapply(strsplit(centry, "(,\\s*|\\s+)")[[1L]], as.numeric)
+          if (length(csplit) != ncol(cmat)) {
+            warning("Number of element in entered contrast does not match number of columns in design. Not adding contrast")
+          } else {
+            cmat <- rbind(cmat, cvec)
+            rownames(cmat)[nrow(cmat)] <- cname
+          }          
+        }
+      } else if (add_more == 2L) {
+        summarize_contrasts(cmat)
+      } else if (add_more == 3L) {
+        whichdel <- menu(rownames(cmat), title="Which contrast should be deleted?")
+        if (whichdel != 0) {
+          cmat <- cmat[-whichdel,]
+        }
+      } else if (add_more == 4L) {
+        cat("Exiting contrast setup\n")
+      }
+      
+    }
+
+    
+    
   }
   
   create_new_model <- function(signal_list) {
@@ -270,22 +353,46 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
           return(invisible(NULL)) #return nothing from function
         }
       } else {
-        model_signals <- names(signal_list)[model_signals] #want actual names, not numeric positions
+        mm$model_signals <- model_signals
         break
       }
     }
 
+    #look up what the regressors will be for this.
+    mm$model_regressors <- unlist(lapply(mm$model_signals, function(nn) {
+      if (isTRUE(signal_list[[nn]]$add_deriv)) {
+        return(c(nn, paste0(nn, "_dt"))) #regressor and _dt temporal derivative
+      } else if (isTRUE(signal_list[[nn]]$beta_series)) {
+        if (is.data.frame(signal_list[[nn]]$value)) {
+          #TODO: this approach is imperfect if there are jumps in trials for a subject
+          #this assumes that all subjects have all trials
+          trials <- sort(unique(signal_list[[nn]]$value$trial)) #vector of trials for parametric signal
+        } else {
+          #trials will be in corresponding event in case value is a scalar
+          trials <- sort(unique(event_list[[ signal_list[[nn]]$event ]]$trial))
+        }       
+
+        return(paste(nn, sprintf("%03d", trials), sep="_t")) # signal_t01 etc.
+      } else {
+        return(nn) #just the signal name itself (no deriv, no bs)
+      }
+    }))
+    
     #handle contrasts
-    use_diagonals <- menu(c("Yes", "No"), title="Do you want to include diagonal contrasts for each regressor?")
-    if (use_diagonal == 1L) {
-      cmat <- diag(length(model_signals))
-      rownames(cmat) <- model_signals #simple contrast naming
+    include_diagonal <- menu(c("Yes", "No"), title="Do you want to include diagonal contrasts for each regressor?")
+    if (include_diagonal == 1L) {
+      include_diagonal <- TRUE
     } else {
-      cmat <- c()
+      include_diagonal <- FALSE
     }
+
+    class(mm) <- c("list", "l1_model_spec")
     
     #contrast editor
-    cmat <- specify_contrasts(cmat)
+    browser()
+    mm <- specify_contrasts(mm, l1_model_set=l1_model_set, include_diagonal=include_diagonal)
+
+    return(mm)
   }
   
   model_list <- list()
@@ -297,14 +404,12 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
       title="Level 1 model setup menu")
 
     if (add_more == 1L) {
-
       mm <- create_new_model(signal_list)
-      
-
-      
+      if (mm$name %in% names(l1_model_set)) { warning("An model with the same name exists: ", mm$name, ". Overwriting it.") }
+      l1_model_set[[mm$name]] <- mm #add to set
 
     } else if (add_more == 2L) {
-      which_del <- menu(names(model), title="Which model would you like to delete?")
+      which_del <- menu(names(model_list), title="Which model would you like to delete?")
       if (which_del > 0) {
         proceed <- menu(c("Proceed", "Cancel"),
           title=paste0("Are you sure you want to delete ", names(model_list)[which_del], "?"))

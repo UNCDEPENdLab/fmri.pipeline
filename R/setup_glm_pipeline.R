@@ -134,7 +134,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
       ungroup()
 
     #should include the id column itself
-    one_cols <- names(which(sapply(variation_df, function(col) { all(col==1) }) ==TRUE))
+    one_cols <- names(which(sapply(variation_df, function(col) { all(col==1) }) == TRUE))
 
     message("Retaining columns: ", paste(one_cols, collapse=", "))
     
@@ -149,6 +149,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     scheduler=scheduler,
     working_directory=working_directory,
     subject_data=subject_data,
+    run_data=run_data,
     trial_data=trial_data,
     variable_mapping=variable_mapping,
     bad_ids=bad_ids,
