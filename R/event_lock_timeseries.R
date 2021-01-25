@@ -83,7 +83,7 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
     if (evt_after < Inf) { trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) < evt_after) }
 
     #populate trial field
-    trial_ts[[ vm[["trial"]] ]] <- trials[t]
+    trial_ts[[ vm[["trial"]] ]] <- ifelse(nrow(trial_ts) > 0L, trials[t], numeric(0)) #allow for a zero-row df
     
     #add these data to trial list
     tlist[[t]] <- trial_ts
@@ -261,7 +261,7 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
     if (nrow(interp_agg) < 2) {
       #cat("For subject:", trial_df[[idcol]][1], ", insufficient interpolation data for run:",
       #  trial_df[[runcol]][1], ", trial:", trials[t], "\n", file=logfile, append=TRUE)
-      next
+      return(NULL)
     }
     
     vcols <- grep("value_.*", names(interp_agg), value=TRUE)
@@ -319,9 +319,9 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
   checkmate::assert_matrix(mts)
   checkmate::assert_numeric(pexp_target, lower=1e-2, upper=1.0, unique=TRUE)
   checkmate::assert_logical(scale_columns, max.len=1L)
-
+  
   #orig <- mts
-  mts <- mts[,!apply(mts, 2, function(x) all(is.na(x)))] #drop columns/time series that are all NA (edge of brain)
+  mts <- mts[,!apply(mts, 2, function(x) all(is.na(x))), drop=FALSE] #drop columns/time series that are all NA (edge of brain)
   mts <- na.omit(mts) #now drop rows that have NAs (event censoring)
 
   #screen for lousy time series (no variation or extreme means)
@@ -329,24 +329,40 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
   sds <- apply(mts, 2, sd)
 
   bad <- sds < 1e-3 | mms < 1e-6 #very small SD or super-low mean
-  mts <- mts[,!bad]
-  
-  #if (isTRUE(scale_columns)) { mts <- scale(mts) } #z-score columns of matrix before compression (standard practice)
-  if (isTRUE(scale_columns)) { #for some reason, scale is blowing up svd (infinite/missing values -- just use manual z-scoring)
-    mts <- apply(mts, 2, function(x) {  (x - mean(x))/mean(x) })
+  mts <- mts[,!bad, drop=FALSE]
+
+  if (nrow(mts) <= 3 || ncol(mts) <= 1) {
+    warning("mts matrix cannot be compressed. Dims: ", paste(dim(mts), collapse=", "))
+    compress_ret <- list() #setup dummy list
+    for (pp in pexp_target) {
+      compress_ret[[paste0("compress_", pp)]] <- NA_real_
+      compress_ret[[paste0("acompress_", pp)]] <- NA_real_
+    }
+
+    compress_ret[["compress_nt"]] <- NA_integer_
+  } else {
+    #if (isTRUE(scale_columns)) { mts <- scale(mts) } #z-score columns of matrix before compression (standard practice)
+    #for some reason, scale is blowing up svd (infinite/missing values -- just use manual z-scoring)
+    if (isTRUE(scale_columns)) { 
+      mts <- apply(mts, 2, function(x) {  (x - mean(x))/mean(x) })
+    }
+    
+    dd <- svd(mts)
+    pexp <- cumsum(dd$d^2)/sum(dd$d^2) #proportion of variance explained
+
+    compress_ret <- list()
+    for (pp in pexp_target) {
+      nexceed <- min(which(pexp > pp))
+      
+      #linear approximation of rank, allowing non-integer values
+      napprox <- approx(y=1:length(dd$d), x=pexp, xout=pp, ties="ordered")$y
+      compress_ret[[paste0("compress_", pp)]] <- 1-(nexceed/length(dd$d))
+      compress_ret[[paste0("acompress_", pp)]] <- 1-(napprox/length(dd$d))
+    }
+
+    compress_ret[["compress_nt"]] <- length(dd$d) #number of timepoints
+
   }
     
-  dd <- svd(mts)
-  pexp <- cumsum(dd$d^2)/sum(dd$d^2) #proportion of variance explained
-
-  compress_ret <- list()
-  for (pp in pexp_target) {
-    nexceed <- min(which(pexp > pp))
-    napprox <- approx(y=1:length(dd$d), x=pexp, xout=pp, ties="ordered")$y #linear approximation of rank, allowing non-integer values
-    compress_ret[[paste0("compress_", pp)]] <- 1-(nexceed/length(dd$d))
-    compress_ret[[paste0("acompress_", pp)]] <- 1-(napprox/length(dd$d))
-  }
-
-  compress_ret[["compress_nt"]] <- length(dd$d) #number of timepoints
   return(compress_ret)
 }

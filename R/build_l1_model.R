@@ -16,30 +16,51 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     
   possible_cols <- names(trial_data)
   possible_cols <- possible_cols[!names(possible_cols) %in% variable_mapping]
-  
-  if (is.null(onset_cols)) {
+
+  get_onsets <- function(trial_data, onset_cols=c(), onset_regex=NULL) {
     if (!is.null(onset_regex)) {
-      onset_cols <- grep(onset_regex, names(trial_data), value=TRUE, perl=TRUE)
-      if (length(onset_cols) > 0L) {
-        cat("Detected the following possible event onset columns:\n\n  ", paste(onset_cols, collapse=", "), "\n\n")
-        done <- menu(c("Yes (add columns)", "No (done with onsets)"), title="Would you like to select additional event onset columns?")
-        reselect <- ifelse(done==1, 2, 1) #a value of 2 will let the user tack on columns
+      detected_onsets <- grep(onset_regex, names(trial_data), value=TRUE, perl=TRUE)
+      if (length(detected_onsets) > 0L) {
+        cat("Detected the following possible event onset columns:\n\n  ", paste(detected_onsets, collapse=", "), "\n\n")
       }
-    } else {
-      reselect <- 2
-      onset_cols <- c()
+
+      #add these to any that were manually specified/current
+      onset_cols <- unique(c(onset_cols, detected_onsets))
     }
 
-    while(reselect==2) {
-      onset_cols <- select.list(names(trial_data), multiple=TRUE, preselect=onset_cols,
-        title="Choose all columns denoting event onset times\n(Command/Control-click to select multiple)")
-      cat("The following columns were chosen as event onset times.\n  These will be used as possible onset times for each regressor.\n\n")
-      cat("  ", paste(onset_cols, collapse=", "), "\n\n")
+    done_onsets <- FALSE
+    while(isFALSE(done_onsets)) {
+      cat("Current onset columns:\n\n  ", paste(onset_cols, collapse=", "), "\n\n")
+      action <- menu(c("Add/modify onset columns", "Delete onset columns", "Done with onset selection"),
+        title="Would you like to modify the event onset columns?")
       
-      reselect <- menu(c("Yes", "No (reselect events)"), title="Are you done selecting all event onset times?")
+      if (action == 1L) { #Add/modify
+        onset_cols <- select.list(names(trial_data), multiple=TRUE, preselect=onset_cols,
+          title="Choose all columns denoting event onset times\n(Command/Control-click to select multiple)")
+      } else if (action == 2L) { #Delete
+        which_del <- menu(onset_cols, title="Which onset column would you like to remove?")
+        if (which_del > 0) {
+          proceed <- menu(c("Proceed", "Cancel"),
+            title=paste0("Are you sure you want to delete ", onset_cols[which_del], "?"))
+          if (proceed==1) {
+            cat("  Deleting ", onset_cols[which_del], "\n")
+            onset_cols <- onset_cols[-which_del]
+          } else {
+            cat("  Not deleting ", onset_cols[which_del], "\n")
+          }
+        }
+      } else if (action == 3L) { #Done
+        done_onsets <- TRUE
+        cat(c("The following columns were chosen as event onset times.\n",
+          "  These will be used as possible onset times for each regressor.\n\n"))
+        cat("  ", paste(onset_cols, collapse=", "), "\n\n")
+      }
     }
+    return(onset_cols)
   }
-
+  
+  onset_cols <- get_onsets(trial_data, onset_cols, onset_regex)
+  
   #basal data frame for each event
   metadata_df <- trial_data %>% dplyr::select(!!variable_mapping[c("id", "run", "run_trial")]) %>%
     setNames(c("id", "run", "trial"))
@@ -54,7 +75,9 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     cat("Specify a duration value or column for the event onset: ", oo, "\n")
     choices <- c("Specify fixed duration", names(trial_data))
     oval <- menu(choices=choices)
-    if (oval==1) {
+    if (oval==0) {
+      message("Skipping out of duration?") #TODO
+    } else if (oval==1) {
       duration <- NULL
       while(!test_number(duration, lower=0, upper=5000)) {
         duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", oo, ": ")))
@@ -235,29 +258,33 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
       this <- ml[[ii]]
       cat("--------\nModel ", ii, "\n\n")
       cat("  Name:", this$name, "\n")
-      cat("  Signals:", paste(this$signals, collapse=", "), "\n")
+      cat("  Signals:", paste(this$model_signals, collapse=", "), "\n")
       cat("  Contrasts:\n")
       print(this$contrasts)
-      cat("\n--------\n")      
+      cat("\n--------\n\n")      
     })
   }
 
   #add, edit, rename, delete contrasts
-  specify_contrasts <- function(mobj=NULL, l1_model_set=NULL, include_diagonal=include_diagonal) {
+  specify_contrasts <- function(mobj=NULL, include_diagonal=include_diagonal) {
     checkmate::assert_class(mobj, "l1_model_spec") #verify that we have an object of known structure
-    checkmate::assert_class(l1_model_set, "l1_model_set") #insist on having events and signals
 
     cmat <- mobj$contrasts
 
     if (isTRUE(include_diagonal)) {
       if (is.null(cmat)) {
         cmat <- diag(length(mobj$model_regressors))
-        rownames(cmat) <- mobj$model_regressors #simple contrast naming for each regressor        
+        rownames(cmat) <- mobj$model_regressors #simple contrast naming for each single-regressor contrast
+        colnames(cmat) <- mobj$model_regressors #always have columns named by regressor
       }
     }
 
     if (is.null(cmat)) {
       cmat <- matrix(numeric(0), nrow=0, ncol=length(mobj$model_regressors), dimnames=list(NULL, mobj$regressors))
+    } else {
+      #currently blow up if we change regressors (contrast matrix does not match new regressors)
+      #TODO: build out zeros in added columns
+      stopifnot(identical(colnames(cmat), mobj$model_regressors)) 
     }
     
     #syntax of contrast
@@ -273,7 +300,7 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
         cols <- colnames(cmat)[nzcols]
         cat("Contrast: ", con_name, "\n")
         for (ii in 1:length(cols)) {
-          cat(cols[ii], "=", cvec[ii], "\n")
+          cat(cols[ii], "=", cvec[nzcols[ii]], "\n")
         }
         cat("-----\n")
       })
@@ -291,16 +318,26 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
         centry <- readline("Enter contrast syntax: ")
         if (grepl("=", centry)) {
           #split into pairs
-          centry <- gsub("([^\\s])+\\s*=\\s*([^\\s]+)", "\\1=\\2", centry, perl=TRUE)
+          centry <- gsub("([^\\s]+)\\s*=\\s*([^\\s]+)", "\\1=\\2", centry, perl=TRUE)
           csplit <- do.call(rbind, strsplit(strsplit(centry, "\\s+")[[1L]], "=")) #first element is name, second is value
           cvec <- rep(0, ncol(cmat)) %>% setNames(colnames(cmat))
-          for (ii in 1:nrow(csplit)) { cvec[csplit[ii, 1]] <- as.numeric(csplit[ii, 2]) }
-          cmat <- rbind(cmat, cvec)
-          rownames(cmat)[nrow(cmat)] <- cname
+          bad_con <- FALSE
+          for (ii in 1:nrow(csplit)) {
+            if (!cvec[csplit[ii, 1]] %in% colnames(cmat)) {
+              warning("Cannot find column: ", cvec[csplit[ii, 1]], " in contrast matrix. Ignoring contrast input.")
+              bad_con <- TRUE
+            } else {
+              cvec[csplit[ii, 1]] <- as.numeric(csplit[ii, 2])
+            }
+          }
+          if (!bad_con) {
+            cmat <- rbind(cmat, cvec)
+            rownames(cmat)[nrow(cmat)] <- cname
+          }
         } else {
-          csplit <- sapply(strsplit(centry, "(,\\s*|\\s+)")[[1L]], as.numeric)
-          if (length(csplit) != ncol(cmat)) {
-            warning("Number of element in entered contrast does not match number of columns in design. Not adding contrast")
+          cvec <- sapply(strsplit(centry, "(,\\s*|\\s+)")[[1L]], as.numeric)
+          if (length(cvec) != ncol(cmat)) {
+            warning("Number of elements in entered contrast does not match number of columns in design. Not adding contrast")
           } else {
             cmat <- rbind(cmat, cvec)
             rownames(cmat)[nrow(cmat)] <- cname
@@ -311,16 +348,15 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
       } else if (add_more == 3L) {
         whichdel <- menu(rownames(cmat), title="Which contrast should be deleted?")
         if (whichdel != 0) {
-          cmat <- cmat[-whichdel,]
+          cmat <- cmat[-whichdel,,drop=FALSE]
         }
       } else if (add_more == 4L) {
         cat("Exiting contrast setup\n")
       }
       
     }
-
-    
-    
+    mobj$contrasts <- cmat
+    return(mobj)
   }
   
   create_new_model <- function(signal_list) {
@@ -389,8 +425,7 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     class(mm) <- c("list", "l1_model_spec")
     
     #contrast editor
-    browser()
-    mm <- specify_contrasts(mm, l1_model_set=l1_model_set, include_diagonal=include_diagonal)
+    mm <- specify_contrasts(mm, include_diagonal=include_diagonal)
 
     return(mm)
   }
@@ -398,7 +433,7 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
   model_list <- list()
   add_more <- 1
   while (add_more != 3) {
-    summarize_signals(signal_list)
+    summarize_models(model_list)
     
     add_more <- menu(c("Add model", "Delete model", "Done with l1 model setup"),
       title="Level 1 model setup menu")
@@ -406,8 +441,7 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     if (add_more == 1L) {
       mm <- create_new_model(signal_list)
       if (mm$name %in% names(l1_model_set)) { warning("An model with the same name exists: ", mm$name, ". Overwriting it.") }
-      l1_model_set[[mm$name]] <- mm #add to set
-
+      model_list[[mm$name]] <- mm #add to set
     } else if (add_more == 2L) {
       which_del <- menu(names(model_list), title="Which model would you like to delete?")
       if (which_del > 0) {
@@ -424,6 +458,8 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     }
     
   }
-  
-  return(list(events=event_list, signals=signal_list))
+
+  l1_model_set[["models"]] <- model_list
+
+  return(l1_model_set)
 }
