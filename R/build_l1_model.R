@@ -1,31 +1,38 @@
 #' helper function to build an l1 model specification interactively
 #'
 #' @param trial_data A data.frame of trial-level events
-build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
+build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
                            onset_cols=NULL, onset_regex=".*(onset|time).*", duration_regex=".*duration.*", value_cols=NULL) {
-
-
   
   #maybe allow glm object to be passed in that would have trial_data and variable_mapping. I guess that would be like "add_l1_model"
-  
   checkmate::assert_data_frame(trial_data) #yeah, move toward allowing the broader model specification object here
+  checkmate::assert_class(l1_model_set, "l1_model_set", null.ok=TRUE)
   checkmate::assert_subset(onset_cols, names(trial_data)) #make sure that all event columns are in the data frame
   checkmate::assert_string(onset_regex, null.ok=TRUE)
   checkmate::assert_string(duration_regex, null.ok=TRUE)
   checkmate::assert_subset(value_cols, names(trial_data)) #make sure all parametric regressor columns are in the data frame
-    
+  
   possible_cols <- names(trial_data)
   possible_cols <- possible_cols[!names(possible_cols) %in% variable_mapping]
 
-  get_onsets <- function(trial_data, onset_cols=c(), onset_regex=NULL) {
+  if (is.null(l1_model_set)) {
+    ## initialize overall l1 design object (holds events, signals, and models)
+    l1_model_set <- list(events=NULL, signals=NULL, models=NULL)
+    class(l1_model_set) <- c("list", "l1_model_set")
+  }
+  
+  #onset manager
+  get_onsets <- function(trial_data, onset_cols=NULL, onset_regex=NULL) {
     if (!is.null(onset_regex)) {
       detected_onsets <- grep(onset_regex, names(trial_data), value=TRUE, perl=TRUE)
       if (length(detected_onsets) > 0L) {
         cat("Detected the following possible event onset columns:\n\n  ", paste(detected_onsets, collapse=", "), "\n\n")
+        res <- menu(c("Yes", "No"), title="Add these columns to possible onsets?")
+        if (res == 1) {
+          #add these to any that were manually specified/current
+          onset_cols <- unique(c(onset_cols, detected_onsets))
+        }
       }
-
-      #add these to any that were manually specified/current
-      onset_cols <- unique(c(onset_cols, detected_onsets))
     }
 
     done_onsets <- FALSE
@@ -51,14 +58,16 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
         }
       } else if (action == 3L) { #Done
         done_onsets <- TRUE
-        cat(c("The following columns were chosen as event onset times.\n",
-          "  These will be used as possible onset times for each regressor.\n\n"))
+        cat("The following columns were chosen as event onset times.",
+          "These will be used as possible onset times for each regressor.\n\n", sep="\n")
         cat("  ", paste(onset_cols, collapse=", "), "\n\n")
       }
     }
     return(onset_cols)
   }
-  
+
+  #ask user to setup onsets, build from existing onsets, if available
+  if (!is.null(l1_model_set$events)) { onset_cols <- unique(names(l1_model_set$events), onset_cols) }
   onset_cols <- get_onsets(trial_data, onset_cols, onset_regex)
   
   #basal data frame for each event
@@ -69,10 +78,29 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
   event_list <- lapply(onset_cols, function(xx) {
     metadata_df %>% bind_cols(trial_data %>% select(all_of(xx)) %>% setNames("onset") %>% mutate(event=xx))
   }) %>% setNames(onset_cols)
-      
+
+
+  #populate existing events into structure
+  if (!is.null(l1_model_set$events)) {
+    extant_events <- names(l1_model_set$events)[names(l1_model_set$events) %in% names(event_list)]
+    event_list[extant_events] <- l1_model_set$events[extant_events]
+  }
+
   #handle durations
   for (oo in onset_cols) {
-    cat("Specify a duration value or column for the event onset: ", oo, "\n")
+    cat("\n----\nSpecify a fixed duration value or column for the event: ", oo, "\n")
+    
+    if (oo %in% extant_events) {
+      cat("\nCurrent duration value summary, mean [min -- max]:",
+        round(mean(event_list[[oo]]$duration, na.rm=TRUE), 2), "[",
+        round(min(event_list[[oo]]$duration, na.rm=TRUE), 2), "--",
+        round(max(event_list[[oo]]$duration, na.rm=TRUE), 2), "]\n")
+      cat("First 6 values:", paste(head(event_list[[oo]]$duration), collapse=", "), "\n\n")
+      reselect <- menu(c("Yes", "No (keep durations)"), title="Do you want to respecify the duration?")
+      
+      if (reselect == 2) { next } #skip over this column
+    }
+
     choices <- c("Specify fixed duration", names(trial_data))
     oval <- menu(choices=choices)
     if (oval==0) {
@@ -89,9 +117,8 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     }
   }
 
-  ## initialize overall l1 design object (holds events, signals, and models)
-  l1_model_set <- list(event_list=event_list)
-  class(l1_model_set) <- c("list", "l1_model_set")
+  #populate into set object
+  l1_model_set$events <- event_list
   
   ####### setup signals
   cat("\nNow, we will build up a set of signals that can be included as regressors in the level 1 model.\n")
@@ -107,14 +134,14 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
       value_cols <- c() #no parametric modulators
       reselect <- 0 #drop loop
     } else {     
-      cat("The following columns were chosen as regressor values.\n  These will be used as possible values for each signal.\n\n")
+      cat("The following columns were chosen as regressor values.\nThese will be used as possible values for each signal.\n\n")
       cat("  ", paste(value_cols, collapse=", "), "\n\n")
       
       reselect <- menu(c("Yes", "No (reselect values)"), title="Are you done selecting all possible regressor values?")
     }
   }
 
-  #helper function to print current signal setup
+  #helper function to print signal setup
   summarize_signals <- function(sl) {
     if (length(sl) == 0L) { return(invisible(NULL)) }
     lapply(1:length(sl), function(ii) {
@@ -141,7 +168,7 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     })
   }
 
-  signal_list <- list()
+  signal_list <- l1_model_set$signals
   add_more <- 1
   while (add_more != 3) {
     summarize_signals(signal_list)
@@ -214,41 +241,57 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
         if (res > 0) { ss$normalization <- opt[res] }
       }
 
-      #derivative
-      while (is.null(ss$add_deriv)) {
-        res <- menu(c("No", "Yes"), title="Add temporal derivative?")
-        if (res == 1L) { ss$add_deriv <- FALSE
-        } else if (res == 2L) { ss$add_deriv <- TRUE }
+      cat("Advanced options defaults:",
+        "  - No temporal derivative",
+        "  - Demean convolved signal",
+        "  - No beta series",
+        "  - No time series multiplier (PPI)", sep="\n")
+      res <- menu(c("No", "Yes"), title="Change advanced options for this signal?")
+
+      if (res %in% c(0,1)) {
+        cat("Using defaults for signal: ", ss$name, "\n")
+        ss$add_deriv <- FALSE
+        ss$demean_convolved <- TRUE
+        ss$beta_series <- FALSE
+      } else {
+        #derivative
+        while (is.null(ss$add_deriv)) {
+          res <- menu(c("No", "Yes"), title="Add temporal derivative?")
+          if (res == 1L) { ss$add_deriv <- FALSE
+          } else if (res == 2L) { ss$add_deriv <- TRUE }
+        }
+
+        #demean
+        while (is.null(ss$demean_convolved)) {
+          res <- menu(c("No", "Yes"), title="Demean signal post-convolution?")
+          if (res == 1L) { ss$demean_convolved <- FALSE
+          } else if (res == 2L) { ss$demean_convolved <- TRUE }
+        }      
+
+        #beta series
+        while (is.null(ss$beta_series)) {
+          res <- menu(c("No", "Yes"),
+            title="Generate beta series for this signal (one regressor per trial)?")
+          if (res == 1L) { ss$beta_series <- FALSE
+          } else if (res == 2L) { ss$beta_series <- TRUE }
+        }
+
+        #ts multiplier [not quite there]
+        ## while (is.null(ss$beta_series)) {
+        ##   res <- menu(c("No", "Yes"),
+        ##     title="Generate beta series for this signal (one regressor per trial)?")
+        ##   if (res == 1L) { ss$beta_series <- FALSE
+        ##   } else if (res == 2L) { ss$beta_series <- TRUE }
+        ## }      
+
       }
-
-      #demean
-      while (is.null(ss$demean_convolved)) {
-        res <- menu(c("No", "Yes"), title="Demean signal post-convolution?")
-        if (res == 1L) { ss$demean_convolved <- FALSE
-        } else if (res == 2L) { ss$demean_convolved <- TRUE }
-      }      
-
-      #beta series
-      while (is.null(ss$beta_series)) {
-        res <- menu(c("No", "Yes"),
-          title="Generate beta series for this signal (one regressor per trial)?")
-        if (res == 1L) { ss$beta_series <- FALSE
-        } else if (res == 2L) { ss$beta_series <- TRUE }
-      }
-
-      #ts multiplier [not quite there]
-      ## while (is.null(ss$beta_series)) {
-      ##   res <- menu(c("No", "Yes"),
-      ##     title="Generate beta series for this signal (one regressor per trial)?")
-      ##   if (res == 1L) { ss$beta_series <- FALSE
-      ##   } else if (res == 2L) { ss$beta_series <- TRUE }
-      ## }      
 
       signal_list[[ss$name]] <- ss
     }
   }
 
-  l1_model_set$signal_list <- signal_list
+  #populate back into model set
+  l1_model_set$signals <- signal_list
   
   ############### BUILD MODELS FROM SIGNALS AND EVENTS
 
@@ -289,8 +332,9 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     
     #syntax of contrast
     cat("\n\n-----\nContrast editor\n\n")
-    cat("When entering contrasts, you have two options:\n")
-    cat("1) enter a vector of numeric values, one for each regressor, or\n2) enter name=value pairs for relevant coefficients\n")
+    cat("When entering contrasts, you have two options:\n\n")
+    cat("  1) enter a vector of numeric values, one for each regressor\n     Example: 1 0 -1 0 0\n\n")
+    cat("  2) enter name=value pairs for relevant coefficients\n     Example: pe_1h = 1 pe_2h = -1\n\n")
 
     summarize_contrasts <- function(cmat) {
       sapply(1:nrow(cmat), function(x) {
@@ -430,7 +474,7 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     return(mm)
   }
   
-  model_list <- list()
+  model_list <- l1_model_set$models
   add_more <- 1
   while (add_more != 3) {
     summarize_models(model_list)
@@ -459,7 +503,7 @@ build_l1_model <- function(trial_data, variable_mapping=c(id="id", run="run", tr
     
   }
 
-  l1_model_set[["models"]] <- model_list
+  l1_model_set$models <- model_list
 
   return(l1_model_set)
 }
