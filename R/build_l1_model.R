@@ -1,6 +1,18 @@
-#' helper function to build an l1 model specification interactively
+#' Interactive function to build an l1 model specification for setup_glm_pipeline
 #'
-#' @param trial_data A data.frame of trial-level events
+#' @param trial_data a data.frame containing trial-level data for one or more subjects
+#' @param l1_model_set optional existing l1_model_set to be modified
+#' @param variable_mapping a vector of mappings between columns in \code{trial_data} and internal constructs
+#' @param onset_cols an optional character vector of columns in \code{trial_data} that should be in the set of event onsets
+#' @param onset_regex an optional PCRE-compatible regular expression for identifying potential event onset columns in \code{trial_data}
+#' @param duration_regex an optional PCRE-compatible regular expression for identifying potential event duration columns in \code{trial_data}
+#' @param value_cols an optional character vector of columns in \code{trial_data} that should be in the set of signal values
+#'
+#' @return a \code{l1_model_set} object containing events, signals, and models, compatible with build_design_matrix
+#' @author Michael Hallquist
+#' @importFrom checkmate assert_data_frame assert_class assert_subset
+#' @export
+#' 
 build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
                            onset_cols=NULL, onset_regex=".*(onset|time).*", duration_regex=".*duration.*", value_cols=NULL) {
   
@@ -45,15 +57,19 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
         onset_cols <- select.list(names(trial_data), multiple=TRUE, preselect=onset_cols,
           title="Choose all columns denoting event onset times\n(Command/Control-click to select multiple)")
       } else if (action == 2L) { #Delete
-        which_del <- menu(onset_cols, title="Which onset column would you like to remove?")
-        if (which_del > 0) {
-          proceed <- menu(c("Proceed", "Cancel"),
-            title=paste0("Are you sure you want to delete ", onset_cols[which_del], "?"))
-          if (proceed==1) {
-            cat("  Deleting ", onset_cols[which_del], "\n")
-            onset_cols <- onset_cols[-which_del]
-          } else {
-            cat("  Not deleting ", onset_cols[which_del], "\n")
+        if (length(onset_cols) == 0L) {
+          message("No onsets yet. Please add at least one.")
+        } else {          
+          which_del <- menu(onset_cols, title="Which onset column would you like to remove?")
+          if (which_del > 0) {
+            proceed <- menu(c("Proceed", "Cancel"),
+              title=paste0("Are you sure you want to delete ", onset_cols[which_del], "?"))
+            if (proceed==1) {
+              cat("  Deleting ", onset_cols[which_del], "\n")
+              onset_cols <- onset_cols[-which_del]
+            } else {
+              cat("  Not deleting ", onset_cols[which_del], "\n")
+            }
           }
         }
       } else if (action == 3L) { #Done
@@ -84,7 +100,9 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
   if (!is.null(l1_model_set$events)) {
     extant_events <- names(l1_model_set$events)[names(l1_model_set$events) %in% names(event_list)]
     event_list[extant_events] <- l1_model_set$events[extant_events]
-  }
+  } else {
+    extant_events <- c()
+  }  
 
   #handle durations
   for (oo in onset_cols) {
@@ -107,7 +125,7 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
       message("Skipping out of duration?") #TODO
     } else if (oval==1) {
       duration <- NULL
-      while(!test_number(duration, lower=0, upper=5000)) {
+      while(!checkmate::test_number(duration, lower=0, upper=5000)) {
         duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", oo, ": ")))
       }
       if (duration > 50) { warning("Duration more than 50s specified. Make sure that your durations are in seconds, not milliseconds!") }
@@ -170,42 +188,92 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
 
   signal_list <- l1_model_set$signals
   add_more <- 1
-  while (add_more != 3) {
+  while (add_more != 4) {
     summarize_signals(signal_list)
     
-    add_more <- menu(c("Add signal", "Delete signal", "Done with signal setup"),
+    add_more <- menu(c("Add signal", "Modify signal", "Delete signal", "Done with signal setup"),
       title="Signal setup menu")
 
-    if (add_more==3) {      
+    if (add_more==4) {      
       break
-    } else if (add_more == 2) {
-      which_del <- menu(names(signal_list), title="Which signal would you like to delete?")
-      if (which_del > 0) {
-        proceed <- menu(c("Proceed", "Cancel"),
-          title=paste0("Are you sure you want to delete ", names(signal_list)[which_del], "?"))
-        if (proceed==1) {
-          cat("  Deleting ", names(signal_list)[which_del], "\n")
-          signal_list[[which_del]] <- NULL
-        } else {
-          cat("  Not deleting ", names(signal_list)[which_del], "\n")
+    } else if (add_more == 3) {
+      if (length(signal_list) == 0L) {
+        message("No signals added yet. Please add one first")
+      } else {        
+        which_del <- menu(names(signal_list), title="Which signal would you like to delete?")
+        if (which_del > 0) {
+          proceed <- menu(c("Proceed", "Cancel"),
+            title=paste0("Are you sure you want to delete ", names(signal_list)[which_del], "?"))
+          if (proceed==1) {
+            cat("  Deleting ", names(signal_list)[which_del], "\n")
+            signal_list[[which_del]] <- NULL
+          } else {
+            cat("  Not deleting ", names(signal_list)[which_del], "\n")
+          }
         }
       }
-    } else if (add_more == 1) {
+    } else if (add_more %in% c(1, 2)) {
+      modify <- FALSE
+      
       #prompt for signal details
-      ss <- list()
+      if (add_more == 2) {
+        if (length(signal_list) == 0L) {
+          message("No signals available to modify")
+          ss <- list()
+        } else {
+          res <- 0L
+          while (res == 0L) { res <- menu(names(signal_list), title="Which signal do you want to modify?") }
+          ss <- signal_list[[res]]
+          signal_list[[res]] <- NULL #clear out old settings
+          modify <- TRUE
+        }
+      } else {
+        ss <- list()
+      }
+      
+      ### ------ name ------      
+      complete <- FALSE
+      while(isFALSE(complete)) {
+        prompt <- "Enter the signal name: "
+        if (isTRUE(modify)) {
+          cat("Current signal name:", ss$name, "\n")
+          prompt <- "Enter the signal name (press return to leave unchanged): "
+        }
 
-      #name
-      while(is.null(ss$name) || ss$name == "") {
-        ss$name <- readline("Enter the signal name: ")
+        nm <- readline(prompt)
+        if (nm != "") {
+          ss$name <- nm
+          complete <- TRUE
+        } else if (nm == "" && isTRUE(modify)) {
+          complete <- TRUE
+        }
       }
 
-      #alignment
+      ### ------ event alignment ------
+      if (isTRUE(modify)) {
+        cat("Current signal alignment:", ss$event, "\n")
+        res <- menu(c("No", "Yes"), title="Change signal alignment?")
+        if (res == 2) { ss$event <- NULL } #clear out event so that it is respecified
+      }        
+        
       while (is.null(ss$event)) {
         res <- menu(names(event_list), title="With which event is this signal aligned?")
         if (res > 0) { ss$event <- names(event_list)[res] }
       }
 
-      #value
+      ### ------ value of regressor ------
+      if (isTRUE(modify)) {
+        cat("Current signal value:",
+          ifelse(length(ss$value) == 1L && is.numeric(ss$value[1L]),
+            ss$value[1L],
+            paste0(round(mean(ss$value$value, na.rm=TRUE), 2), "[",
+              round(min(ss$value$value, na.rm=TRUE), 2), "--",
+              round(max(ss$value$value, na.rm=TRUE), 2), "]\n")
+          ), "\n")
+        res <- menu(c("No", "Yes"), title="Change signal value?")
+        if (res == 2) { ss$value <- NULL } #clear out event so that it is respecified
+      }
+      
       while (is.null(ss$value) || ss$value == 0) {
         regtype <- menu(c("Unit height (1.0)", "Other fixed value (will prompt for details)",
           "Parametric modulator (will prompt for details)"),
@@ -217,7 +285,7 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
           ss$value <- NULL
           while(!test_number(ss$value)) {
             ss$value <- as.numeric(readline("Enter the regressor value/height (pre-convolution): "))
-          }          
+          }
         } else if (regtype == 3) {
           val <- 0L
           while(val == 0L) {
@@ -230,8 +298,14 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
           }
         }
       }
+
+      ### ------ hrf normalization ------
+      if (isTRUE(modify)) {
+        cat("Current HRF normalization:", ss$normalization, "\n")
+        res <- menu(c("No", "Yes"), title="Change HRF normalization?")
+        if (res == 2) { ss$normalization <- NULL } #clear out so that it is respecified
+      }
       
-      #hrf normalization
       while (is.null(ss$normalization)) {
         opt <- c("none", "evtmax_1", "durmax_1")
         res <- menu(c("none",
@@ -241,19 +315,36 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
         if (res > 0) { ss$normalization <- opt[res] }
       }
 
-      cat("Advanced options defaults:",
-        "  - No temporal derivative",
-        "  - Demean convolved signal",
-        "  - No beta series",
-        "  - No time series multiplier (PPI)", sep="\n")
-      res <- menu(c("No", "Yes"), title="Change advanced options for this signal?")
+      accept_defaults <- 1 # "No"
+      prompt_advanced <- FALSE
+      if (isTRUE(modify)) {
+        cat("Current advanced option settings:\n",
+          "  - Temporal derivative:", as.character(ss$add_deriv), "\n",
+          "  - Demean convolved signal:", as.character(ss$demean_convolved), "\n",
+          "  - Beta series:", as.character(ss$beta_series), "\n",
+          "  - Time series multiplier:", as.character(ss$ts_multiplier), "\n\n")
 
-      if (res %in% c(0,1)) {
+        res <- menu(c("No", "Yes"), title="Change advanced settings?")
+        if (res == 2) { #clear out so that it is respecified
+          ss$add_deriv <- ss$demean_convolved <- ss$beta_series <- ss$ts_multiplier <- NULL
+          prompt_advanced <- TRUE
+        }
+      } else {
+        cat("Advanced options defaults:",
+          "  - No temporal derivative",
+          "  - Demean convolved signal",
+          "  - No beta series",
+          "  - No time series multiplier (PPI)\n", sep="\n")
+        accept_defaults <- menu(c("Yes", "No"), title="Accept default advanced options for this signal?")
+        if (accept_defaults == 2L) { prompt_advanced <- TRUE }
+      }
+      
+      if (accept_defaults == 1L) {
         cat("Using defaults for signal: ", ss$name, "\n")
         ss$add_deriv <- FALSE
         ss$demean_convolved <- TRUE
         ss$beta_series <- FALSE
-      } else {
+      } else if (isTRUE(prompt_advanced)) {
         #derivative
         while (is.null(ss$add_deriv)) {
           res <- menu(c("No", "Yes"), title="Add temporal derivative?")
@@ -302,9 +393,11 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
       cat("--------\nModel ", ii, "\n\n")
       cat("  Name:", this$name, "\n")
       cat("  Signals:", paste(this$model_signals, collapse=", "), "\n")
-      cat("  Contrasts:\n")
-      print(this$contrasts)
-      cat("\n--------\n\n")      
+      if (ncol(this$contrasts) < 30) {
+        cat("  Contrasts:\n\n")
+        print(this$contrasts)
+        cat("\n--------\n\n")
+      } else { cat("More than 30 regressor columns. Not printing contrasts\n") }
     })
   }
 
@@ -315,11 +408,12 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
     cmat <- mobj$contrasts
 
     if (isTRUE(include_diagonal)) {
-      if (is.null(cmat)) {
-        cmat <- diag(length(mobj$model_regressors))
-        rownames(cmat) <- mobj$model_regressors #simple contrast naming for each single-regressor contrast
-        colnames(cmat) <- mobj$model_regressors #always have columns named by regressor
-      }
+      diag_mat <- diag(length(mobj$model_regressors))
+      rownames(diag_mat) <- mobj$model_regressors #simple contrast naming for each single-regressor contrast
+      colnames(diag_mat) <- mobj$model_regressors #always have columns named by regressor
+
+      cmat <- rbind(cmat, diag_mat)
+      cmat <- cmat[!duplicated(cmat, MARGIN=1),] #don't add duplicate diagonal contrasts to matrix, if alread present
     }
 
     if (is.null(cmat)) {
@@ -358,7 +452,7 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
       if (add_more == 1L) {
         cname <- readline("Enter contrast name: ")
         cat("Columns of contrast matrix (one per regressor)\n")
-        cat(colnames(cmat), "\n")
+        cat(strwrap(paste(colnames(cmat), collapse=", "), 70, exdent=5), "\n")
         centry <- readline("Enter contrast syntax: ")
         if (grepl("=", centry)) {
           #split into pairs
@@ -385,7 +479,7 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
           } else {
             cmat <- rbind(cmat, cvec)
             rownames(cmat)[nrow(cmat)] <- cname
-          }          
+          }
         }
       } else if (add_more == 2L) {
         summarize_contrasts(cmat)
@@ -396,17 +490,31 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
         }
       } else if (add_more == 4L) {
         cat("Exiting contrast setup\n")
-      }
-      
+      }      
     }
+    
     mobj$contrasts <- cmat
     return(mobj)
   }
   
-  create_new_model <- function(signal_list) {
-    mm <- list()
+  create_new_model <- function(signal_list, to_modify=NULL) {
+    checkmate::assert_class(to_modify, "l1_model_spec", null.ok=TRUE)
+    if (is.null(to_modify)) {
+      mm <- list()
+      class(mm) <- c("list", "l1_model_spec")
+      modify <- FALSE
+    } else {
+      mm <- to_modify
+      modify <- TRUE
+    }
+
+    ### ------ model name ------
+    if (isTRUE(modify)) {
+      cat("Current model name:", mm$name, "\n")
+      res <- menu(c("No", "Yes"), title="Change model name?")
+      if (res == 2) { mm$name <- NULL } #clear out so that it is respecified
+    }
     
-    #model name
     while(is.null(mm$name) || mm$name == "") {
       res <- trimws(readline("Enter the model name: "))
       if (res != "") {
@@ -420,11 +528,19 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
       }
     }
 
+    if (isTRUE(modify)) {
+      cat("Current model signals:", paste(names(mm$model_signals), collapse=", "), "\n")
+      res <- menu(c("No", "Yes"), title="Change model signals (and contrasts)?")
+      if (res == 2) { #clear out so that it is respecified
+        mm$model_signals <- mm$model_regressors <- mm$contrasts <- NULL
+      }      
+    }
+    
     #signals
     summarize_signals(signal_list) #print summary
 
-    while(TRUE) {  
-      model_signals <- select.list(names(signal_list), multiple=TRUE, 
+    while(is.null(mm$model_signals)) {
+      model_signals <- select.list(names(signal_list), multiple=TRUE, preselect=mm$model_signals,
         title="Choose all signals to include in this model\n(Command/Control-click to select multiple)")
 
       if (length(model_signals) == 0L) {
@@ -434,59 +550,78 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
         }
       } else {
         mm$model_signals <- model_signals
-        break
       }
     }
 
     #look up what the regressors will be for this.
-    mm$model_regressors <- unlist(lapply(mm$model_signals, function(nn) {
-      if (isTRUE(signal_list[[nn]]$add_deriv)) {
-        return(c(nn, paste0(nn, "_dt"))) #regressor and _dt temporal derivative
-      } else if (isTRUE(signal_list[[nn]]$beta_series)) {
-        if (is.data.frame(signal_list[[nn]]$value)) {
-          #TODO: this approach is imperfect if there are jumps in trials for a subject
-          #this assumes that all subjects have all trials
-          trials <- sort(unique(signal_list[[nn]]$value$trial)) #vector of trials for parametric signal
-        } else {
-          #trials will be in corresponding event in case value is a scalar
-          trials <- sort(unique(event_list[[ signal_list[[nn]]$event ]]$trial))
-        }       
+    if (is.null(mm$model_regressors)) {      
+      mm$model_regressors <- unlist(lapply(mm$model_signals, function(nn) {
+        if (isTRUE(signal_list[[nn]]$add_deriv)) {
+          return(c(nn, paste0(nn, "_dt"))) #regressor and _dt temporal derivative
+        } else if (isTRUE(signal_list[[nn]]$beta_series)) {
+          if (is.data.frame(signal_list[[nn]]$value)) {
+            #TODO: this approach is imperfect if there are jumps in trials for a subject
+            #this assumes that all subjects have all trials
+            trials <- sort(unique(signal_list[[nn]]$value$trial)) #vector of trials for parametric signal
+          } else {
+            #trials will be in corresponding event in case value is a scalar
+            trials <- sort(unique(event_list[[ signal_list[[nn]]$event ]]$trial))
+          }       
 
-        return(paste(nn, sprintf("%03d", trials), sep="_t")) # signal_t01 etc.
-      } else {
-        return(nn) #just the signal name itself (no deriv, no bs)
-      }
-    }))
-    
-    #handle contrasts
-    include_diagonal <- menu(c("Yes", "No"), title="Do you want to include diagonal contrasts for each regressor?")
-    if (include_diagonal == 1L) {
-      include_diagonal <- TRUE
-    } else {
-      include_diagonal <- FALSE
+          return(paste(nn, sprintf("%03d", trials), sep="_t")) # signal_t001 etc.
+        } else {
+          return(nn) #just the signal name itself (no deriv, no bs)
+        }
+      }))
     }
 
-    class(mm) <- c("list", "l1_model_spec")
-    
-    #contrast editor
-    mm <- specify_contrasts(mm, include_diagonal=include_diagonal)
 
+    prompt_contrasts <- FALSE
+    if (is.null(mm$contrasts)) {
+      #handle contrasts
+      include_diagonal <- menu(c("Yes", "No"), title="Do you want to include diagonal contrasts for each regressor?")
+      if (include_diagonal == 1L) {
+        include_diagonal <- TRUE
+      } else {
+        include_diagonal <- FALSE
+      }
+      prompt_contrasts <- TRUE
+    } else if (isTRUE(modify)) {
+      cat("\nCurrent model contrasts:\n\n")
+      print(mm$contrasts)
+      cat("\n--------\n\n")
+
+      res <- menu(c("No", "Yes"), title="Do you want to modify model contrasts?")
+      if (res == 2L) { prompt_contrasts <- TRUE }      
+    }
+     
+    #contrast editor
+    if (isTRUE(prompt_contrasts)) { mm <- specify_contrasts(mm, include_diagonal=include_diagonal) }    
+    
     return(mm)
   }
   
   model_list <- l1_model_set$models
   add_more <- 1
-  while (add_more != 3) {
+  while (add_more != 4) {
     summarize_models(model_list)
     
-    add_more <- menu(c("Add model", "Delete model", "Done with l1 model setup"),
+    add_more <- menu(c("Add model", "Modify model", "Delete model", "Done with l1 model setup"),
       title="Level 1 model setup menu")
 
-    if (add_more == 1L) {
+    if (add_more == 1L) { #add
       mm <- create_new_model(signal_list)
       if (mm$name %in% names(l1_model_set)) { warning("An model with the same name exists: ", mm$name, ". Overwriting it.") }
       model_list[[mm$name]] <- mm #add to set
-    } else if (add_more == 2L) {
+    } else if (add_more == 2L) { #modify
+      if (is.null(model_list)) {
+        message("No models available to modify. Add at least one model first")
+      } else {
+        res <- 0L
+        while (res == 0L) { res <- menu(names(model_list), title="Which model do you want to modify?") }
+        model_list[[res]] <- create_new_model(signal_list, to_modify=model_list[[res]])        
+      }      
+    } else if (add_more == 3L) { #delete
       which_del <- menu(names(model_list), title="Which model would you like to delete?")
       if (which_del > 0) {
         proceed <- menu(c("Proceed", "Cancel"),
@@ -498,7 +633,6 @@ build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id=
           cat("  Not deleting ", names(model_list)[which_del], "\n")
         }
       }
-
     }
     
   }

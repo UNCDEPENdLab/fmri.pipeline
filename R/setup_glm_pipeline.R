@@ -7,17 +7,17 @@
 #' @param subject_data A data.frame containing all subject-level data such as age, sex, or other covariates. Columns
 #'   from \code{subject_data} can be used as covariates in group (aka 'level 3') analyses. If \code{NULL}, then
 #'   this will be distilled from \code{trial_data} by looking for variables that vary at the same
-#'   level as \code{variable_mapping["id"]}.
+#'   level as \code{vm["id"]}.
 #' @param run_data A data.frame containing all run-level data such as run condition or run number. Columns from
 #'   \code{run_data} can be used as covariates in subject (aka 'level 2') analyses. If \code{NULL}, this will be
-#'   distilled from \code{trial_data} by looking for variables that vary at the same level as \code{variable_mapping["run"]}.
+#'   distilled from \code{trial_data} by looking for variables that vary at the same level as \code{vm["run"]}.
 #' @param trial_data A data.frame containing trial-level statistics for all subjects. Data should be stacked in long
 #'   form such that each row represents a single trial for a given subject and the number of total rows is subjects x trials.
 #'   If you wish, you can pass a single trial-level data frame that also contains all run-level and subject-level covariates
 #'   (i.e., a combined long format, where variables at different levels are all included as columns). In this case,
 #'   \code{setup_glm_pipeline} will detect which variables occur at each level and parse these accordingly into
 #'   \code{subject_data} and \code{run_data}.
-#' @param variable_mapping A named character vector containing key identifying columns in \code{subject_data} and
+#' @param vm A named character vector containing key identifying columns in \code{subject_data} and
 #'   \code{trial_data}. Minimally, this vector should contain the elements 'id' 
 #' @param id_column A character string indicating the name of the subject identifier in \code{subject_data} and \code{trial_data}.
 #' @param bad_ids An optional vector of ids in \code{subject_data} and \code{trial_data} that should be excluded from analysis.
@@ -69,7 +69,7 @@
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", working_directory=file.path(getwd(), "glm_out"),
                                subject_data=NULL, run_data=NULL, trial_data=NULL,
-                               variable_mapping=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
+                               vm=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
                                bad_ids=NULL,
                                fmri_file_regex=".*\\.nii\\.gz", tr=NULL, nuisance_file_regex=NULL, nuisance_file_columns=NULL,
                                drop_volumes=0L,
@@ -85,7 +85,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   checkmate::assert_data_frame(subject_data, null.ok=TRUE)
   checkmate::assert_data_frame(run_data, null.ok=TRUE)
   checkmate::assert_data_frame(trial_data)
-  checkmate::assert_character(variable_mapping)
+  checkmate::assert_character(vm)
   checkmate::assert_number(tr)
   checkmate::assert_integerish(drop_volumes)
   checkmate::assert_list(l1_model_variants)
@@ -103,13 +103,13 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   }
 
   #whether to run a 2-level or 3-level analysis
-  multi_run <- ifelse(length(unique(trial_data[[ variable_mapping["run"] ]])) > 1L, TRUE, FALSE)
+  multi_run <- ifelse(length(unique(trial_data[[ vm["run"] ]])) > 1L, TRUE, FALSE)
   
   #create run data, if needed
   if (is.null(run_data) && isTRUE(multi_run)) {
     message("Distilling run_data object from trial_data by finding variables that vary at run level")
 
-    variation_df <- trial_data %>% group_by(across(variable_mapping[c("id", "run")])) %>%
+    variation_df <- trial_data %>% group_by(across(vm[c("id", "run")])) %>%
       mutate_at(vars(everything()), ~length(unique(.))) %>%
       ungroup()
 
@@ -120,7 +120,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
 
     #at present, this will keep all subject-levle covariates, too. Maybe correct later?
     run_data <- trial_data %>% select(!!one_cols) %>%
-      group_by(across(variable_mapping["id"])) %>%
+      group_by(across(vm["id"])) %>%
       filter(row_number() == 1) %>% ungroup()    
     
   }
@@ -129,7 +129,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   if (is.null(subject_data)) {
     message("Distilling subject_data object from trial_data by finding variables that vary at subject level")
 
-    variation_df <- trial_data %>% group_by(across(variable_mapping["id"])) %>%
+    variation_df <- trial_data %>% group_by(across(vm["id"])) %>%
       mutate_at(vars(everything()), ~length(unique(.))) %>%
       ungroup()
 
@@ -139,7 +139,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     message("Retaining columns: ", paste(one_cols, collapse=", "))
     
     subject_data <- trial_data %>% select(!!one_cols) %>%
-      group_by(across(variable_mapping["id"])) %>%
+      group_by(across(vm["id"])) %>%
       filter(row_number() == 1) %>% ungroup()    
   }
   
@@ -151,7 +151,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     subject_data=subject_data,
     run_data=run_data,
     trial_data=trial_data,
-    variable_mapping=variable_mapping,
+    vm=vm,
     bad_ids=bad_ids,
     multi_run=multi_run, #2- or 3-level analysis
     
@@ -178,7 +178,9 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   )
 
   #validate and populate any other pipeline details before execution
-  fsl_model_arguments <- finalize_pipeline_configuration(fsl_model_arguments)
+  gma <- finalize_pipeline_configuration(gma)
+
+  return(gma)
 }
 
 ## setup_glm_pipeline(analysis_name="testing", scheduler="slurm", working_directory = tempdir(),
