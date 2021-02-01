@@ -1,24 +1,37 @@
-# fit behavioral data for all participants who completed emo clock in scanner
-# setup model-based fMRI GLM analysis for based on fitted data
+#' Function for setting up level 1 model specifications and corresponding files
+#'
+#' @param gpa A glm_model_arguments function setup by the \code{setup_glm_pipeline} function
+#' @param to_setup A character vector of model names within \code{gpa$l1_models} whose l1
+#'    inputs should be generated. If omitted, all models within \code{gpa$l1_models} will be generated.
+#'
+#' @details The \code{to_setup} argument allows the creation of multiple l1 models to be parallelized at
+#'   a superordinate level or, even better, to be spread across independent jobs on a cluster. This function
+#'   already provides the option to parallelize over subjects for a single model if \code{gpa$l1_setup_cpus}
+#'   is greater than 1.
+setup_lvl1_models <- function(gpa, to_output=NULL) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_character(to_output, null.ok=TRUE)
 
-model_clock_fmri_lvl1 <- function(trial_statistics, id_col=NULL, subject_data=NULL, drop_volumes=6, ncpus=1,
-                                  expectdir="mni_5mm_aroma", expectfile = "nfaswuktm_clock[0-9]_5.nii.gz",
-                                  sceptic_run_signals=c("v_chosen", "v_entropy", "d_auc", "pe_max"), #which signals to model jointly in LVL1
-                                  l1_contrasts=NULL,
-                                  outdir=NULL, glm_software="fsl", ...) {
+  #if no model subset is requested, output all models
+  if (is.null(to_output)) { to_output <- names(gpa$l1_models$models) }
+  
 
-  stopifnot(is.numeric(ncpus) && ncpus >= 1)
+## model_clock_fmri_lvl1 <- function(trial_statistics, id_col=NULL, subject_data=NULL, drop_volumes=6, ncpus=1,
+##                                   expectdir="mni_5mm_aroma", expectfile = "nfaswuktm_clock[0-9]_5.nii.gz",
+##                                   sceptic_run_signals=c("v_chosen", "v_entropy", "d_auc", "pe_max"), #which signals to model jointly in LVL1
+##                                   l1_contrasts=NULL,
+##                                   outdir=NULL, glm_software="fsl", ...) {
+
   if (is.null(id_col)) { stop("Need to specify an id column in subject_data") }
   if (is.null(subject_data)) { stop("Need to specify a subject_data data.frame") }
   
   require(foreach) #contains registerDoSEQ
-  
+ 
   #setup parallel worker pool, if requested
-  if (ncpus > 1) {
+  if (gpa$l1_setup_cores > 1) {
     require(doParallel)
-    cl <- makePSOCKcluster(ncpus)
-    registerDoParallel(cl)
-    
+    cl <- parallel::makeCluster(ncpus)
+    registerDoParallel(cl)    
     on.exit(try(stopCluster(cl))) #cleanup pool upon exit of this function
   } else {
     registerDoSEQ() #formally register a sequential 'pool' so that dopar is okay
@@ -28,49 +41,48 @@ model_clock_fmri_lvl1 <- function(trial_statistics, id_col=NULL, subject_data=NU
   #split on id to iterate over subjects
   by_subj <- split(trial_statistics, trial_statistics[[id_col]])
 
+  idvec <- gpa$subject_data[[ gpa$vm["id"] ]]
+    
   # loop over each subject, identify relevant fMRI data, and setup FSL level 1 files
   #by_subj <- by_subj[4]
-  ll <- foreach(b = iter(by_subj), .inorder=FALSE, .packages=c("dependlab"),
-    .export=c("truncateRuns", "fsl_sceptic_model", "spm_sceptic_model", "runFSLCommand", "populate_sceptic_signals") ) %dopar% {
-
-      subid <- b[[id_col]][1] #subject id
-      #scandate <- sub("^.*/Basic/\\w+/(\\d+)/.*$", "\\1", b, perl=TRUE)  #not currently accessible
+  ll <- foreach(subid = iter(idvec), .inorder=FALSE, .packages=c("dependlab"),
+    .export=c("gpa", "truncateRuns", "fsl_sceptic_model", "spm_sceptic_model", "runFSLCommand", "populate_sceptic_signals") ) %dopar% {
 
       mrfiles <- c() #force clear of mr files over subjects to avoid potential persistence from one subject to the next
 
-      mrmatch <- subject_data$mr_dir[subject_data[[id_col]] == subid]
+      mrmatch <- subject_data %>% filter(!!gpa$vm["id"] == subid) %>% pull(!!gpa$vm["mr_dir"])
 
       if (length(mrmatch) != 1L) {
-        warning("Unable to find fMRI directory for subid: ", subid)
+        warning("Unable to find fMRI directory record in subject_data for subid: ", subid)
         return(NULL)
-      }        
+      }
       
-      if (! file.exists(file.path(mrmatch, expectdir))) {
-        warning("Unable to find preprocessed data ", expectdir, " for subid: ", subid)
+      if (! dir.exists(file.path(mrmatch)) {
+        warning("Unable to find subject data directory: ", mrmatch, " for subid: ", subid)
         return(NULL)
       }
       
       ## Find processed fMRI run-level data for this subject
-      ##mrfiles <- list.files(mrmatch, pattern=expectfile, full.names=TRUE, recursive=TRUE)
+      #mrfiles <- list.files(mrmatch, pattern=gma$fmri_file_regex, full.names=TRUE, recursive=TRUE)
       ##cat(paste0("command: find ", mrmatch, " -iname '", expectfile, "' -ipath '*", expectdir, "*' -type f\n"))
-      mrfiles <- system(paste0("find ", mrmatch, " -iname '", expectfile, "' -ipath '*", expectdir, "*' -type f | sort -n"), intern=TRUE)
-      mrfiles <- mrfiles[!grepl("(exclude|bbr_noref|old)", mrfiles, ignore.case=TRUE)] #if exclude is in path/filename, then skip
+
+      # -ipath '*", expectdir, "*' -type f | sort -n"), intern=TRUE)
+      mrfiles <- system(paste0("find ", mrmatch, " -regextype posix-egrep -iregex '.*", gma$fmri_file_regex, "' -type f | sort -n"), intern=TRUE)
 
       ##mrrunnums <- as.integer(sub(paste0(".*", expectfile, "$"), "\\1", mrfiles, perl=TRUE))
-      mrrunnums <- as.integer(sub(paste0(".*clock(\\d+).*$"), "\\1", mrfiles, perl=TRUE)) #extract run number from file name
+      mrrunnums <- as.integer(sub(paste0(gma$run_number_regex), "\\1", mrfiles, perl=TRUE)) #extract run number from file name
 
       ##NB. If we reorder the mrfiles, then the run numbers diverge unless we sort(mrrunnums). Remove for now for testing
       ##mrfiles <- mrfiles[order(mrrunnums)] #make absolutely sure that runs are ordered ascending
 
       if (length(mrfiles) == 0L) {
-        warning("Unable to find any preprocessed MB files in dir: ", mrmatch)
+        warning("Unable to find any preprocessed fMRI files in dir: ", mrmatch)
         return(NULL)
       }
 
       ##read number of volumes from NIfTI header
-      suppressMessages(library(Rniftilib))
-      runlengths <- unname(sapply(mrfiles, function(x) { Rniftilib::nifti.image.read(x, read_data=0)$dim[4L] }))
-      detach("package:Rniftilib", unload=TRUE) #necessary to avoid dim() conflict with oro.nifti
+      library(RNifti)
+      runlengths <- unname(sapply(mrfiles, function(x) { Rnifti::niftiHeader(x)$dim[4L] }))
       
       ## create truncated run files to end analysis 12s after last ITI (or big head movement)
       ## also handle removal of N volumes from the beginning of each run due to steady state magnetization

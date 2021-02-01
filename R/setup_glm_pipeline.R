@@ -23,7 +23,8 @@
 #' @param bad_ids An optional vector of ids in \code{subject_data} and \code{trial_data} that should be excluded from analysis.
 #' @param mr_dir_column A character string indicating the column name in \code{subject_data} containing the folder for each
 #'   subject's data. Default is "mr_dir".
-#' @param fmri_file_regex A character string containing a Perl-compatible regular expression 
+#' @param fmri_file_regex A character string containing a Perl-compatible regular expression for the subfolder and filename
+#'   within the \code{mr_dir} field in \code{subject_data}.
 #' @param tr The repetition time of the scanning sequence in seconds. Used for setting up design matrices
 #' @param working_directory The working directory for all configuration and job submission files for this analysis.
 #'   Default is a subfolder called "glm_out" in the current working directory.
@@ -69,13 +70,13 @@
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", working_directory=file.path(getwd(), "glm_out"),
                                subject_data=NULL, run_data=NULL, trial_data=NULL,
-                               vm=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
-                               bad_ids=NULL,
-                               fmri_file_regex=".*\\.nii\\.gz", tr=NULL, nuisance_file_regex=NULL, nuisance_file_columns=NULL,
-                               drop_volumes=0L,
-                               l1_model_variants=NULL, l1_contrasts=NULL, l1_include_diagonal_contrasts=TRUE,
+                               vm=c(id="id", session="session", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
+                               bad_ids=NULL, tr=NULL,
+                               fmri_file_regex=".*\\.nii(\\.gz)?", run_number_regex=".*run-*([0-9]+).*",
+                               nuisance_file_regex=NULL, nuisance_file_columns=NULL,
+                               drop_volumes=0L, l1_models="prompt",
                                l2_model_variants=NULL, l2_contrasts=NULL, l2_include_diagonal_contrasts=TRUE,
-                               l3_model_variants=NULL, l3_contrasts=NULL, l3_include_diagonal_contrasts=TRUE,                               
+                               l3_model_variants=NULL, l3_contrasts=NULL, l3_include_diagonal_contrasts=TRUE,
                                glm_software="fsl",
                                use_preconvolve=TRUE, 
                                additional=list()) {
@@ -88,9 +89,6 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   checkmate::assert_character(vm)
   checkmate::assert_number(tr)
   checkmate::assert_integerish(drop_volumes)
-  checkmate::assert_list(l1_model_variants)
-  checkmate::assert_list(l1_contrasts, null.ok=TRUE)
-  checkmate::assert_logical(l1_include_diagonal_contrasts)
   checkmate::assert_character(glm_software)
 
   glm_software <- tolower(glm_software)
@@ -102,6 +100,15 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     dir.create(working_directory, recursive=TRUE)
   }
 
+  #code default session of 1, if missing
+  if (!vm["session"] %in% names(trial_data)) { trial_data[[ vm["session"] ]] <- 1 }
+  
+  #code default run of 1, if missing
+  if (!vm["run"] %in% names(trial_data)) { trial_data[[ vm["run"] ]] <- 1 }
+
+  #enforce id column in trial_data
+  stopifnot(vm["id"] %in% names(trial_data))
+  
   #whether to run a 2-level or 3-level analysis
   multi_run <- ifelse(length(unique(trial_data[[ vm["run"] ]])) > 1L, TRUE, FALSE)
   
@@ -109,7 +116,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   if (is.null(run_data) && isTRUE(multi_run)) {
     message("Distilling run_data object from trial_data by finding variables that vary at run level")
 
-    variation_df <- trial_data %>% group_by(across(vm[c("id", "run")])) %>%
+    variation_df <- trial_data %>% group_by(across(vm[c("id", "session", "run")])) %>%
       mutate_at(vars(everything()), ~length(unique(.))) %>%
       ungroup()
 
@@ -118,18 +125,21 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
 
     message("Retaining columns: ", paste(one_cols, collapse=", "))
 
-    #at present, this will keep all subject-levle covariates, too. Maybe correct later?
+    #at present, this will keep all subject-level covariates, too. Maybe correct later?
     run_data <- trial_data %>% select(!!one_cols) %>%
-      group_by(across(vm["id"])) %>%
+      group_by(across(vm[c("id", "session")])) %>%
       filter(row_number() == 1) %>% ungroup()    
     
+  } else {
+    stopifnot(vm["id"] %in% names(run_data))
+    if (!vm["session"] %in% names(run_data)) { run_data[[ vm["session"] ]] <- 1 }
   }
 
   #create subject data 
   if (is.null(subject_data)) {
     message("Distilling subject_data object from trial_data by finding variables that vary at subject level")
 
-    variation_df <- trial_data %>% group_by(across(vm["id"])) %>%
+    variation_df <- trial_data %>% group_by(across(vm[c("id", "session")])) %>%
       mutate_at(vars(everything()), ~length(unique(.))) %>%
       ungroup()
 
@@ -139,11 +149,19 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     message("Retaining columns: ", paste(one_cols, collapse=", "))
     
     subject_data <- trial_data %>% select(!!one_cols) %>%
-      group_by(across(vm["id"])) %>%
+      group_by(across(vm[c("id", "session")])) %>%
       filter(row_number() == 1) %>% ungroup()    
   }
+
+  if (!is.null(l1_models)) {
+    if (test_string(l1_models) && l1_models[1L] == "prompt") {
+      l1_models <- build_l1_model(trial_data, variable_mapping=vm)
+    } else if (!test_class(l1_models, "l1_model_set")) {
+      stop("l1_models argument is not of class l1_model_set. Use build_l1_model to create this.")
+    }
+  } # else allow nulls in case user wants to specify things later
   
-  gma <- list(
+  gpa <- list(
     #metadata
     analysis_name=analysis_name,
     scheduler=scheduler,
@@ -161,9 +179,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     nuisance_file_columns=nuisance_file_columns,    
     drop_volumes=drop_volumes,
     use_preconvolve=use_preconvolve,
-    l1_model_variants=l1_model_variants,
-    l1_contrasts=l1_contrasts,
-    l1_include_diagonal_contrasts=l1_include_diagonal_contrasts,
+    l1_models=l1_models,
 
     #l2 analysis details
     l2_model_variants=l2_model_variants,
@@ -178,9 +194,10 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   )
 
   #validate and populate any other pipeline details before execution
-  gma <- finalize_pipeline_configuration(gma)
+  gpa <- finalize_pipeline_configuration(gpa)
 
-  return(gma)
+  class(gpa) <- c("list", "glm_pipeline_arguments")
+  return(gpa)
 }
 
 ## setup_glm_pipeline(analysis_name="testing", scheduler="slurm", working_directory = tempdir(),
