@@ -1,6 +1,6 @@
 #note: this is a small adapation from the original fslSCEPTICModel to avoid use of the clockfit objects and to move to the
 #simpler build_design_matrix approach and the use of the trial_statistics csv files from vba_fmri
-fsl_sceptic_model <- function(subj_data, sceptic_signals, l1_contrasts=NULL, mrfiles, runlengths, mrrunnums, execute_feat=FALSE, force=FALSE,
+fsl_l1_model <- function(subj_data, sceptic_signals, l1_contrasts=NULL, mrfiles, runlengths, mrrunnums, execute_feat=FALSE, force=FALSE,
                               drop_volumes=0, outdir=NULL, usepreconvolve=FALSE, spikeregressors=FALSE, model_suffix="", ...) {
 
   # subj_data is the trial-level data for one subject, as produced by parse_sceptic_outputs
