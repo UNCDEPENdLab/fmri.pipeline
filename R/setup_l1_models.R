@@ -49,34 +49,52 @@ setup_l1_models <- function(gpa, to_output=NULL) {
     .export=c("gpa", "truncateRuns", "fsl_sceptic_model", "spm_sceptic_model", "runFSLCommand", "populate_sceptic_signals") ) %dopar% {
 
       browser()
-      mrfiles <- c() #force clear of mr files over subjects to avoid potential persistence from one subject to the next
+      #use specific run NIfTIs included in run_data, rather finding these by regex
+      if (gpa$vm["run_nifti"] %in% names(gpa$run_data)) {
+        mrfiles <- gpa$run_data %>% filter(!!sym(gpa$vm["id"]) == !!subid) %>% pull(!!gpa$vm["run_nifti"])
 
-      mrmatch <- gpa$subject_data %>% filter(!!sym(gpa$vm["id"]) == !!subid) %>% pull(!!gpa$vm["mr_dir"])
+        mr_found <- file.exists(mrfiles)
+        if (any(mr_found != TRUE)) {
+          mrdirs <-  gpa$run_data %>% filter(!!sym(gpa$vm["id"]) == !!subid) %>% pull(!!gpa$vm["mr_dir"])
+          mrfiles[!mr_found] <- file.path(mrdirs[!mr_found], mrfiles[!mr_found]) #try prepending the mr_dir path if run_nifti is relative
+        }
 
-      if (length(mrmatch) != 1L) {
-        warning("Unable to find fMRI directory record in subject_data for subid: ", subid)
-        return(NULL)
+        mr_found <- file.exists(mrfiles)
+        if (any(mr_found != TRUE)) {
+          warning("Could not find the following run files: ", mrfiles[!mr_found])
+        }
+        
+      } else {
+        #find run nifti files based on directory and regular expression settings
+        mrmatch <- gpa$subject_data %>% filter(!!sym(gpa$vm["id"]) == !!subid) %>% pull(!!gpa$vm["mr_dir"])
+
+        if (length(mrmatch) != 1L) {
+          warning("Unable to find fMRI directory record in subject_data for subid: ", subid)
+          return(NULL)
+        }
+        
+        if (!dir.exists(file.path(mrmatch))) {
+          warning("Unable to find subject data directory: ", mrmatch, " for subid: ", subid)
+          return(NULL)
+        }
+        
+        ## Find processed fMRI run-level data for this subject
+        #mrfiles <- list.files(mrmatch, pattern=gpa$fmri_file_regex, full.names=TRUE, recursive=TRUE)
+        ##cat(paste0("command: find ", mrmatch, " -iname '", expectfile, "' -ipath '*", expectdir, "*' -type f\n"))
+
+        # -ipath '*", expectdir, "*' -type f | sort -n"), intern=TRUE)
+        if (!is.null(gpa$fmri_path_regex)) { addon <- paste0(" -ipath '*/", gpa$fmri_path_regex, "/*'") } else { addon <- "" }
+        mrfiles <- system(paste0("find ", mrmatch, " -regextype posix-egrep -iregex '.*", gpa$fmri_file_regex, "'", addon, " -type f | sort -n"), intern=TRUE)
+
+        ##mrrunnums <- as.integer(sub(paste0(".*", expectfile, "$"), "\\1", mrfiles, perl=TRUE))
+        mrrunnums <- as.integer(sub(paste0(gpa$run_number_regex), "\\1", mrfiles, perl=TRUE)) #extract run number from file name
+
+        ##NB. If we reorder the mrfiles, then the run numbers diverge unless we sort(mrrunnums). Remove for now for testing
+        ##mrfiles <- mrfiles[order(mrrunnums)] #make absolutely sure that runs are ordered ascending
+
       }
-      
-      if (!dir.exists(file.path(mrmatch))) {
-        warning("Unable to find subject data directory: ", mrmatch, " for subid: ", subid)
-        return(NULL)
-      }
-      
-      ## Find processed fMRI run-level data for this subject
-      #mrfiles <- list.files(mrmatch, pattern=gpa$fmri_file_regex, full.names=TRUE, recursive=TRUE)
-      ##cat(paste0("command: find ", mrmatch, " -iname '", expectfile, "' -ipath '*", expectdir, "*' -type f\n"))
 
-      # -ipath '*", expectdir, "*' -type f | sort -n"), intern=TRUE)
-      if (!is.null(gpa$fmri_path_regex)) { addon <- paste0(" -ipath '*/", gpa$fmri_path_regex, "/*'") } else { addon <- "" }
-      mrfiles <- system(paste0("find ", mrmatch, " -regextype posix-egrep -iregex '.*", gpa$fmri_file_regex, "'", addon, " -type f | sort -n"), intern=TRUE)
-
-      ##mrrunnums <- as.integer(sub(paste0(".*", expectfile, "$"), "\\1", mrfiles, perl=TRUE))
-      mrrunnums <- as.integer(sub(paste0(gpa$run_number_regex), "\\1", mrfiles, perl=TRUE)) #extract run number from file name
-
-      ##NB. If we reorder the mrfiles, then the run numbers diverge unless we sort(mrrunnums). Remove for now for testing
-      ##mrfiles <- mrfiles[order(mrrunnums)] #make absolutely sure that runs are ordered ascending
-
+      #process files
       if (length(mrfiles) == 0L) {
         warning("Unable to find any preprocessed fMRI files in dir: ", mrmatch)
         return(NULL)

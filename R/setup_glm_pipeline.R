@@ -65,7 +65,7 @@
 setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", working_directory=file.path(getwd(), "glm_out"),
                                group_output_directory="default",
                                subject_data=NULL, run_data=NULL, trial_data=NULL,
-                               vm=c(id="id", session="session", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
+                               vm=c(id="id", session="session", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir", run_nifti="run_nifti"),
                                bad_ids=NULL, tr=NULL,
                                fmri_file_regex=".*\\.nii(\\.gz)?", fmri_path_regex=NULL, run_number_regex=".*run-*([0-9]+).*",
                                nuisance_file_regex=".*confounds.*\\.txt", nuisance_file_columns=NULL,
@@ -75,7 +75,9 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
                                glm_software="fsl",
                                use_preconvolve=TRUE, truncate_runs=FALSE,
                                motion_controls=list(
-                                 exclude_run=expression(meanFD > 0.9 | maxFD > 0.5)
+                                 exclude_run=expression(mean(FD) > 0.9 | max(FD) > 0.5),
+                                 exclude_subject=expression(nruns < 4),
+                                 spike_volume=expression(FD > 0.9)
                                ),
                                parallel=list(
                                  l1_setup_cores = 1L, #number of cores used when looping over l1 setup of design matrices and syntax for each subject
@@ -187,7 +189,8 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     fmri_file_regex=fmri_file_regex,
     fmri_path_regex=fmri_path_regex,
     nuisance_file_regex=nuisance_file_regex,
-    nuisance_file_columns=nuisance_file_columns,    
+    nuisance_file_columns=nuisance_file_columns,
+    run_number_regex=run_number_regex,
     drop_volumes=drop_volumes,
     use_preconvolve=use_preconvolve,
     l1_models=l1_models,
