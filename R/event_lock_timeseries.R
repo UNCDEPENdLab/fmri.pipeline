@@ -54,7 +54,8 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
   tlist <- list()
 
   #loop over trials, retaining data within window around event of interest
-  for (t in 1:length(trials)) {      
+  for (t in 1:length(trials)) {
+
     evt_onset <- run_df %>% filter(!!sym(vm[["trial"]]) == trials[t]) %>% pull(!!event)
     stopifnot(length(evt_onset) == 1L) #would be a bizarre and problematic result
 
@@ -74,7 +75,8 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
     ts_data$evt_time <- ts_data[[ vm[["time"]] ]] - evt_onset
 
     #add time on either side of interpolation grid to have preceding time points that inform linear interp
-    trial_ts <- ts_data %>% filter(evt_time > time_before + pad_before & evt_time < time_after + pad_after)
+    #N.B. Occasionally, if the time series (fMRI run) ends before the late events, trial_ts will have 0 rows
+    trial_ts <- ts_data %>% filter(evt_time >= time_before + pad_before & evt_time <= time_after + pad_after)
 
     #enforce colliding preceding event
     if (evt_before > -Inf) { trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) > evt_before) }
@@ -83,7 +85,7 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
     if (evt_after < Inf) { trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) < evt_after) }
 
     #populate trial field
-    trial_ts[[ vm[["trial"]] ]] <- ifelse(nrow(trial_ts) > 0L, trials[t], numeric(0)) #allow for a zero-row df
+    trial_ts[[ vm[["trial"]] ]] <- if(nrow(trial_ts) > 0L) { trials[t] } else { numeric(0) } #allow for a zero-row df
     
     #add these data to trial list
     tlist[[t]] <- trial_ts

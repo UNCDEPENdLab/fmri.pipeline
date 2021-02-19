@@ -3,12 +3,17 @@ library(dplyr)
 library(tidyr)
 library(data.table)
 
-trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds")
-example <- read_csv("deconvolved/sub11350_run1_Schaefer_DorsAttn_2.3mm_deconvolved.csv.gz")
+trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
+  mutate(rt_time=clock_onset + rt_csv/1000, #should be pretty redundant with isi_onset, but still
+    rt_vmax=rt_vmax/10, #to put into seconds
+    rt_vmax_cum=clock_onset + rt_vmax)
+
+#example <- read_csv("deconvolved/sub11350_run1_Schaefer_DorsAttn_2.3mm_deconvolved.csv.gz")
+example <- read_csv("/proj/mnhallqlab/users/michael/sceptic_decon/Schaefer_DorsAttn_2.3mm/deconvolved/sub11325_run7_Schaefer_DorsAttn_2.3mm_deconvolved.csv.gz")
 example <- example %>% select(vnum, time, decon, atlas_value)
 example$decon2 <- example$decon
 
-run_df <- trial_df %>% filter(id==11350 & run==1)
+run_df <- trial_df %>% filter(id==11325 & run==7)
 
 x <- fmri_ts$new(ts_data=example, event_data=run_df, tr=1.0,
   vm=list(value=c("decon", "decon2"), key=c("vnum", "atlas_value")))
@@ -17,7 +22,7 @@ rm(example)
 
 #vv <- x$get_ts(orig_names=TRUE)
 
-test <- event_lock_ts(x, event="clock_onset", collide_before="clock_onset")
+test <- event_lock_ts(x, event="rt_time", collide_after="rt_time", time_before=0, time_after=12)
 
 int_dt2 <- get_medusa_interpolated_ts(x, event="clock_onset", time_before=-3.0, time_after=3.0,
   collide_before="clock_onset", collide_after=NULL,

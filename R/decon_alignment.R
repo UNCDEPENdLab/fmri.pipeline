@@ -58,7 +58,7 @@ on.exit(stopCluster(cl))
 #registerDoSEQ()
 
 #events <- c("clock_onset", "feedback_onset", "clock_long", "feedback_long", "rt_long", "rt_vmax_cum")
-events <- c("whole_trial", "rt_to_rt")
+events <- c("whole_trial", "rt_to_rt", "rt8")
 nbins <- 12 #splits along axis
 
 for (a in 1:length(atlas_dirs)) {
@@ -111,6 +111,10 @@ for (a in 1:length(atlas_dirs)) {
       evt_col <- "rt_time"
       time_before=-4
       time_after=7
+    } else if (e == "rt8") { #symmetric 16-second windows around rt, no collision
+      evt_col <- "rt_time"
+      time_before=-8
+      time_after=8
     } else {
       evt_col <- e
       time_before=-3

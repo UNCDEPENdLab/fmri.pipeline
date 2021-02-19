@@ -16,7 +16,7 @@
 ## #call function below
 ## run_feat_lvl1_sepqsub(feat_model_arguments, run_model_index, rerun=FALSE, wait_for=wait_for)
 
-run_feat_lvl1_sepqsub <- function(fsl_model_arguments, run_model_index, rerun=FALSE, wait_for="") {
+run_feat_lvl1_sepqsub <- function(gpa, run_model_index, rerun=FALSE, wait_for="") {
 
   #This function is now called within run_fsl_pipeline, rather than being run in its own qsub
   #to_run <- Sys.getenv("fsl_pipeline_file")
@@ -27,10 +27,10 @@ run_feat_lvl1_sepqsub <- function(fsl_model_arguments, run_model_index, rerun=FA
 
   #load(to_run)
 
-  subject_data <- fsl_model_arguments$subject_data
-  expectdir <- fsl_model_arguments$expectdir
-  model_match <- fsl_model_arguments$outdir[run_model_index]
-  workdir <- fsl_model_arguments$workdir[run_model_index]
+  subject_data <- gpa$subject_data
+  expectdir <- gpa$expectdir
+  model_match <- gpa$outdir[run_model_index]
+  l1_working_directory <- gpa$l1_working_directory[run_model_index]
 
   cpusperjob <- 8 #number of cpus per qsub
   runsperproc <- 3 #number of feat calls per processor
@@ -91,7 +91,7 @@ run_feat_lvl1_sepqsub <- function(fsl_model_arguments, run_model_index, rerun=FA
   )
 
 
-  if (!file.exists(workdir)) { dir.create(workdir, recursive=TRUE) }
+  if (!file.exists(l1_working_directory)) { dir.create(l1_working_directory, recursive=TRUE) }
 
   njobs <- ceiling(length(torun)/(cpusperjob*runsperproc))
 
@@ -101,7 +101,7 @@ run_feat_lvl1_sepqsub <- function(fsl_model_arguments, run_model_index, rerun=FA
 
   joblist <- rep(NA_character_, njobs)
   for (j in 1:njobs) {
-    outfile <- paste0(workdir, "/qsub_featsep_", j, "_", basename(tempfile()), ".pbs")
+    outfile <- paste0(l1_working_directory, "/qsub_featsep_", j, "_", basename(tempfile()), ".pbs")
     cat(preamble, file=outfile, sep="\n")
     thisrun <- with(df, fsf[job==j])
     cat(paste("feat", thisrun, "&"), file=outfile, sep="\n", append=TRUE)
@@ -112,7 +112,7 @@ run_feat_lvl1_sepqsub <- function(fsl_model_arguments, run_model_index, rerun=FA
 
   #write the list of separate feat qsub jobs that are now queued (so that LVL2 can wait on these)
   #should also return this to the caller as a function?
-  writeLines(joblist, con=file.path(workdir, "sepqsub_lvl1_jobs.txt"))
+  writeLines(joblist, con=file.path(l1_working_directory, "sepqsub_lvl1_jobs.txt"))
 
   return(joblist)
 }
