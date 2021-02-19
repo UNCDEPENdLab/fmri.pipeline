@@ -14,6 +14,8 @@ rle_dt <- R6::R6Class("rle_dt",
     keys=NULL,
 
     key_metadata=NULL, #at present, levels of factor and whether ordered
+    
+    compression_ratio=NULL #savings
   ),
   public=list(
     #' @description Create an RLE-encoded copy of the data
@@ -21,25 +23,35 @@ rle_dt <- R6::R6Class("rle_dt",
     #' @keys A character vector of keys within \code{data} that should be RLE-encoded
     #' @optimize_order A boolean indicating whether to search for the smallest encoding scheme.
     #'    The default it to search in data with 4 or fewer keys, but not to search for 5+.
+    #'    Optionally, if a positive integer, randomly test ordering over this number of permutations.
     initialize=function(data, keys=NULL, optimize_order=(length(keys) <= 4)) {
       checkmate::assert_data_frame(data)
       checkmate::assert_character(keys, null.ok=TRUE)
-      checkmate::assert_logical(optimize_order, max.len=1)
+      checkmate::assert_integerish(as.numeric(optimize_order), max.len=1, lower=0)
+      
+      dsize <- object.size(data)
       
       #convert to data table for speed, memory management
       dt <- data.table(data)
+      rm(data)
 
       if (!is.null(keys)) {        
         #determine nesting/ordering
-        stopifnot(all(keys %in% names(data)))
+        stopifnot(all(keys %in% names(dt)))
 
         costs <- c()
         klist <- list()
+        optimize_order=as.integer(optimize_order)
         
-        if (isTRUE(optimize_order)) {
+        if (optimize_order != 0L) { #TRUE or numeric
           perms <- gtools::permutations(n=length(keys), r=length(keys), v=keys, repeats.allowed=FALSE)
+          if (optimize_order==1L) {
+            perms <- perms #test all permutations
+          } else {
+            perms <- perms[sample(1:nrow(perms), min(optimize_order, nrow(perms))),] #random sample
+          }
         } else {
-          perms <- matrix(data=keys, nrow=1)
+          perms <- matrix(data=keys, nrow=1) #take keys as stated
         }
 
         key_factors <- sapply(keys, function(x) { is.factor(dt[[x]]) })
@@ -65,6 +77,10 @@ rle_dt <- R6::R6Class("rle_dt",
 
       #set data field
       private$data <- dt
+      
+      savings <- 100*(1 - (object.size(private$data) + object.size(private$keys))/dsize)
+      message("RLE-encoding of keys savings: ", round(savings, 2), "%")
+      private$compression_ratio <- savings
     },
 
     #' @description Simple method to return the data.table with all columns in their original form.
