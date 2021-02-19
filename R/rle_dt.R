@@ -39,6 +39,8 @@ rle_dt <- R6::R6Class("rle_dt",
         #determine nesting/ordering
         stopifnot(all(keys %in% names(dt)))
 
+        setkeyv(dt, keys) #start with key and sort order provided by user
+        
         costs <- c()
         klist <- list()
         optimize_order=as.integer(optimize_order)
@@ -103,8 +105,10 @@ rle_dt <- R6::R6Class("rle_dt",
             }
           }
         }
+
+        setkeyv(dd, names(private$keys)) #add keys back to object
         setcolorder(dd, names(private$keys)) #put clustering variables first in object
-        setorderv(dd, names(private$keys)) #order by original key inputs
+        setorderv(dd, names(private$keys)) #order by original key input order (rather than optimized order)
       }
       return(dd)
     }
