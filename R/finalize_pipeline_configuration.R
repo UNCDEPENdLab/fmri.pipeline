@@ -6,14 +6,8 @@
 #' @importFrom string str_count fixed
 finalize_pipeline_configuration <- function(gpa) {
 
-  #gpa$outdir <- sapply(gpa$l1_model_variants, function(x) {
-  #  paste0("l1-", paste(x, collapse="-"), #define output directory based on combination of signals requested
-  #    ifelse(gpa$use_preconvolve, "-preconvolve", ""),
-  #    gpa$model_suffix)
-  #})
-
   #new approach: use internal model names
-  gpa$outdir <- names(gpa$l1_models$models)
+  gpa$outdir <- paste(gpa$analysis_name, names(gpa$l1_models$models), sep="_") #default to <analysis_name>/<l1_model_name>
   if (isTRUE(gpa$use_preconvolve)) { gpa$outdir <- paste0(gpa$outdir, "-preconvolve") } #add suffix if using preconvolution approach
 
   if (!is.null(gpa$run_number_regex)) {
@@ -55,7 +49,7 @@ finalize_pipeline_configuration <- function(gpa) {
   if (is.null(gpa$l2_cpus)) { gpa$l2_cpus <- 20 } #number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
 
   #TODO: deprecate this -- should not be required when executing as an R package
-  if (is.null(gpa$pipeline_home)) { gpa$pipeline_home <- "/proj/mnhallqlab/clock_analysis/fmri/fsl_pipeline" }
+  if (is.null(gpa$pipeline_home)) { gpa$pipeline_home <- "/proj/mnhallqlab/users/michael/fmri.pipeline" }
   if (is.null(gpa$group_output_directory) || gpa$group_output_directory == "default") {
     gpa$group_output_directory <- file.path(getwd(), "group_analyses", gpa$analysis_name)
   }
@@ -67,13 +61,20 @@ finalize_pipeline_configuration <- function(gpa) {
   if (is.null(gpa$clustsize)) { gpa$clustsize <- 50 } #arbitrary reasonable lower bound on clusters
   if (is.null(gpa$glm_software)) { gpa$glm_software <- "fsl" } #default to FSL FEAT
 
-  if (is.null(gpa$l1_setup_logfile)) { gpa$l1_setup_logfile <- paste0(names(gpa$l1_models$models), "_l1setup.txt") }
-  if (is.null(gpa$l1_execution_logfile)) { gpa$l1_setup_logfile <- paste0(names(gpa$l1_models$models), "_l1execution.txt") }
+  if (is.null(gpa$log_json)) { gpa$log_json <- TRUE } #whether to write JSON log files
+  if (is.null(gpa$log_txt)) { gpa$log_txt <- TRUE } #whether to write text log files
+  if (is.null(gpa$l1_setup_log)) { gpa$l1_setup_log <- paste0(names(gpa$l1_models$models), "_l1setup") }
+  if (is.null(gpa$l1_execution_log)) { gpa$l1_setup_log <- paste0(names(gpa$l1_models$models), "_l1execution") }
   
   #remove bad ids before running anything further
   if (!is.null(gpa$bad_ids) && length(gpa$bad_ids) > 0L) {
     gpa$subject_data <- gpa$subject_data %>% filter(! !!sym(gpa$vm["id"]) %in% gpa$bad_ids) #remove bad ids
   }
-  
+
+  #build design matrix arguments
+  if (is.null(gpa$additional$bdm_args)) {
+    gpa$additional$bdm_args <- list(baseline_coef_order=2, center_values=TRUE, plot=FALSE, convolve_wi_run=TRUE, output_directory="run_timing")
+  }
+
   return(gpa)
 }

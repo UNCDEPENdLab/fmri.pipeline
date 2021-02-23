@@ -1,8 +1,15 @@
 #note: this is a small adapation from the original fslSCEPTICModel to avoid use of the clockfit objects and to move to the
 #simpler build_design_matrix approach and the use of the trial_statistics csv files from vba_fmri
-fsl_l1_model <- function(subj_data, sceptic_signals, l1_contrasts=NULL, mrfiles, runlengths, mrrunnums, execute_feat=FALSE, force=FALSE,
-                              drop_volumes=0, outdir=NULL, usepreconvolve=FALSE, spikeregressors=FALSE, model_suffix="", ...) {
+fsl_l1_model <- function(gpa, model_name=NULL) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  stopifnot(model_name %in% names(gpa$l1_models$models))
+  
 
+#                         subj_data, sceptic_signals, l1_contrasts=NULL, mrfiles, runlengths, mrrunnums, execute_feat=FALSE, force=FALSE,
+#                              drop_volumes=0, outdir=NULL, usepreconvolve=FALSE, spikeregressors=FALSE, model_suffix="", ...) {
+
+  
+  
   # subj_data is the trial-level data for one subject, as produced by parse_sceptic_outputs
   # sceptic_signals is a character vector of column names in subj_data used for parametric modulator regressors
   # mrfiles is a character vector of processed data to analyze
@@ -15,70 +22,28 @@ fsl_l1_model <- function(subj_data, sceptic_signals, l1_contrasts=NULL, mrfiles,
   # usepreconvolve is a TRUE/FALSE denoting whether to use convolved regressors from build_design_matrix (TRUE) or let FSL handle 3-column format convolution (FALSE)
   # any additional arguments trapped by ... are passed forward to build_design_matrix  
   
-  require(Rniftilib)
   require(dplyr)
   require(tidyr)
   require(dependlab)
+
+  lg <- lgr::get_logger("glm_pipeline/l1_setup")
   
-  if (is.null(outdir)) {
-    outdir=paste0("sceptic-", paste(sceptic_signals, collapse="-")) #define output directory based on combination of signals requested
-    if (usepreconvolve) { outdir=paste(outdir, "preconvolve", sep="-") }
-
-    outdir <- paste0(outdir, model_suffix) #add any model suffix, if requested
-  }
-
-  #determine which feat template is relevant
-  use_new <- TRUE #generate EV and contrast syntax dynamically
-  if (use_new) {
-    fsfTemplate <- readLines(file.path(getMainDir(), "clock_analysis", "fmri", "fsf_templates", "feat_lvl1_clock_sceptic_nparam_template.fsf"))
-  } else {    
-    if (length(sceptic_signals) == 1L) {
-      ##single model-based regressor
-      if (usepreconvolve) {
-        fsfTemplate <- readLines(file.path(getMainDir(), "clock_analysis", "fmri", "fsf_templates", "feat_lvl1_clock_sceptic_univariate_preconvolve_template.fsf"))
-      } else {
-        fsfTemplate <- readLines(file.path(getMainDir(), "clock_analysis", "fmri", "fsf_templates", "feat_lvl1_clock_sceptic_univariate_template.fsf"))
-      }
-    } else if (length(sceptic_signals) == 4L) { #pemax, dauc, vchosen, ventropy
-      if (usepreconvolve) {
-        fsfTemplate <- readLines(file.path(getMainDir(), "clock_analysis", "fmri", "fsf_templates", "feat_lvl1_clock_sceptic_4param_preconvolve_template.fsf"))
-      } else {
-        stop("not implemented yet")
-      }
-    } else if (length(sceptic_signals) == 5L) { #pemax, dauc, vchosen, ventropy, vtime
-      if (usepreconvolve) {
-        fsfTemplate <- readLines(file.path(getMainDir(), "clock_analysis", "fmri", "fsf_templates", "feat_lvl1_clock_sceptic_5param_preconvolve_template.fsf"))
-      } else { stop("not implemented yet") }      
-    } else { stop("not implemented yet") }
-  }
+  fsfTemplate <- readLines(file.path(gpa$pipeline_home, "inst", "feat_lvl1_nparam_template.fsf"))  
   
   #note: normalizePath will fail to evaluate properly if directory does not exist
   fsl_run_output_dir <- file.path(normalizePath(file.path(dirname(mrfiles[1L]), "..")), outdir)
 
-  if (file.exists(fsl_run_output_dir) && force==FALSE) { message(fsl_run_output_dir, " exists. Skipping."); return(0) }
-  cat("fsl_run_output_dir create: ", fsl_run_output_dir, "\n")
-  dir.create(fsl_run_output_dir, showWarnings=FALSE) #one directory up from a given clock run
-  timingdir <- file.path(fsl_run_output_dir, "run_timing_sceptic")
+  if (file.exists(fsl_run_output_dir) && isFALSE(gpa$force_l1_creation)) {
+    lg$info("%s exists. Skipping l1 fsf setup in fsl_l1_model().", fsl_run_output_dir)
+    return(0)
+  }
 
-  #create the events and signals structures for the build_design_matrix call
-  #this assumes that we have received a data.frame with the structure from the _trial_statistics.csv.gz generated
-  #thus, we have $clock_onset and $feedback_onset, and $iti_onset available
-  events <- subj_data %>% dplyr::select(id, run, trial, clock_onset, feedback_onset, iti_onset, rt_csv) %>%
-    dplyr::mutate(clock_duration=rt_csv/1000, feedback_duration=iti_onset - feedback_onset) %>%
-    dplyr::select(-iti_onset, -rt_csv) %>% tidyr::gather(key="key", value="value", -id, -run, -trial) %>%
-    tidyr::separate(col = key, into = c("event", "onset_duration")) %>%
-    tidyr::spread(key=onset_duration, value=value) %>% dplyr::select(event, run, trial, onset, duration)
+  lg$info("Create l1 fsl_run_output_dir: %s", fsl_run_output_dir)
+  dir.create(fsl_run_output_dir, showWarnings=FALSE) #one directory up from a given run
+  timingdir <- file.path(fsl_run_output_dir, "run_timing")
 
-  signals <- populate_sceptic_signals(sceptic_signals, subj_data)
   
-  #not currently handling vtime
-  # else if (thisName == "vtime") {
-  #      #vtime is a runs x trials list with a data.frame per trial containing onsets, durations, and values within trial
-  #      onsets[v] <- NA #not relevant
-  #      durations[v] <- NA #not relevant
-  #      normalizations[v] <- "none" #should not try to normalize the within-trial regressor since this starts to confused within/between trial variation
-
-  #save(file=file.path(fsl_run_output_dir, "bdm_call.RData"), events, signals, timingdir, drop_volumes, mrfiles, mrrunnums)
+  #save(file=file.path(fsl_run_output_dir, "bdm_call.RData"), events, signals, timingdir, drop_volumes, mrfiles, mrrunnums)  
   
   #NB. The tr argument should be passed in as part of ...
   d <- build_design_matrix(events=events, signals=signals, baseline_coef_order=2, write_timing_files = c("convolved"), #, "FSL"),
@@ -94,7 +59,7 @@ fsl_l1_model <- function(subj_data, sceptic_signals, l1_contrasts=NULL, mrfiles,
     stopifnot(file.exists(file.path(dirname(mrfiles[r]), "motion.par"))) #can't find motion parameters
     
     runnum <- sub("^.*/clock(\\d+)$", "\\1", dirname(mrfiles[r]), perl=TRUE)
-    nvol <- nifti.image.read(mrfiles[r], read_data=0)$dim[4L]
+    nvol <- oro.nifti::readNIfTI(mrfiles[r], read_data=FALSE)$dim_[5L]
 
     ##just PCA motion on the current run
     ##mregressors <- pca_motion(mrfiles[r], runlengths[r], motion_parfile="motion.par", numpcs=3, drop_volumes=drop_volumes)$motion_pcs_concat
@@ -145,8 +110,6 @@ fsl_l1_model <- function(subj_data, sceptic_signals, l1_contrasts=NULL, mrfiles,
     ##.NVOL. is the number of volumes in the run
     ##.FUNCTIONAL. is the fmri data to process (sans extension)
     ##.CONFOUNDS. is the confounds file for GLM
-    ##.CLOCK_TIMES. is the three-column file for clock onset
-    ##.FEEDBACK_TIMES. is the three-column file for feedback onset
     ##.VNAME. is the signal name in a univariate model
     ##.V_TIMES. is the three-column file for the signal
     ##.V_CON. is the contrast name for the signal
@@ -157,52 +120,31 @@ fsl_l1_model <- function(subj_data, sceptic_signals, l1_contrasts=NULL, mrfiles,
     thisTemplate <- gsub(".FUNCTIONAL.", gsub(".nii(.gz)*$", "", mrfiles[r]), thisTemplate, fixed=TRUE)
     thisTemplate <- gsub(".CONFOUNDS.", motfile, thisTemplate, fixed=TRUE)
 
-    if (use_new) {
-      #generate ev syntax
-      dmat <- d$design_convolved[[paste0("run", runnum)]] %>% select(-matches("base\\d+")) #drop baseline columns
-      regressors <- as.list(names(dmat))
+    #generate ev syntax
+    dmat <- d$design_convolved[[paste0("run", runnum)]] %>% select(-matches("base\\d+")) #drop baseline columns
+    regressors <- as.list(names(dmat))
 
-      #add common ingredients for preconvolved regressors
-      regressors <- lapply(regressors, function(x) { list(name=x, waveform="custom_1", convolution="none", tempfilt=1, timing_file=file.path(timingdir, paste0("run", runnum, "_", x, ".1D"))) })
+    #add common ingredients for preconvolved regressors
+    regressors <- lapply(regressors, function(x) { list(name=x, waveform="custom_1", convolution="none", tempfilt=1, timing_file=file.path(timingdir, paste0("run", runnum, "_", x, ".1D"))) })
 
-      ev_syn <- dependlab::generate_fsf_lvl1_ev_syntax(regressors)
+    ev_syn <- dependlab::generate_fsf_lvl1_ev_syntax(regressors)
 
-      #creation of l1 contrast matrices, including the diagonal contrasts, now abstracted to finalize_pipeline_configuration.R
-      #thus, l1_contrasts is already a contrast matrix ready to be passed to the generate_fsf_contrast_syntax function
-      cmat_syn <- dependlab::generate_fsf_contrast_syntax(l1_contrasts)
-      
-      thisTemplate <- c(thisTemplate, ev_syn, cmat_syn)      
-    } else {
-      if (usepreconvolve) {
-        thisTemplate <- gsub(".CLOCK_TIMES.", file.path(timingdir, paste0("run", runnum, "_clock.1D")), thisTemplate, fixed=TRUE)
-        thisTemplate <- gsub(".FEEDBACK_TIMES.", file.path(timingdir, paste0("run", runnum, "_feedback.1D")), thisTemplate, fixed=TRUE)
-      } else {
-        thisTemplate <- gsub(".CLOCK_TIMES.", file.path(timingdir, paste0("run", runnum, "_clock_FSL3col.txt")), thisTemplate, fixed=TRUE)
-        thisTemplate <- gsub(".FEEDBACK_TIMES.", file.path(timingdir, paste0("run", runnum, "_feedback_FSL3col.txt")), thisTemplate, fixed=TRUE)
-      }
-
-      for (s in 1:length(sceptic_signals)) {
-        if (usepreconvolve) {
-          thisTemplate <- gsub(paste0(".V", s, "_TIMES."), file.path(timingdir, paste0("run", runnum, "_", sceptic_signals[s], ".1D")), thisTemplate, fixed=TRUE)
-        } else {
-          thisTemplate <- gsub(paste0(".V", s, "_TIMES."), file.path(timingdir, paste0("run", runnum, "_", sceptic_signals[s], "_FSL3col.txt")), thisTemplate, fixed=TRUE)
-        }
-        thisTemplate <- gsub(paste0(".V", s, "NAME."), sceptic_signals[s], thisTemplate) #define EV name
-        thisTemplate <- gsub(paste0(".V", s, "_CON."), sceptic_signals[s], thisTemplate) #define contrast name
-      }
-
-    }
+    #creation of l1 contrast matrices, including the diagonal contrasts, now abstracted to finalize_pipeline_configuration.R
+    #thus, l1_contrasts is already a contrast matrix ready to be passed to the generate_fsf_contrast_syntax function
+    cmat_syn <- dependlab::generate_fsf_contrast_syntax(l1_contrasts)
+    
+    thisTemplate <- c(thisTemplate, ev_syn, cmat_syn)      
     
     featFile <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", runnum, ".fsf"))
     if (file.exists(featFile) && force==FALSE) { next } #skip re-creation of FSF and do not run below unless force==TRUE 
     cat(thisTemplate, file=featFile, sep="\n")
     
     allFeatFiles[[r]] <- featFile
-  }
+  }    
 
   #if execute_feat is TRUE, execute feat on each fsf files at this stage, using an 8-node socket cluster (since we have 8 runs)
   #if execute_feat is FALSE, just create the fsf files but don't execute the analysis
-  if (execute_feat == TRUE) {
+  if (isTRUE(execute_feat)) {
     require(parallel)
     cl_fork <- makeForkCluster(nnodes=8)
     runfeat <- function(fsf) {

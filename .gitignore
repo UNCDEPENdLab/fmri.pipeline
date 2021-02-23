@@ -37,3 +37,9 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+#slurm outputs
+slurm-*.out
+
+#local files that don't pertain to release
+/local/

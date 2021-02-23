@@ -32,14 +32,14 @@ rle_dt <- R6::R6Class("rle_dt",
       dsize <- object.size(data)
       
       #convert to data table for speed, memory management
-      dt <- data.table(data)
+      dt <- data.table::data.table(data)
       rm(data)
 
       if (!is.null(keys)) {        
         #determine nesting/ordering
         stopifnot(all(keys %in% names(dt)))
 
-        setkeyv(dt, keys) #start with key and sort order provided by user
+        data.table::setkeyv(dt, keys) #start with key and sort order provided by user
         
         costs <- c()
         klist <- list()
@@ -65,13 +65,13 @@ rle_dt <- R6::R6Class("rle_dt",
 
         #search for best RLE encoding of keys
         for(ii in 1:nrow(perms)) {
-          setorderv(dt, perms[ii,])
+          data.table::setorderv(dt, perms[ii,])
           klist[[ii]] <- sapply(keys, function(x) { rle(dt[[x]]) }, simplify=FALSE)
           costs[ii] <- object.size(klist[[ii]])
         }
 
         best_order <- which.min(costs)
-        setorderv(dt, perms[best_order,])
+        data.table::setorderv(dt, perms[best_order,])
         
         dt[, (keys) := NULL] #drop key columns
         private$keys <- klist[[best_order]] #set keys field
@@ -99,16 +99,16 @@ rle_dt <- R6::R6Class("rle_dt",
           #handle factors
           if (!is.null(meta <- private$key_metadata[[kk]])) {
             if (isTRUE(meta$ordered)) {
-              set(dd, j=kk, value=ordered(dd[[kk]], levels=meta$levels))
+              data.table::set(dd, j=kk, value=ordered(dd[[kk]], levels=meta$levels))
             } else {
-              set(dd, j=kk, value=factor(dd[[kk]], levels=meta$levels))
+              data.table::set(dd, j=kk, value=factor(dd[[kk]], levels=meta$levels))
             }
           }
         }
 
-        setkeyv(dd, names(private$keys)) #add keys back to object
-        setcolorder(dd, names(private$keys)) #put clustering variables first in object
-        setorderv(dd, names(private$keys)) #order by original key input order (rather than optimized order)
+        data.table::setkeyv(dd, names(private$keys)) #add keys back to object
+        data.table::setcolorder(dd, names(private$keys)) #put clustering variables first in object
+        data.table::setorderv(dd, names(private$keys)) #order by original key input order (rather than optimized order)
       }
       return(dd)
     }

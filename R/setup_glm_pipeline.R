@@ -68,12 +68,12 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
                                vm=c(id="id", session="session", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir", run_nifti="run_nifti"),
                                bad_ids=NULL, tr=NULL,
                                fmri_file_regex=".*\\.nii(\\.gz)?", fmri_path_regex=NULL, run_number_regex=".*run-*([0-9]+).*",
-                               nuisance_file_regex=".*confounds.*\\.txt", nuisance_file_columns=NULL,
+                               nuisance_file_regex=".*confounds.*\\.txt", nuisance_file_columns=NULL, motion_params_regex="motion\\.par",
                                drop_volumes=0L, l1_models="prompt",
                                l2_model_variants=NULL, l2_contrasts=NULL, l2_include_diagonal_contrasts=TRUE,
                                l3_model_variants=NULL, l3_contrasts=NULL, l3_include_diagonal_contrasts=TRUE,
                                glm_software="fsl",
-                               use_preconvolve=TRUE, truncate_runs=FALSE,
+                               use_preconvolve=TRUE, truncate_runs=FALSE, force_l1_creation=FALSE,
                                motion_controls=list(
                                  exclude_run=expression(mean(FD) > 0.9 | max(FD) > 0.5),
                                  exclude_subject=expression(nruns < 4),
@@ -96,8 +96,9 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   checkmate::assert_string(nuisance_file_regex, null.ok=TRUE)
   checkmate::assert_integerish(drop_volumes)
   checkmate::assert_character(glm_software)
-  checkmate::assert_logical(use_preconvolve, null.ok=TRUE)
-  checkmate::assert_logical(truncate_runs, null.ok=TRUE)
+  checkmate::assert_logical(use_preconvolve, null.ok=FALSE)
+  checkmate::assert_logical(truncate_runs, null.ok=FALSE)
+  checkmate::assert_logical(force_l1_creation, null.ok=FALSE)
 
   glm_software <- tolower(glm_software)
   checkmate::assert_subset(glm_software, c("fsl", "spm", "afni"))
@@ -184,6 +185,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     bad_ids=bad_ids,
     multi_run=multi_run, #2- or 3-level analysis
     truncate_runs=truncate_runs,
+    force_l1_creation=force_l1_creation,
     
     #l1 analysis details
     fmri_file_regex=fmri_file_regex,
