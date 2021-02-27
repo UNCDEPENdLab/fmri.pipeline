@@ -155,38 +155,86 @@ truncate_runs <- function(s, mrfiles, mrrunnums, niftivols, drop_volumes=0) {
   
 }
 
-pca_motion <- function(mrfiles, runlengths, motion_parfile="motion.par", verbose=FALSE,  numpcs=3, drop_volumes=0) {
-  #based on a vector of mr files to be analyzed, compute the PCA decomposition of motion parameters and their derivatives
-  #do this for each run separately (e.g., for FSL or R glm), as well as concatenated files
-  motion_runs <- lapply(1:length(mrfiles), function(i)  {
-        mot <- read.table(file.path(dirname(mrfiles[i]), motion_parfile), col.names=c("r.x", "r.y", "r.z", "t.x", "t.y", "t.z"))
-        mot <- mot[(1+drop_volumes):runlengths[i],]
-        motderiv <- as.data.frame(lapply(mot, function(col) { c(0, diff(col)) }))
-        names(motderiv) <- paste0("d.", names(mot)) #add delta to names
-        cbind(mot, motderiv)
-      })
+#' helper function for generating motion regressors from raw 6-parameter motion coregistration
+#'
+#' @param motion_params file containing 6 motion parameters
+#' @param col.names names of columns in \code{motion_params}, in order from left to right
+#' @param regressors names of regressors to generate and return to caller
+#' @param drop_volumes number of volumes to drop from beginning of motion params
+#'
+#' @importFrom data.table fread
+#' @importFrom checkmate assert_file_exists
+generate_motion_regressors <- function(motion_params = "motion.par",
+                                       col.names = c("rx", "ry", "rz", "tx", "ty", "tz"),
+                                       regressors = c("rx", "ry", "rz", "tx", "ty", "tz"),
+                                       demean = TRUE, drop_volumes = 0, last_volume=NULL) {
+
+  checkmate::assert_file_exists(motion_params)
+  checkmate::assert_subset(col.names, c("rx", "ry", "rz", "tx", "ty", "tz"))
+  checkmate::assert_subset(regressors,
+    c("rx", "ry", "rz", "tx", "ty", "tz",
+    "drx", "dry", "drz", "dtx", "dty", "dtz",
+    "qdrx", "qdry", "qdrz", "qdtx", "qdty", "qdtz")
+  )
   
-  motion_pcs_runs <- lapply(1:length(motion_runs), function(r) {
-        pc <- prcomp(motion_runs[[r]], retx=TRUE)
-        cumvar <- cumsum(pc$sdev^2/sum(pc$sdev^2))
-        if (verbose) message("first", numpcs, "motion principal components account for: ", round(cumvar[numpcs], 3))
-        mregressors <- pc$x[,1:numpcs] #cf Churchill et al. 2012 PLoS ONE
-      })
+  mot <- data.table::fread(motion_params, col.names=col.names)
+
+  if (is.null(last_volume)) { last_volume <- nrow(mot) }
+  checkmate::assert_integerish(last_volume, lower=nrow(mot))
   
-  motion_concat <- do.call(rbind, motion_runs)
-  pc <- prcomp(motion_concat, retx=TRUE)
+  mot <- mot[(1+drop_volumes):last_volume,]
+
+  if (any(derivcols <- grepl("^q?d{1}.*", regressors, perl=TRUE))) {
+    motderiv <- mot[, lapply(.SD, function(x) { c(0, diff(x)) })]
+    setnames(motderiv, paste0("d", names(mot))) #add delta to names
+    mot <- cbind(mot, motderiv)
+  }
+
+  #quadratics always computed after derivative calculation
+  if (any(quadcols <- grepl("^q{1}.*", regressors, perl=TRUE))) {
+    motquad <- mot[, lapply(.SD, function(x) { x^2 })]
+    setnames(motquad, paste0("q", names(mot))) #add delta to names
+    mot <- cbind(mot, motquad)
+  }
+
+  mot <- mot[, ..regressors] #keep regressors of interest
+  if (isTRUE(demean)) {
+    mot <- mot[, lapply(.SD, function(x) { x - mean(x, na.rm=TRUE) }) ] #demean all columns
+  }
+
+  return(mot)
+}
+
+#' small helper function for compressing motion parameters using PCA
+#'
+#' @param motion_df volumes x motion parameters data frame for PCA compression
+#' @param num_pcs number of principal components to extract
+#' @param zscore whether to standardize motion parameters prior to PCA (this is a good idea)
+#' @param verbose whether to print the variance explained by PCs and the multiple correlations of
+#'   among motion parameters
+#'
+#' @return A matrix of PCA-compressed motion regressors
+#' 
+pca_motion <- function(motion_df, num_pcs=3L, zscore=TRUE, verbose=FALSE) {
+  checkmate::assert_data_frame(motion_df)
+  checkmate::assert_integerish(num_pcs, lower=1, upper=50)
+  checkmate::assert_logical(zscore)
+  checkmate::assert_logical(verbose)
+  
+  #compute the PCA decomposition of motion parameters and their derivatives
+  pc <- prcomp(motion_df, retx=TRUE, scale.=zscore)
   cumvar <- cumsum(pc$sdev^2/sum(pc$sdev^2))
   
-  if (verbose) message("first", numpcs, "motion principal components account for: ", round(cumvar[numpcs], 3))
-  motion_pcs_concat <- pc$x[,1:numpcs] #cf Churchill et al. 2012 PLoS ONE
+  if (verbose) message("first", num_pcs, "motion principal components account for: ", round(cumvar[num_pcs], 3))
+  mregressors <- pc$x[,1:num_pcs] #cf Churchill et al. 2012 PLoS ONE
+  attr(mregressors, "variance.explained") <- cumvar[num_pcs]
   
   if (verbose) {
-    cat("correlation of motion parameters:\n\n")
-    print(round(cor(motion_concat), 2))
+    cat("Multiple correlation of motion parameters:\n\n")
+    print(round(sqrt(psych::smc(motion_df)), 2))
   }
   
-  return(list(motion_pcs_runs=motion_pcs_runs, motion_pcs_concat=motion_pcs_concat))
-  
+  return(as.data.frame(mregressors))
 }
 
 generateRunMask <- function(mrfiles, outdir=getwd(), outfile="runmask") {
