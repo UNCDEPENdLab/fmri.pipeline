@@ -65,7 +65,8 @@
 setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", working_directory=file.path(getwd(), "glm_out"),
                                group_output_directory="default",
                                subject_data=NULL, run_data=NULL, trial_data=NULL,
-                               vm=c(id="id", session="session", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir", run_nifti="run_nifti"),
+                               vm=c(id="id", session="session", run="run", trial="trial", run_trial="trial",
+                                 mr_dir="mr_dir", run_nifti="run_nifti", run_number="run_number"),
                                bad_ids=NULL, tr=NULL,
                                fmri_file_regex=".*\\.nii(\\.gz)?", fmri_path_regex=NULL, run_number_regex=".*run-*([0-9]+).*",
                                nuisance_file_regex=".*confounds.*\\.txt", nuisance_file_columns=NULL, motion_params_regex="motion\\.par",
@@ -74,7 +75,8 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
                                l3_model_variants=NULL, l3_contrasts=NULL, l3_include_diagonal_contrasts=TRUE,
                                glm_software="fsl",
                                use_preconvolve=TRUE, truncate_runs=FALSE, force_l1_creation=FALSE,
-                               motion_controls=list(
+                               motion_settings=list(
+                                 motion_file="motion.par", #assumed to be in the same folder as the fmri run NIfTIs
                                  exclude_run=expression(mean(FD) > 0.9 | max(FD) > 0.5),
                                  exclude_subject=expression(nruns < 4),
                                  spike_volume=expression(FD > 0.9)
@@ -183,6 +185,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     trial_data=trial_data,
     vm=vm,
     bad_ids=bad_ids,
+    tr=tr,
     multi_run=multi_run, #2- or 3-level analysis
     truncate_runs=truncate_runs,
     force_l1_creation=force_l1_creation,

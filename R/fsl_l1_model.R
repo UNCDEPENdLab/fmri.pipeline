@@ -1,7 +1,10 @@
 #note: this is a small adapation from the original fslSCEPTICModel to avoid use of the clockfit objects and to move to the
 #simpler build_design_matrix approach and the use of the trial_statistics csv files from vba_fmri
-fsl_l1_model <- function(gpa, model_name=NULL) {
+fsl_l1_model <- function(d_obj, gpa, model_name=NULL, mrfiles=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_character(mrfiles, null.ok=FALSE)
+  checkmate::assert_file_exists(mrfiles) #all exist
+  
   stopifnot(model_name %in% names(gpa$l1_models$models))
   
 
@@ -27,7 +30,8 @@ fsl_l1_model <- function(gpa, model_name=NULL) {
   require(dependlab)
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
-  
+
+  #TODO use system.file to read from R package installation dir
   fsfTemplate <- readLines(file.path(gpa$pipeline_home, "inst", "feat_lvl1_nparam_template.fsf"))  
   
   #note: normalizePath will fail to evaluate properly if directory does not exist
@@ -41,16 +45,6 @@ fsl_l1_model <- function(gpa, model_name=NULL) {
   lg$info("Create l1 fsl_run_output_dir: %s", fsl_run_output_dir)
   dir.create(fsl_run_output_dir, showWarnings=FALSE) #one directory up from a given run
   timingdir <- file.path(fsl_run_output_dir, "run_timing")
-
-  
-  #save(file=file.path(fsl_run_output_dir, "bdm_call.RData"), events, signals, timingdir, drop_volumes, mrfiles, mrrunnums)  
-  
-  #NB. The tr argument should be passed in as part of ...
-  d <- build_design_matrix(events=events, signals=signals, baseline_coef_order=2, write_timing_files = c("convolved"), #, "FSL"),
-    center_values=TRUE, plot=FALSE, convolve_wi_run=TRUE, output_directory=timingdir, drop_volumes=drop_volumes,
-    run_volumes=mrfiles, runs_to_output=mrrunnums, ...)
-
-  save(d, subj_data, events, signals, timingdir, runlengths, mrrunnums, file=file.path(fsl_run_output_dir, "designmatrix.RData"))
   
   allFeatFiles <- list()
   
@@ -58,7 +52,7 @@ fsl_l1_model <- function(gpa, model_name=NULL) {
   for (r in 1:length(mrfiles)) {
     stopifnot(file.exists(file.path(dirname(mrfiles[r]), "motion.par"))) #can't find motion parameters
     
-    runnum <- sub("^.*/clock(\\d+)$", "\\1", dirname(mrfiles[r]), perl=TRUE)
+    runnum <- c()
     nvol <- oro.nifti::readNIfTI(mrfiles[r], read_data=FALSE)$dim_[5L]
 
     ##just PCA motion on the current run
@@ -110,9 +104,6 @@ fsl_l1_model <- function(gpa, model_name=NULL) {
     ##.NVOL. is the number of volumes in the run
     ##.FUNCTIONAL. is the fmri data to process (sans extension)
     ##.CONFOUNDS. is the confounds file for GLM
-    ##.VNAME. is the signal name in a univariate model
-    ##.V_TIMES. is the three-column file for the signal
-    ##.V_CON. is the contrast name for the signal
     
     thisTemplate <- fsfTemplate
     thisTemplate <- gsub(".OUTPUTDIR.", file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", runnum)), thisTemplate, fixed=TRUE)

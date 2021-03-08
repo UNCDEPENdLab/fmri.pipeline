@@ -6,9 +6,13 @@
 #' @importFrom string str_count fixed
 finalize_pipeline_configuration <- function(gpa) {
 
-  #new approach: use internal model names
-  gpa$outdir <- paste(gpa$analysis_name, names(gpa$l1_models$models), sep="_") #default to <analysis_name>/<l1_model_name>
-  if (isTRUE(gpa$use_preconvolve)) { gpa$outdir <- paste0(gpa$outdir, "-preconvolve") } #add suffix if using preconvolution approach
+  #new approach: use internal model names for creating output directories at subject level
+  #default to <analysis_name>/<l1_model_name>
+  #add suffix if using preconvolution approach
+  gpa$l1_models$models <- lapply(gpa$l1_models$models, function(mm) {
+    mm$outdir <- file.path(gpa$analysis_name, paste0(mm$name, ifelse(gpa$use_preconvolve, "_preconvolve", "")))
+    return(mm)
+  })
 
   if (!is.null(gpa$run_number_regex)) {
     if (stringr::str_count(gpa$run_number_regex, stringr::fixed("(")) != 1L) {
@@ -63,15 +67,15 @@ finalize_pipeline_configuration <- function(gpa) {
 
   if (is.null(gpa$log_json)) { gpa$log_json <- TRUE } #whether to write JSON log files
   if (is.null(gpa$log_txt)) { gpa$log_txt <- TRUE } #whether to write text log files
-  if (is.null(gpa$l1_setup_log)) { gpa$l1_setup_log <- paste0(names(gpa$l1_models$models), "_l1setup") }
-  if (is.null(gpa$l1_execution_log)) { gpa$l1_setup_log <- paste0(names(gpa$l1_models$models), "_l1execution") }
+  if (is.null(gpa$l1_setup_log)) { gpa$l1_setup_log <- paste0(names(gpa$l1_models$models), "_l1setup") %>% setNames(names(gpa$l1_models$models)) }
+  if (is.null(gpa$l1_execution_log)) { gpa$l1_execution_log <- paste0(names(gpa$l1_models$models), "_l1execution") %>% setNames(names(gpa$l1_models$models)) }
   
   #remove bad ids before running anything further
   if (!is.null(gpa$bad_ids) && length(gpa$bad_ids) > 0L) {
-    gpa$subject_data <- gpa$subject_data %>% filter(! !!sym(gpa$vm["id"]) %in% gpa$bad_ids) #remove bad ids
+    gpa$subject_data <- gpa$subject_data %>% filter(! (!!sym(gpa$vm["id"]) %in% gpa$bad_ids)) #remove bad ids
   }
 
-  #build design matrix arguments
+  #build design matrix default arguments
   if (is.null(gpa$additional$bdm_args)) {
     gpa$additional$bdm_args <- list(baseline_coef_order=2, center_values=TRUE, plot=FALSE, convolve_wi_run=TRUE, output_directory="run_timing")
   }

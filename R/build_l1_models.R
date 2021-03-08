@@ -13,7 +13,7 @@
 #' @importFrom checkmate assert_data_frame assert_class assert_subset
 #' @export
 #' 
-build_l1_model <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
+build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
                            onset_cols=NULL, onset_regex=".*(onset|time).*", duration_regex=".*duration.*", value_cols=NULL) {
   
   #maybe allow glm object to be passed in that would have trial_data and variable_mapping. I guess that would be like "add_l1_model"
