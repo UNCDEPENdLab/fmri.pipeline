@@ -180,11 +180,11 @@ generate_motion_regressors <- function(motion_params = "motion.par",
   mot <- data.table::fread(motion_params, col.names=col.names)
 
   if (is.null(last_volume)) { last_volume <- nrow(mot) }
-  checkmate::assert_integerish(last_volume, lower=nrow(mot))
+  checkmate::assert_integerish(last_volume, upper=nrow(mot))
   
   mot <- mot[(1+drop_volumes):last_volume,]
 
-  if (any(derivcols <- grepl("^q?d{1}.*", regressors, perl=TRUE))) {
+  if ("fd" %in% regressors || any(derivcols <- grepl("^q?d{1}.*", regressors, perl=TRUE))) {
     motderiv <- mot[, lapply(.SD, function(x) { c(0, diff(x)) })]
     setnames(motderiv, paste0("d", names(mot))) #add delta to names
     mot <- cbind(mot, motderiv)
@@ -197,11 +197,22 @@ generate_motion_regressors <- function(motion_params = "motion.par",
     mot <- cbind(mot, motquad)
   }
 
+  if ("fd" %in% regressors) {
+    #need to adapt in case of degrees (this is based on radians)
+    #https://wiki.cam.ac.uk/bmuwiki/FMRI
+    fd <- apply(mot.deriv[,c("drx", "dry", "drz")], 1, function(x) sum(2*pi*50*(abs(x)/360))) +
+      apply(mot.deriv[,c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
+    mot <- cbind(mot, fd=fd)
+  }
+  
   mot <- mot[, ..regressors] #keep regressors of interest
   if (isTRUE(demean)) {
     mot <- mot[, lapply(.SD, function(x) { x - mean(x, na.rm=TRUE) }) ] #demean all columns
   }
-
+  
+  ##just PCA motion on the current run
+  ##mregressors <- pca_motion(mr_files[r], runlengths[r], motion_parfile="motion.par", numpcs=3, drop_volumes=drop_volumes)$motion_pcs_concat
+  
   return(mot)
 }
 
@@ -348,5 +359,3 @@ get_beta_series <- function(inputs, roimask, n_bs=50) {
 
   return(do.call(rbind, beta_res))
 }
-
-

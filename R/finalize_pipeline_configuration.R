@@ -80,5 +80,10 @@ finalize_pipeline_configuration <- function(gpa) {
     gpa$additional$bdm_args <- list(baseline_coef_order=2, center_values=TRUE, plot=FALSE, convolve_wi_run=TRUE, output_directory="run_timing")
   }
 
+  #default settings for feat l1
+  if (is.null(gpa$additional$feat_l1_args)) {
+    gpa$additional$feat_l1_args <- list(feat_l1_zthresh=1.96, feat_l1_pthresh=.05)
+  }
+
   return(gpa)
 }

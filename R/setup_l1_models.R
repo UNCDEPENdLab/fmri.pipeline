@@ -174,7 +174,8 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
 
         if (is.null(d_obj)) { next } #skip to next iteration on error       
 
-        save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, mrfiles, run_lengths, subid, this_model, file=file.path(subj_out, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData")))
+        save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, mrfiles, run_lengths, subid, this_model,
+          file=file.path(subj_out, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData")))
 
         browser()
         if ("fsl" %in% gpa$glm_software) {

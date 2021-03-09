@@ -84,7 +84,9 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
                                parallel=list(
                                  l1_setup_cores = 1L, #number of cores used when looping over l1 setup of design matrices and syntax for each subject
                                  pipeline_cores = "default" #number of cores used  when looping over l1 model variants in push_pipeline
-                               ), additional=list()) {
+                               ), additional=list(
+                                 feat_l1_args=list(feat_l1_zthresh=1.96, feat_l1_pthresh=.05)
+                               )) {
   
   checkmate::assert_string(analysis_name) #must be scalar string
   checkmate::assert_subset(scheduler, c("slurm", "sbatch", "torque", "qsub"), empty.ok=FALSE)
