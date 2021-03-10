@@ -27,14 +27,10 @@ finalize_pipeline_configuration <- function(gpa) {
   }
   
   #setup l1 copes, cope names, and contrasts.
-  #for now, always create a diagonal contrast matrix so that we start with 1 cope per EV
-  gpa$n_l1_copes <- c() #number of level 1 copes per model
-  gpa$l1_cope_names <- list() #names of level 1 copes per model
-
-  gpa$n_l1_copes <- sapply(gpa$l1_models$models, function(mm) { nrow(mm$contrasts) }) #names of level 1 copes per model
-  gpa$l1_cope_names <- lapply(gpa$l1_models$models, function(mm) { rownames(mm$contrasts) })
-
+  gpa$n_l1_copes <- sapply(gpa$l1_models$models, function(mm) { nrow(mm$contrasts) }) #number of level 1 copes per model
+  gpa$l1_cope_names <- lapply(gpa$l1_models$models, function(mm) { rownames(mm$contrasts) }) #names of level 1 copes for each model
   gpa$l1_working_directory <- file.path(gpa$working_directory, gpa$outdir) #temp folder for each analysis variant
+  if (is.null(gpa$force_l1_creation)) { gpa$force_l1_creation <- FALSE } #whether to overwrite existing level 1 setup files (e.g., .fsf)
 
   # ---- PARALLELISM SETUP
   # pipeline_cores: number of cores used in push_pipeline when looping over l1 model variants

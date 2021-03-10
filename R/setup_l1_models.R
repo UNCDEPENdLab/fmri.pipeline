@@ -134,6 +134,10 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
       mrfiles <- mrdf$mrfile_to_analyze
       run_lengths <- mrdf$last_vol_analysis
 
+      #tracking list containing data.frames for each software, where we expect one row per run-level model (FSL) or subject-level model (AFNI)
+      #the structure varies because FSL estimates per-run GLMs, while AFNI concatenates.
+      l1_file_setup <- list(fsl=NULL, spm=NULL, afni=NULL)
+      
       #loop over models to output
       for (ii in seq_along(to_setup)) {
         this_model <- to_setup[ii]
@@ -180,28 +184,35 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         browser()
         if ("fsl" %in% gpa$glm_software) {
           #Setup FSL run-level models for each combination of signals
-          tryCatch(fsl_l1_model(b, sceptic_run_signals, l1_contrasts, mrfiles, run_lengths, mrrunnums, drop_volumes=drop_volumes, outdir=outdir, ...),
+          feat_files <- tryCatch(fsl_l1_model(d_obj, gpa, this_model),
             error=function(e) {
-              cat("Subject: ", b[[id_col]][1], ", run variant: ", paste(sceptic_run_signals, collapse="-"), " failed with mrfiles: \n",
-                paste(mrfiles, collapse="\n"), "\n", "error: ", as.character(e), "\n\n", file="lvl1_crashlog.txt", append=TRUE)
+              lg$error("Problem running fsl_l1_model. Model: %s, Subject: %s", this_model, subid)
+              lg$error("Error message: %s", as.character(e))
+              return(NULL)
             })
+
+          if (!is.null(feat_files)) {
+            #add to tracking data.frame
+          }
         }
 
+        #TODO: finalize SPM approach
+        if ("spm" %in% gpa$glm_software) {
+          #Setup spm run-level models for each combination of signals
+          spm_files <- tryCatch(spm_l1_model(d_obj, gpa, this_model, mr_files),
+            error=function(e) {
+              lg$error("Problem running spm_l1_model. Model: %s, Subject: %s", this_model, subid)
+              lg$error("Error message: %s", as.character(e))
+              return(NULL)
+            })
+
+        }
+
+
       }
-      
 
-      if ("spm" %in% gpa$glm_software) {
-        #Setup spm run-level models for each combination of signals
-        tryCatch(spm_l1_model(b, sceptic_run_signals, mrfiles, run_lengths, mrrunnums, drop_volumes=drop_volumes, outdir=outdir, ...),
-          error=function(e) {
-            cat("Subject: ", b[[id_col]][1], ", run variant: ", paste(sceptic_run_signals, collapse="-"), " failed with mrfiles: \n",
-              paste(mrfiles, collapse="\n"), "\n", "error: ", as.character(e), "\n\n", file="lvl1_crashlog.txt", append=TRUE)
-          })
-
-      }
-
-      message("completed processing of subject: ", subid)
-      cat("\n\n\n")
+      lg$info("Completed processing of subject: %s", subid)
     }
+  
   
 }

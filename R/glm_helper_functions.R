@@ -163,19 +163,28 @@ truncate_runs <- function(s, mrfiles, mrrunnums, niftivols, drop_volumes=0) {
 #' @param drop_volumes number of volumes to drop from beginning of motion params
 #'
 #' @importFrom data.table fread
-#' @importFrom checkmate assert_file_exists
+#' @importFrom checkmate assert_file_exists assert_subset assert_integerish
 generate_motion_regressors <- function(motion_params = "motion.par",
                                        col.names = c("rx", "ry", "rz", "tx", "ty", "tz"),
                                        regressors = c("rx", "ry", "rz", "tx", "ty", "tz"),
-                                       demean = TRUE, drop_volumes = 0, last_volume=NULL) {
+                                       demean = TRUE, drop_volumes = 0, last_volume=NULL,
+                                       rot_unit="rad", tra_units="mm") {
 
   checkmate::assert_file_exists(motion_params)
+  if (is.null(col.names)) { col.names <- c("rx", "ry", "rz", "tx", "ty", "tz") } #explicit defaults in case of null
   checkmate::assert_subset(col.names, c("rx", "ry", "rz", "tx", "ty", "tz"))
-  checkmate::assert_subset(regressors,
-    c("rx", "ry", "rz", "tx", "ty", "tz",
+
+  #Regressors that are not motion-related can be passed in from outside (since we have a combined l1_confound_regressors argument).
+  #These could include CSF, WM, or whatever. Subset down to just the values that can be calculated from motion params alone so that
+  #the logic below of parameter naming holds up.
+  regressors <- intersect(regressors,
+    c("fd", "rx", "ry", "rz", "tx", "ty", "tz",
     "drx", "dry", "drz", "dtx", "dty", "dtz",
     "qdrx", "qdry", "qdrz", "qdtx", "qdty", "qdtz")
   )
+
+  #if none of the confound regressors is a motion parameter, then quietly return NULL
+  if (length(regressors) == 0L) { return(invisible(NULL)) }
   
   mot <- data.table::fread(motion_params, col.names=col.names)
 
@@ -200,8 +209,12 @@ generate_motion_regressors <- function(motion_params = "motion.par",
   if ("fd" %in% regressors) {
     #need to adapt in case of degrees (this is based on radians)
     #https://wiki.cam.ac.uk/bmuwiki/FMRI
-    fd <- apply(mot.deriv[,c("drx", "dry", "drz")], 1, function(x) sum(2*pi*50*(abs(x)/360))) +
-      apply(mot.deriv[,c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
+    if (rot_units=="rad") {
+      fd <- apply(mot.deriv[,c("drx", "dry", "drz")], 1, function(x) sum(2*pi*50*(abs(x)/360))) +
+        apply(mot.deriv[,c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
+    } else {
+      stop("not done yet")
+    }
     mot <- cbind(mot, fd=fd)
   }
   
@@ -212,6 +225,20 @@ generate_motion_regressors <- function(motion_params = "motion.par",
   
   ##just PCA motion on the current run
   ##mregressors <- pca_motion(mr_files[r], runlengths[r], motion_parfile="motion.par", numpcs=3, drop_volumes=drop_volumes)$motion_pcs_concat
+
+  #need to adapt this implementation -- create spike regressors based on a motion threshold
+  ## if (spikeregressors) { #incorporate spike regressors if requested (not used in conventional AROMA)
+  ##   censorfile <- file.path(dirname(mr_files[rr]), "motion_info", "fd_0.9.mat")
+  ##   if (file.exists(censorfile) && file.info(censorfile)$size > 0) {
+  ##     censor <- read.table(censorfile, header=FALSE)
+  ##     censor <- censor[(1+drop_volumes):runlengths[rr],,drop=FALSE] #need no drop here in case there is just a single volume to censor
+  ##     #if the spikes fall outside of the rows selected above, we will obtain an all-zero column. remove these
+  ##     censor <- censor[,sapply(censor, sum) > 0,drop=FALSE]
+  ##     if (ncol(censor) == 0L) { censor <- NULL } #no volumes to censor within valid timepoints
+  ##     mregressors <- censor
+  ##   }
+  ## }
+
   
   return(mot)
 }

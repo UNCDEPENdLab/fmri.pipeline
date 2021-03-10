@@ -69,14 +69,17 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
                                  mr_dir="mr_dir", run_nifti="run_nifti", run_number="run_number"),
                                bad_ids=NULL, tr=NULL,
                                fmri_file_regex=".*\\.nii(\\.gz)?", fmri_path_regex=NULL, run_number_regex=".*run-*([0-9]+).*",
-                               nuisance_file_regex=".*confounds.*\\.txt", nuisance_file_columns=NULL, motion_params_regex="motion\\.par",
                                drop_volumes=0L, l1_models="prompt",
                                l2_model_variants=NULL, l2_contrasts=NULL, l2_include_diagonal_contrasts=TRUE,
                                l3_model_variants=NULL, l3_contrasts=NULL, l3_include_diagonal_contrasts=TRUE,
                                glm_software="fsl",
                                use_preconvolve=TRUE, truncate_runs=FALSE, force_l1_creation=FALSE,
-                               motion_settings=list(
-                                 motion_file="motion.par", #assumed to be in the same folder as the fmri run NIfTIs
+                               confound_settings=list(
+                                 motion_params_file="motion.par", #assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
+                                 motion_params_columns=c("rx", "ry", "rz", "tx", "ty", "tz"),
+                                 confound_file=NULL, #assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
+                                 confound_columns=NULL, #names of confound columns -- if null, we will attempt to find a header row
+                                 l1_confound_regressors=NULL, #column names in motion_params and/or confound_file
                                  exclude_run=expression(mean(FD) > 0.9 | max(FD) > 0.5),
                                  exclude_subject=expression(nruns < 4),
                                  spike_volume=expression(FD > 0.9)
@@ -85,7 +88,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
                                  l1_setup_cores = 1L, #number of cores used when looping over l1 setup of design matrices and syntax for each subject
                                  pipeline_cores = "default" #number of cores used  when looping over l1 model variants in push_pipeline
                                ), additional=list(
-                                 feat_l1_args=list(feat_l1_zthresh=1.96, feat_l1_pthresh=.05)
+                                 feat_l1_args=list(z_thresh=1.96, prob_thresh=.05) #additional feat level 1 settings (uses internal FSL nomenclature)
                                )) {
   
   checkmate::assert_string(analysis_name) #must be scalar string
@@ -94,10 +97,9 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   checkmate::assert_data_frame(run_data, null.ok=TRUE)
   checkmate::assert_data_frame(trial_data)
   checkmate::assert_character(vm)
-  checkmate::assert_number(tr)
+  checkmate::assert_number(tr, lower=0.01, upper=60) #would be insane to have super-long TR (suggests milliseconds, not seconds passed in)
   checkmate::assert_string(fmri_file_regex, null.ok=TRUE)
   checkmate::assert_string(run_number_regex, null.ok=TRUE)
-  checkmate::assert_string(nuisance_file_regex, null.ok=TRUE)
   checkmate::assert_integerish(drop_volumes)
   checkmate::assert_character(glm_software)
   checkmate::assert_logical(use_preconvolve, null.ok=FALSE)
@@ -195,8 +197,6 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     #l1 analysis details
     fmri_file_regex=fmri_file_regex,
     fmri_path_regex=fmri_path_regex,
-    nuisance_file_regex=nuisance_file_regex,
-    nuisance_file_columns=nuisance_file_columns,
     run_number_regex=run_number_regex,
     drop_volumes=drop_volumes,
     use_preconvolve=use_preconvolve,
