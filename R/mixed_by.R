@@ -1,5 +1,6 @@
 #' @param df A data.frame or data.table object containing stacked data for each combination of the \code{split_on}
-#'   variables. The function will run separate mixed-effect models for each combination
+#'   variables. The function will run separate mixed-effect models for each combination. Alternatively, a vector of filenames
+#'   can be passed, which will be read in sequentially and fit (.rds, .csv, .dat, and .txt supported at present).
 #' @param outcomes A character vector of outcome variables to be analyzed
 #' @param rhs_model_formulae A lme4-format formula specifying the exact model to be run for each data split.
 #' @param split_on A character vector of columns in \code{df} used to split the analyses into separate models.
@@ -39,16 +40,18 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   require(iterators)
   require(broom.mixed)
   
-  checkmate::assert_data_frame(df)
+  ## VALIDATE INPUTS
+  #support data.frame input for single dataset execution or a vector of files that are imported and fit sequentially
+  if (checkmate::test_data_frame(df)) {
+    single_df <- TRUE
+  } else {
+    if (!checkmate::test_character(df)) { stop("If df is not a data.frame, it should be a set of file names.") }
+    checkmate::assert_file_exists(df)
+    single_df <- FALSE
+  }
+  
   checkmate::assert_character(outcomes, null.ok=FALSE)
-  checkmate::assert_subset(outcomes, names(df))
   checkmate::assert_character(split_on, null.ok=TRUE)
-  checkmate::assert_subset(split_on, names(df))
-  if (is.null(split_on)) {
-    split_on <- "split" #dummy split to make code function consistently
-    df$split <- factor(1)
-    has_split <- FALSE
-  } else { has_split <- TRUE }
   if (!is.list(padjust_by)) { padjust_by <- list(padjust_by) } #convert to list for consistency
   sapply(padjust_by, checkmate::assert_character)
   checkmate::assert_string(padjust_method)
@@ -67,8 +70,8 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   }
   
   #worker subfunction to fit a given model to a data split
-  model_worker <- function(df, model_formula, lmer_control) {
-    md <-  lmerTest::lmer(model_formula, df, control=lmer_control)
+  model_worker <- function(data, model_formula, lmer_control) {
+    md <-  lmerTest::lmer(model_formula, data, control=lmer_control)
     
     if (refit_on_nonconvergence > 0L) {
       rfc <- 0
@@ -85,9 +88,13 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   }
   
   #convert to data.table and nest
-  dt <- data.table(df)
-  setkeyv(dt, split_on)
-  dt <- dt[, .(data=list(.SD)), by=split_on] #nest data.tables for each combination of split factors
+  if (isTRUE(single_df)) {
+    dt <- data.table(df)
+    rm(df) #avoid any lingering RAM demand
+    df_set <- c("internal")
+  } else {
+    df_set <- df
+  }
   
   #setup parallel compute
   if (ncores > 1L) {
@@ -100,30 +107,66 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   
   model_set <- expand.grid(outcome=outcomes, rhs=rhs_model_formulae)
   
-  #loop over outcomes and rhs formulae within each chunk to maximize compute time by chunk (reduce worker overhead)
-  mresults <- foreach(thisdf=iter(dt, by="row"), .packages=c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed"), 
-                      .noexport="dt", .export="split_on", .combine=rbind) %dopar% 
-    {
-      
-      split_results <- lapply(1:nrow(model_set), function(mm) {
-        ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) #replace LHS
-        ret <- copy(thisdf)
-        thism <- model_worker(as_tibble(ret$data[[1]]), ff, lmer_control)
-        ret[, data := NULL] #drop original data
-        ret[, outcome := model_set$outcome[[mm]] ]
-        ret[, model_name := names(model_set$rhs)[mm] ]
-        ret[, rhs := as.character(model_set$rhs[mm]) ]
-        #ret[, model := list(list(thism))] #not sure why a double list is needed, but a single list does not make a list-column
-        ret[, coef_df := list(do.call(tidy, append(tidy_args, x=thism)))]
-        return(ret)
-      })
-      
-      split_results <- rbindlist(split_results)
-      coef_df <- split_results[, coef_df[[1]], by=.(outcome, model_name, rhs)] #unnest coefficients
-      coef_df <- cbind(thisdf[, ..split_on], coef_df) #add back metadata for this split
-      
-      coef_df #return
+  #loop over each dataset to be fit
+  for (i in seq_along(df_set)) {
+    df_i <- df_set[i]
+    #read each dataset if operating in multiple df scenario
+    if (isFALSE(single_df)) {
+      message("Reading file: ", df_i)
+      if (grepl(".rds$", df_i)) {
+        dt <- data.table(readRDS(df_i))
+      } else if (grepl("(.csv|.csv.gz|.csv.bz2|.dat|.txt|.txt.gz|.txt.bz2)", df_i, perl=TRUE)) {
+        dt <- data.table(fread(df_i))
+      } else {
+        stop("Unable to sort out this df input: ", df_i)
+      }
     }
+    
+    #validate structure of data against models to be fit
+    checkmate::assert_subset(outcomes, names(dt))
+    checkmate::assert_subset(split_on, names(dt))
+    if (is.null(split_on)) {
+      split_on <- "split" #dummy split to make code function consistently
+      dt$split <- factor(1)
+      has_split <- FALSE
+    } else { has_split <- TRUE }
+    
+    #nest data.tables for each combination of split factors
+    setkeyv(dt, split_on)
+    dt <- dt[, .(data=list(.SD)), by=split_on]
+    
+    mresults <- vector(mode = "list", length(df_set)) #preallocate list
+    
+    #loop over outcomes and rhs formulae within each chunk to maximize compute time by chunk (reduce worker overhead)
+    mresults[[i]] <- foreach(dt_split=iter(dt, by="row"), .packages=c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed"), 
+                             .noexport="dt", .export="split_on", .combine=rbind) %dopar% 
+      {
+        
+        split_results <- lapply(1:nrow(model_set), function(mm) {
+          ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) #replace LHS
+          ret <- copy(dt_split)
+          thism <- model_worker(as_tibble(ret$data[[1]]), ff, lmer_control)
+          ret[, data := NULL] #drop original data
+          ret[, outcome := model_set$outcome[[mm]] ]
+          ret[, model_name := names(model_set$rhs)[mm] ]
+          ret[, rhs := as.character(model_set$rhs[mm]) ]
+          #ret[, model := list(list(thism))] #not sure why a double list is needed, but a single list does not make a list-column
+          ret[, coef_df := list(do.call(tidy, append(tidy_args, x=thism)))]
+          return(ret)
+        })
+        
+        split_results <- rbindlist(split_results)
+        coef_df <- split_results[, coef_df[[1]], by=.(outcome, model_name, rhs)] #unnest coefficients
+        coef_df <- cbind(dt_split[, ..split_on], coef_df) #add back metadata for this split
+        
+        coef_df #return
+      }
+  }
+  
+  #need to put this above, but trying to avoid tmp objects
+  #dt[, filename:=df_i] #tag for later
+  
+  mresults <- rbindlist(mresults) #combine results from each df (in the multiple df case)
   
   #compute adjusted p values
   if (!is.null(padjust_by)) {
