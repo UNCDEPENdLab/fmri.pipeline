@@ -1,0 +1,169 @@
+#' @param df A data.frame or data.table object containing stacked data for each combination of the \code{split_on}
+#'   variables. The function will run separate mixed-effect models for each combination
+#' @param outcomes A character vector of outcome variables to be analyzed
+#' @param rhs_model_formulae A lme4-format formula specifying the exact model to be run for each data split.
+#' @param split_on A character vector of columns in \code{df} used to split the analyses into separate models.
+#' @param padjust_by A character vector or list consisting of one or more variables over which an adjusted p-value
+#'   should be calculated. This defaults to adjusting by each term (fixed effect) in the model, which will adjust for
+#'   all tests for a given term across variables in \code{split_on}.
+#' @param padjust_method The adjustment method (see \code{?p.adjust}) for adjusting p-values. Multiple values
+#'   can be passed as a character vector, in which case multiple corrections will be added as distinct columns.
+#' @ncores The number of compute cores to be used in the computation. Defaults to 1.
+#' @refit_on_nonconvergence The number of times a model should be refit if it does not converge. Final estimates
+#'   from one iteration are used as starting values for the next.
+#' @tidy_args A list of arguments passed to tidy.merMod for creating the coefficient data.frame. By default,
+#'   the function only returns the fixed effects and computes confidence intervals using the Wald method.
+#' @param lmer_control An lmerControl object specifying any optimization settings to be passed to lmer()
+#' 
+#' @return A data.table object containing all coefficients for each model estimated separately by \code{split_on}
+#' 
+#' @importFrom lmerTest lmer
+#' @importFrom lme4 lmerControl
+#' @importFrom checkmate assert_data_frame assert_character assert_subset assert_formula
+#' @importFrom foreach %dopar% foreach registerDoSEQ
+#' @importFrom iterators iter
+#' @importFrom parallel makeCluster stopCluster
+#' @importFrom doParallel registerDoParallel
+#' @importFrom broom.mixed tidy
+mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, padjust_by="term",
+                     padjust_method="BY", ncores=1L, refit_on_nonconvergence=3, pkg="data.table",
+                     tidy_args=list(effects="fixed", conf.int=TRUE),
+                     lmer_control=lmerControl(optimizer = "nloptwrap")) {
+  
+  require(data.table) #remove for package
+  require(dplyr)
+  require(lme4)
+  require(lmerTest)
+  require(foreach)
+  require(doParallel)
+  require(iterators)
+  require(broom.mixed)
+  
+  checkmate::assert_data_frame(df)
+  checkmate::assert_character(outcomes, null.ok=FALSE)
+  checkmate::assert_subset(outcomes, names(df))
+  checkmate::assert_character(split_on, null.ok=TRUE)
+  checkmate::assert_subset(split_on, names(df))
+  if (is.null(split_on)) {
+    split_on <- "split" #dummy split to make code function consistently
+    df$split <- factor(1)
+    has_split <- FALSE
+  } else { has_split <- TRUE }
+  if (!is.list(padjust_by)) { padjust_by <- list(padjust_by) } #convert to list for consistency
+  sapply(padjust_by, checkmate::assert_character)
+  checkmate::assert_string(padjust_method)
+  checkmate::assert_integerish(ncores, lower = 1L)
+  
+  #turn off refitting if user specifies 'FALSE'
+  if (is.logical(refit_on_nonconvergence) && isFALSE(refit_on_nonconvergence)) { refit_on_nonconvergence <- 0L }
+  checkmate::assert_integerish(refit_on_nonconvergence, null.ok=FALSE)
+  
+  if (inherits(rhs_model_formulae, "formula")) { rhs_model_formulae <- list(rhs_model_formulae) } #wrap as list
+  lapply(rhs_model_formulae, checkmate::assert_formula)
+  if (is.null(names(rhs_model_formulae))) {
+    nm <- paste0("model", seq_along(rhs_model_formulae))
+    message("Using default model names of ", nm)
+    names(rhs_model_formulae) <- nm
+  }
+  
+  #worker subfunction to fit a given model to a data split
+  model_worker <- function(df, model_formula, lmer_control) {
+    md <-  lmerTest::lmer(model_formula, df, control=lmer_control)
+    
+    if (refit_on_nonconvergence > 0L) {
+      rfc <- 0
+      while (any(grepl("failed to converge", md@optinfo$conv$lme4$messages)) && rfc < refit_on_nonconvergence) {
+        #print(md@optinfo$conv$lme4$conv)
+        ss <- getME(md,c("theta","fixef"))
+        lmod <- lmer_control
+        lmod$optimizer <- "bobyqa" #produces convergence more reliably
+        md <- update(md, start=ss, control=lmod)
+        rfc <- rfc + 1 #increment refit counter
+      }
+    }
+    return(md)
+  }
+  
+  if (pkg=="tidyr") {
+    #use tidyverse
+    dt <- df %>% nest_by(all_of(across(split_on)), .key="data")
+  } else {
+    dt <- data.table(df)
+    setkeyv(dt, split_on)
+    dt <- dt[, .(data=list(.SD)), by=split_on] #nest data.tables for each combination of split factors
+  }
+  
+  #setup parallel compute
+  if (ncores > 1L) {
+    cl <- makeCluster(ncores)
+    registerDoParallel(cl)
+    on.exit(try(stopCluster(cl)))
+  } else {
+    registerDoSEQ()
+  }
+  
+  model_set <- expand.grid(outcome=outcomes, rhs=rhs_model_formulae)
+  
+  #loop over outcomes and rhs formulae within each chunk to maximize compute time by chunk (reduce worker overhead)
+  mresults <- foreach(thisdf=iter(dt, by="row"), .packages=c("lme4", "lmerTest", "data.table", "dplyr", "tidyr", "broom.mixed"), 
+                      .noexport="dt", .export="split_on", .combine=rbind) %dopar% {
+    if (pkg=="tidyr") {
+      split_results <- lapply(1:nrow(model_set), function(mm) {
+        ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) #replace LHS
+        thism <- model_worker(thisdf$data[[1]], ff, lmer_control)
+        minfo <- tibble(outcome=model_set$outcome[[mm]], 
+                        model_name=names(model_set$rhs)[mm], 
+                        rhs=as.character(model_set$rhs[mm]))
+        ret <- thisdf %>% dplyr::select(-data) %>% bind_cols(minfo) %>%
+          bind_cols(tibble(model_obj=list(thism), coef_df=list(tidy(thism)))) %>%
+          dplyr::select(-model_obj)
+        return(ret)
+      })
+      split_results <- bind_rows(split_results)
+      coef_df <- split_results %>% unnest(coef_df)
+    } else if (pkg=="data.table") {
+      split_results <- lapply(1:nrow(model_set), function(mm) {
+        ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) #replace LHS
+        ret <- copy(thisdf)
+        thism <- model_worker(as_tibble(ret$data[[1]]), ff, lmer_control)
+        ret[, data := NULL] #drop original data
+        ret[, outcome := model_set$outcome[[mm]] ]
+        ret[, model_name := names(model_set$rhs)[mm] ]
+        ret[, rhs := as.character(model_set$rhs[mm]) ]
+        #ret[, model := list(list(thism))] #not sure why a double list is needed, but a single list does not make a list-column
+        ret[, coef_df := list(do.call(tidy, append(tidy_args, x=thism)))]
+        return(ret)
+      })
+      split_results <- rbindlist(split_results)
+      coef_df <- split_results[, coef_df[[1]], by=.(outcome, model_name, rhs)]
+      coef_df <- cbind(thisdf[, ..split_on], coef_df) #add back metadata for this split
+    }
+    
+    coef_df #return
+  }
+  
+  #compute adjusted p values
+  if (!is.null(padjust_by)) {
+    checkmate::assert_subset(padjust_method, c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr", "none"))
+    for (ff in padjust_by) {
+      checkmate::assert_subset(ff, names(mresults))
+      cname <- paste0("padj_", padjust_method, "_", paste(ff, collapse="_"))
+      mresults <- mresults[, (cname) := p.adjust(p.value, method=padjust_method), by=ff]   
+    }
+  }
+  
+  #drop off dummy split if irrelevant
+  if (isFALSE(has_split)) { mresults[, split := NULL] }
+  
+  return(mresults)
+  
+}
+
+
+#tiny worker to split a data frame on a character vector
+# split_df <- function(d, vars, drop=TRUE) {
+#   base::split(d, lapply(vars, function(xx) { get(xx, as.environment(d)) }), drop=drop)
+# }
+
+#split data into a list -- on further reflection, the keyed/nested data.frame is easier to work with
+# to_model <- split_df(df, split_on)
