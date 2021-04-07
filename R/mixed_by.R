@@ -26,7 +26,7 @@
 #' @importFrom doParallel registerDoParallel
 #' @importFrom broom.mixed tidy
 mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, padjust_by="term",
-                     padjust_method="BY", ncores=1L, refit_on_nonconvergence=3, pkg="data.table",
+                     padjust_method="BY", ncores=1L, refit_on_nonconvergence=3,
                      tidy_args=list(effects="fixed", conf.int=TRUE),
                      lmer_control=lmerControl(optimizer = "nloptwrap")) {
   
@@ -84,14 +84,10 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
     return(md)
   }
   
-  if (pkg=="tidyr") {
-    #use tidyverse
-    dt <- df %>% nest_by(all_of(across(split_on)), .key="data")
-  } else {
-    dt <- data.table(df)
-    setkeyv(dt, split_on)
-    dt <- dt[, .(data=list(.SD)), by=split_on] #nest data.tables for each combination of split factors
-  }
+  #convert to data.table and nest
+  dt <- data.table(df)
+  setkeyv(dt, split_on)
+  dt <- dt[, .(data=list(.SD)), by=split_on] #nest data.tables for each combination of split factors
   
   #setup parallel compute
   if (ncores > 1L) {
@@ -105,23 +101,10 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   model_set <- expand.grid(outcome=outcomes, rhs=rhs_model_formulae)
   
   #loop over outcomes and rhs formulae within each chunk to maximize compute time by chunk (reduce worker overhead)
-  mresults <- foreach(thisdf=iter(dt, by="row"), .packages=c("lme4", "lmerTest", "data.table", "dplyr", "tidyr", "broom.mixed"), 
-                      .noexport="dt", .export="split_on", .combine=rbind) %dopar% {
-    if (pkg=="tidyr") {
-      split_results <- lapply(1:nrow(model_set), function(mm) {
-        ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) #replace LHS
-        thism <- model_worker(thisdf$data[[1]], ff, lmer_control)
-        minfo <- tibble(outcome=model_set$outcome[[mm]], 
-                        model_name=names(model_set$rhs)[mm], 
-                        rhs=as.character(model_set$rhs[mm]))
-        ret <- thisdf %>% dplyr::select(-data) %>% bind_cols(minfo) %>%
-          bind_cols(tibble(model_obj=list(thism), coef_df=list(tidy(thism)))) %>%
-          dplyr::select(-model_obj)
-        return(ret)
-      })
-      split_results <- bind_rows(split_results)
-      coef_df <- split_results %>% unnest(coef_df)
-    } else if (pkg=="data.table") {
+  mresults <- foreach(thisdf=iter(dt, by="row"), .packages=c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed"), 
+                      .noexport="dt", .export="split_on", .combine=rbind) %dopar% 
+    {
+      
       split_results <- lapply(1:nrow(model_set), function(mm) {
         ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) #replace LHS
         ret <- copy(thisdf)
@@ -134,13 +117,13 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
         ret[, coef_df := list(do.call(tidy, append(tidy_args, x=thism)))]
         return(ret)
       })
+      
       split_results <- rbindlist(split_results)
-      coef_df <- split_results[, coef_df[[1]], by=.(outcome, model_name, rhs)]
+      coef_df <- split_results[, coef_df[[1]], by=.(outcome, model_name, rhs)] #unnest coefficients
       coef_df <- cbind(thisdf[, ..split_on], coef_df) #add back metadata for this split
+      
+      coef_df #return
     }
-    
-    coef_df #return
-  }
   
   #compute adjusted p values
   if (!is.null(padjust_by)) {
@@ -158,12 +141,3 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   return(mresults)
   
 }
-
-
-#tiny worker to split a data frame on a character vector
-# split_df <- function(d, vars, drop=TRUE) {
-#   base::split(d, lapply(vars, function(xx) { get(xx, as.environment(d)) }), drop=drop)
-# }
-
-#split data into a list -- on further reflection, the keyed/nested data.frame is easier to work with
-# to_model <- split_df(df, split_on)
