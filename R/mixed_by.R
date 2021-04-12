@@ -4,6 +4,12 @@
 #' @param outcomes A character vector of outcome variables to be analyzed
 #' @param rhs_model_formulae A lme4-format formula specifying the exact model to be run for each data split.
 #' @param split_on A character vector of columns in \code{df} used to split the analyses into separate models.
+#' @param external_df An optional data.frame/data.table containing external data that should be joined with \code{df}
+#'   prior to model fitting. Useful if \code{df} contains external time series data and \code{external_df} is a
+#'   dataset of behavioral variables that do not vary by neural sensor/region. Optionally, this can be a single
+#'   filename to a .rds file if you want to pass in the filename, not the data itself.
+#' @param external_merge_by A character vector specifying which columns of \code{external_df} and \code{df} should
+#'   be used for creating a combined dataset.
 #' @param padjust_by A character vector or list consisting of one or more variables over which an adjusted p-value
 #'   should be calculated. This defaults to adjusting by each term (fixed effect) in the model, which will adjust for
 #'   all tests for a given term across variables in \code{split_on}.
@@ -26,8 +32,8 @@
 #' @importFrom parallel makeCluster stopCluster
 #' @importFrom doParallel registerDoParallel
 #' @importFrom broom.mixed tidy
-mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, padjust_by="term",
-                     padjust_method="BY", ncores=1L, refit_on_nonconvergence=3,
+mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, external_df=NULL, external_merge_by=NULL, 
+                     padjust_by="term", padjust_method="BY", ncores=1L, refit_on_nonconvergence=3,
                      tidy_args=list(effects="fixed", conf.int=TRUE),
                      lmer_control=lmerControl(optimizer = "nloptwrap")) {
   
@@ -67,6 +73,19 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
     nm <- paste0("model", seq_along(rhs_model_formulae))
     message("Using default model names of ", nm)
     names(rhs_model_formulae) <- nm
+  }
+  
+  #handle external_df
+  if (!is.null(external_df)) { 
+    if (checkmate::test_string(external_df)) {
+      checkmate::assert_file_exists(external_df)
+      external_df <- readRDS(external_df) #only supports .rds at the moment
+    } else {
+      checkmate::assert_data_frame(external_df)
+      if (!is.data.table(external_df)) { external_df <- data.table(external_df) }
+      checkmate::assert_subset(external_merge_by, names(external_df))
+      setkeyv(external_df, external_merge_by) #key external data by merge columns
+    }
   }
   
   #worker subfunction to fit a given model to a data split
@@ -130,6 +149,12 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
       dt$split <- factor(1)
       has_split <- FALSE
     } else { has_split <- TRUE }
+    
+    #handle external df, if requested
+    if (!is.null(external_df)) {
+      checkmate::assert_subset(external_merge_by, names(dt))
+      dt <- merge(dt, external_df, by=external_merge_by)
+    }
     
     #nest data.tables for each combination of split factors
     setkeyv(dt, split_on)
