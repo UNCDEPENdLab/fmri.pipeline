@@ -125,10 +125,12 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   }
   
   model_set <- expand.grid(outcome=outcomes, rhs=rhs_model_formulae)
+  mresults <- vector(mode = "list", length(df_set)) #preallocate list
   
   #loop over each dataset to be fit
   for (i in seq_along(df_set)) {
     df_i <- df_set[i]
+    
     #read each dataset if operating in multiple df scenario
     if (isFALSE(single_df)) {
       message("Reading file: ", df_i)
@@ -159,8 +161,6 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
     #nest data.tables for each combination of split factors
     setkeyv(dt, split_on)
     dt <- dt[, .(data=list(.SD)), by=split_on]
-    
-    mresults <- vector(mode = "list", length(df_set)) #preallocate list
     
     #loop over outcomes and rhs formulae within each chunk to maximize compute time by chunk (reduce worker overhead)
     mresults[[i]] <- foreach(dt_split=iter(dt, by="row"), .packages=c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed"), 
