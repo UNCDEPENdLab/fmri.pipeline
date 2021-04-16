@@ -100,5 +100,9 @@ write.csv(round(example, 3), file="test_decon.csv", row.names=F, col.names=F)
 
 
 ### build glm
-trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>% mutate(rt_sec=rt_csv/1000)
+trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>% mutate(rt_sec=rt_csv/1000) %>%
+  select(-isi_onset, -iti_onset)
 result <- build_l1_model(trial_df, value_cols=c("pe_max", "v_chosen", "v_entropy"))
+
+#test modification
+result2 <- build_l1_model(trial_df, l1_model_set=result, value_cols=c("pe_max", "v_chosen", "v_entropy"))

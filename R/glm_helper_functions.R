@@ -239,6 +239,18 @@ generate_motion_regressors <- function(motion_params = "motion.par",
   ##   }
   ## }
 
+  ##add CSF and WM regressors (with their derivatives)
+  ## nuisancefile <- file.path(dirname(mr_files[rr]), "nuisance_regressors.txt")
+  ## if (file.exists(nuisancefile)) {
+  ##   nuisance <- read.table(nuisancefile, header=FALSE)
+  ##   nuisance <- nuisance[(1+drop_volumes):runlengths[rr],,drop=FALSE]
+  ##   nuisance <- as.data.frame(lapply(nuisance, function(col) { col - mean(col) })) #demean
+  ##   #cat("about to cbind with nuisance\n")
+  ##   #print(str(mregressors))
+  ##   #print(str(nuisance))
+  ##   if (!is.null(mregressors)) { mregressors <- cbind(mregressors, nuisance) #note that in R 3.3.0, cbind with NULL or c() is no problem...
+  ##   } else { mregressors <- nuisance }
+  ## }
   
   return(mot)
 }

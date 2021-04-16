@@ -25,14 +25,6 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
   if (isTRUE(gpa$log_txt)) { lg$add_appender(lgr::AppenderFile$new("setup_l1_models.txt"), name="txt") }
   
-## model_clock_fmri_lvl1 <- function(trial_statistics, id_col=NULL, subject_data=NULL, drop_volumes=6, ncpus=1,
-##                                   expectdir="mni_5mm_aroma", expectfile = "nfaswuktm_clock[0-9]_5.nii.gz",
-##                                   sceptic_run_signals=c("v_chosen", "v_entropy", "d_auc", "pe_max"), #which signals to model jointly in LVL1
-##                                   l1_contrasts=NULL,
-##                                   outdir=NULL, glm_software="fsl", ...) {
-
-  
-  
   #setup parallel worker pool, if requested
   if (gpa$parallel$l1_setup_cores > 1L) {
     lg$info("Initializing l1 setup cluster with %d cores", gpa$parallel$l1_setup_cores)
@@ -181,10 +173,9 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, mrfiles, run_lengths, subid, this_model,
           file=file.path(subj_out, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData")))
 
-        browser()
         if ("fsl" %in% gpa$glm_software) {
           #Setup FSL run-level models for each combination of signals
-          feat_files <- tryCatch(fsl_l1_model(d_obj, gpa, this_model),
+          feat_files <- tryCatch(fsl_l1_model(id=subid, d_obj, gpa, this_model, lg=lg),
             error=function(e) {
               lg$error("Problem running fsl_l1_model. Model: %s, Subject: %s", this_model, subid)
               lg$error("Error message: %s", as.character(e))
