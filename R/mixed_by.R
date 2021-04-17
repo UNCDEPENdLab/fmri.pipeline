@@ -116,6 +116,7 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
     df_set <- c("internal")
   } else {
     df_set <- df
+    split_on <- c(".filename", split_on) #even though we aren't splitting on this, adding it will propagate the filename to the output structure
   }
 
   #setup parallel compute
@@ -149,7 +150,6 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
         stop("Unable to sort out this df input: ", df_i)
       }
       dt[, .filename := basename(df_i)] #add filename
-      split_on <- c(".filename", split_on) #even though we aren't splitting on this, adding it will propagate the filename to the output structure
     }
 
     #validate structure of data against models to be fit
