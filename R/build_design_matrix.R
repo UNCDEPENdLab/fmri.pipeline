@@ -883,7 +883,7 @@ build_design_matrix <- function(
   concat_onsets <- lapply(design_concat, function(x) { x[,"onset"] })
 
   to_return <- list(design=dmat, design_concat=design_concat, design_convolved=dmat_convolved, design_unconvolved=dmat_unconvolved, collin_raw=collinearityDiag.raw,
-                   collin_convolve=collinearityDiag.convolve, concat_onsets=concat_onsets, run_niftis=run_niftis, run_volumes=run_volumes, tr=tr)
+                   collin_convolve=collinearityDiag.convolve, concat_onsets=concat_onsets, run_niftis=run_niftis, run_volumes=run_volumes, run_number=runs_to_output, tr=tr)
 
   to_return$design_plot <- visualize_design_matrix(concat_design_runs(to_return))
 
