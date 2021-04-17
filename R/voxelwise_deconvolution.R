@@ -53,7 +53,7 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
                                     TR=NULL, time_offset=0, atlas_files=NULL, mask=NULL, nprocs=20, save_original_ts=TRUE, algorithm="bush2011",
                                     decon_settings=list(nev_lr = .01, #neural events learning rate (default in algorithm)
                                       epsilon = .005, #convergence criterion (default)
-                                      beta = 20,
+                                      beta = 60, #best from Bush 2015 update
                                       kernel = spm_hrf(TR)$hrf, #canonical SPM difference of gammas
                                       Nresample = 25)) #for Bush 2015 only
 {
@@ -170,7 +170,7 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
 
       if (algorithm == "bush2015") {
         #use R implementation of Bush 2015 algorithm
-        alg_input <- as.matrix(read.table(temp_i))
+        alg_input <- as.matrix(data.table::fread(temp_i))
         deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("dependlab")) %do% {
           reg <- tryCatch(deconvolve_nlreg_resample(as.vector(vox_ts), kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon, Nresample=decon_settings$Nresample),
             error=function(e) { cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE); return(rep(NA, length(vox_ts))) })
@@ -180,9 +180,12 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
         }
       } else if (algorithm == "bush2011") {
         #this should use the new internal RcppArmadillo function
-        alg_input <- as.matrix(t(read.table(temp_i)))
+        alg_input <- as.matrix(t(data.table::fread(temp_i)))
         deconv_mat <- tryCatch(deconvolve_nlreg(alg_input, kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon, beta=decon_settings$beta),
-          error=function(e) { cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE); return(matrix(NA, nrow=nrow(alg_input), ncol=ncol(alg_input))) })
+          error=function(e) {
+            cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE)
+            return(matrix(NA, nrow=nrow(alg_input), ncol=ncol(alg_input)))
+          })
 
         deconv_mat <- t(deconv_mat) #Rcpp function is time x voxels...
       } else if (algorithm == "bush2011_external") {
@@ -201,7 +204,7 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
         }
 
         if (is.null(decon_bin)) {
-          alg_input <- as.matrix(read.table(temp_i))
+          alg_input <- as.matrix(data.table::fread(temp_i))
           deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("dependlab")) %do% {
             reg <- tryCatch(deconvolve_nlreg(as.vector(vox_ts), kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon),
               error=function(e) { cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE); return(rep(NA, length(vox_ts))) })
