@@ -15,10 +15,12 @@
 #'   all tests for a given term across variables in \code{split_on}.
 #' @param padjust_method The adjustment method (see \code{?p.adjust}) for adjusting p-values. Multiple values
 #'   can be passed as a character vector, in which case multiple corrections will be added as distinct columns.
-#' @ncores The number of compute cores to be used in the computation. Defaults to 1.
-#' @refit_on_nonconvergence The number of times a model should be refit if it does not converge. Final estimates
+#' @param ncores The number of compute cores to be used in the computation. Defaults to 1.
+#' @param cl An optional external cl object (created by a variant of makeCluster) used for computation. Can
+#'   save the overhead of starting and stopping many workers in a loop context.
+#' @param refit_on_nonconvergence The number of times a model should be refit if it does not converge. Final estimates
 #'   from one iteration are used as starting values for the next.
-#' @tidy_args A list of arguments passed to tidy.merMod for creating the coefficient data.frame. By default,
+#' @param tidy_args A list of arguments passed to tidy.merMod for creating the coefficient data.frame. By default,
 #'   the function only returns the fixed effects and computes confidence intervals using the Wald method.
 #' @param lmer_control An lmerControl object specifying any optimization settings to be passed to lmer()
 #'
@@ -33,7 +35,7 @@
 #' @importFrom doParallel registerDoParallel
 #' @importFrom broom.mixed tidy
 mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, external_df=NULL, external_merge_by=NULL,
-                     padjust_by="term", padjust_method="BY", ncores=1L, refit_on_nonconvergence=3,
+                     padjust_by="term", padjust_method="BY", ncores=1L, cl=NULL, refit_on_nonconvergence=3,
                      tidy_args=list(effects="fixed", conf.int=TRUE),
                      lmer_control=lmerControl(optimizer = "nloptwrap")) {
 
@@ -62,6 +64,7 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   sapply(padjust_by, checkmate::assert_character, null.ok=TRUE)
   checkmate::assert_string(padjust_method)
   checkmate::assert_integerish(ncores, lower = 1L)
+  checkmate::assert_class(cl, "cluster", null.ok=TRUE)
 
   #turn off refitting if user specifies 'FALSE'
   if (is.logical(refit_on_nonconvergence) && isFALSE(refit_on_nonconvergence)) { refit_on_nonconvergence <- 0L }
@@ -116,10 +119,14 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   }
 
   #setup parallel compute
-  if (ncores > 1L) {
+  if (ncores > 1L && is.null(cl)) {
     cl <- makeCluster(ncores)
     registerDoParallel(cl)
     on.exit(try(stopCluster(cl)))
+  } else if (!is.null(cl)) {
+    message("Using external cl object for parallelism. mixed_by will not stop the cluster upon completion.")
+    message("Use stopCluster() yourself when done with all computation.")
+    registerDoParallel(cl, cores=ncores)
   } else {
     registerDoSEQ()
   }
