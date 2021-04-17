@@ -60,8 +60,10 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
 
   checkmate::assert_character(outcomes, null.ok=FALSE)
   checkmate::assert_character(split_on, null.ok=TRUE)
-  if (!is.list(padjust_by)) { padjust_by <- list(padjust_by) } #convert to list for consistency
-  sapply(padjust_by, checkmate::assert_character, null.ok=TRUE)
+  if (!is.null(padjust_by)) {
+    if (!is.list(padjust_by)) { padjust_by <- list(padjust_by) } #convert to list for consistency
+    sapply(padjust_by, checkmate::assert_character, null.ok=TRUE)
+  }
   checkmate::assert_string(padjust_method)
   checkmate::assert_integerish(ncores, lower = 1L)
   checkmate::assert_class(cl, "cluster", null.ok=TRUE)
