@@ -148,6 +148,8 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
       } else {
         stop("Unable to sort out this df input: ", df_i)
       }
+      dt[, .filename := basename(df_i)] #add filename
+      split_on <- c(".filename", split_on) #even though we aren't splitting on this, adding it will propagate the filename to the output structure
     }
 
     #validate structure of data against models to be fit
@@ -171,7 +173,7 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
 
     #loop over outcomes and rhs formulae within each chunk to maximize compute time by chunk (reduce worker overhead)
     mresults[[i]] <- foreach(dt_split=iter(dt, by="row"), .packages=c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed"),
-                             .noexport="dt", .export="split_on", .combine=rbind) %dopar%
+                             .noexport="dt", .export="split_on", .inorder=FALSE, .combine=rbind) %dopar%
       {
 
         split_results <- lapply(1:nrow(model_set), function(mm) {
@@ -199,6 +201,7 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   #dt[, filename:=df_i] #tag for later
 
   mresults <- rbindlist(mresults) #combine results from each df (in the multiple df case)
+  setorderv(mresults, split_on) #since we allow out-of-order foreach, reorder coefs here.
 
   #compute adjusted p values
   if (!is.null(padjust_by)) {
