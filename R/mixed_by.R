@@ -15,6 +15,8 @@
 #'   all tests for a given term across variables in \code{split_on}.
 #' @param padjust_method The adjustment method (see \code{?p.adjust}) for adjusting p-values. Multiple values
 #'   can be passed as a character vector, in which case multiple corrections will be added as distinct columns.
+#' @param outcome_transform A vectorized function that will be applied to the outcome variable prior to running
+#'   the model. For example, \code{outcome_transform=function(x) { as.vector(scale(x)) } }.
 #' @param ncores The number of compute cores to be used in the computation. Defaults to 1.
 #' @param cl An optional external cl object (created by a variant of makeCluster) used for computation. Can
 #'   save the overhead of starting and stopping many workers in a loop context.
@@ -35,7 +37,8 @@
 #' @importFrom doParallel registerDoParallel
 #' @importFrom broom.mixed tidy
 mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, external_df=NULL, external_merge_by=NULL,
-                     padjust_by="term", padjust_method="BY", ncores=1L, cl=NULL, refit_on_nonconvergence=3,
+                     padjust_by="term", padjust_method="BY", outcome_transform=NULL,
+                     ncores=1L, cl=NULL, refit_on_nonconvergence=3,
                      tidy_args=list(effects="fixed", conf.int=TRUE),
                      lmer_control=lmerControl(optimizer = "nloptwrap")) {
 
@@ -94,7 +97,12 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   }
 
   #worker subfunction to fit a given model to a data split
-  model_worker <- function(data, model_formula, lmer_control) {
+  model_worker <- function(data, model_formula, lmer_control, outcome_transform=NULL) {
+    if (!is.null(outcome_transform)) { #apply transformation to outcome
+      lhs <- all.vars(model_formula)[1]
+      data[[lhs]] <- outcome_transform(data[[lhs]])
+    }
+
     md <-  lmerTest::lmer(model_formula, data, control=lmer_control)
 
     if (refit_on_nonconvergence > 0L) {
@@ -183,7 +191,7 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
         split_results <- lapply(1:nrow(model_set), function(mm) {
           ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) #replace LHS
           ret <- copy(dt_split)
-          thism <- model_worker(as_tibble(ret$data[[1]]), ff, lmer_control)
+          thism <- model_worker(as_tibble(ret$data[[1]]), ff, lmer_control, outcome_transform)
           ret[, data := NULL] #drop original data
           ret[, outcome := model_set$outcome[[mm]] ]
           ret[, model_name := names(model_set$rhs)[mm] ]
