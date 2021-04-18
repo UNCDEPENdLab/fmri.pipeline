@@ -155,8 +155,6 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
     }
 
     #validate structure of data against models to be fit
-    checkmate::assert_subset(outcomes, names(dt))
-    checkmate::assert_subset(split_on, names(dt))
     if (is.null(split_on)) {
       split_on <- "split" #dummy split to make code function consistently
       dt$split <- factor(1)
@@ -168,6 +166,10 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
       checkmate::assert_subset(external_merge_by, names(dt))
       dt <- merge(dt, external_df, by=external_merge_by)
     }
+
+    #verify that outcomes and split variables are present in data
+    checkmate::assert_subset(outcomes, names(dt))
+    checkmate::assert_subset(split_on, names(dt))
 
     #nest data.tables for each combination of split factors
     setkeyv(dt, split_on)
