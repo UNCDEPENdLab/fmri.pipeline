@@ -62,7 +62,7 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   }
 
   checkmate::assert_character(outcomes, null.ok=FALSE)
-  checkmate::assert_character(split_on, null.ok=TRUE)
+  checkmate::assert_character(split_on, null.ok=TRUE, unique = TRUE)
   if (!is.null(padjust_by)) {
     if (!is.list(padjust_by)) { padjust_by <- list(padjust_by) } #convert to list for consistency
     sapply(padjust_by, checkmate::assert_character, null.ok=TRUE)
@@ -126,7 +126,8 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
     df_set <- c("internal")
   } else {
     df_set <- df
-    split_on <- c(".filename", split_on) #even though we aren't splitting on this, adding it will propagate the filename to the output structure
+    #even though we aren't splitting on this, adding it will propagate the filename to the output structure
+    if (! ".filename" %in% split_on) { split_on <- c(".filename", split_on) }
   }
 
   #setup parallel compute
@@ -191,7 +192,7 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
         split_results <- lapply(1:nrow(model_set), function(mm) {
           ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) #replace LHS
           ret <- copy(dt_split)
-          thism <- model_worker(as_tibble(ret$data[[1]]), ff, lmer_control, outcome_transform)
+          thism <- model_worker(ret$data[[1]], ff, lmer_control, outcome_transform)
           ret[, data := NULL] #drop original data
           ret[, outcome := model_set$outcome[[mm]] ]
           ret[, model_name := names(model_set$rhs)[mm] ]
