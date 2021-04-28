@@ -1,14 +1,14 @@
-#' @param df A data.frame or data.table object containing stacked data for each combination of the \code{split_on}
+#' @param data A data.frame or data.table object containing stacked data for each combination of the \code{split_on}
 #'   variables. The function will run separate mixed-effect models for each combination. Alternatively, a vector of filenames
 #'   can be passed, which will be read in sequentially and fit (.rds, .csv, .dat, and .txt supported at present).
 #' @param outcomes A character vector of outcome variables to be analyzed
 #' @param rhs_model_formulae A lme4-format formula specifying the exact model to be run for each data split.
-#' @param split_on A character vector of columns in \code{df} used to split the analyses into separate models.
-#' @param external_df An optional data.frame/data.table containing external data that should be joined with \code{df}
-#'   prior to model fitting. Useful if \code{df} contains external time series data and \code{external_df} is a
+#' @param split_on A character vector of columns in \code{data} used to split the analyses into separate models.
+#' @param external_df An optional data.frame/data.table containing external data that should be joined with \code{data}
+#'   prior to model fitting. Useful if \code{data} contains external time series data and \code{external_df} is a
 #'   dataset of behavioral variables that do not vary by neural sensor/region. Optionally, this can be a single
 #'   filename to a .rds file if you want to pass in the filename, not the data itself.
-#' @param external_merge_by A character vector specifying which columns of \code{external_df} and \code{df} should
+#' @param external_merge_by A character vector specifying which columns of \code{external_df} and \code{data} should
 #'   be used for creating a combined dataset.
 #' @param padjust_by A character vector or list consisting of one or more variables over which an adjusted p-value
 #'   should be calculated. This defaults to adjusting by each term (fixed effect) in the model, which will adjust for
@@ -36,7 +36,7 @@
 #' @importFrom parallel makeCluster stopCluster
 #' @importFrom doParallel registerDoParallel
 #' @importFrom broom.mixed tidy
-mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, external_df=NULL, external_merge_by=NULL,
+mixed_by <- function(data, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, external_df=NULL, external_merge_by=NULL,
                      padjust_by="term", padjust_method="BY", outcome_transform=NULL,
                      ncores=1L, cl=NULL, refit_on_nonconvergence=3,
                      tidy_args=list(effects="fixed", conf.int=TRUE),
@@ -53,11 +53,11 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
 
   ## VALIDATE INPUTS
   #support data.frame input for single dataset execution or a vector of files that are imported and fit sequentially
-  if (checkmate::test_data_frame(df)) {
+  if (checkmate::test_data_frame(data)) {
     single_df <- TRUE
   } else {
-    if (!checkmate::test_character(df)) { stop("If df is not a data.frame, it should be a set of file names.") }
-    checkmate::assert_file_exists(df)
+    if (!checkmate::test_character(data)) { stop("If data is not a data.frame, it should be a set of file names.") }
+    checkmate::assert_file_exists(data)
     single_df <- FALSE
   }
 
@@ -90,7 +90,7 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
       external_df <- readRDS(external_df) #only supports .rds at the moment
     } else {
       checkmate::assert_data_frame(external_df)
-      if (!is.data.table(external_df)) { external_df <- data.table(external_df) }
+      if (!is.data.table(external_df)) { setDT(external_df) }
       checkmate::assert_subset(external_merge_by, names(external_df))
       setkeyv(external_df, external_merge_by) #key external data by merge columns
     }
@@ -121,11 +121,13 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
 
   #convert to data.table and nest
   if (isTRUE(single_df)) {
-    dt <- data.table(df)
-    rm(df) #avoid any lingering RAM demand
+    if (!is.data.table(data)) { setDT(data) } #convert to data.table by reference to avoid RAM copy
+    #bad idea -- will copy data and then original dataset is maintained in calling environment after rm() since it is not fully dereferenced
+    #dt <- data.table(data)
+    #rm(data) #avoid any lingering RAM demand
     df_set <- c("internal")
   } else {
-    df_set <- df
+    df_set <- data
     #even though we aren't splitting on this, adding it will propagate the filename to the output structure
     if (! ".filename" %in% split_on) { split_on <- c(".filename", split_on) }
   }
@@ -150,50 +152,51 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   for (i in seq_along(df_set)) {
     df_i <- df_set[i]
 
-    #read each dataset if operating in multiple df scenario
+    #read each dataset if operating in multiple data scenario
     if (isFALSE(single_df)) {
       message("Reading file: ", df_i)
       if (grepl(".rds$", df_i)) {
-        dt <- data.table(readRDS(df_i))
+        data <- readRDS(df_i)
+        if (!is.data.table(data)) { setDT(data) }
       } else if (grepl("(.csv|.csv.gz|.csv.bz2|.dat|.txt|.txt.gz|.txt.bz2)", df_i, perl=TRUE)) {
-        dt <- data.table(fread(df_i))
+        data <- fread(df_i, data.table = TRUE)
       } else {
-        stop("Unable to sort out this df input: ", df_i)
+        stop("Unable to sort out this data input: ", df_i)
       }
-      dt[, .filename := basename(df_i)] #add filename
+      data[, .filename := basename(df_i)] #add filename
     }
 
     #validate structure of data against models to be fit
     if (is.null(split_on)) {
       split_on <- "split" #dummy split to make code function consistently
-      dt$split <- factor(1)
+      data[, split := factor(1)]
       has_split <- FALSE
     } else { has_split <- TRUE }
 
-    #handle external df, if requested
+    #handle external_df, if requested
     if (!is.null(external_df)) {
-      checkmate::assert_subset(external_merge_by, names(dt))
-      dt <- merge(dt, external_df, by=external_merge_by)
+      checkmate::assert_subset(external_merge_by, names(data))
+      data <- merge(data, external_df, by=external_merge_by)
     }
 
     #verify that outcomes and split variables are present in data
-    checkmate::assert_subset(outcomes, names(dt))
-    checkmate::assert_subset(split_on, names(dt))
+    checkmate::assert_subset(outcomes, names(data))
+    checkmate::assert_subset(split_on, names(data))
 
     #nest data.tables for each combination of split factors
-    setkeyv(dt, split_on)
-    dt <- dt[, .(data=list(.SD)), by=split_on]
+    setkeyv(data, split_on)
+    data <- data[, .(dt=list(.SD)), by=split_on]
 
     #loop over outcomes and rhs formulae within each chunk to maximize compute time by chunk (reduce worker overhead)
-    mresults[[i]] <- foreach(dt_split=iter(dt, by="row"), .packages=c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed"),
-                             .noexport="dt", .export="split_on", .inorder=FALSE, .combine=rbind) %dopar%
+    mresults[[i]] <- foreach(dt_split=iter(data, by="row"), .packages=c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed"),
+                             .noexport="data", .export="split_on", .inorder=FALSE, .combine=rbind) %dopar%
       {
 
         split_results <- lapply(1:nrow(model_set), function(mm) {
           ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) #replace LHS
           ret <- copy(dt_split)
-          thism <- model_worker(ret$data[[1]], ff, lmer_control, outcome_transform)
-          ret[, data := NULL] #drop original data
+          thism <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform)
+          ret[, dt := NULL] #drop original data.table for this split
           ret[, outcome := model_set$outcome[[mm]] ]
           ret[, model_name := names(model_set$rhs)[mm] ]
           ret[, rhs := as.character(model_set$rhs[mm]) ]
@@ -211,7 +214,7 @@ mixed_by <- function(df, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL, 
   }
 
   #need to put this above, but trying to avoid tmp objects
-  #dt[, filename:=df_i] #tag for later
+  #data[, filename:=df_i] #tag for later
 
   mresults <- rbindlist(mresults) #combine results from each df (in the multiple df case)
   setorderv(mresults, split_on) #since we allow out-of-order foreach, reorder coefs here.
