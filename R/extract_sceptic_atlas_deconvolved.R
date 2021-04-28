@@ -31,7 +31,8 @@ library(readr)
 #vestiges of things that should be passed in
 
 #verify that mr_dir is present as expected
-subinfo <- fsl_model_arguments$subject_data
+#subinfo <- fsl_model_arguments$subject_data
+subinfo <- fsl_model_arguments$subject_covariates #new nomenclature
 feat_run_outdir <- fsl_model_arguments$outdir[run_model_index] #the name of the subfolder for the current run-level model
 feat_lvl3_outdir <- file.path(fsl_model_arguments$group_output_dir, feat_run_outdir) #output directory for this run-level model
 
@@ -174,5 +175,6 @@ if (!all(fexists <- file.exists(l1_niftis))) {
 #call voxelwise_deconvolution here
 metadata <- feat_l2_inputs_df %>% dplyr::select(subid, run_num, contingency, emotion)
 
-voxelwise_deconvolution(l1_niftis, metadata, out_dir="/proj/mnhallqlab/users/michael/sceptic_decon", TR=1, time_offset=2.0, atlas_files=atlas_files, mask=NULL, nprocs=18, save_original_ts=FALSE,
+voxelwise_deconvolution(l1_niftis, metadata, out_dir="/proj/mnhallqlab/users/michael/sceptic_decon_beta60",
+  TR=1, time_offset=2.0, atlas_files=atlas_files, mask=NULL, nprocs=18, save_original_ts=FALSE,
   out_file_expression=expression(paste0("sub", this_subj$subid, "_run", this_subj$run_num, "_", atlas_img_name)))

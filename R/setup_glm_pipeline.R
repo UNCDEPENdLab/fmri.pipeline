@@ -193,6 +193,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     multi_run=multi_run, #2- or 3-level analysis
     truncate_runs=truncate_runs,
     force_l1_creation=force_l1_creation,
+    confound_settings=confound_settings,
     
     #l1 analysis details
     fmri_file_regex=fmri_file_regex,

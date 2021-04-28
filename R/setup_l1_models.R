@@ -115,6 +115,9 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
       #RNifti is unexpectedly slow compared to oro.nifti
       #run_lengths <- unname(sapply(mrfiles, function(x) { RNifti::niftiHeader(x)$dim[5L] }))
       run_lengths <- unname(sapply(mrfiles, function(x) { oro.nifti::readNIfTI(x, read_data=FALSE)@dim_[5L] }))
+
+      #we also need xyz to get number of voxels
+      #run_lengths <- unname(sapply(mrfiles, function(x) { oro.nifti::readNIfTI(x, read_data=FALSE)@dim_[5L] }))
       lg$debug("Run lengths of mrfiles: %s", paste(run_lengths, collapse=", "))
       
       ## create truncated run files to end analysis 12s after last ITI (or big head movement)
@@ -128,7 +131,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
 
       #tracking list containing data.frames for each software, where we expect one row per run-level model (FSL) or subject-level model (AFNI)
       #the structure varies because FSL estimates per-run GLMs, while AFNI concatenates.
-      l1_file_setup <- list(fsl=NULL, spm=NULL, afni=NULL)
+      l1_file_setup <- list(fsl=list(), spm=list(), afni=list())
       
       #loop over models to output
       for (ii in seq_along(to_setup)) {
@@ -175,6 +178,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
 
         if ("fsl" %in% gpa$glm_software) {
           #Setup FSL run-level models for each combination of signals
+          #Returns a data.frame of feat l1 inputs and the fsf file
           feat_files <- tryCatch(fsl_l1_model(id=subid, d_obj, gpa, this_model, lg=lg),
             error=function(e) {
               lg$error("Problem running fsl_l1_model. Model: %s, Subject: %s", this_model, subid)
@@ -183,7 +187,8 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
             })
 
           if (!is.null(feat_files)) {
-            #add to tracking data.frame
+            #add to tracking data.frame (simple append)
+            l1_file_setup$fsl <- c(l1_file_setup$fsl, list(feat_files))
           }
         }
 
@@ -198,12 +203,12 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
             })
 
         }
-
-
       }
 
+      browser()
       lg$info("Completed processing of subject: %s", subid)
+      return(l1_file_setup)
     }
-  
-  
+
+  return(ll)
 }

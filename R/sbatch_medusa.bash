@@ -4,10 +4,12 @@
 #SBATCH -N 1
 #SBATCH --mem=72g
 #SBATCH -n 18
-#SBATCH -t 2-
+#SBATCH -t 3-
 
 module use /proj/mnhallqlab/sw/modules
-module load r/4.0.1
+#module load r/4.0.1
+module load r/4.0.3_depend
+module load gsl/2.6
 module load fsl/6.0.4
 module load afni/20.1.05
 
