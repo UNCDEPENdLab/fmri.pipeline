@@ -191,7 +191,7 @@ mixed_by <- function(data, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL
     mresults[[i]] <- foreach(dt_split=iter(data, by="row"), .packages=c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed"),
                              .noexport="data", .export="split_on", .inorder=FALSE, .combine=rbind) %dopar%
       {
-
+        
         split_results <- lapply(1:nrow(model_set), function(mm) {
           ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) #replace LHS
           ret <- copy(dt_split)
@@ -204,13 +204,16 @@ mixed_by <- function(data, outcomes=NULL, rhs_model_formulae=NULL, split_on=NULL
           ret[, coef_df := list(do.call(tidy, append(tidy_args, x=thism)))]
           return(ret)
         })
-
+        
         split_results <- rbindlist(split_results)
         coef_df <- split_results[, coef_df[[1]], by=.(outcome, model_name, rhs)] #unnest coefficients
         coef_df <- cbind(dt_split[, ..split_on], coef_df) #add back metadata for this split
-
+        
         coef_df #return
       }
+    
+    rm(data) #cleanup big datasets and force memory release before next iteration
+    gc()
   }
 
   #need to put this above, but trying to avoid tmp objects
