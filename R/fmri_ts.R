@@ -79,7 +79,7 @@ fmri_ts <- R6::R6Class("fmri_ts",
       private$vmvec <- unlist(vm) #yields key1, key2, etc.
       if ("key" %in% names(vm)) { private$kvars <- paste0("key", 1:length(vm$key)) }
       if ("value" %in% names(vm)) { private$vvars <- paste0("value", 1:length(vm$value)) }
-      
+
       if (!is.null(event_data)) {
         if (!is.null(vm$id)) {
           checkmate::assert_string(vm$id)
@@ -162,7 +162,7 @@ fmri_ts <- R6::R6Class("fmri_ts",
 
       #revert to original names before we modify
       private$names_to_original(self$ts_data)
-      
+
       for (rr in 1:length(replist)) {
         this_field <- repfields[rr]
         self$vm[[this_field]] <- replist[[rr]]
@@ -185,5 +185,3 @@ fmri_ts <- R6::R6Class("fmri_ts",
     }
   )
 )
-
-

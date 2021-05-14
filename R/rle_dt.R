@@ -14,7 +14,7 @@ rle_dt <- R6::R6Class("rle_dt",
     keys=NULL,
 
     key_metadata=NULL, #at present, levels of factor and whether ordered
-    
+
     compression_ratio=NULL #savings
   ),
   public=list(
@@ -28,29 +28,29 @@ rle_dt <- R6::R6Class("rle_dt",
       checkmate::assert_data_frame(data)
       checkmate::assert_character(keys, null.ok=TRUE)
       checkmate::assert_integerish(as.numeric(optimize_order), max.len=1, lower=0)
-      
+
       dsize <- object.size(data)
-      
+
       #convert to data table for speed, memory management
       dt <- data.table::data.table(data)
       rm(data)
 
-      if (!is.null(keys)) {        
+      if (!is.null(keys)) {
         #determine nesting/ordering
         stopifnot(all(keys %in% names(dt)))
 
         data.table::setkeyv(dt, keys) #start with key and sort order provided by user
-        
+
         costs <- c()
         klist <- list()
-        optimize_order=as.integer(optimize_order)
-        
+        optimize_order <- as.integer(optimize_order)
+
         if (optimize_order != 0L) { #TRUE or numeric
           perms <- gtools::permutations(n=length(keys), r=length(keys), v=keys, repeats.allowed=FALSE)
           if (optimize_order==1L) {
             perms <- perms #test all permutations
           } else {
-            perms <- perms[sample(1:nrow(perms), min(optimize_order, nrow(perms))),] #random sample
+            perms <- perms[sample(seq_len(nrow(perms)), min(optimize_order, nrow(perms))), ] #random sample
           }
         } else {
           perms <- matrix(data=keys, nrow=1) #take keys as stated
@@ -64,23 +64,23 @@ rle_dt <- R6::R6Class("rle_dt",
         }
 
         #search for best RLE encoding of keys
-        for(ii in 1:nrow(perms)) {
-          data.table::setorderv(dt, perms[ii,])
+        for (ii in seq_len(nrow(perms))) {
+          data.table::setorderv(dt, perms[ii, ])
           klist[[ii]] <- sapply(keys, function(x) { rle(dt[[x]]) }, simplify=FALSE)
           costs[ii] <- object.size(klist[[ii]])
         }
 
         best_order <- which.min(costs)
-        data.table::setorderv(dt, perms[best_order,])
-        
+        data.table::setorderv(dt, perms[best_order, ])
+
         dt[, (keys) := NULL] #drop key columns
         private$keys <- klist[[best_order]] #set keys field
       }
 
       #set data field
       private$data <- dt
-      
-      savings <- 100*(1 - (object.size(private$data) + object.size(private$keys))/dsize)
+
+      savings <- 100 * (1 - (object.size(private$data) + object.size(private$keys))/dsize)
       message("RLE-encoding of keys savings: ", round(savings, 2), "%")
       private$compression_ratio <- savings
     },

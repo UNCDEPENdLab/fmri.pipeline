@@ -18,18 +18,18 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_character(to_setup, null.ok=TRUE)
   checkmate::assert_data_frame(gpa$subject_data)
-  
+
   #if no model subset is requested, output all models
   if (is.null(to_setup)) { to_setup <- names(gpa$l1_models$models) }
- 
+
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
   if (isTRUE(gpa$log_txt)) { lg$add_appender(lgr::AppenderFile$new("setup_l1_models.txt"), name="txt") }
-  
+
   #setup parallel worker pool, if requested
   if (gpa$parallel$l1_setup_cores > 1L) {
     lg$info("Initializing l1 setup cluster with %d cores", gpa$parallel$l1_setup_cores)
     cl <- parallel::makeCluster(gpa$parallel$l1_setup_cores)
-    doParallel::registerDoParallel(cl)    
+    doParallel::registerDoParallel(cl)
     on.exit(try(stopCluster(cl))) #cleanup pool upon exit of this function
   } else {
     lg$info("Initializing l1 setup with serial execution")
@@ -37,13 +37,13 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
   }
 
   idvec <- gpa$subject_data[[ gpa$vm["id"] ]]
-    
+
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
   ll <- foreach(subid = iter(idvec), .inorder=FALSE, .packages=c("dependlab"),
     .export=c("lg", "gpa", "truncateRuns", "fsl_l1_model", "spm_l1_model", "runFSLCommand") ) %dopar% {
 
       subj_mr_dir <- gpa$subject_data %>% filter(!!sym(gpa$vm["id"]) == !!subid) %>% pull(!!gpa$vm["mr_dir"])
-      
+
       #use specific run NIfTIs included in run_data, rather finding these by regex
       if (gpa$vm["run_nifti"] %in% names(gpa$run_data)) {
         lg$info("Using run_data to identify NIfTI files for analysis")
@@ -53,10 +53,10 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
           log$fatal("Found an unexpected number of runs (%d) for subject %s", nrow(subj_runs), subid)
           stop("Unexpected number of runs in subj_runs")
         }
-        
+
         mrfiles <- subj_runs[[ gpa$vm["run_nifti"] ]]
         mr_run_nums <- subj_runs[[ gpa$vm["run_number"] ]]
-        
+
         mr_found <- file.exists(mrfiles)
         if (any(mr_found != TRUE)) {
           lg$debug("Cannot find some files: %s. Prepend mr_dir and try again.", paste(mrfiles[!mr_found], collapse=", "))
@@ -74,19 +74,19 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         mr_run_nums <- mr_run_nums[mr_found]        
       } else {
         lg$info("Using regex-based find approach to identify run NIfTIs")
-        
+
         #find run nifti files based on directory and regular expression settings
 
         if (length(subj_mr_dir) != 1L) {
           lg$warn("Unable to find fMRI directory record in subject_data for subid: %s", subid)
           return(NULL)
         }
-        
+
         if (!dir.exists(file.path(subj_mr_dir))) {
           lg$warn("Unable to find subject data directory: %s for subid: %s", subj_mr_dir, subid)
           return(NULL)
         }
-        
+
         ## Find processed fMRI run-level data for this subject
         #mrfiles <- list.files(subj_mr_dir, pattern=gpa$fmri_file_regex, full.names=TRUE, recursive=TRUE)
         ##cat(paste0("command: find ", subj_mr_dir, " -iname '", expectfile, "' -ipath '*", expectdir, "*' -type f\n"))
@@ -97,7 +97,8 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         lg$debug("mrfiles find syntax: %s", find_string)
         mrfiles <- system(find_string, intern=TRUE)
 
-        mr_run_nums <- as.integer(sub(paste0(gpa$run_number_regex), "\\1", mrfiles, perl=TRUE)) #extract run number from file name
+        #extract run number from file name
+        mr_run_nums <- as.integer(sub(paste0(gpa$run_number_regex), "\\1", mrfiles, perl=TRUE)) 
 
         ##NB. If we reorder the mrfiles, then the run numbers diverge unless we sort(mr_run_nums). Remove for now for testing
         ##mrfiles <- mrfiles[order(mr_run_nums)] #make absolutely sure that runs are ordered ascending
@@ -119,20 +120,23 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
       #we also need xyz to get number of voxels
       #run_lengths <- unname(sapply(mrfiles, function(x) { oro.nifti::readNIfTI(x, read_data=FALSE)@dim_[5L] }))
       lg$debug("Run lengths of mrfiles: %s", paste(run_lengths, collapse=", "))
-      
+
       ## create truncated run files to end analysis 12s after last ITI (or big head movement)
       ## also handle removal of N volumes from the beginning of each run due to steady state magnetization
-      
+
       #mrdf <- truncate_runs(b, mrfiles, mr_run_nums, run_lengths, drop_volumes=drop_volumes)
-      mrdf <- data.frame(mrfile_to_analyze=mrfiles, run=mr_run_nums, last_vol_analysis=run_lengths, drop_volumes=gpa$drop_volumes)
-      
+      mrdf <- data.frame(
+        mrfile_to_analyze = mrfiles, run = mr_run_nums,
+        last_vol_analysis = run_lengths, drop_volumes = gpa$drop_volumes
+      )
+
       mrfiles <- mrdf$mrfile_to_analyze
       run_lengths <- mrdf$last_vol_analysis
 
-      #tracking list containing data.frames for each software, where we expect one row per run-level model (FSL) or subject-level model (AFNI)
-      #the structure varies because FSL estimates per-run GLMs, while AFNI concatenates.
+      # Tracking list containing data.frames for each software, where we expect one row per run-level model (FSL) 
+      # or subject-level model (AFNI). The structure varies because FSL estimates per-run GLMs, while AFNI concatenates.
       l1_file_setup <- list(fsl=list(), spm=list(), afni=list())
-      
+
       #loop over models to output
       for (ii in seq_along(to_setup)) {
         this_model <- to_setup[ii]
@@ -152,7 +156,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
           lg$info("Creating subject output directory: %s", subj_out)
           dir.create(subj_out, showWarnings=FALSE, recursive=TRUE)
         }
-        
+
         t_out <- gpa$glm_software
         if (isTRUE(gpa$use_preconvolve)) { t_out <- c("convolved", t_out) } #compute preconvolved regressors
         bdm_args <- gpa$additional$bdm_args
@@ -171,7 +175,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
           return(NULL)
         })
 
-        if (is.null(d_obj)) { next } #skip to next iteration on error       
+        if (is.null(d_obj)) { next } #skip to next iteration on error
 
         save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, mrfiles, run_lengths, subid, this_model,
           file=file.path(subj_out, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData")))
