@@ -4,7 +4,7 @@
 #' @importFrom doParallel registerDoParallel
 #' @importFrom parallel makeCluster stopCluster
 #' @importFrom iterators iter
-backproject_medusa <- function(coef_df, brain_mask, plot_cols=NULL, parcel_col="roi", time_col="time", 
+backproject_medusa <- function(coef_df, brain_mask, plot_cols=NULL, parcel_col="roi", time_col="time",
                                effect_col="term", output_dir=getwd(), ncpus=4L) {
 
   checkmate::assert_data_frame(coef_df)
@@ -85,7 +85,7 @@ backproject_medusa <- function(coef_df, brain_mask, plot_cols=NULL, parcel_col="
     }
 
     assign_mat <- do.call(rbind, assign_mat)
-    results_img[assign_mat[,1:4]] <- assign_mat[,5] #fill all voxels at once with coef values
+    results_img[assign_mat[, 1:4]] <- assign_mat[, 5] #fill all voxels at once with coef values
 
     writeNIfTI(results_img, filename=file.path(output_dir, make.names(paste(ii$pc, ii$ee, sep="_"))))
 

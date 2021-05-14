@@ -67,9 +67,6 @@ run_feat_lvl1_sepqsub <- function(gpa, run_model_index, rerun=FALSE, wait_for=""
   cat("About to run the following fsf files in parallel:\n\n")
   cat(torun, sep="\n")
 
-  # Omit emails for LVL1 estimation because it generates *many* emails
-  #  "#PBS -M michael.hallquist@psu.edu",
-  
   preamble <- c(
     "#PBS -A mnh5174_c_g_sc_default",
     paste0("#PBS -l nodes=1:ppn=", cpusperjob),
@@ -97,7 +94,7 @@ run_feat_lvl1_sepqsub <- function(gpa, run_model_index, rerun=FALSE, wait_for=""
 
   #use length.out on rep to ensure that the vectors align even if chunks are uneven wrt files to run
   df <- data.frame(fsf=torun, job=rep(1:njobs, each=cpusperjob*runsperproc, length.out=length(torun)), stringsAsFactors=FALSE)
-  df <- df[order(df$job),]
+  df <- df[order(df$job), ]
 
   joblist <- rep(NA_character_, njobs)
   for (j in 1:njobs) {

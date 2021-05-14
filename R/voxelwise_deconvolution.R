@@ -40,7 +40,7 @@
 #'   }
 #'
 #' @return Nothing (invisible NULL).
-#' @importFrom doparallel registerDoParallel
+#' @importFrom doParallel registerDoParallel
 #' @importFrom parallel makeCluster
 #' @importFrom data.table fread
 #' @importFrom oro.nifti readNIfTI translateCoordinate

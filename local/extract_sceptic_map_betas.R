@@ -193,7 +193,7 @@ for (l1 in 1:n_l1_copes) {
             return(sub("(^\\s*|\\s*$)", "", sec[atlaslines+1], perl=TRUE)) #first match after atlas for each cluster          
           }
         })
-        
+
         coordlines <- grep("Focus point (LPI)=", lookup, fixed=TRUE)
         coords <- lookup[coordlines+2] #first line after header is TLRC, second is MNI
         #coords <- sub("<a href=.*$", "", coords, perl=TRUE)
@@ -202,19 +202,19 @@ for (l1 in 1:n_l1_copes) {
         coords_l <- as.numeric(sub("^\\s*(-*\\d+) mm.*", "\\1", coords, perl=TRUE))
         coords_p <- as.numeric(sub("^\\s*(-*\\d+) mm \\[(?:L|R)\\],\\s+(-*\\d+) mm.*", "\\2", coords, perl=TRUE))
         coords_i <- as.numeric(sub("^\\s*(-*\\d+) mm \\[(?:L|R)\\],\\s+(-*\\d+) mm \\[(?:A|P)\\],\\s+(-*\\d+) mm.*", "\\3", coords, perl=TRUE))
-        
+
         cluster_metadata <- data.frame(model=this_model, l1_contrast=l1_contrast_name, l2_contrast=l2_contrast_name, l3_contrast=l3_contrast_name,
-          cluster_number=1:length(coords_l), cluster_size=vsizes, cluster_threshold=clustsize, z_threshold=this_z,
+          cluster_number=seq_len(coords_l), cluster_size=vsizes, cluster_threshold=clustsize, z_threshold=this_z,
           x=coords_l, y=coords_p, z=coords_i, label=bestguess, stringsAsFactors=FALSE)
-        
+
         roimask <- readAFNI(paste0(clust_brik, "+tlrc.HEAD"), vol=1)
 
         #afni masks tend to read in as 4D matrix with singleton 4th dimension. Fix this
         if (length(dim(roimask)) == 4L) { roimask@.Data <- roimask[,,,,drop=T] }
-        
+
         maskvals <- sort(unique(as.vector(roimask)))
         maskvals <- maskvals[!maskvals == 0]
-        
+
         #generate a matrix of roi averages across subjects
         #this should be subjects x clusters in size
         roimats <- get_cluster_means(roimask, copeconcat)
@@ -228,17 +228,17 @@ for (l1 in 1:n_l1_copes) {
           fear_cope <- which(l2_contrast_names == "fear")
           copefiles_tmp <- file.path(subject_inputs, "stats", paste0("cope", fear_cope, ".nii.gz"))
           fear_copeconcat <- array(0, dim=c(imgdims, length(copefiles_tmp)))
-          for (i in 1:length(copefiles_tmp)) { fear_copeconcat[,,,i] <- readNIfTI(copefiles_tmp[i], reorient=FALSE)@.Data }
+          for (i in seq_len(copefiles_tmp)) { fear_copeconcat[,,,i] <- readNIfTI(copefiles_tmp[i], reorient=FALSE)@.Data }
 
           scram_cope <- which(l2_contrast_names == "scram")
           copefiles_tmp <- file.path(subject_inputs, "stats", paste0("cope", scram_cope, ".nii.gz"))
           scram_copeconcat <- array(0, dim=c(imgdims, length(copefiles_tmp)))
-          for (i in 1:length(copefiles_tmp)) { scram_copeconcat[,,,i] <- readNIfTI(copefiles_tmp[i], reorient=FALSE)@.Data }
+          for (i in seq_len(copefiles_tmp)) { scram_copeconcat[,,,i] <- readNIfTI(copefiles_tmp[i], reorient=FALSE)@.Data }
 
           happy_cope <- which(l2_contrast_names == "happy")
           copefiles_tmp <- file.path(subject_inputs, "stats", paste0("cope", happy_cope, ".nii.gz"))
           happy_copeconcat <- array(0, dim=c(imgdims, length(copefiles_tmp)))
-          for (i in 1:length(copefiles_tmp)) { happy_copeconcat[,,,i] <- readNIfTI(copefiles_tmp[i], reorient=FALSE)@.Data }
+          for (i in seq_len(copefiles_tmp)) { happy_copeconcat[,,,i] <- readNIfTI(copefiles_tmp[i], reorient=FALSE)@.Data }
 
           fear_mats <- get_cluster_means(roimask, fear_copeconcat)
           scram_mats <- get_cluster_means(roimask, scram_copeconcat)
@@ -262,7 +262,7 @@ for (l1 in 1:n_l1_copes) {
           subj_beta_df <- reshape2::melt(roimats, value.name="cope_value", varnames=c("feat_input_id", "cluster_number")) %>%
             mutate(model=this_model, l1_contrast=l1_contrast_name, l2_contrast=l2_contrast_name, l3_contrast=l3_contrast_name) %>%
             #full_join(design_df %>% select(subject, !!l3_contrast_name), by="subject") #merge with relevant covariate
-            full_join(design_df, by="feat_input_id") #merge with all covariates         
+            full_join(design_df, by="feat_input_id") #merge with all covariates
         }
 
         #handle l1 beta extraction
@@ -279,7 +279,7 @@ for (l1 in 1:n_l1_copes) {
         } else {
           l1_beta_df <- data.frame()
         }
-                
+
         #handle beta series extraction (NB. beta_series_inputs should be in same order as subject_inputs based on use of sub above)
         if (calculate_beta_series) {          
           beta_series_df <- get_beta_series(beta_series_inputs, roimask, n_bs=50)
@@ -292,17 +292,17 @@ for (l1 in 1:n_l1_copes) {
         } else {
           beta_series_df <- data.frame()
         }
-        
+
         coords <- lapply(maskvals, function(v) {
           mi <- which(roimask==v, arr.ind=TRUE)
           return(mi)
         })
 
         names(coords) <- make.names(bestguess, unique=TRUE)
-        
+
         ##get correlation matrix for each ROI (note that the dimension of the latent subspace is constrained by the number of subjects -- eigenvalues become 0 after N)
         #corrmats <- lapply(roimats, function(r) { return(cor(r)) })
-        
+
         #thiscope <- list(cluster_metadata=cluster_metadata, roivals=roimats, coords=coords, corrmats=corrmats)
         #curoutdir <- file.path(getwd(), l1copes[l1], l2copes[l2])
         #dir.create(curoutdir, showWarnings=FALSE, recursive=TRUE)
@@ -310,15 +310,20 @@ for (l1 in 1:n_l1_copes) {
 
         #all_metadata[[paste(l1, l2, l3, sep=".")]] <- cluster_metadata
         #all_subj_betas[[paste(l1, l2, l3, sep=".")]] <- subj_beta_df
-        
+
         l2_loop_cluster_metadata[[paste(l1, l2, l3, sep=".")]] <- cluster_metadata
         l2_loop_subj_betas[[paste(l1, l2, l3, sep=".")]] <- subj_beta_df
         l2_loop_l1betas[[paste(l1, l2, l3, sep=".")]] <- l1_beta_df
         l2_loop_bs[[paste(l1, l2, l3, sep=".")]] <- beta_series_df
       }
 
-      #return(list(cluster_metadata=l2_loop_cluster_metadata, subj_betas=l2_loop_subj_betas))
-      l2_loop_outputs[[l2]] <- list(cluster_metadata=l2_loop_cluster_metadata, subj_betas=l2_loop_subj_betas, l1_betas=l2_loop_l1betas, beta_series=l2_loop_bs)
+      # return(list(cluster_metadata=l2_loop_cluster_metadata, subj_betas=l2_loop_subj_betas))
+      l2_loop_outputs[[l2]] <- list(
+        cluster_metadata = l2_loop_cluster_metadata,
+        subj_betas = l2_loop_subj_betas,
+        l1_betas = l2_loop_l1betas,
+        beta_series = l2_loop_bs
+      )
     }
 
     #tack on metadata and roi betas from this l2 contrast to the broader set
@@ -344,7 +349,7 @@ for (l1 in 1:n_l1_copes) {
     all_beta_series <- all_beta_series %>% arrange(model, l1_contrast, l2_contrast, l3_contrast, cluster_number, feat_input_id, run, trial)
     readr::write_csv(x=all_beta_series, file.path(model_output_dir, paste0(l1_contrast_name, "_roi_beta_series", beta_series_suffix, ".csv.gz")))
   }
-  
+
   #not uniquely useful at present (CSVs have it all)
   #save(all_metadata, all_subj_betas, dmat, file=file.path(model_output_dir, "sceptic_clusters.RData"))
 

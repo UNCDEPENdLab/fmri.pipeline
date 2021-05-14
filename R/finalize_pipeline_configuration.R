@@ -1,9 +1,9 @@
-#This is a small helper function to validate the glm_model_arguments list structure.
-#It adds a few details such as the output directory to make it less burdensome for to setup a pipeline
-#N.B. gpa is a shorthand abbreviation for glm_model_arguments, to save typing
-
+#' This is a small helper function to validate the glm_model_arguments list structure.
+#' It adds a few details such as the output directory to make it less burdensome for to setup a pipeline
+#' N.B. gpa is a shorthand abbreviation for glm_model_arguments, to save typing
+#'
 #' @param gpa A \code{glm_pipeline_arguments} object setup by \code{setup_glm_pipeline}
-#' @importFrom string str_count fixed
+#' @importFrom stringr str_count fixed
 finalize_pipeline_configuration <- function(gpa) {
 
   #new approach: use internal model names for creating output directories at subject level
@@ -25,7 +25,7 @@ finalize_pipeline_configuration <- function(gpa) {
         " must have exactly one closing parenthesis, denoting end of run number capture")
     }
   }
-  
+
   #setup l1 copes, cope names, and contrasts.
   gpa$n_l1_copes <- sapply(gpa$l1_models$models, function(mm) { nrow(mm$contrasts) }) #number of level 1 copes per model
   gpa$l1_cope_names <- lapply(gpa$l1_models$models, function(mm) { rownames(mm$contrasts) }) #names of level 1 copes for each model
@@ -57,7 +57,7 @@ finalize_pipeline_configuration <- function(gpa) {
   if (is.null(gpa$center_l3_predictors)) gpa$center_l3_predictors <- TRUE
   if (is.null(gpa$bad_ids)) gpa$bad_ids <- c()
   if (is.null(gpa$scheduler)) gpa$scheduler <- "slurm" #HPC batch system
-  
+
   if (is.null(gpa$zthresh)) gpa$zthresh <- 3.09  #1-tailed p=.001 for z stat
   if (is.null(gpa$clustsize)) gpa$clustsize <- 50 #arbitrary reasonable lower bound on clusters
   if (is.null(gpa$glm_software)) gpa$glm_software <- "fsl" #default to FSL FEAT
@@ -66,7 +66,7 @@ finalize_pipeline_configuration <- function(gpa) {
   if (is.null(gpa$log_txt)) gpa$log_txt <- TRUE #whether to write text log files
   if (is.null(gpa$l1_setup_log)) { gpa$l1_setup_log <- paste0(names(gpa$l1_models$models), "_l1setup") %>% setNames(names(gpa$l1_models$models)) }
   if (is.null(gpa$l1_execution_log)) { gpa$l1_execution_log <- paste0(names(gpa$l1_models$models), "_l1execution") %>% setNames(names(gpa$l1_models$models)) }
-  
+
   #remove bad ids before running anything further
   if (!is.null(gpa$bad_ids) && length(gpa$bad_ids) > 0L) {
     gpa$subject_data <- gpa$subject_data %>% filter(! (!!sym(gpa$vm["id"]) %in% gpa$bad_ids)) #remove bad ids
