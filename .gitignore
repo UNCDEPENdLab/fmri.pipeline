@@ -42,4 +42,8 @@ vignettes/*.pdf
 slurm-*.out
 
 #local files that don't pertain to release
-/local/
+#leaving these in for now (in prototyping phase)
+#/local/
+
+#R CMD BATCH outputs
+*.Rout

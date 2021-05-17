@@ -2,12 +2,12 @@ Package: fmri.pipeline
 Type: Package
 Title: Analysis of fMRI data on HPC clusters
 Version: 0.1
-Date: 2021-03-07
+Date: 2021-05-14
 Authors@R: c(person("Michael", "Hallquist", role = c("aut", "cre"),
     email = "michael.hallquist@gmail.com"))
 Maintainer: Michael Hallquist <michael.hallquist@gmail.com>
-Maintainer: Who to complain to <yourfault@somewhere.net>
-Description: More about what it does (maybe more than one line)
+Description: Setup of GLM and deconvolution analyses for large-scale analyses
+  of fMRI data.
 License: GPL-3
 Encoding: UTF-8
 LazyLoad: yes
@@ -17,4 +17,8 @@ Imports:
   dplyr,
   data.table,
   lgr,
-  checkmate
+  checkmate,
+  doParallel,
+  foreach,
+  oro.nifti
+  

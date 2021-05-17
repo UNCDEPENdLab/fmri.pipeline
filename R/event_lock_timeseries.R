@@ -80,30 +80,30 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
 
     #enforce colliding preceding event
     if (evt_before > -Inf) { trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) > evt_before) }
-    
+
     #enforce colliding subsequent event
     if (evt_after < Inf) { trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) < evt_after) }
 
     #populate trial field
     trial_ts[[ vm[["trial"]] ]] <- if(nrow(trial_ts) > 0L) { trials[t] } else { numeric(0) } #allow for a zero-row df
-    
+
     #add these data to trial list
     tlist[[t]] <- trial_ts
 
   }
 
   names(tlist) <- trials
-  
+
   #combine rows to stack trial-locked time series for this atlas value
   tdf <- bind_rows(tlist)
 
   #convert to a keyed fmri_ts object for consistency
   res <- fmri_ts$new(ts_data=tdf, event_data=fmri_obj$event_data, vm=fmri_obj$vm, tr=fmri_obj$tr)
   res$replace_vm(time="evt_time")
-  
+
   #add trial as keying variable
   res$add_keys(vm[["trial"]])
-  
+
   return(res)
 
 }
@@ -141,11 +141,11 @@ get_medusa_interpolated_ts <- function(fmri_obj, event=NULL, time_before=-3.0, t
 
   #make default output_resolution equal to fmri TR
   if (is.null(output_resolution)) { output_resolution <- fmri_obj$tr }
-  
+
   #talign is an fmri_ts object keyed by trial (and other keying variables)
   talign <- event_lock_ts(fmri_obj, event=event, time_before=time_before, time_after=time_after,
     pad_before=pad_before, pad_after=pad_after, collide_before=collide_before, collide_after=collide_after)
-  
+
   #need to interpolate by key variables
   interpolated_epochs <- interpolate_fmri_epochs(talign, time_before=time_before, time_after=time_after,
     output_resolution=output_resolution, group_by=group_by)  
@@ -234,7 +234,7 @@ get_medusa_compression_score <- function(fmri_obj, event=NULL, time_before=-3, t
 #' Interpolate an aligned fmri_ts object onto a consistent time grid with respect to a target event
 #'
 #' @param a_obj an fmri_ts object that has data aligned to an event of interest
-#' @param evt_time
+#' @param evt_time column name in \code{a_obj} event data to which time series should be aligned and interpolated
 #' @param time_before The earliest time point (in seconds) relative to the event to be output in interpolation
 #' @param time_after The latest time point (in seconds) relative to the event to be output in interpolation
 #' @param output_resolution The timestep (in seconds) used for interpolation
@@ -249,7 +249,7 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
   #basically need to split align_obj on keying units, then interpolate within keys
 
   stopifnot(inherits(a_obj, "fmri_ts"))
-  
+
   #worker to apply a set of summary functions to each timepoint within a given cluster/unit
   interpolate_worker <- function(to_interpolate, funs=list(mean=mean, median=median, sd=sd)) {
     #For now, we only support linear interpolation. Because of this, interpolation of a mean time

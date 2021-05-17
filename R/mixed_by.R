@@ -1,3 +1,6 @@
+#' Mixed by runs a set of mixed-effects models for each combination of a set of factors. Its primary use is to
+#'   run the same model on different splits of the data.
+#' 
 #' @param data A data.frame or data.table object containing stacked data for each combination of the \code{split_on}
 #'   variables. The function will run separate mixed-effect models for each combination. Alternatively, a vector of filenames
 #'   can be passed, which will be read in sequentially and fit (.rds, .csv, .dat, and .txt supported at present).

@@ -17,11 +17,11 @@
 #'      the values of the vector are the environment variable values to be passed in.
 #'      If you want to propagate the current value of an environment variable to the compute node at runtime,
 #'      use NA as the value of the element in \code{env_variables}. See examples.
-#' @param export_all Whether to export all environment variables to the compute node at runtime. Default: FALSE#'      
+#' @param export_all Whether to export all environment variables to the compute node at runtime. Default: FALSE
 #' @param echo Whether to echo the job submission command to the terminal at the time it is scheduled. Default: TRUE.
-#' @param fail_on_error Whether to stop execution of the script (TRUE), or issue a warning (FALSE) if the job submission fails.
-#'      Defaults to FALSE (i.e., issue a warning).
-#' 
+#' @param fail_on_error Whether to stop execution of the script (TRUE), or issue a warning (FALSE) if the job 
+#'      submission fails. Defaults to FALSE (i.e., issue a warning).
+#'
 #' @return A character string containing the jobid of the scheduled job.
 #'
 #' @examples
