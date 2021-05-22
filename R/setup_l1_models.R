@@ -14,6 +14,9 @@
 #' @importFrom foreach registerDoSEQ
 #' @importFrom parallel makeCluster stopCluster
 #' @importFrom RNifti niftiHeader
+#' @importFrom dplyr filter pull
+#' @importFrom rlang sym
+#' @importFrom magrittr %>%
 setup_l1_models <- function(gpa, to_setup=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_character(to_setup, null.ok=TRUE)
@@ -39,10 +42,12 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
   idvec <- gpa$subject_data[[ gpa$vm["id"] ]]
 
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
-  ll <- foreach(subid = iter(idvec), .inorder=FALSE, .packages=c("dependlab"),
-    .export=c("lg", "gpa", "truncateRuns", "fsl_l1_model", "spm_l1_model", "runFSLCommand") ) %dopar% {
+  ll <- foreach(subid = iter(idvec), .inorder=FALSE, .packages=c("dependlab", "dplyr"),
+    .export=c("lg", "gpa", "truncateRuns", "fsl_l1_model", "spm_l1_model", "runFSLCommand")) %dopar% {
 
-      subj_mr_dir <- gpa$subject_data %>% filter(!!sym(gpa$vm["id"]) == !!subid) %>% pull(!!gpa$vm["mr_dir"])
+      subj_mr_dir <- gpa$subject_data %>%
+        dplyr::filter(!!sym(gpa$vm["id"]) == !!subid) %>%
+        pull(!!gpa$vm["mr_dir"])
 
       #use specific run NIfTIs included in run_data, rather finding these by regex
       if (gpa$vm["run_nifti"] %in% names(gpa$run_data)) {
@@ -59,19 +64,27 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
 
         mr_found <- file.exists(mrfiles)
         if (any(mr_found != TRUE)) {
-          lg$debug("Cannot find some files: %s. Prepend mr_dir and try again.", paste(mrfiles[!mr_found], collapse=", "))
+          lg$debug(
+            "Cannot find some files: %s. Prepend mr_dir and try again.",
+            paste(mrfiles[!mr_found], collapse = ", ")
+          )
           mrdirs <- subj_runs[[ gpa$vm["mr_dir"] ]]
-          mrfiles[!mr_found] <- file.path(mrdirs[!mr_found], mrfiles[!mr_found]) #try prepending the mr_dir path if run_nifti is relative
+
+          #try prepending the mr_dir path if run_nifti is relative
+          mrfiles[!mr_found] <- file.path(mrdirs[!mr_found], mrfiles[!mr_found])
         }
 
         mr_found <- file.exists(mrfiles)
         if (any(mr_found != TRUE)) {
-          lg$warn("Could not find the following run files: %s. Dropping from analysis", paste(mrfiles[!mr_found], collapse=", "))
+          lg$warn(
+            "Could not find the following run files: %s. Dropping from analysis",
+            paste(mrfiles[!mr_found], collapse = ", ")
+          )
         }
 
         #pass forward variables for analysis
         mrfiles <- mrfiles[mr_found]
-        mr_run_nums <- mr_run_nums[mr_found]        
+        mr_run_nums <- mr_run_nums[mr_found]
       } else {
         lg$info("Using regex-based find approach to identify run NIfTIs")
 
@@ -88,20 +101,28 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         }
 
         ## Find processed fMRI run-level data for this subject
-        #mrfiles <- list.files(subj_mr_dir, pattern=gpa$fmri_file_regex, full.names=TRUE, recursive=TRUE)
-        ##cat(paste0("command: find ", subj_mr_dir, " -iname '", expectfile, "' -ipath '*", expectdir, "*' -type f\n"))
+        # mrfiles <- list.files(subj_mr_dir, pattern=gpa$fmri_file_regex, full.names=TRUE, recursive=TRUE)
+        ## cat(paste0("command: find ", subj_mr_dir, " -iname '", expectfile, "' -ipath '*", expectdir, "*' -type f\n"))
 
         # -ipath '*", expectdir, "*' -type f | sort -n"), intern=TRUE)
-        if (!is.null(gpa$fmri_path_regex)) { addon <- paste0(" -ipath '*/", gpa$fmri_path_regex, "/*'") } else { addon <- "" }
-        find_string <- paste0("find ", subj_mr_dir, " -regextype posix-egrep -iregex '.*", gpa$fmri_file_regex, "'", addon, " -type f | sort -n")
+        if (!is.null(gpa$fmri_path_regex)) {
+          addon <- paste0(" -ipath '*/", gpa$fmri_path_regex, "/*'")
+        } else {
+          addon <- ""
+        }
+        find_string <- paste0(
+          "find ", subj_mr_dir, " -regextype posix-egrep -iregex '.*",
+          gpa$fmri_file_regex, "'", addon, " -type f | sort -n"
+        )
         lg$debug("mrfiles find syntax: %s", find_string)
         mrfiles <- system(find_string, intern=TRUE)
 
         #extract run number from file name
-        mr_run_nums <- as.integer(sub(paste0(gpa$run_number_regex), "\\1", mrfiles, perl=TRUE)) 
+        mr_run_nums <- as.integer(sub(paste0(gpa$run_number_regex), "\\1", mrfiles, perl=TRUE))
 
-        ##NB. If we reorder the mrfiles, then the run numbers diverge unless we sort(mr_run_nums). Remove for now for testing
-        ##mrfiles <- mrfiles[order(mr_run_nums)] #make absolutely sure that runs are ordered ascending
+        ## NB. If we reorder the mrfiles, then the run numbers diverge unless we sort(mr_run_nums). 
+        ## Remove for now for testing
+        ## mrfiles <- mrfiles[order(mr_run_nums)] #make absolutely sure that runs are ordered ascending
       }
 
       #process files
@@ -112,10 +133,11 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         lg$debug(paste("MR files to analyze:", mrfiles[mr_found])) #log files that were found
       }
 
-      ##read number of volumes from NIfTI header
-      #RNifti is unexpectedly slow compared to oro.nifti
-      #run_lengths <- unname(sapply(mrfiles, function(x) { RNifti::niftiHeader(x)$dim[5L] }))
-      run_lengths <- unname(sapply(mrfiles, function(x) { oro.nifti::readNIfTI(x, read_data=FALSE)@dim_[5L] }))
+      ## read number of volumes from NIfTI header
+      # RNifti is unexpectedly slow compared to oro.nifti
+      mr_dims <- lapply(mrfiles, function(x) { oro.nifti::readNIfTI(x, read_data = FALSE)@dim_ })
+      run_lengths <- sapply(mr_dims, "[[", 5) # number of volumes is 4th dimension
+      nvoxels <- sapply(mr_dims, function(x) { prod(x[2:5]) })
 
       #we also need xyz to get number of voxels
       #run_lengths <- unname(sapply(mrfiles, function(x) { oro.nifti::readNIfTI(x, read_data=FALSE)@dim_[5L] }))
@@ -133,7 +155,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
       mrfiles <- mrdf$mrfile_to_analyze
       run_lengths <- mrdf$last_vol_analysis
 
-      # Tracking list containing data.frames for each software, where we expect one row per run-level model (FSL) 
+      # Tracking list containing data.frames for each software, where we expect one row per run-level model (FSL)
       # or subject-level model (AFNI). The structure varies because FSL estimates per-run GLMs, while AFNI concatenates.
       l1_file_setup <- list(fsl=list(), spm=list(), afni=list())
 
@@ -143,11 +165,18 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         if (isTRUE(gpa$log_json)) { lg$add_appender(lgr::AppenderJson$new(paste0(gpa$l1_setup_log[ii], ".json")), name="json") }
         if (isTRUE(gpa$log_txt)) { lg$add_appender(lgr::AppenderFile$new(paste0(gpa$l1_setup_log[ii], ".txt")), name="txt") }
 
-        #setup design matrix for any given software package
-        m_events <- dplyr::bind_rows(lapply(gpa$l1_models$events, function(this_event) { this_event %>% filter(!!sym(gpa$vm["id"]) == !!subid) }))
+        # setup design matrix for any given software package
+        m_events <- data.table::rbindlist(
+          lapply(gpa$l1_models$events, function(this_event) {
+            this_event %>% filter(!!sym(gpa$vm["id"]) == !!subid)
+          })
+        )
+
         m_signals <- lapply(gpa$l1_models$signals[gpa$l1_models$models[[this_model]]$model_signals], function(this_signal) {
-          #filter down to this id if the signal is a data.frame
-          if (inherits(this_signal$value, "data.frame")) { this_signal$value <- this_signal$value %>% filter(!!sym(gpa$vm["id"]) == !!subid) }
+          # filter down to this id if the signal is a data.frame
+          if (inherits(this_signal$value, "data.frame")) {
+            this_signal$value <- this_signal$value %>% filter(!!sym(gpa$vm["id"]) == !!subid)
+          }
           return(this_signal)
         })
 
@@ -183,7 +212,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         if ("fsl" %in% gpa$glm_software) {
           #Setup FSL run-level models for each combination of signals
           #Returns a data.frame of feat l1 inputs and the fsf file
-          feat_files <- tryCatch(fsl_l1_model(id=subid, d_obj, gpa, this_model, lg=lg),
+          feat_files <- tryCatch(fsl_l1_model(id=subid, d_obj, gpa, this_model, nvoxels = nvoxels, lg=lg),
             error=function(e) {
               lg$error("Problem running fsl_l1_model. Model: %s, Subject: %s", this_model, subid)
               lg$error("Error message: %s", as.character(e))

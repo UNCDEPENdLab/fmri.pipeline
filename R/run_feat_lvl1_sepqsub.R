@@ -36,26 +36,29 @@ run_feat_lvl1_sepqsub <- function(gpa, run_model_index, rerun=FALSE, wait_for=""
   runsperproc <- 3 #number of feat calls per processor
 
   #look in the subfolder for each subject for fsf files
-  fsfFiles <- do.call(c, lapply(subject_data$mr_dir, function(s) {
-    system(paste0("find ", file.path(s, expectdir), " -mindepth 2 -iname \"FEAT_LVL1_*.fsf\" -ipath \"*/", model_match, "/*\" -type f"), intern=TRUE)
+  fsf_files <- do.call(c, lapply(subject_data$mr_dir, function(s) {
+    system(paste0(
+      "find ", file.path(s, expectdir),
+      " -mindepth 2 -iname \"FEAT_LVL1_*.fsf\" -ipath \"*/", model_match, "/*\" -type f"
+    ), intern = TRUE)
   }))
 
   #figure out which fsf files have already been run
-  dirExpect <- gsub("\\.fsf$", ".feat", fsfFiles, perl=TRUE)
+  dir_expect <- gsub("\\.fsf$", ".feat", fsf_files, perl=TRUE)
   torun <- c()
 
-  for (f in 1:length(fsfFiles)) {
-    if (file.exists(dirExpect[f])) {
+  for (f in seq_len(fsf_files)) {
+    if (file.exists(dir_expect[f])) {
       if (rerun) {
-        cmd <- paste0("rm -rf \"", dirExpect[f], "\"")
+        cmd <- paste0("rm -rf \"", dir_expect[f], "\"")
         cat("Removing old directory: ", cmd, "\n")
         system(cmd)
-        torun <- c(torun, fsfFiles[f]) #add to queue
+        torun <- c(torun, fsf_files[f]) #add to queue
       } else {
-        cat("Skipping existing directory: ", dirExpect[f], "\n")
+        cat("Skipping existing directory: ", dir_expect[f], "\n")
       }
     } else {
-      torun <- c(torun, fsfFiles[f])
+      torun <- c(torun, fsf_files[f])
     }
   }
 

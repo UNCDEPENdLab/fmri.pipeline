@@ -25,15 +25,15 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
   checkmate::assert_string(duration_regex, null.ok=TRUE)
   checkmate::assert_subset(value_cols, names(trial_data)) #make sure all parametric regressor columns are in the data frame
   
-  possible_cols <- names(trial_data)
-  possible_cols <- possible_cols[!names(possible_cols) %in% variable_mapping]
+  #possible_cols <- names(trial_data)
+  #possible_cols <- possible_cols[!names(possible_cols) %in% variable_mapping]
 
   if (is.null(l1_model_set)) {
     ## initialize overall l1 design object (holds events, signals, and models)
     l1_model_set <- list(events=NULL, signals=NULL, models=NULL)
     class(l1_model_set) <- c("list", "l1_model_set")
   }
-  
+
   #onset manager
   get_onsets <- function(trial_data, onset_cols=NULL, onset_regex=NULL) {
     if (!is.null(onset_regex)) {
@@ -405,102 +405,6 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
     })
   }
 
-  #add, edit, rename, delete contrasts
-  specify_contrasts <- function(mobj=NULL, include_diagonal=include_diagonal) {
-    checkmate::assert_class(mobj, "l1_model_spec") #verify that we have an object of known structure
-
-    cmat <- mobj$contrasts
-
-    if (isTRUE(include_diagonal)) {
-      diag_mat <- diag(length(mobj$model_regressors))
-      rownames(diag_mat) <- mobj$model_regressors #simple contrast naming for each single-regressor contrast
-      colnames(diag_mat) <- mobj$model_regressors #always have columns named by regressor
-
-      cmat <- rbind(cmat, diag_mat)
-      cmat <- cmat[!duplicated(cmat, MARGIN=1), ] #don't add duplicate diagonal contrasts to matrix, if alread present
-    }
-
-    if (is.null(cmat)) {
-      cmat <- matrix(numeric(0), nrow=0, ncol=length(mobj$model_regressors), dimnames=list(NULL, mobj$regressors))
-    } else {
-      #currently blow up if we change regressors (contrast matrix does not match new regressors)
-      #TODO: build out zeros in added columns
-      stopifnot(identical(colnames(cmat), mobj$model_regressors)) 
-    }
-
-    #syntax of contrast
-    cat("\n\n-----\nContrast editor\n\n")
-    cat("When entering contrasts, you have two options:\n\n")
-    cat("  1) enter a vector of numeric values, one for each regressor\n     Example: 1 0 -1 0 0\n\n")
-    cat("  2) enter name=value pairs for relevant coefficients\n     Example: pe_1h = 1 pe_2h = -1\n\n")
-
-    summarize_contrasts <- function(cmat) {
-      sapply(seq_len(nrow(cmat)), function(x) {
-        con_name <- rownames(cmat)[x]
-        cvec <- cmat[x, ]
-        nzcols <- which(cvec != 0)
-        cols <- colnames(cmat)[nzcols]
-        cat("Contrast: ", con_name, "\n")
-        for (ii in seq_along(cols)) {
-          cat(cols[ii], "=", cvec[nzcols[ii]], "\n")
-        }
-        cat("-----\n")
-      })
-    }
-
-    add_more <- 1
-    while (add_more != 4) {
-      add_more <- menu(c("Add contrast", "Show contrasts", "Delete contrast", "Done with contrast setup"),
-        title="Contrast setup menu")
-
-      if (add_more == 1L) {
-        cname <- readline("Enter contrast name: ")
-        cat("Columns of contrast matrix (one per regressor)\n")
-        cat(strwrap(paste(colnames(cmat), collapse=", "), 70, exdent=5), "\n")
-        centry <- readline("Enter contrast syntax: ")
-        if (grepl("=", centry)) {
-          #split into pairs
-          centry <- gsub("([^\\s]+)\\s*=\\s*([^\\s]+)", "\\1=\\2", centry, perl=TRUE)
-          csplit <- do.call(rbind, strsplit(strsplit(centry, "\\s+")[[1L]], "=")) #first element is name, second is value
-          cvec <- rep(0, ncol(cmat)) %>% setNames(colnames(cmat))
-          bad_con <- FALSE
-          for (ii in seq_len(nrow(csplit))) {
-            if (!cvec[csplit[ii, 1]] %in% colnames(cmat)) {
-              warning("Cannot find column: ", cvec[csplit[ii, 1]], " in contrast matrix. Ignoring contrast input.")
-              bad_con <- TRUE
-            } else {
-              cvec[csplit[ii, 1]] <- as.numeric(csplit[ii, 2])
-            }
-          }
-          if (!bad_con) {
-            cmat <- rbind(cmat, cvec)
-            rownames(cmat)[nrow(cmat)] <- cname
-          }
-        } else {
-          cvec <- sapply(strsplit(centry, "(,\\s*|\\s+)")[[1L]], as.numeric)
-          if (length(cvec) != ncol(cmat)) {
-            warning("Number of elements in entered contrast does not match number of columns in design. Not adding contrast")
-          } else {
-            cmat <- rbind(cmat, cvec)
-            rownames(cmat)[nrow(cmat)] <- cname
-          }
-        }
-      } else if (add_more == 2L) {
-        summarize_contrasts(cmat)
-      } else if (add_more == 3L) {
-        whichdel <- menu(rownames(cmat), title="Which contrast should be deleted?")
-        if (whichdel != 0) {
-          cmat <- cmat[-whichdel,,drop=FALSE]
-        }
-      } else if (add_more == 4L) {
-        cat("Exiting contrast setup\n")
-      }
-    }
-
-    mobj$contrasts <- cmat
-    return(mobj)
-  }
-
   create_new_model <- function(signal_list, to_modify=NULL) {
     checkmate::assert_class(to_modify, "l1_model_spec", null.ok=TRUE)
     if (is.null(to_modify)) {
@@ -596,11 +500,11 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
       cat("\n--------\n\n")
 
       res <- menu(c("No", "Yes"), title="Do you want to modify model contrasts?")
-      if (res == 2L) { prompt_contrasts <- TRUE }      
+      if (res == 2L) { prompt_contrasts <- TRUE }
     }
 
     #contrast editor
-    if (isTRUE(prompt_contrasts)) { mm <- specify_contrasts(mm, include_diagonal=include_diagonal) }    
+    if (isTRUE(prompt_contrasts)) { mm <- specify_contrasts(mm, include_diagonal=include_diagonal) }
 
     return(mm)
   }
@@ -615,7 +519,7 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
 
     if (add_more == 1L) { #add
       mm <- create_new_model(signal_list)
-      if (mm$name %in% names(l1_model_set)) { warning("An model with the same name exists: ", mm$name, ". Overwriting it.") }
+      if (mm$name %in% names(l1_model_set)) { warning("A model with the same name exists: ", mm$name, ". Overwriting it.") }
       model_list[[mm$name]] <- mm #add to set
     } else if (add_more == 2L) { #modify
       if (is.null(model_list)) {
@@ -623,8 +527,8 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
       } else {
         res <- 0L
         while (res == 0L) { res <- menu(names(model_list), title="Which model do you want to modify?") }
-        model_list[[res]] <- create_new_model(signal_list, to_modify=model_list[[res]])        
-      }      
+        model_list[[res]] <- create_new_model(signal_list, to_modify=model_list[[res]])
+      }
     } else if (add_more == 3L) { #delete
       which_del <- menu(names(model_list), title="Which model would you like to delete?")
       if (which_del > 0) {

@@ -22,19 +22,19 @@ fmri_ts <- R6::R6Class("fmri_ts",
     vmvec=NULL,  #mapping between input names and internal names
     names_to_original=function(dt) {
       setnames(dt, names(private$vmvec), private$vmvec, skip_absent=TRUE)
-    },    
+    },
     names_to_internal=function(dt) {
       #look for naming collisions
       poss_conf <- private$vmvec[ intersect(names(private$vmvec), names(dt)) ]
       poss_conf <- poss_conf[poss_conf != names(poss_conf)]
-      
+
       if (length(poss_conf) > 0L) {
-        new_names <- if(length(poss_conf) > 1L) { paste0(".aux", 1:length(poss_conf)) } else { ".aux" }
+        new_names <- if (length(poss_conf) > 1L) { paste0(".aux", seq_len(poss_conf)) } else { ".aux" }
         cat("To avoid naming conflicts, renaming these columns:", paste(names(poss_conf), collapse=", "),
           "to:", paste0(new_names, collapse=", "), "\n")
         self$vm[[".aux"]] <- names(poss_conf)
         setnames(dt, self$vm[[".aux"]], new_names, skip_absent=FALSE)
-        private$vmvec <- unlist(self$vm) #yields key1, key2, etc.          
+        private$vmvec <- unlist(self$vm) #yields key1, key2, etc.
       }
 
       #handle internal renaming to make programming with these objects easy
@@ -156,7 +156,8 @@ fmri_ts <- R6::R6Class("fmri_ts",
     },
 
     #' @description method to replace one or more variable mappings in the object
-    #' @param ... a set of arguments, each one of which replaces a field in the variable mapping with a new specification
+    #' @param ... a set of arguments, each one of which replaces a field in
+    #'    the variable mapping with a new specification
     #  TODO: create a private validate_vm method and run both initialize and replace through it
     replace_vm = function(...) {
       replist <- list(...)
