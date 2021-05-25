@@ -3,9 +3,12 @@
 #' @param trial_data a data.frame containing trial-level data for one or more subjects
 #' @param l1_model_set optional existing l1_model_set to be modified
 #' @param variable_mapping a vector of mappings between columns in \code{trial_data} and internal constructs
-#' @param onset_cols an optional character vector of columns in \code{trial_data} that should be in the set of event onsets
-#' @param onset_regex an optional PCRE-compatible regular expression for identifying potential event onset columns in \code{trial_data}
-#' @param duration_regex an optional PCRE-compatible regular expression for identifying potential event duration columns in \code{trial_data}
+#' @param onset_cols an optional character vector of columns in \code{trial_data} that should be
+#'   in the set of event onsets
+#' @param onset_regex an optional PCRE-compatible regular expression for identifying potential
+#'   event onset columns in \code{trial_data}
+#' @param duration_regex an optional PCRE-compatible regular expression for identifying potential
+#'   event duration columns in \code{trial_data}
 #' @param value_cols an optional character vector of columns in \code{trial_data} that should be in the set of signal values
 #'
 #' @return a \code{l1_model_set} object containing events, signals, and models, compatible with build_design_matrix
@@ -13,10 +16,12 @@
 #' @importFrom checkmate assert_data_frame assert_class assert_subset
 #' @export
 #' 
-build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
+build_l1_models <- function(
+  trial_data, l1_model_set=NULL,
+  variable_mapping=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
                            onset_cols=NULL, onset_regex=".*(onset|time).*", duration_regex=".*duration.*", value_cols=NULL) {
 
-  # Maybe allow glm object to be passed in that would have trial_data and variable_mapping. 
+  # Maybe allow glm object to be passed in that would have trial_data and variable_mapping.
   # I guess that would be like "add_l1_model"
   checkmate::assert_data_frame(trial_data) #yeah, move toward allowing the broader model specification object here
   checkmate::assert_class(l1_model_set, "l1_model_set", null.ok=TRUE)
@@ -24,7 +29,7 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
   checkmate::assert_string(onset_regex, null.ok=TRUE)
   checkmate::assert_string(duration_regex, null.ok=TRUE)
   checkmate::assert_subset(value_cols, names(trial_data)) #make sure all parametric regressor columns are in the data frame
-  
+
   #possible_cols <- names(trial_data)
   #possible_cols <- possible_cols[!names(possible_cols) %in% variable_mapping]
 
@@ -88,7 +93,8 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
   onset_cols <- get_onsets(trial_data, onset_cols, onset_regex)
 
   #basal data frame for each event
-  metadata_df <- trial_data %>% dplyr::select(!!variable_mapping[c("id", "run", "run_trial")]) %>%
+  metadata_df <- trial_data %>%
+    dplyr::select(!!variable_mapping[c("id", "run", "run_trial")]) %>%
     setNames(c("id", "run", "trial"))
 
   #build a list of data frames, one per event (to be rbind'ed later)
@@ -129,33 +135,35 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
       message("Skipping out of duration?") #TODO
     } else if (oval==1) {
       duration <- NULL
-      while(!checkmate::test_number(duration, lower=0, upper=5000)) {
+      while (!checkmate::test_number(duration, lower=0, upper=5000)) {
         duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", oo, ": ")))
       }
       if (duration > 50) { warning("Duration more than 50s specified. Make sure that your durations are in seconds, not milliseconds!") }
-      event_list[[oo]] <- event_list[[oo]] %>% mutate(duration=duration)
+      event_list[[oo]] <- event_list[[oo]] %>%
+        mutate(duration = duration)
     } else {
-      event_list[[oo]] <- event_list[[oo]] %>% mutate(duration=trial_data[[choices[oval] ]])
+      event_list[[oo]] <- event_list[[oo]] %>%
+        mutate(duration = trial_data[[choices[oval]]])
     }
   }
 
   #populate into set object
   l1_model_set$events <- event_list
-  
+
   ####### setup signals
   cat("\nNow, we will build up a set of signals that can be included as regressors in the level 1 model.\n")
   cat("First, select all columns that contain parametric signals to be used for regressors\n")
   cat("If you wish to use a fixed value (e.g., 1.0, a unit-height regressor), this will be entered in the next step\n\n")
 
   reselect <- 2
-  while(reselect == 2L) {
+  while (reselect == 2L) {
     value_cols <- select.list(c("None (no parametric modulators)", names(trial_data)), multiple=TRUE, preselect=value_cols,
       title="Choose all columns denoting regressor values\n(Command/Control-click to select multiple)")
 
     if (any(value_cols %in% c(0, 1))) {
       value_cols <- c() #no parametric modulators
       reselect <- 0 #drop loop
-    } else {     
+    } else {
       cat("The following columns were chosen as regressor values.\nThese will be used as possible values for each signal.\n\n")
       cat("  ", paste(value_cols, collapse=", "), "\n\n")
 
@@ -235,7 +243,7 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
         ss <- list()
       }
 
-      ### ------ name ------      
+      ### ------ name ------
       complete <- FALSE
       while (isFALSE(complete)) {
         prompt <- "Enter the signal name: "
@@ -342,7 +350,7 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
         accept_defaults <- menu(c("Yes", "No"), title="Accept default advanced options for this signal?")
         if (accept_defaults == 2L) { prompt_advanced <- TRUE }
       }
-      
+
       if (accept_defaults == 1L) {
         cat("Using defaults for signal: ", ss$name, "\n")
         ss$add_deriv <- FALSE
@@ -352,23 +360,32 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
         #derivative
         while (is.null(ss$add_deriv)) {
           res <- menu(c("No", "Yes"), title="Add temporal derivative?")
-          if (res == 1L) { ss$add_deriv <- FALSE
-          } else if (res == 2L) { ss$add_deriv <- TRUE }
+          if (res == 1L) {
+            ss$add_deriv <- FALSE
+          } else if (res == 2L) {
+            ss$add_deriv <- TRUE
+          }
         }
 
         #demean
         while (is.null(ss$demean_convolved)) {
           res <- menu(c("No", "Yes"), title="Demean signal post-convolution?")
-          if (res == 1L) { ss$demean_convolved <- FALSE
-          } else if (res == 2L) { ss$demean_convolved <- TRUE }
+          if (res == 1L) {
+            ss$demean_convolved <- FALSE
+          } else if (res == 2L) {
+            ss$demean_convolved <- TRUE
+          }
         }
 
         #beta series
         while (is.null(ss$beta_series)) {
           res <- menu(c("No", "Yes"),
             title="Generate beta series for this signal (one regressor per trial)?")
-          if (res == 1L) { ss$beta_series <- FALSE
-          } else if (res == 2L) { ss$beta_series <- TRUE }
+          if (res == 1L) {
+            ss$beta_series <- FALSE
+          } else if (res == 2L) {
+            ss$beta_series <- TRUE
+          }
         }
 
         #ts multiplier [not quite there]
@@ -399,7 +416,7 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
       cat("  Signals:", paste(this$model_signals, collapse=", "), "\n")
       if (ncol(this$contrasts) < 30) {
         cat("  Contrasts:\n\n")
-        print(this$contrasts)
+        print(round(this$contrasts, 3))
         cat("\n--------\n\n")
       } else { cat("More than 30 regressor columns. Not printing contrasts\n") }
     })
@@ -474,7 +491,7 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
           } else {
             #trials will be in corresponding event in case value is a scalar
             trials <- sort(unique(event_list[[ signal_list[[nn]]$event ]]$trial))
-          }       
+          }
 
           return(paste(nn, sprintf("%03d", trials), sep="_t")) # signal_t001 etc.
         } else {
@@ -483,28 +500,8 @@ build_l1_models <- function(trial_data, l1_model_set=NULL, variable_mapping=c(id
       }))
     }
 
-
-    prompt_contrasts <- FALSE
-    if (is.null(mm$contrasts)) {
-      #handle contrasts
-      include_diagonal <- menu(c("Yes", "No"), title="Do you want to include diagonal contrasts for each regressor?")
-      if (include_diagonal == 1L) {
-        include_diagonal <- TRUE
-      } else {
-        include_diagonal <- FALSE
-      }
-      prompt_contrasts <- TRUE
-    } else if (isTRUE(modify)) {
-      cat("\nCurrent model contrasts:\n\n")
-      print(mm$contrasts)
-      cat("\n--------\n\n")
-
-      res <- menu(c("No", "Yes"), title="Do you want to modify model contrasts?")
-      if (res == 2L) { prompt_contrasts <- TRUE }
-    }
-
     #contrast editor
-    if (isTRUE(prompt_contrasts)) { mm <- specify_contrasts(mm, include_diagonal=include_diagonal) }
+    mm <- specify_contrasts(mm)
 
     return(mm)
   }

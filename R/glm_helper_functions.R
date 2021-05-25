@@ -99,22 +99,22 @@ truncate_runs <- function(s, mrfiles, mrrunnums, niftivols, drop_volumes=0) {
   ##note that all of this would need to be reworked if TR were not 1.0 (i.e., 1 second = 1 volume)
 
   require(dplyr)
-  
-  mrdf <- do.call(rbind, lapply(1:length(mrfiles), function(r) {
+
+  mrdf <- do.call(rbind, lapply(seq_along(mrfiles), function(r) {
     #iti_durations <- s$runs[[ mrrunnums[r] ]]$orig_data_frame$iti_ideal #for clockfit objects
     #last_iti <- s$runs[[ mrrunnums[r] ]]$iti_onset[length(s$runs[[ mrrunnums[r] ]]$iti_onset)]
-    
+
     iti_durations <- s %>% dplyr::filter(run == mrrunnums[r]) %>% pull(iti_ideal) #for outputs from parse_sceptic_outputs (2018+)
     last_iti <- s %>% dplyr::filter(run == mrrunnums[r]) %>% pull(iti_onset) %>% tail(n=1)
 
     last_vol_behavior <- floor(last_iti + iti_durations[length(iti_durations)]) #use floor to select last vol in the iti window
     first_vol <- drop_volumes #first volume to use for analysis 
-    
+
     if (last_vol_behavior < niftivols[r]) {
       ##more vols were acquired than presented in paradigm. Thus, truncation may be needed
       ##check framewise displacement and truncate earlier than 12 second ITI if a big movement occurred
       fd <- read.table(file.path(dirname(mrfiles[r]), "motion_info", "fd.txt"))$V1
-      badfd <- do.call(c, sapply(1:length(fd), function(x) { if (x >= last_iti && fd[x] > 0.9) x else NULL })) #flag volumes after last_iti with high FD
+      badfd <- do.call(c, sapply(seq_along(fd), function(x) { if (x >= last_iti && fd[x] > 0.9) x else NULL })) #flag volumes after last_iti with high FD
       if (length(badfd) == 0L) {
         ##no frames flagged in last volumes
         last_vol_analysis <- last_vol_behavior
@@ -122,37 +122,46 @@ truncate_runs <- function(s, mrfiles, mrrunnums, niftivols, drop_volumes=0) {
         ##use either the last volume of the task or the volume before the earliest bad movement 
         last_vol_analysis <- min(last_vol_behavior, (min(badfd) - 1))
       }
-      
+
       #length of truncated file
-      truncLength <- last_vol_analysis - first_vol
-      
+      trunc_length <- last_vol_analysis - first_vol
+
       #generate filename for truncated volume
       if (first_vol > 0) {
-        truncfile <- sub("(^.*/[a-z]+_clock[0-9](?:_5)*)\\.nii\\.gz$", paste0("\\1_drop", drop_volumes, "_trunc", last_vol_analysis, ".nii.gz"), mrfiles[r], perl=TRUE)  
+        truncfile <- sub("(^.*/[a-z]+_clock[0-9](?:_5)*)\\.nii\\.gz$",
+          paste0("\\1_drop", drop_volumes, "_trunc", last_vol_analysis, ".nii.gz"), mrfiles[r],
+          perl = TRUE
+        )
       } else {
-        truncfile <- sub("(^.*/[a-z]+_clock[0-9](?:_5)*)\\.nii\\.gz$", paste0("\\1_trunc", last_vol_analysis, ".nii.gz"), mrfiles[r], perl=TRUE)
+        truncfile <- sub("(^.*/[a-z]+_clock[0-9](?:_5)*)\\.nii\\.gz$",
+          paste0("\\1_trunc", last_vol_analysis, ".nii.gz"), mrfiles[r],
+          perl = TRUE
+        )
       }
       
-      if (!file.exists(truncfile)) { runFSLCommand(paste("fslroi", mrfiles[r], truncfile, first_vol, truncLength)) } #create truncated volume
+      if (!file.exists(truncfile)) { runFSLCommand(paste("fslroi", mrfiles[r], truncfile, first_vol, trunc_length)) } #create truncated volume
       mrfile_to_analyze <- truncfile
     } else {
       last_vol_analysis <- niftivols[r] 
       if (drop_volumes > 0) {
-        truncLength <- niftivols[r] - drop_volumes
-        truncfile <- sub("(^.*/[a-z]+_clock[0-9](?:_5)*)\\.nii\\.gz$", paste0("\\1_drop", drop_volumes, ".nii.gz"), mrfiles[r], perl=TRUE)
-        if (!file.exists(truncfile)) { runFSLCommand(paste("fslroi", mrfiles[r], truncfile, first_vol, truncLength)) } #create truncated volume
+        trunc_length <- niftivols[r] - drop_volumes
+        truncfile <- sub("(^.*/[a-z]+_clock[0-9](?:_5)*)\\.nii\\.gz$",
+          paste0("\\1_drop", drop_volumes, ".nii.gz"), mrfiles[r],
+          perl = TRUE
+        )
+        if (!file.exists(truncfile)) { runFSLCommand(paste("fslroi", mrfiles[r], truncfile, first_vol, trunc_length)) } #create truncated volume
         mrfile_to_analyze <- truncfile
       } else {
         mrfile_to_analyze <- mrfiles[r] #just use original file  
       }
-      
+
     }
-    #cat(paste0(paste(mrfiles[r], niftivols[r], floor(last_iti), truncLength, sep="\t"), "\n"), file="trunclog", append=TRUE)
+    #cat(paste0(paste(mrfiles[r], niftivols[r], floor(last_iti), trunc_length, sep="\t"), "\n"), file="trunclog", append=TRUE)
     return(data.frame(last_vol_analysis, mrfile_to_analyze, stringsAsFactors=FALSE))
   }))
-  
+
   mrdf
-  
+
 }
 
 #' helper function for generating motion regressors from raw 6-parameter motion coregistration
@@ -290,12 +299,12 @@ pca_motion <- function(motion_df, num_pcs=3L, zscore=TRUE, verbose=FALSE) {
 generateRunMask <- function(mrfiles, outdir=getwd(), outfile="runmask") {
   if (file.exists(file.path(outdir, paste0(outfile, ".nii.gz")))) { return(invisible(NULL)) }
   ##generate mask of mrfiles where temporal min is > 0 for all runs
-  for (f in 1:length(mrfiles)) {
+  for (f in seq_along(mrfiles)) {
     runFSLCommand(paste0("fslmaths ", mrfiles[f], " -Tmin -bin ", outdir, "/tmin", f))#, fsldir="/usr/local/ni_tools/fsl")
   }
   
   ##sum mins together over runs and threshold at number of runs
-  runFSLCommand(paste0("fslmaths ", paste(paste0(outdir, "/tmin", 1:length(mrfiles)), collapse=" -add "), " ", outdir, "/tminsum"))#, fsldir="/usr/local/ni_tools/fsl")
+  runFSLCommand(paste0("fslmaths ", paste(paste0(outdir, "/tmin", seq_along(mrfiles)), collapse=" -add "), " ", outdir, "/tminsum"))#, fsldir="/usr/local/ni_tools/fsl")
   runFSLCommand(paste0("fslmaths ", outdir, "/tminsum -thr ", length(mrfiles), " -bin ", outdir, "/", outfile))#, fsldir="/usr/local/ni_tools/fsl")
   runFSLCommand(paste0("imrm ", outdir, "/tmin*"))#, fsldir="/usr/local/ni_tools/fsl") #cleanup 
   
@@ -304,30 +313,32 @@ generateRunMask <- function(mrfiles, outdir=getwd(), outfile="runmask") {
 visualizeDesignMatrix <- function(d, outfile=NULL, runboundaries=NULL, events=NULL, includeBaseline=TRUE) {
   require(ggplot2)
   require(reshape2)
-  
+
   if (!includeBaseline) {
     d <- d[,!grepl("run[0-9]+base", colnames(d))]
   }
-  
+
   print(round(cor(d), 3))
   d <- as.data.frame(d)
   d$volume <- 1:nrow(d)
   d.m <- melt(d, id.vars="volume")
-  g <- ggplot(d.m, aes(x=volume, y=value)) + geom_line(size=1.2) + theme_bw(base_size=15) + facet_grid(variable ~ ., scales="free_y")
+  g <- ggplot(d.m, aes(x = volume, y = value)) +
+    geom_line(size = 1.2) +
+    theme_bw(base_size = 15) +
+    facet_grid(variable ~ ., scales = "free_y")
   
   colors <- c("black", "blue", "red", "orange") #just a hack for color scheme right now
-  
+
   if (!is.null(runboundaries)) {
     g <- g + geom_vline(xintercept=runboundaries, color=colors[1L])
   }
-  
-  
+
   if (!is.null(events)) {
-    for (i in 1:length(events)) {
+    for (i in seq_along(events)) {
       g <- g + geom_vline(xintercept=events[[i]], color=colors[i+1])
     }
   }
-  
+
   if (!is.null(outfile)) {
     ggsave(filename=outfile, plot=g, width=21, height=9)
   }
@@ -393,8 +404,26 @@ get_beta_series <- function(inputs, roimask, n_bs=50) {
     }
 
     return(do.call(rbind, run_betas))
-    
+
   }
 
   return(do.call(rbind, beta_res))
+}
+
+#' Internal helper function for printing a summary of a contrast matrix
+#' @param cmat a contrast matrix where row names are the contrast names and column
+#'   names are the column names of the corresponding design matrix.
+#' @keywords internal
+summarize_contrasts <- function(cmat) {
+  sapply(seq_len(nrow(cmat)), function(x) {
+    con_name <- rownames(cmat)[x]
+    cvec <- cmat[x, ]
+    nzcols <- which(cvec != 0)
+    cols <- colnames(cmat)[nzcols]
+    cat("Contrast: ", con_name, "\n")
+    for (ii in seq_along(cols)) {
+      cat(cols[ii], "=", cvec[nzcols[ii]], "\n")
+    }
+    cat("-----\n")
+  })
 }

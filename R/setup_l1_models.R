@@ -44,7 +44,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
   ll <- foreach(subid = iter(idvec), .inorder=FALSE, .packages=c("dependlab", "dplyr"),
     .export=c("lg", "gpa", "truncateRuns", "fsl_l1_model", "spm_l1_model", "runFSLCommand")) %dopar% {
-
+      subid <- subid # avoid complaints about visible global binding in R CMD check
       subj_mr_dir <- gpa$subject_data %>%
         dplyr::filter(!!sym(gpa$vm["id"]) == !!subid) %>%
         pull(!!gpa$vm["mr_dir"])
