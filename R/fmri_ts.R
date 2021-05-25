@@ -78,22 +78,30 @@ fmri_ts <- R6::R6Class("fmri_ts",
 
       #setup standardized naming
       private$vmvec <- unlist(vm) #yields key1, key2, etc.
-      if ("key" %in% names(vm)) { private$kvars <- paste0("key", seq_along(vm$key)) }
-      if ("value" %in% names(vm)) { private$vvars <- paste0("value", seq_along(vm$value)) }
+      if ("key" %in% names(vm)) {
+        # if there is more than one key, unlist adds a number to each element of the vector
+        # but if there is only one key, unlist keeps it as 'key'
+        private$kvars <- if (length(vm$key) > 1L) paste0("key", seq_along(vm$key)) else "key"
+      }
+      if ("value" %in% names(vm)) {
+        private$vvars <- if (length(vm$value) > 1L) paste0("value", seq_along(vm$value)) else "value"
+      }
 
       if (!is.null(event_data)) {
         if (!is.null(vm$id)) {
           checkmate::assert_string(vm$id)
           stopifnot(vm$id %in% names(event_data))
           if (length(unique(event_data[[vm$id]])) > 1L) {
-            stop("fmri_ts objects only support single runs of data for single IDs. You can combine fmri_ts objects using combine_ts()")
+            stop("fmri_ts objects only support single runs of data for single IDs.",
+            " You can combine fmri_ts objects using combine_ts().")
           }
         }
         if (!is.null(vm$run)) {
           checkmate::assert_string(vm$run)
           stopifnot(vm$run %in% names(event_data))
           if (length(unique(event_data[[vm$run]])) > 1L) {
-            stop("fmri_ts objects only support single runs of data for single IDs. You can combine fmri_ts objects using combine_ts()")
+            stop("fmri_ts objects only support single runs of data for single IDs.",
+            " You can combine fmri_ts objects using combine_ts().")
           }
         }
 
@@ -108,10 +116,10 @@ fmri_ts <- R6::R6Class("fmri_ts",
         setorderv(event_data, vm$trial) #order by trial
       }
 
-      #verify presence of required columns
-      sapply(vm[c("time", "value", "key")], function(x) { stopifnot(all(x %in% names(ts_data))) } )
+      # verify presence of required columns
+      sapply(vm[c("time", "value", "key")], function(x) { stopifnot(all(x %in% names(ts_data))) })
 
-      #convert to data table for speed, memory management
+      # convert to data table for speed, memory management
       ts_data <- data.table(ts_data)
 
       #handle internal renaming to make programming with these objects easy
