@@ -29,7 +29,7 @@ fmri_ts <- R6::R6Class("fmri_ts",
       poss_conf <- poss_conf[poss_conf != names(poss_conf)]
 
       if (length(poss_conf) > 0L) {
-        new_names <- if (length(poss_conf) > 1L) { paste0(".aux", seq_len(poss_conf)) } else { ".aux" }
+        new_names <- if (length(poss_conf) > 1L) { paste0(".aux", seq_along(poss_conf)) } else { ".aux" }
         cat("To avoid naming conflicts, renaming these columns:", paste(names(poss_conf), collapse=", "),
           "to:", paste0(new_names, collapse=", "), "\n")
         self$vm[[".aux"]] <- names(poss_conf)
@@ -78,8 +78,8 @@ fmri_ts <- R6::R6Class("fmri_ts",
 
       #setup standardized naming
       private$vmvec <- unlist(vm) #yields key1, key2, etc.
-      if ("key" %in% names(vm)) { private$kvars <- paste0("key", seq_len(vm$key)) }
-      if ("value" %in% names(vm)) { private$vvars <- paste0("value", seq_len(vm$value)) }
+      if ("key" %in% names(vm)) { private$kvars <- paste0("key", seq_along(vm$key)) }
+      if ("value" %in% names(vm)) { private$vvars <- paste0("value", seq_along(vm$value)) }
 
       if (!is.null(event_data)) {
         if (!is.null(vm$id)) {
@@ -132,7 +132,7 @@ fmri_ts <- R6::R6Class("fmri_ts",
     #' @param orig_names boolean indicating whether to return data.table with original naming scheme. Default: FALSE
     get_ts = function(orig_names=FALSE) {
       tsd <- data.table::copy(self$ts_data) #ensure that we copy the object to avoid altering $ts_data
-      for (kk in seq_len(self$ts_keys)) { tsd[, names(self$ts_keys)[kk] := inverse.rle(self$ts_keys[[kk]])] }
+      for (kk in seq_along(self$ts_keys)) { tsd[, names(self$ts_keys)[kk] := inverse.rle(self$ts_keys[[kk]])] }
       setcolorder(tsd, private$kvars) #put keying variables first in object
       if (isTRUE(orig_names)) { private$names_to_original(tsd) }
       return(tsd)
@@ -167,7 +167,7 @@ fmri_ts <- R6::R6Class("fmri_ts",
       #revert to original names before we modify
       private$names_to_original(self$ts_data)
 
-      for (rr in seq_len(replist)) {
+      for (rr in seq_along(replist)) {
         this_field <- repfields[rr]
         self$vm[[this_field]] <- replist[[rr]]
       }
