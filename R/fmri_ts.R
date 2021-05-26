@@ -125,12 +125,14 @@ fmri_ts <- R6::R6Class("fmri_ts",
       #handle internal renaming to make programming with these objects easy
       private$names_to_internal(ts_data)
 
-      setorderv(ts_data, private$kvars)
-      ts_keys <- sapply(private$kvars, function(x) { rle(ts_data[[x]]) }, simplify=FALSE)
-      ts_data[, private$kvars := NULL] #drop key columns
+      if (!is.null(private$kvars)) {
+        setorderv(ts_data, private$kvars)
+        ts_keys <- sapply(private$kvars, function(x) { rle(ts_data[[x]]) }, simplify = FALSE)
+        ts_data[, private$kvars := NULL] # drop key columns
+        self$ts_keys <- ts_keys
+      }
 
       self$ts_data <- ts_data
-      self$ts_keys <- ts_keys
       self$event_data <- event_data
       self$vm <- vm
       self$tr <- tr

@@ -22,11 +22,14 @@ build_l1_models(
 
 \item{variable_mapping}{a vector of mappings between columns in \code{trial_data} and internal constructs}
 
-\item{onset_cols}{an optional character vector of columns in \code{trial_data} that should be in the set of event onsets}
+\item{onset_cols}{an optional character vector of columns in \code{trial_data} that should be
+in the set of event onsets}
 
-\item{onset_regex}{an optional PCRE-compatible regular expression for identifying potential event onset columns in \code{trial_data}}
+\item{onset_regex}{an optional PCRE-compatible regular expression for identifying potential
+event onset columns in \code{trial_data}}
 
-\item{duration_regex}{an optional PCRE-compatible regular expression for identifying potential event duration columns in \code{trial_data}}
+\item{duration_regex}{an optional PCRE-compatible regular expression for identifying potential
+event duration columns in \code{trial_data}}
 
 \item{value_cols}{an optional character vector of columns in \code{trial_data} that should be in the set of signal values}
 }
