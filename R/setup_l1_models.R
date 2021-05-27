@@ -28,35 +28,39 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
   if (isTRUE(gpa$log_txt)) { lg$add_appender(lgr::AppenderFile$new("setup_l1_models.txt"), name="txt") }
 
+  gpa$parallel$l1_setup_cores <- 1
   #setup parallel worker pool, if requested
   if (gpa$parallel$l1_setup_cores > 1L) {
     lg$info("Initializing l1 setup cluster with %d cores", gpa$parallel$l1_setup_cores)
     cl <- parallel::makeCluster(gpa$parallel$l1_setup_cores)
     doParallel::registerDoParallel(cl)
-    on.exit(try(stopCluster(cl))) #cleanup pool upon exit of this function
+    on.exit(try(parallel::stopCluster(cl))) #cleanup pool upon exit of this function
   } else {
     lg$info("Initializing l1 setup with serial execution")
     foreach::registerDoSEQ() #formally register a sequential 'pool' so that dopar is okay
   }
 
-  idvec <- gpa$subject_data$id
+  gpa$subject_data <- gpa$subject_data[1:3,]
 
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
-  all_subj_l1_list <- foreach(subid = iter(idvec), .inorder=FALSE, .packages=c("dependlab", "dplyr"),
+  all_subj_l1_list <- foreach(subj_df = iter(gpa$subject_data, by="row"), .inorder=FALSE, .packages=c("dependlab", "dplyr"),
     .export=c("lg", "gpa", "truncateRuns", "fsl_l1_model", "spm_l1_model", "runFSLCommand")) %dopar% {
-      subid <- subid # avoid complaints about visible global binding in R CMD check
+      subj_df <- subj_df # avoid complaints about visible global binding in R CMD check
+      subid <- subj_df$id
 
       #find the run data for analysis
-      rdata <- gpa$run_data %>% filter(id == !!subid & run_nifti_present == TRUE)
-      mr_files <- rdata %>% pull(run_nifti)
-      mr_run_nums <- rdata %>% pull(run_number)
+      rdata <- gpa$run_data %>% dplyr::filter(id == !!subid & run_nifti_present == TRUE)
+      mr_files <- rdata %>% dplyr::pull("run_nifti")
+      mr_run_nums <- rdata %>% dplyr::pull("run_number")
+
+      subj_mr_dir <- subj_df$mr_dir
 
       #process files
       if (length(mr_files) == 0L) {
         lg$warn("Unable to find any preprocessed fMRI files in dir: %s", subj_mr_dir)
         return(NULL)
       } else {
-        lg$debug(paste("MR files to analyze:", mr_files[mr_found])) #log files that were found
+        lg$debug(paste("MR files to analyze:", mr_files)) #log files that were found
       }
 
       ## read number of volumes from NIfTI header
@@ -94,19 +98,20 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         # setup design matrix for any given software package
         m_events <- data.table::rbindlist(
           lapply(gpa$l1_models$events, function(this_event) {
-            this_event %>% filter(id == !!subid)
+            this_event %>% dplyr::filter(id == !!subid)
           })
         )
 
-        m_signals <- lapply(gpa$l1_models$signals[gpa$l1_models$models[[this_model]]$model_signals], function(this_signal) {
+        m_signals <- lapply(gpa$l1_models$signals[gpa$l1_models$models[[this_model]]$signals], function(this_signal) {
           # filter down to this id if the signal is a data.frame
           if (inherits(this_signal$value, "data.frame")) {
-            this_signal$value <- this_signal$value %>% filter(id == !!subid)
+            this_signal$value <- this_signal$value %>% dplyr::filter(id == !!subid)
           }
           return(this_signal)
         })
 
         subj_out <- file.path(subj_mr_dir, gpa$l1_models$models[[this_model]]$outdir)
+
         if (!dir.exists(subj_out)) {
           lg$info("Creating subject output directory: %s", subj_out)
           dir.create(subj_out, showWarnings=FALSE, recursive=TRUE)

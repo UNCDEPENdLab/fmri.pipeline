@@ -43,7 +43,7 @@ fsl_l1_model <- function(
   )
 
   l1_contrasts <- gpa$l1_models$models[[model_name]]$contrasts #contrast matrix for this model
-  regressors <- gpa$l1_models$models[[model_name]]$model_regressors #names of regressors in design matrix for this model
+  regressors <- gpa$l1_models$models[[model_name]]$regressors #names of regressors in design matrix for this model
 
   if (dir.exists(fsl_run_output_dir) &&
     file.exists(file.path(fsl_run_output_dir, "feat_l1_inputs.rds")) &&
@@ -58,14 +58,16 @@ fsl_l1_model <- function(
 
   feat_l1_df <- data.frame(
     id = id, run = d_obj$runs_to_output, run_volumes = d_obj$run_volumes,
-    mr_files = mr_files, model = model_name, feat_file = NA_character_
+    mr_files = mr_files, l1_model = model_name, feat_file = NA_character_
   )
   all_feat_files <- c()
 
   #FSL computes first-level models on individual runs
   for (rr in seq_along(mr_files)) {
     lg$info("Creating FSF for file: %s", mr_files[rr])
-    this_template <- fsf_template #start with default copy of template for this run
+    this_template <- fsf_template # start with default copy of template for this run
+    
+    confound <- get_confound_txt(mr_files[rr], gpa)
 
     all_confounds_mat <- c()
     if (!is.null(gpa$confound_settings$l1_confound_regressors)) {
@@ -196,7 +198,7 @@ fsl_l1_model <- function(
     require(parallel)
     nnodes <- min(length(all_feat_files), parallel::detectCores())
     lg$info("Starting fork cluster with %d workers", nnodes)
-    cl_fork <- makeForkCluster(nnodes=nnodes)
+    cl_fork <- parallel::makeForkCluster(nnodes=nnodes)
     runfeat <- function(fsf) {
       runname <- basename(fsf)
       runFSLCommand(paste("feat", fsf), stdout=file.path(dirname(fsf), paste0("feat_stdout_", runname)),
@@ -204,8 +206,8 @@ fsl_l1_model <- function(
     }
 
     lg$info("Executing all subject feat files with clusterApply")
-    clusterApply(cl_fork, all_feat_files, runfeat)
-    stopCluster(cl_fork)
+    parallel::clusterApply(cl_fork, all_feat_files, runfeat)
+    parallel::stopCluster(cl_fork)
   }
 
   return(feat_l1_df)

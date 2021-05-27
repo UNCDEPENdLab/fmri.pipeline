@@ -49,8 +49,6 @@ lookup_nifti_inputs <- function(gpa) {
         paste(mr_files[!mr_found], collapse = ", ")
       )
     }
-
-
   } else {
     # find run nifti files based on directory and regular expression settings
     lg$info("Using regex-based find approach to identify run NIfTIs")
@@ -91,9 +89,9 @@ lookup_nifti_inputs <- function(gpa) {
       )
     }
 
-    mr_df <- bind_rows(mr_list)
+    mr_df <- dplyr::bind_rows(mr_list)
 
-    gpa$run_data <- left_join(gpa$run_data, mr_df, by = c("id", "session", "run_number"))
+    gpa$run_data <- dplyr::left_join(gpa$run_data, mr_df, by = c("id", "session", "run_number"))
     mr_found <- file.exists(gpa$run_data$run_nifti)
   }
 

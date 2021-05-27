@@ -279,21 +279,47 @@ pca_motion <- function(motion_df, num_pcs=3L, zscore=TRUE, verbose=FALSE) {
   checkmate::assert_integerish(num_pcs, lower=1, upper=50)
   checkmate::assert_logical(zscore)
   checkmate::assert_logical(verbose)
-  
+
   #compute the PCA decomposition of motion parameters and their derivatives
   pc <- prcomp(motion_df, retx=TRUE, scale.=zscore)
   cumvar <- cumsum(pc$sdev^2/sum(pc$sdev^2))
-  
-  if (verbose) message("first", num_pcs, "motion principal components account for: ", round(cumvar[num_pcs], 3))
+
+  if (isTRUE(verbose)) message("first", num_pcs, "motion principal components account for: ", round(cumvar[num_pcs], 3))
   mregressors <- pc$x[,1:num_pcs] #cf Churchill et al. 2012 PLoS ONE
   attr(mregressors, "variance.explained") <- cumvar[num_pcs]
-  
-  if (verbose) {
+
+  if (isTRUE(verbose)) {
     cat("Multiple correlation of motion parameters:\n\n")
     print(round(sqrt(psych::smc(motion_df)), 2))
   }
-  
+
   return(as.data.frame(mregressors))
+}
+
+
+#' helper function to generate confounds txt file for inclusion as additional regressors
+#'
+#' @param mr_file an absolute path to a nifti file for a single run
+#' @param gpa a \code{glm_pipeline_arguments} object containing pipeline specification
+get_confound_txt <- function(mr_file, gpa) {
+  rinfo <- gpa$run_data %>% dplyr::filter(run_nifti == !!mr_file)
+  if (nrow(rinfo) > 1L) {
+    print(rinfo)
+    stop("Multiple matches for a single run_nifti in get_confound_txt.")
+  } else if (nrow(rinfo) == 0L) {
+    stop("Unable to locate a record in gpa$run_data for run_nifti: ", mr_file)
+  }
+
+  # note: normalizePath will fail to evaluate properly if directory does not exist
+  analysis_outdir <- file.path(
+    normalizePath(file.path(dirname(mr_files[1L]), "..")),
+    gpa$analysis_name
+  )
+
+  if (!dir.exists(analysis_outdir)) {
+    dir.create(analysis_outdir, showWarnings=FALSE, recursive=TRUE)
+  }
+
 }
 
 generateRunMask <- function(mrfiles, outdir=getwd(), outfile="runmask") {
@@ -394,7 +420,7 @@ get_beta_series <- function(inputs, roimask, n_bs=50) {
       #concat_file <- tempfile()
       #system.time(runFSLCommand(paste("fslmerge -t", concat_file, paste(copes, collapse=" "))))
       #system.time(cout <- readNIfTI(concat_file, reorient=FALSE)@.Data)
-      
+
       cout <- do.call(abind, list(along=4, lapply(copes, function(x) { readNIfTI(x, reorient=FALSE)@.Data })))
       beta_series_cluster_means <- get_cluster_means(roimask, cout)
       beta_melt <- reshape2::melt(beta_series_cluster_means, value.name="bs_value", varnames=c("trial", "cluster_number")) %>%

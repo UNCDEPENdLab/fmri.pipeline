@@ -18,7 +18,7 @@
 #'   \code{setup_glm_pipeline} will detect which variables occur at each level and parse these accordingly into
 #'   \code{subject_data} and \code{run_data}.
 #' @param vm A named character vector containing key identifying columns in \code{subject_data} and
-#'   \code{trial_data}. Minimally, this vector should contain the elements 'id' 
+#'   \code{trial_data}. Minimally, this vector should contain the elements 'id'
 #' @param id_column A character string indicating the name of the subject identifier in \code{subject_data} and \code{trial_data}.
 #' @param bad_ids An optional vector of ids in \code{subject_data} and \code{trial_data} that should be excluded from analysis.
 #' @param mr_dir_column A character string indicating the column name in \code{subject_data} containing the folder for each
@@ -48,62 +48,71 @@
 #'   the resulting object will not be functional within the pipeline until l3 models are provided.
 #' @param glm_software Which fMRI analysis package to use in the analysis. Options are "FSL", "SPM", or "AFNI"
 #'   (case insensitive).
+#' @param n_expected_runs Number of expected runs per subject. Used to determine 2- versus 3-level analysis
+#'   (for FSL), and for providing feedback about subjects who have unexpected numbers of runs.
 #' @param additional A list of additional metadata that will be added to the \code{glm.pipeline} object returned
 #'   by the function. This can be useful if there are other identifiers that you want for long-term storage or
 #'   off-shoot functions.
 #'
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 #'    test_string test_class
-setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", working_directory=file.path(getwd(), "glm_out"),
-                               group_output_directory="default",
-                               subject_data=NULL, run_data=NULL, trial_data=NULL,
-                               vm=c(id="id", session="session", run_number="run_number", trial="trial", run_trial="run_trial",
-                                 mr_dir="mr_dir", run_nifti="run_nifti"),
-                               bad_ids=NULL, tr=NULL,
-                               fmri_file_regex=".*\\.nii(\\.gz)?", fmri_path_regex=NULL, run_number_regex=".*run-*([0-9]+).*",
-                               drop_volumes=0L, l1_models="prompt", l2_models="prompt", l3_models="prompt",
-                               glm_software="fsl",
-                               use_preconvolve=TRUE, truncate_runs=FALSE, force_l1_creation=FALSE,
-                               confound_settings=list(
-                                 motion_params_file="motion.par", #assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
-                                 motion_params_columns=c("rx", "ry", "rz", "tx", "ty", "tz"),
-                                 confound_file=NULL, #assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
-                                 confound_columns=NULL, #names of confound columns -- if null, we will attempt to find a header row
-                                 l1_confound_regressors=NULL, #column names in motion_params and/or confound_file
-                                 exclude_run=expression(mean(FD) > 0.9 | max(FD) > 0.5),
-                                 exclude_subject=expression(nruns < 4),
-                                 spike_volume=expression(FD > 0.9)
+setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm", working_directory = file.path(getwd(), "glm_out"),
+                               group_output_directory = "default",
+                               subject_data = NULL, run_data = NULL, trial_data = NULL,
+                               vm = c(
+                                 id = "id", session = "session", run_number = "run_number", trial = "trial",
+                                 run_trial = "run_trial", mr_dir = "mr_dir", run_nifti = "run_nifti"
                                ),
-                               parallel=list(
-                                 l1_setup_cores = 1L, #number of cores used when looping over l1 setup of design matrices and syntax for each subject
-                                 pipeline_cores = "default" #number of cores used  when looping over l1 model variants in push_pipeline
-                               ), additional=list(
-                                 feat_l1_args=list(z_thresh=1.96, prob_thresh=.05) #additional feat level 1 settings (uses internal FSL nomenclature)
+                               bad_ids = NULL, tr = NULL,
+                               fmri_file_regex = ".*\\.nii(\\.gz)?", fmri_path_regex = NULL,
+                               run_number_regex = ".*run-*([0-9]+).*", drop_volumes = 0L,
+                               l1_models = "prompt", l2_models = "prompt", l3_models = "prompt",
+                               glm_software = "fsl", n_expected_runs = 1L,
+                               use_preconvolve = TRUE, truncate_runs = FALSE, force_l1_creation = FALSE,
+                               confound_settings = list(
+                                 motion_params_file = "motion.par", # assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
+                                 motion_params_columns = c("rx", "ry", "rz", "tx", "ty", "tz"),
+                                 confound_file = NULL, # assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
+                                 confound_columns = NULL, # names of confound columns -- if null, we will attempt to find a header row
+                                 l1_confound_regressors = NULL, # column names in motion_params and/or confound_file
+                                 exclude_run = expression(mean(FD) > 0.9 | max(FD) > 0.5),
+                                 exclude_subject = expression(nruns < 4),
+                                 spike_volume = expression(FD > 0.9)
+                               ),
+                               parallel = list(
+                                 # number of cores used when looping over l1 setup of design matrices and syntax for each subject
+                                 l1_setup_cores = 1L,
+
+                                 # number of cores used  when looping over l1 model variants in push_pipeline
+                                 pipeline_cores = "default"
+                               ), additional = list(
+                                 # additional feat level 1 settings (uses internal FSL nomenclature)
+                                 feat_l1_args = list(z_thresh = 1.96, prob_thresh = .05)
                                )) {
-  
-  checkmate::assert_string(analysis_name) #must be scalar string
-  checkmate::assert_subset(scheduler, c("slurm", "sbatch", "torque", "qsub"), empty.ok=FALSE)
-  checkmate::assert_data_frame(subject_data, null.ok=TRUE)
-  checkmate::assert_data_frame(run_data, null.ok=TRUE)
+  checkmate::assert_string(analysis_name) # must be scalar string
+  checkmate::assert_subset(scheduler, c("slurm", "sbatch", "torque", "qsub"), empty.ok = FALSE)
+  checkmate::assert_data_frame(subject_data, null.ok = TRUE)
+  checkmate::assert_data_frame(run_data, null.ok = TRUE)
   checkmate::assert_data_frame(trial_data)
-  checkmate::assert_character(vm, unique=TRUE) #all values of vm must refer to distinct columns
+  checkmate::assert_character(vm, unique = TRUE) # all values of vm must refer to distinct columns
   # would be insane to have super-long TR (suggests milliseconds, not seconds passed in)
-  checkmate::assert_number(tr, lower=0.01, upper=20)
-  checkmate::assert_string(fmri_file_regex, null.ok=TRUE)
-  checkmate::assert_string(run_number_regex, null.ok=TRUE)
+  checkmate::assert_number(tr, lower = 0.01, upper = 20)
+  checkmate::assert_string(fmri_file_regex, null.ok = TRUE)
+  checkmate::assert_string(run_number_regex, null.ok = TRUE)
   checkmate::assert_integerish(drop_volumes)
   checkmate::assert_character(glm_software)
-  checkmate::assert_logical(use_preconvolve, null.ok=FALSE)
-  checkmate::assert_logical(truncate_runs, null.ok=FALSE)
-  checkmate::assert_logical(force_l1_creation, null.ok=FALSE)
+  checkmate::assert_logical(use_preconvolve, null.ok = FALSE)
+  checkmate::assert_logical(truncate_runs, null.ok = FALSE)
+  checkmate::assert_logical(force_l1_creation, null.ok = FALSE)
 
   glm_software <- tolower(glm_software)
   checkmate::assert_subset(glm_software, c("fsl", "spm", "afni"))
+  checkmate::assert_integerish(n_expected_runs, null.ok=TRUE)
 
-  #setup working directory, if needed
+  # setup working directory, if needed
   if (!dir.exists(working_directory)) {
     message("Setting up working directory for pipeline: ", working_directory)
-    dir.create(working_directory, recursive=TRUE)
+    dir.create(working_directory, recursive = TRUE)
   }
 
   # validate and fill in variable mapping vector (if user only passes some fields)
@@ -112,14 +121,18 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     mr_dir = "mr_dir", run_nifti = "run_nifti", run_number = "run_number"
   )
 
-  default_vm[names(vm)] <- vm #override defaults with user inputs
-  vm <- default_vm #reassign full vm
+  default_vm[names(vm)] <- vm # override defaults with user inputs
+  vm <- default_vm # reassign full vm
 
   # code default session of 1, if missing
-  if (!vm["session"] %in% names(trial_data)) { trial_data[[ vm["session"] ]] <- 1 }
+  if (!vm["session"] %in% names(trial_data)) {
+    trial_data[[vm["session"]]] <- 1
+  }
 
   # code default run of 1, if missing
-  if (!vm["run_number"] %in% names(trial_data)) { trial_data[[ vm["run_number"] ]] <- 1 }
+  if (!vm["run_number"] %in% names(trial_data)) {
+    trial_data[[vm["run_number"]]] <- 1
+  }
 
   # enforce id column in trial_data
   stopifnot(vm["id"] %in% names(trial_data))
@@ -130,18 +143,21 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   # whether to run a 2-level or 3-level analysis
   multi_run <- ifelse(length(unique(trial_data$run_number)) > 1L, TRUE, FALSE)
 
-  #create run data, if needed
+  # create run data, if needed
   if (is.null(run_data) && isTRUE(multi_run)) {
     message("Distilling run_data object from trial_data by finding variables that vary at run level")
 
-    variation_df <- trial_data %>% group_by(id, session, run_number) %>%
-      mutate_at(vars(everything()), ~length(unique(.))) %>%
+    variation_df <- trial_data %>%
+      group_by(id, session, run_number) %>%
+      mutate_at(vars(everything()), ~ length(unique(.))) %>%
       ungroup()
 
-    #should include the id and run columns
-    one_cols <- names(which(sapply(variation_df, function(col) { all(col==1) }) ==TRUE))
+    # should include the id and run columns
+    one_cols <- names(which(sapply(variation_df, function(col) {
+      all(col == 1)
+    }) == TRUE))
 
-    message("Retaining columns: ", paste(one_cols, collapse=", "))
+    message("Retaining columns: ", paste(one_cols, collapse = ", "))
 
     # at present, this will keep all subject-level covariates, too. Maybe correct later?
     run_data <- trial_data %>%
@@ -158,19 +174,21 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   stopifnot("id" %in% names(run_data))
   if (!"session" %in% names(run_data)) run_data$session <- 1
 
-  #create subject data
+  # create subject data
   if (is.null(subject_data)) {
     message("Distilling subject_data object from trial_data by finding variables that vary at subject level")
 
-    variation_df <- trial_data %>% 
+    variation_df <- trial_data %>%
       group_by(id, session) %>%
-      mutate_at(vars(everything()), ~length(unique(.))) %>%
+      mutate_at(vars(everything()), ~ length(unique(.))) %>%
       ungroup()
 
-    #should include the id column itself
-    one_cols <- names(which(sapply(variation_df, function(col) { all(col==1) }) == TRUE))
+    # should include the id column itself
+    one_cols <- names(which(sapply(variation_df, function(col) {
+      all(col == 1)
+    }) == TRUE))
 
-    message("Retaining columns: ", paste(one_cols, collapse=", "))
+    message("Retaining columns: ", paste(one_cols, collapse = ", "))
 
     subject_data <- trial_data %>%
       select(!!one_cols) %>%
@@ -183,54 +201,53 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     names(subject_data) <- names_to_internal(subject_data, vm)
   }
 
-  #can't really get traction without this!
+  # can't really get traction without this!
   stopifnot("mr_dir" %in% names(subject_data))
   stopifnot("id" %in% names(subject_data))
   if (!"session" %in% names(subject_data)) subject_data$session <- 1
 
-  #TODO: should probably look at names in subject, run, and trial data to make sure they all line up
+  # TODO: should probably look at names in subject, run, and trial data to make sure they all line up
 
   if (!is.null(l1_models)) {
     if (checkmate::test_string(l1_models) && l1_models[1L] == "prompt") {
-      l1_models <- build_l1_models(trial_data, variable_mapping=vm)
+      l1_models <- build_l1_models(trial_data, variable_mapping = vm)
     } else if (!checkmate::test_class(l1_models, "l1_model_set")) {
       stop("l1_models argument is not of class l1_model_set. Use build_l1_model to create this.")
     }
   } # else allow nulls in case user wants to specify things later
 
   gpa <- list(
-    #metadata
-    analysis_name=analysis_name,
-    scheduler=scheduler,
-    working_directory=working_directory,
+    # metadata
+    analysis_name = analysis_name,
+    scheduler = scheduler,
+    working_directory = working_directory,
     subject_data = subject_data,
     run_data = run_data,
     trial_data = trial_data,
     vm = vm,
-    bad_ids=bad_ids,
-    tr=tr,
-    multi_run=multi_run, #2- or 3-level analysis
-    truncate_runs=truncate_runs,
-    force_l1_creation=force_l1_creation,
-    confound_settings=confound_settings,
+    bad_ids = bad_ids,
+    tr = tr,
+    multi_run = multi_run, # 2- or 3-level analysis
+    truncate_runs = truncate_runs,
+    force_l1_creation = force_l1_creation,
+    confound_settings = confound_settings,
 
-    #l1 analysis details
-    fmri_file_regex=fmri_file_regex,
-    fmri_path_regex=fmri_path_regex,
-    run_number_regex=run_number_regex,
-    drop_volumes=drop_volumes,
-    use_preconvolve=use_preconvolve,
-    l1_models=l1_models,
+    # l1 analysis details
+    fmri_file_regex = fmri_file_regex,
+    fmri_path_regex = fmri_path_regex,
+    run_number_regex = run_number_regex,
+    drop_volumes = drop_volumes,
+    use_preconvolve = use_preconvolve,
+    l1_models = l1_models,
 
-    #l2 analysis details
+    # l2 analysis details
     l2_models = l2_models,
 
-    #l3 analysis details
+    # l3 analysis details
     l3_models = l3_models
-
   )
 
-  #validate and populate any other pipeline details before execution
+  # validate and populate any other pipeline details before execution
   gpa <- finalize_pipeline_configuration(gpa)
 
   class(gpa) <- c("list", "glm_pipeline_arguments")

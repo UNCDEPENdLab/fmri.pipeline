@@ -215,7 +215,7 @@ build_l2_models <- function(data, model_set = NULL,
         data$dummy <- rnorm(nrow(data))
         ffit <- update.formula(res, "dummy ~ .") # add LHS
         mm$lmfit <- lm(ffit, data)
-        mm$model_regressors <- colnames(modelmat) # actual regressors after expanding categorical variables
+        mm$regressors <- colnames(modelmat) # actual regressors after expanding categorical variables
         mm$model_matrix <- modelmat
 
         # handle coefficient aliasing

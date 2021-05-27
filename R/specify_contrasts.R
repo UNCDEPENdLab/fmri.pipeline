@@ -118,20 +118,20 @@ specify_contrasts <- function(mobj = NULL, include_diagonal = TRUE, include_fact
     cmat <- mobj$contrasts
 
     if (isTRUE(include_diagonal)) {
-        diag_mat <- diag(length(mobj$model_regressors))
-        rownames(diag_mat) <- paste0("EV_", mobj$model_regressors) # simple contrast naming for each individual regressor
-        colnames(diag_mat) <- mobj$model_regressors # always have columns named by regressor
+        diag_mat <- diag(length(mobj$regressors))
+        rownames(diag_mat) <- paste0("EV_", mobj$regressors) # simple contrast naming for each individual regressor
+        colnames(diag_mat) <- mobj$regressors # always have columns named by regressor
 
         cmat <- rbind(cmat, diag_mat)
         cmat <- cmat[!duplicated(cmat, MARGIN = 1), ] # don't add duplicate diagonal contrasts to matrix, if already present
     }
 
     if (is.null(cmat)) {
-        cmat <- matrix(numeric(0), nrow = 0, ncol = length(mobj$model_regressors), dimnames = list(NULL, mobj$model_regressors))
+        cmat <- matrix(numeric(0), nrow = 0, ncol = length(mobj$regressors), dimnames = list(NULL, mobj$regressors))
     } else {
         # currently blow up if we change regressors (contrast matrix does not match new regressors)
         # TODO: build out zeros in added columns
-        stopifnot(identical(colnames(cmat), mobj$model_regressors))
+        stopifnot(identical(colnames(cmat), mobj$regressors))
     }
 
     # add condition means, if requested

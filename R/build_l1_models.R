@@ -413,7 +413,7 @@ build_l1_models <- function(
       this <- ml[[ii]]
       cat("--------\nModel ", ii, "\n\n")
       cat("  Name:", this$name, "\n")
-      cat("  Signals:", paste(this$model_signals, collapse=", "), "\n")
+      cat("  Signals:", paste(this$signals, collapse=", "), "\n")
       if (ncol(this$contrasts) < 30) {
         cat("  Contrasts:\n\n")
         print(round(this$contrasts, 3))
@@ -454,33 +454,33 @@ build_l1_models <- function(
     }
 
     if (isTRUE(modify)) {
-      cat("Current model signals:", paste(names(mm$model_signals), collapse=", "), "\n")
+      cat("Current model signals:", paste(names(mm$signals), collapse=", "), "\n")
       res <- menu(c("No", "Yes"), title="Change model signals (and contrasts)?")
       if (res == 2) { #clear out so that it is respecified
-        mm$model_signals <- mm$model_regressors <- mm$contrasts <- NULL
+        mm$signals <- mm$regressors <- mm$contrasts <- NULL
       }
     }
 
     #signals
     summarize_signals(signal_list) #print summary
 
-    while (is.null(mm$model_signals)) {
-      model_signals <- select.list(names(signal_list), multiple=TRUE, preselect=mm$model_signals,
+    while (is.null(mm$signals)) {
+      signals <- select.list(names(signal_list), multiple=TRUE, preselect=mm$signals,
         title="Choose all signals to include in this model\n(Command/Control-click to select multiple)")
 
-      if (length(model_signals) == 0L) {
+      if (length(signals) == 0L) {
         proceed <- menu(c("Yes", "No"), title="Nothing entered. Do you want to cancel model setup?")
         if (proceed == 1L) {
           return(invisible(NULL)) #return nothing from function
         }
       } else {
-        mm$model_signals <- model_signals
+        mm$signals <- signals
       }
     }
 
     #look up what the regressors will be for this.
-    if (is.null(mm$model_regressors)) {
-      mm$model_regressors <- unlist(lapply(mm$model_signals, function(nn) {
+    if (is.null(mm$regressors)) {
+      mm$regressors <- unlist(lapply(mm$signals, function(nn) {
         if (isTRUE(signal_list[[nn]]$add_deriv)) {
           return(c(nn, paste0(nn, "_dt"))) #regressor and _dt temporal derivative
         } else if (isTRUE(signal_list[[nn]]$beta_series)) {
