@@ -4,6 +4,7 @@
 #'
 #' @param gpa A \code{glm_pipeline_arguments} object setup by \code{setup_glm_pipeline}
 #' @importFrom stringr str_count fixed
+#' @importFrom magrittr %>%
 finalize_pipeline_configuration <- function(gpa) {
 
   #new approach: use internal model names for creating output directories at subject level
@@ -64,12 +65,18 @@ finalize_pipeline_configuration <- function(gpa) {
 
   if (is.null(gpa$log_json)) gpa$log_json <- TRUE #whether to write JSON log files
   if (is.null(gpa$log_txt)) gpa$log_txt <- TRUE #whether to write text log files
-  if (is.null(gpa$l1_setup_log)) { gpa$l1_setup_log <- paste0(names(gpa$l1_models$models), "_l1setup") %>% setNames(names(gpa$l1_models$models)) }
-  if (is.null(gpa$l1_execution_log)) { gpa$l1_execution_log <- paste0(names(gpa$l1_models$models), "_l1execution") %>% setNames(names(gpa$l1_models$models)) }
+  if (is.null(gpa$l1_setup_log)) {
+    gpa$l1_setup_log <- paste0(names(gpa$l1_models$models), "_l1setup") %>% setNames(names(gpa$l1_models$models))
+  }
+  if (is.null(gpa$l1_execution_log)) {
+    gpa$l1_execution_log <- paste0(names(gpa$l1_models$models), "_l1execution") %>% setNames(names(gpa$l1_models$models))
+  }
+
+  if (is.null(gpa$n_expected_runs)) gpa$n_expected_runs <- 1 # assume single run case
 
   #remove bad ids before running anything further
   if (!is.null(gpa$bad_ids) && length(gpa$bad_ids) > 0L) {
-    gpa$subject_data <- gpa$subject_data %>% filter(! (!!sym(gpa$vm["id"]) %in% gpa$bad_ids)) #remove bad ids
+    gpa$subject_data <- gpa$subject_data %>% filter(!id %in% gpa$bad_ids) # remove bad ids
   }
 
   #build design matrix default arguments
@@ -82,6 +89,9 @@ finalize_pipeline_configuration <- function(gpa) {
   if (is.null(gpa$additional$feat_l1_args)) {
     gpa$additional$feat_l1_args <- list(feat_l1_zthresh = 1.96, feat_l1_pthresh = .05)
   }
+
+  #identify and validate niftis for each run
+  gpa <- lookup_nifti_inputs(gpa)
 
   return(gpa)
 }

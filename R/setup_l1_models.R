@@ -46,7 +46,8 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
     .export=c("lg", "gpa", "truncateRuns", "fsl_l1_model", "spm_l1_model", "runFSLCommand")) %dopar% {
       subid <- subid # avoid complaints about visible global binding in R CMD check
 
-      rdata <- gpa$run_data %>% filter(id == !!subid)
+      #find the run data for analysis
+      rdata <- gpa$run_data %>% filter(id == !!subid & run_nifti_present == TRUE)
       mr_files <- rdata %>% pull(run_nifti)
       mr_run_nums <- rdata %>% pull(run_number)
 

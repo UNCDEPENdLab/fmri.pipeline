@@ -10,7 +10,7 @@
 #'   level as \code{vm["id"]}.
 #' @param run_data A data.frame containing all run-level data such as run condition or run number. Columns from
 #'   \code{run_data} can be used as covariates in subject (aka 'level 2') analyses. If \code{NULL}, this will be
-#'   distilled from \code{trial_data} by looking for variables that vary at the same level as \code{vm["run"]}.
+#'   distilled from \code{trial_data} by looking for variables that vary at the same level as \code{vm["run_number"]}.
 #' @param trial_data A data.frame containing trial-level statistics for all subjects. Data should be stacked in long
 #'   form such that each row represents a single trial for a given subject and the number of total rows is subjects x trials.
 #'   If you wish, you can pass a single trial-level data frame that also contains all run-level and subject-level covariates
@@ -57,8 +57,8 @@
 setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", working_directory=file.path(getwd(), "glm_out"),
                                group_output_directory="default",
                                subject_data=NULL, run_data=NULL, trial_data=NULL,
-                               vm=c(id="id", session="session", run="run", trial="trial", run_trial="run_trial",
-                                 mr_dir="mr_dir", run_nifti="run_nifti", run_number="run_number"),
+                               vm=c(id="id", session="session", run_number="run_number", trial="trial", run_trial="run_trial",
+                                 mr_dir="mr_dir", run_nifti="run_nifti"),
                                bad_ids=NULL, tr=NULL,
                                fmri_file_regex=".*\\.nii(\\.gz)?", fmri_path_regex=NULL, run_number_regex=".*run-*([0-9]+).*",
                                drop_volumes=0L, l1_models="prompt", l2_models="prompt", l3_models="prompt",
@@ -108,7 +108,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
 
   # validate and fill in variable mapping vector (if user only passes some fields)
   default_vm <- c(
-    id = "id", session = "session", run = "run", trial = "trial", run_trial = "run_trial",
+    id = "id", session = "session", trial = "trial", run_trial = "run_trial",
     mr_dir = "mr_dir", run_nifti = "run_nifti", run_number = "run_number"
   )
 
@@ -119,7 +119,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   if (!vm["session"] %in% names(trial_data)) { trial_data[[ vm["session"] ]] <- 1 }
 
   # code default run of 1, if missing
-  if (!vm["run"] %in% names(trial_data)) { trial_data[[ vm["run"] ]] <- 1 }
+  if (!vm["run_number"] %in% names(trial_data)) { trial_data[[ vm["run_number"] ]] <- 1 }
 
   # enforce id column in trial_data
   stopifnot(vm["id"] %in% names(trial_data))
@@ -128,13 +128,13 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   names(trial_data) <- names_to_internal(trial_data, vm)
 
   # whether to run a 2-level or 3-level analysis
-  multi_run <- ifelse(length(unique(trial_data$run)) > 1L, TRUE, FALSE)
+  multi_run <- ifelse(length(unique(trial_data$run_number)) > 1L, TRUE, FALSE)
 
   #create run data, if needed
   if (is.null(run_data) && isTRUE(multi_run)) {
     message("Distilling run_data object from trial_data by finding variables that vary at run level")
 
-    variation_df <- trial_data %>% group_by(id, session, run) %>%
+    variation_df <- trial_data %>% group_by(id, session, run_number) %>%
       mutate_at(vars(everything()), ~length(unique(.))) %>%
       ungroup()
 
@@ -146,13 +146,13 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
     # at present, this will keep all subject-level covariates, too. Maybe correct later?
     run_data <- trial_data %>%
       select(!!one_cols) %>%
-      group_by(id, session, run) %>%
+      group_by(id, session, run_number) %>%
       filter(row_number() == 1) %>%
       ungroup()
   } else {
     # if we are working from an external run_data object, rename variables
-    # rename columns of run data frame to use internal nomenclature (run_data modified in place)
-    names_to_internal(run_data, vm)
+    # rename columns of run data frame to use internal nomenclature
+    names(run_data) <- names_to_internal(run_data, vm)
   }
 
   stopifnot("id" %in% names(run_data))
@@ -180,7 +180,7 @@ setup_glm_pipeline <- function(analysis_name="glm_analysis", scheduler="slurm", 
   } else {
     # if we are working from an external run_data object, rename variables
     # rename columns of run data frame to use internal nomenclature (run_data modified in place)
-    names_to_internal(subject_data, vm)
+    names(subject_data) <- names_to_internal(subject_data, vm)
   }
 
   #can't really get traction without this!

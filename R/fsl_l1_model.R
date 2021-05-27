@@ -75,7 +75,7 @@ fsl_l1_model <- function(
         if (checkmate::test_file_exists(motion_file)) {
           mot_mat <- generate_motion_regressors(motion_file,
             col.names = gpa$confound_settings$motion_params_columns,
-            regressors = gpa$confound_settings$l1_confound_regressors, 
+            regressors = gpa$confound_settings$l1_confound_regressors,
             drop_volumes = gpa$drop_volumes,
             last_volume = feat_l1_df$run_volumes[rr]
           )
