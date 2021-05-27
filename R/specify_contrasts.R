@@ -3,7 +3,7 @@
 #' @param mobj \code{l1_model_spec} or \code{hi_model_spec} object
 #' @param include_diagonal A logical indicating whether to include a diagonal matrix of contrasts
 #'   in the model contrasts. Defaults to TRUE.
-#' @internal
+#' @keywords internal
 #' @author Michael Hallquist
 #' @importFrom magrittr %>%
 #' @importFrom emmeans emmeans emtrends

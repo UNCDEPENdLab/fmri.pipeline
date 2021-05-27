@@ -183,9 +183,9 @@ generate_motion_regressors <- function(motion_params = "motion.par",
   if (is.null(col.names)) { col.names <- c("rx", "ry", "rz", "tx", "ty", "tz") } #explicit defaults in case of null
   checkmate::assert_subset(col.names, c("rx", "ry", "rz", "tx", "ty", "tz"))
 
-  #Regressors that are not motion-related can be passed in from outside (since we have a combined l1_confound_regressors argument).
-  #These could include CSF, WM, or whatever. Subset down to just the values that can be calculated from motion params alone so that
-  #the logic below of parameter naming holds up.
+  # Regressors that are not motion-related can be passed in from outside (since we have a combined 
+  # l1_confound_regressors argument). These could include CSF, WM, or whatever. Subset down to just
+  # the values that can be calculated from motion params alone so that the logic below of parameter naming holds up.
   regressors <- intersect(regressors,
     c("fd", "rx", "ry", "rz", "tx", "ty", "tz",
     "drx", "dry", "drz", "dtx", "dty", "dtz",
@@ -194,13 +194,13 @@ generate_motion_regressors <- function(motion_params = "motion.par",
 
   #if none of the confound regressors is a motion parameter, then quietly return NULL
   if (length(regressors) == 0L) { return(invisible(NULL)) }
-  
+
   mot <- data.table::fread(motion_params, col.names=col.names)
 
   if (is.null(last_volume)) { last_volume <- nrow(mot) }
   checkmate::assert_integerish(last_volume, upper=nrow(mot))
-  
-  mot <- mot[(1+drop_volumes):last_volume,]
+
+  mot <- mot[(1+drop_volumes):last_volume, ]
 
   if ("fd" %in% regressors || any(derivcols <- grepl("^q?d{1}.*", regressors, perl=TRUE))) {
     motderiv <- mot[, lapply(.SD, function(x) { c(0, diff(x)) })]
@@ -226,12 +226,12 @@ generate_motion_regressors <- function(motion_params = "motion.par",
     }
     mot <- cbind(mot, fd=fd)
   }
-  
+
   mot <- mot[, ..regressors] #keep regressors of interest
   if (isTRUE(demean)) {
     mot <- mot[, lapply(.SD, function(x) { x - mean(x, na.rm=TRUE) }) ] #demean all columns
   }
-  
+
   ##just PCA motion on the current run
   ##mregressors <- pca_motion(mr_files[r], runlengths[r], motion_parfile="motion.par", numpcs=3, drop_volumes=drop_volumes)$motion_pcs_concat
 
@@ -426,4 +426,39 @@ summarize_contrasts <- function(cmat) {
     }
     cat("-----\n")
   })
+}
+
+#' helper function to rename columns of input data.frame to internal nomenclature
+#'   based on the variable mapping (vm) vector
+#' 
+#' @param df a data.frame containing columns to be renamed to internal standards
+#' @param vm a named vector of columns in \code{df} that identify internal constructs
+#'   such as id, session, and run.
+#'
+#' @return a modified version of \code{df} with column names modified to use internal names
+#' @importFrom data.table setnames
+#' @keywords internal
+names_to_internal <- function(df, vm) {
+  # look for naming collisions
+  nm <- names(df)
+  nv <- names(vm)
+  conflict <- intersect(nm[nm %in% names(vm)], nv[nv != vm])
+
+  if (length(conflict) > 0L) {
+    new_names <- paste0("..", conflict, "..")
+    cat(
+      "To avoid naming conflicts, renaming these columns:", paste(conflict, collapse = ", "),
+      "to:", paste0(new_names, collapse = ", "), "\n"
+    )
+
+    nm[which(nm %in% conflict)] <- new_names
+  }
+
+  # convert variable names to internal constructs via the variable mapping
+  vm_present <- vm[which(vm %in% nm)]
+  vm_pos <- sapply(vm_present, function(x) { which(nm == x)[1] })
+  nm[vm_pos] <- names(vm_present)
+
+  return(nm)
+
 }
