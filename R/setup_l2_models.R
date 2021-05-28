@@ -7,15 +7,44 @@
 # 3) Load emotion conditions from first-level design matrices
 # 4) Save all valid inputs into a single data.frame .RData object to be digested/run
 
-setup_feat_lvl2_inputs <- function(fsl_model_arguments, run_model_index) {
-  require(plyr)
- 
+setup_l2_models <- function(gpa, to_setup=NULL) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_character(to_setup, null.ok = TRUE)
+  checkmate::assert_data_frame(gpa$run_data)
+
+  # if no model subset is requested, output all models
+  if (is.null(to_setup)) { to_setup <- names(gpa$l2_models$models) }
+
+  lg <- lgr::get_logger("glm_pipeline/l2_setup")
+  if (isTRUE(gpa$log_txt)) {
+    lg$add_appender(lgr::AppenderFile$new("setup_l2_models.txt"), name = "txt")
+  }
+
+  if (is.null(gpa$l1_model_setup) || !inherits(gpa$l1_model_setup, "l1_setup")) {
+    stop("No l1_model_setup found in the glm pipeline object.",
+    "You must run setup_l1_models before running setup_l2_models.")
+  }
+
+  #calculate motion exclusions
+  
+
+  #split l1 models by ID
+  l1_split <- split(gpa$l1_model_setup, gpa$l1_model_setup$id)
+
+  for (ii in seq_along(to_setup)) {
+    this_model <- to_setup[ii]
+
+    if ("fsl" %in% gpa$glm_software) {
+
+    }
+  }
+
   #define run-level model folder name for analysis
-  expectdir <- fsl_model_arguments$expectdir #the subfolder for each subject such as mni_5mm_aroma
-  odir <- fsl_model_arguments$outdir[run_model_index] #the expect subfolder name for outputs of this model
-  n_l1_copes <- fsl_model_arguments$n_l1_copes[run_model_index]
-  subject_data <- fsl_model_arguments$subject_data
-  id_col <- fsl_model_arguments$id_col
+  expectdir <- gpa$expectdir #the subfolder for each subject such as mni_5mm_aroma
+  odir <- gpa$outdir[run_model_index] #the expect subfolder name for outputs of this model
+  n_l1_copes <- gpa$n_l1_copes[run_model_index]
+  subject_data <- gpa$subject_data
+  id_col <- gpa$id_col
   
   #setup inputs for all LVL2 analyses for the current model
   feat_runs <- do.call(rbind, lapply(1:nrow(subject_data), function(s) {
@@ -34,12 +63,12 @@ setup_feat_lvl2_inputs <- function(fsl_model_arguments, run_model_index) {
   feat_runs$fd_file <- file.path(feat_runs$mr_dir, expectdir, paste0("clock", feat_runs$run_num), "motion_info", "fd.txt")
 
   #identify the length of runs used in the analysis, accounting for both initial dropped volumes and truncation at the end
-  feat_runs$drop_volumes <- fsl_model_arguments$drop_volumes #replicate initial drops for each .feat directory (used to index FD files)
+  feat_runs$drop_volumes <- gpa$drop_volumes #replicate initial drops for each .feat directory (used to index FD files)
 
   feat_runs$trunc_lengths <- unname(sapply(feat_runs$feat_dir, function(feat_dir) {
     design_fsf <- readLines(file.path(feat_dir, "design.fsf"))
     nvol <- as.numeric(sub("set fmri(npts)", "", grep("set fmri(npts)", design_fsf, fixed=TRUE, value=TRUE)[1], fixed=TRUE))
-    nvol <- nvol + fsl_model_arguments$drop_volumes  #in FD indexing, this is the end point of the vector
+    nvol <- nvol + gpa$drop_volumes  #in FD indexing, this is the end point of the vector
   }))
 
   if (any(is.na(feat_runs$trunc_lengths))) {
@@ -107,7 +136,10 @@ setup_feat_lvl2_inputs <- function(fsl_model_arguments, run_model_index) {
 
   feat_l2_inputs_df <- feat_l2_inputs_df %>% select(subid, run_num, contingency, emotion, model, feat_dir, everything())
 
-  save(feat_l2_inputs_df, feat_runs, file=file.path(fsl_model_arguments$pipeline_home, "configuration_files", paste0(paste(fsl_model_arguments$analysis_name, odir, "lvl2_inputs", sep="_"), ".RData")))
+  save(feat_l2_inputs_df, feat_runs, file = file.path(
+    gpa$pipeline_home, "configuration_files",
+    paste0(paste(gpa$analysis_name, odir, "lvl2_inputs", sep = "_"), ".RData")
+  ))
 
   return(feat_l2_inputs_df) #return run-level information for passing onto run_feat_lvl2
 }

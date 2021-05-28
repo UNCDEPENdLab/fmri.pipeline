@@ -22,3 +22,4 @@ Internal function to add, edit, rename, delete contrasts
 \author{
 Michael Hallquist
 }
+\keyword{internal}

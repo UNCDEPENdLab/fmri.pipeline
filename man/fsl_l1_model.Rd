@@ -2,8 +2,8 @@
 % Please edit documentation in R/fsl_l1_model.R
 \name{fsl_l1_model}
 \alias{fsl_l1_model}
-\title{note: this is a small adapation from the original fslSCEPTICModel to avoid use of the clockfit objects and to move to the
-simpler build_design_matrix approach and the use of the trial_statistics csv files from vba_fmri}
+\title{This function specifies a first-level GLM model in FSL based on a build_design_matrix
+  bdm object.}
 \usage{
 fsl_l1_model(
   id = NULL,
@@ -28,8 +28,8 @@ you wish to setup multiple models, this is handled upstream in setup_l1_models.R
 Prefer to pass these via the build_design_matrix object in $run_4d_files}
 }
 \description{
-note: this is a small adapation from the original fslSCEPTICModel to avoid use of the clockfit objects and to move to the
-simpler build_design_matrix approach and the use of the trial_statistics csv files from vba_fmri
+This function specifies a first-level GLM model in FSL based on a build_design_matrix
+  bdm object.
 }
 \author{
 Michael Hallquist

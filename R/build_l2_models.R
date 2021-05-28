@@ -215,13 +215,13 @@ build_l2_models <- function(data, model_set = NULL,
         data$dummy <- rnorm(nrow(data))
         ffit <- update.formula(res, "dummy ~ .") # add LHS
         mm$lmfit <- lm(ffit, data)
-        mm$model_regressors <- colnames(modelmat) # actual regressors after expanding categorical variables
+        mm$regressors <- colnames(modelmat) # actual regressors after expanding categorical variables
         mm$model_matrix <- modelmat
 
         # handle coefficient aliasing
         al <- alias(mm$lmfit)
         if (!is.null(al$Complete)) {
-            cat("Problems with aliased (redundant) terms in model.\nWe will drop these from the design.\n\n")
+            cat("Problems with aliased (redundant) terms in model.\n\n")
             bad_terms <- rownames(al$Complete)
             cat(paste(bad_terms, collapse = ", "), "\n\n")
 
@@ -236,15 +236,12 @@ build_l2_models <- function(data, model_set = NULL,
             mm$model_matrix_noalias <- modelmat[, grep(":", good_terms, fixed = TRUE, value = TRUE, invert = TRUE)]
             modeldf <- as.data.frame(mm$model_matrix_noalias)
             modeldf$dummy <- data$dummy # copy across dummy DV for fitting
-            mm$lmfit_noalias <- lm(newf, modeldf)            
+            mm$lmfit_noalias <- lm(newf, modeldf)
             mm$aliased_terms <- bad_terms
 
             # N.B. emmeans needs to calculate contrasts on the original design to see the factor structure
             # So, we also need to drop out columns from the emmeans linfct
         }
-
-        #emmeans(mm$lmfit, ~rewFunc)
-        #xx <- emmeans(mm$lmfit, ~ emotion * rewFunc)
 
         # walk through contrast generation for this model
         mm <- specify_contrasts(mm)

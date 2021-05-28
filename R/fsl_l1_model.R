@@ -43,7 +43,7 @@ fsl_l1_model <- function(
   )
 
   l1_contrasts <- gpa$l1_models$models[[model_name]]$contrasts #contrast matrix for this model
-  regressors <- gpa$l1_models$models[[model_name]]$model_regressors #names of regressors in design matrix for this model
+  regressors <- gpa$l1_models$models[[model_name]]$regressors #names of regressors in design matrix for this model
 
   if (dir.exists(fsl_run_output_dir) &&
     file.exists(file.path(fsl_run_output_dir, "feat_l1_inputs.rds")) &&
@@ -58,56 +58,22 @@ fsl_l1_model <- function(
 
   feat_l1_df <- data.frame(
     id = id, run = d_obj$runs_to_output, run_volumes = d_obj$run_volumes,
-    mr_files = mr_files, model = model_name, feat_file = NA_character_
+    mr_files = mr_files, l1_model = model_name, feat_file = NA_character_
   )
   all_feat_files <- c()
 
   #FSL computes first-level models on individual runs
   for (rr in seq_along(mr_files)) {
     lg$info("Creating FSF for file: %s", mr_files[rr])
-    this_template <- fsf_template #start with default copy of template for this run
+    this_template <- fsf_template # start with default copy of template for this run
 
-    all_confounds_mat <- c()
+
     if (!is.null(gpa$confound_settings$l1_confound_regressors)) {
-      #handle setup of confound regressors -- read motion file
-      if (!is.null(gpa$confound_settings$motion_params_file)) {
-        motion_file <- file.path(normalizePath(file.path(dirname(mr_files[rr]), gpa$confound_settings$motion_params_file)))
-        if (checkmate::test_file_exists(motion_file)) {
-          mot_mat <- generate_motion_regressors(motion_file,
-            col.names = gpa$confound_settings$motion_params_columns,
-            regressors = gpa$confound_settings$l1_confound_regressors, 
-            drop_volumes = gpa$drop_volumes,
-            last_volume = feat_l1_df$run_volumes[rr]
-          )
-          all_confounds_mat <- cbind(all_confounds_mat, mot_mat)
-        } else {
-          lg$warn("Cannot locate motion parameters file %s", motion_file)
-        }
-      }
-
-      if (!is.null(gpa$confound_settings$confound_file)) {
-        confound_file <- normalizePath(file.path(dirname(mr_files[rr]), gpa$confound_settings$confound_file))
-        if (checkmate::test_file_exists(confound_file)) {
-          #read in file and handle it
-          confounds <- data.table::fread(confound_file, col.names=gpa$confound_settings$confound_columns)
-          confounds_present <- intersect(gpa$confound_settings$l1_confound_regressors, names(confounds))
-          confound_mat <- confounds[(1 + gpa$drop_volumes):feat_l1_df$run_volumes[rr], ..confounds_present]
-          missing_cols <- setdiff(gpa$confound_settings$l1_confound_regressors, unique(c(names(mot_mat), names(confounds))))
-          if (length(missing_cols) > 0L) {
-            lg$warn("Cannot find confound column: %s in file: %s", missing_cols, confound_file)
-          }
-
-          # error on mismatching time series length (rows)
-          if (!is.null(all_confounds_mat)) { stopifnot(nrow(all_confounds_mat) ==  nrow(confound_mat)) }
-          all_confounds_mat <- cbind(all_confounds_mat, confound_mat)
-        } else {
-          lg$warn("Cannot locate confound file %s", confound_file)
-        }
-      }
-
-      outfile <- file.path(fsl_run_output_dir, paste0("run", feat_l1_df$run[rr], "_confounds.txt"))
-      write.table(all_confounds_mat, file=outfile, col.names=FALSE, row.names=FALSE)
-      this_template <- gsub(".CONFOUNDS.", outfile, this_template, fixed=TRUE)
+      confounds <- get_confound_txt(mr_files[rr], gpa,
+        drop_volumes = gpa$drop_volumes,
+        last_volume = feat_l1_df$run_volumes[rr]
+      )
+      this_template <- gsub(".CONFOUNDS.", confounds, this_template, fixed = TRUE)
     } else { #disable confounds
       this_template <- gsub("set fmri(confoundevs) 1", "set fmri(confoundevs) 0", this_template, fixed=TRUE) #disable
       l1 <- grep("# Confound EVs text file for analysis 1", this_template, fixed = TRUE)
@@ -196,7 +162,7 @@ fsl_l1_model <- function(
     require(parallel)
     nnodes <- min(length(all_feat_files), parallel::detectCores())
     lg$info("Starting fork cluster with %d workers", nnodes)
-    cl_fork <- makeForkCluster(nnodes=nnodes)
+    cl_fork <- parallel::makeForkCluster(nnodes=nnodes)
     runfeat <- function(fsf) {
       runname <- basename(fsf)
       runFSLCommand(paste("feat", fsf), stdout=file.path(dirname(fsf), paste0("feat_stdout_", runname)),
@@ -204,8 +170,8 @@ fsl_l1_model <- function(
     }
 
     lg$info("Executing all subject feat files with clusterApply")
-    clusterApply(cl_fork, all_feat_files, runfeat)
-    stopCluster(cl_fork)
+    parallel::clusterApply(cl_fork, all_feat_files, runfeat)
+    parallel::stopCluster(cl_fork)
   }
 
   return(feat_l1_df)

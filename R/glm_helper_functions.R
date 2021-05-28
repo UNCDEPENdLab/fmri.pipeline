@@ -15,10 +15,10 @@ runAFNICommand <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, ...) {
   }
   
   Sys.setenv(AFNIDIR=afnidir) #export to R environment
-  afnisetup=paste0("AFNIDIR=", afnidir, "; PATH=${AFNIDIR}:${PATH}; DYLD_FALLBACK_LIBRARY_PATH=${AFNIDIR}; ${AFNIDIR}/")
-  afnicmd=paste0(afnisetup, args)
-  if (!is.null(stdout)) { afnicmd=paste(afnicmd, ">", stdout) }
-  if (!is.null(stderr)) { afnicmd=paste(afnicmd, "2>", stderr) }
+  afnisetup <- paste0("AFNIDIR=", afnidir, "; PATH=${AFNIDIR}:${PATH}; DYLD_FALLBACK_LIBRARY_PATH=${AFNIDIR}; ${AFNIDIR}/")
+  afnicmd  <- paste0(afnisetup, args)
+  if (!is.null(stdout)) { afnicmd <- paste(afnicmd, ">", stdout) }
+  if (!is.null(stderr)) { afnicmd <- paste(afnicmd, "2>", stderr) }
   cat("AFNI command: ", afnicmd, "\n")
   retcode <- system(afnicmd, ...)
   return(retcode)
@@ -104,8 +104,8 @@ truncate_runs <- function(s, mrfiles, mrrunnums, niftivols, drop_volumes=0) {
     #iti_durations <- s$runs[[ mrrunnums[r] ]]$orig_data_frame$iti_ideal #for clockfit objects
     #last_iti <- s$runs[[ mrrunnums[r] ]]$iti_onset[length(s$runs[[ mrrunnums[r] ]]$iti_onset)]
 
-    iti_durations <- s %>% dplyr::filter(run == mrrunnums[r]) %>% pull(iti_ideal) #for outputs from parse_sceptic_outputs (2018+)
-    last_iti <- s %>% dplyr::filter(run == mrrunnums[r]) %>% pull(iti_onset) %>% tail(n=1)
+    iti_durations <- s %>% dplyr::filter(run == mrrunnums[r]) %>% dplyr::pull(iti_ideal) #for outputs from parse_sceptic_outputs (2018+)
+    last_iti <- s %>% dplyr::filter(run == mrrunnums[r]) %>% dplyr::pull(iti_onset) %>% tail(n=1)
 
     last_vol_behavior <- floor(last_iti + iti_durations[length(iti_durations)]) #use floor to select last vol in the iti window
     first_vol <- drop_volumes #first volume to use for analysis 
@@ -170,22 +170,29 @@ truncate_runs <- function(s, mrfiles, mrrunnums, niftivols, drop_volumes=0) {
 #' @param col.names names of columns in \code{motion_params}, in order from left to right
 #' @param regressors names of regressors to generate and return to caller
 #' @param drop_volumes number of volumes to drop from beginning of motion params
+#' @param last_volume final volume to include from motion params (if truncated at end). If \code{NULL},
+#'   then the end of the time series is not truncated.
+#' @param rot_units The units of the rotation parameters. Default is "rad" for radians
+#' @param tra_units The units of the translation parameter. Default is "mm" for millimeters
 #'
 #' @importFrom data.table fread
 #' @importFrom checkmate assert_file_exists assert_subset assert_integerish
+#' @keywords internal
 generate_motion_regressors <- function(motion_params = "motion.par",
                                        col.names = c("rx", "ry", "rz", "tx", "ty", "tz"),
                                        regressors = c("rx", "ry", "rz", "tx", "ty", "tz"),
-                                       demean = TRUE, drop_volumes = 0, last_volume=NULL,
-                                       rot_unit="rad", tra_units="mm") {
+                                       demean = TRUE, drop_volumes = 0L, last_volume=NULL,
+                                       rot_units="rad", tra_units="mm") {
 
   checkmate::assert_file_exists(motion_params)
   if (is.null(col.names)) { col.names <- c("rx", "ry", "rz", "tx", "ty", "tz") } #explicit defaults in case of null
   checkmate::assert_subset(col.names, c("rx", "ry", "rz", "tx", "ty", "tz"))
+  checkmate::assert_logical(demean)
+  checkmate::assert_integerish(drop_volumes, lower=0)
 
-  #Regressors that are not motion-related can be passed in from outside (since we have a combined l1_confound_regressors argument).
-  #These could include CSF, WM, or whatever. Subset down to just the values that can be calculated from motion params alone so that
-  #the logic below of parameter naming holds up.
+  # Regressors that are not motion-related can be passed in from outside (since we have a combined 
+  # l1_confound_regressors argument). These could include CSF, WM, or whatever. Subset down to just
+  # the values that can be calculated from motion params alone so that the logic below of parameter naming holds up.
   regressors <- intersect(regressors,
     c("fd", "rx", "ry", "rz", "tx", "ty", "tz",
     "drx", "dry", "drz", "dtx", "dty", "dtz",
@@ -194,13 +201,13 @@ generate_motion_regressors <- function(motion_params = "motion.par",
 
   #if none of the confound regressors is a motion parameter, then quietly return NULL
   if (length(regressors) == 0L) { return(invisible(NULL)) }
-  
+
   mot <- data.table::fread(motion_params, col.names=col.names)
 
   if (is.null(last_volume)) { last_volume <- nrow(mot) }
   checkmate::assert_integerish(last_volume, upper=nrow(mot))
-  
-  mot <- mot[(1+drop_volumes):last_volume,]
+
+  mot <- mot[(1+drop_volumes):last_volume, ]
 
   if ("fd" %in% regressors || any(derivcols <- grepl("^q?d{1}.*", regressors, perl=TRUE))) {
     motderiv <- mot[, lapply(.SD, function(x) { c(0, diff(x)) })]
@@ -226,12 +233,12 @@ generate_motion_regressors <- function(motion_params = "motion.par",
     }
     mot <- cbind(mot, fd=fd)
   }
-  
+
   mot <- mot[, ..regressors] #keep regressors of interest
   if (isTRUE(demean)) {
     mot <- mot[, lapply(.SD, function(x) { x - mean(x, na.rm=TRUE) }) ] #demean all columns
   }
-  
+
   ##just PCA motion on the current run
   ##mregressors <- pca_motion(mr_files[r], runlengths[r], motion_parfile="motion.par", numpcs=3, drop_volumes=drop_volumes)$motion_pcs_concat
 
@@ -279,21 +286,141 @@ pca_motion <- function(motion_df, num_pcs=3L, zscore=TRUE, verbose=FALSE) {
   checkmate::assert_integerish(num_pcs, lower=1, upper=50)
   checkmate::assert_logical(zscore)
   checkmate::assert_logical(verbose)
-  
+
   #compute the PCA decomposition of motion parameters and their derivatives
   pc <- prcomp(motion_df, retx=TRUE, scale.=zscore)
   cumvar <- cumsum(pc$sdev^2/sum(pc$sdev^2))
-  
-  if (verbose) message("first", num_pcs, "motion principal components account for: ", round(cumvar[num_pcs], 3))
+
+  if (isTRUE(verbose)) message("first", num_pcs, "motion principal components account for: ", round(cumvar[num_pcs], 3))
   mregressors <- pc$x[,1:num_pcs] #cf Churchill et al. 2012 PLoS ONE
   attr(mregressors, "variance.explained") <- cumvar[num_pcs]
-  
-  if (verbose) {
+
+  if (isTRUE(verbose)) {
     cat("Multiple correlation of motion parameters:\n\n")
     print(round(sqrt(psych::smc(motion_df)), 2))
   }
-  
+
   return(as.data.frame(mregressors))
+}
+
+
+#' helper function to generate confounds txt file for inclusion as additional regressors
+#'
+#' @param mr_file an absolute path to a nifti file for a single run
+#' @param gpa a \code{glm_pipeline_arguments} object containing pipeline specification
+get_confound_txt <- function(mr_file, gpa, drop_volumes=0L, last_volume=NULL) {
+  checkmate::assert_string(mr_file)
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_integerish(drop_volumes, lower = 0)
+  checkmate::assert_integerish(last_volumes, null.ok = TRUE)
+
+  lg <- lgr::get_logger("glm_pipeline/l1_setup")
+
+  rinfo <- gpa$run_data %>% dplyr::filter(run_nifti == !!mr_file)
+  if (nrow(rinfo) > 1L) {
+    print(rinfo)
+    lg$error("Multiple matches for a single run_nifti in get_confound_txt.")
+    return(NULL)
+  } else if (nrow(rinfo) == 0L) {
+    lg$error("Unable to locate a record in gpa$run_data for run_nifti: ", mr_file)
+    return(NULL)
+  }
+
+  # part these in an analysis-level subfolder, not a particular model, since they
+  # are re-used across models.
+  # note: normalizePath will fail to evaluate properly if directory does not exist
+  analysis_outdir <- file.path(
+    normalizePath(file.path(dirname(mr_files[1L]), "..")),
+    gpa$analysis_name
+  )
+
+  if (!dir.exists(analysis_outdir)) {
+    lg$info("Creating analysis directory: %s", analysis_outdir)
+    dir.create(analysis_outdir, showWarnings=FALSE, recursive=TRUE)
+  }
+
+  expect_file <- file.path(analysis_outdir, paste0("run", rinfo$run_number[1], "_l1_confounds.txt"))
+  if (file.exists(expect_file)) {
+    lg$debug("Returning extant file: %s in get_confound_txt", expect_file)
+    return(expect_file)
+  }
+
+  confound_df <- NULL
+  if (isTRUE(rinfo$confound_file_present[1])) {
+    lg$debug("Reading confound file: %s", rinfo$confound_file[1])
+    confound_df <- tryCatch(data.table::fread(rinfo$confound_file[1]), error = function(e) {
+      lg$error("Failed to read confound file: %s with error %s", rinfo$confound_file[1], as.character(e))
+      return(NULL)
+    })
+
+    if (!is.null(gpa$confound_settings$confound_columns) && !is.null(confound_df)) {
+      if (length(gpa$confound_settings$confound_columns) != ncol(confound_df)) {
+        lg$warn(
+          "Mismatch in number of columns in confound file: %s relative to $confound_settings$confound_columns",
+          rinfo$confound_file[1]
+        )
+      }
+      data.table::setnames(confound_df, gpa$confound_settings$confound_columns)
+    }
+
+    confound_df <- confound_df[(1 + drop_volumes):last_volume, ]
+  }
+
+  motion_df <- NULL
+  if (isTRUE(rinfo$motion_params_present[1])) {
+    lg$debug("Reading motion file: %s", rinfo$motion_params[1])
+    motion_df <- tryCatch({
+      generate_motion_regressors(
+        rinfo$motion_params[1],
+        col.names = gpa$confound_settings$motion_params_columns,
+        regressors = gpa$confound_settings$confound_columns,
+        drop_volumes = drop_volumes, last_volume = last_volume
+      )} , error = function(e) {
+      lg$error("Failed to read motion file: %s with error %s", rinfo$motion_params[1], as.character(e))
+      return(NULL)
+    })
+
+    if (!is.null(gpa$confound_settings$motion_params_columns) && !is.null(motion_df)) {
+      if (length(gpa$confound_settings$motion_params_columns) != ncol(motion_df)) {
+        lg$warn(
+          "Mismatch in number of columns in confound file: %s relative to $confound_settings$confound_columns",
+          rinfo$motion_params[1]
+        )
+      }
+      data.table::setnames(motion_df, gpa$confound_settings$motion_params_columns)
+    }
+
+  }
+
+  if (nrow(motion_df) != nrow(confound_df)) {
+    lg$error("Number of rows in motion_df is: %d and in confound_df is %d. Cannot combine", nrow(motion_df), nrow(confound_df))
+    return(NULL)
+  } else {
+    #prefer confound_df as authoritative in cases where motion_df has overlapping columns
+    overlap_names <- intersect(names(motion_df), names(confound_df))
+    if (length(overlap_names) > 0L) {
+      lg$info(
+        "Motion parameters have overlapping columns with confounds file: %s. Preferring confounds to motion params",
+        rinfo$confound_file[1]
+      )
+      lg$info("Overlap: %s", overlap_names)
+      data.table::setnames(motion_df, old = overlap_names, new = paste0(overlap_names, ".mot"))
+    }
+
+    confounds <- dplyr::bind_cols(confound_df, motion_df)
+  }
+
+  if (!all(gpa$confound_settings$l1_confound_regressors %in% names(confounds))) {
+    lg$warn("Missing confound columns for subject: %s, session: %s", rinfo$id[1], rinfo$session[1])
+    lg$warn("Column: %s", setdiff(gpa$confound_settings$l1_confound_regressors, names(confounds)))
+
+    confounds <- confounds[, intersect(gpa$confound_settings$l1_confound_regressors, names(confounds))]
+  }
+
+  lg$debug("Writing l1 confounds to file: %s", expect_file)
+  write.table(confounds, expect_file, row.names=FALSE, col.names=FALSE)
+
+  return(expect_file)
 }
 
 generateRunMask <- function(mrfiles, outdir=getwd(), outfile="runmask") {
@@ -302,7 +429,7 @@ generateRunMask <- function(mrfiles, outdir=getwd(), outfile="runmask") {
   for (f in seq_along(mrfiles)) {
     runFSLCommand(paste0("fslmaths ", mrfiles[f], " -Tmin -bin ", outdir, "/tmin", f))#, fsldir="/usr/local/ni_tools/fsl")
   }
-  
+
   ##sum mins together over runs and threshold at number of runs
   runFSLCommand(paste0("fslmaths ", paste(paste0(outdir, "/tmin", seq_along(mrfiles)), collapse=" -add "), " ", outdir, "/tminsum"))#, fsldir="/usr/local/ni_tools/fsl")
   runFSLCommand(paste0("fslmaths ", outdir, "/tminsum -thr ", length(mrfiles), " -bin ", outdir, "/", outfile))#, fsldir="/usr/local/ni_tools/fsl")
@@ -361,14 +488,14 @@ get_cluster_means <- function(roimask, ni4d) {
     nsubbriks <- dim(ni4d)[4]
     nvox <- nrow(mi)
     mi4d <- cbind(pracma::repmat(mi, nsubbriks, 1), rep(1:nsubbriks, each=nvox))
-    
+
     mat <- matrix(ni4d[mi4d], nrow=nvox, ncol=nsubbriks) #need to manually reshape into matrix from vector
     #for each subject, compute huber m-estimator of location/center Winsorizing at 2SD across voxels (similar to voxel mean)
     #clusavg <- apply(mat, 2, function(x) { MASS::huber(x, k=2)$mu })
     clusavg <- apply(mat, 2, mean)
-    
+
     return(clusavg)
-  })          
+  })
 }
 
 #function to extract mean beta series
@@ -380,21 +507,24 @@ get_beta_series <- function(inputs, roimask, n_bs=50) {
     run_dirs <- list.files(path=inputs[i], pattern="FEAT_LVL1_run\\d+\\.feat", recursive=FALSE, full.names=TRUE)
     run_betas <- list()
     
-    for (r in 1:length(run_dirs)) {
+    for (r in seq_along(run_dirs)) {
       runnum <- as.numeric(sub(".*/FEAT_LVL1_run(\\d+)\\.feat", "\\1", run_dirs[r], perl=TRUE))
       copes <- file.path(run_dirs[r], "stats", paste0("cope", 1:n_bs, ".nii.gz"))
 
       if (!all(file.exists(copes))) {
         cat("File listing in dir:", run_dirs[r], list.files(run_dirs[r], recursive=FALSE), sep="\n", append=TRUE)
-        cat("Cannot find all ", length(copes), " beta series copes in: ", run_dirs[r], "\n", file="beta_series_errors.txt", append=TRUE)
+        cat("Cannot find all ", length(copes), " beta series copes in: ",
+          run_dirs[r], "\n",
+          file = "beta_series_errors.txt", append = TRUE
+        )
         next #don't error for now, just omit
       }
-      
+
       #in testing, it is faster to use readNIfTI to read each cope file individually (7.5s) than to use fslmerge + readNIfTI on the 4d (13s)
       #concat_file <- tempfile()
       #system.time(runFSLCommand(paste("fslmerge -t", concat_file, paste(copes, collapse=" "))))
       #system.time(cout <- readNIfTI(concat_file, reorient=FALSE)@.Data)
-      
+
       cout <- do.call(abind, list(along=4, lapply(copes, function(x) { readNIfTI(x, reorient=FALSE)@.Data })))
       beta_series_cluster_means <- get_cluster_means(roimask, cout)
       beta_melt <- reshape2::melt(beta_series_cluster_means, value.name="bs_value", varnames=c("trial", "cluster_number")) %>%
@@ -426,4 +556,39 @@ summarize_contrasts <- function(cmat) {
     }
     cat("-----\n")
   })
+}
+
+#' helper function to rename columns of input data.frame to internal nomenclature
+#'   based on the variable mapping (vm) vector
+#' 
+#' @param df a data.frame containing columns to be renamed to internal standards
+#' @param vm a named vector of columns in \code{df} that identify internal constructs
+#'   such as id, session, and run.
+#'
+#' @return a modified version of \code{df} with column names modified to use internal names
+#' @importFrom data.table setnames
+#' @keywords internal
+names_to_internal <- function(df, vm) {
+  # look for naming collisions
+  nm <- names(df)
+  nv <- names(vm)
+  conflict <- intersect(nm[nm %in% names(vm)], nv[nv != vm])
+
+  if (length(conflict) > 0L) {
+    new_names <- paste0("..", conflict, "..")
+    cat(
+      "To avoid naming conflicts, renaming these columns:", paste(conflict, collapse = ", "),
+      "to:", paste0(new_names, collapse = ", "), "\n"
+    )
+
+    nm[which(nm %in% conflict)] <- new_names
+  }
+
+  # convert variable names to internal constructs via the variable mapping
+  vm_present <- vm[which(vm %in% nm)]
+  vm_pos <- sapply(vm_present, function(x) { which(nm == x)[1] })
+  nm[vm_pos] <- names(vm_present)
+
+  return(nm)
+
 }
