@@ -127,15 +127,19 @@ finalize_pipeline_configuration <- function(gpa) {
     if ("confound_file" %in% names(gpa$run_data)) {
       message("confound_file column already in run_data. Not using confound_file specification.")
     } else {
-      gpa$run_data$confound_file <- normalizePath(
-        file.path(dirname(gpa$run_data$run_nifti), gpa$confound_settings$confound_file)
-      )
+      gpa$run_data$confound_file <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
+        if (isTRUE(gpa$run_data$run_nifti_present[ii])) {
+          normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$confound_file))
+        } else {
+          NA_character_
+        }
+      })
     }
     gpa$run_data$confound_file_present <- file.exists(gpa$run_data$confound_file)
   } else {
     if (!"confound_file" %in% names(gpa$run_data)) {
       gpa$run_data$confound_file <- gpa$run_data$confound_file_present <- NA_character_
-    }    
+    }
   }
 
   return(gpa)

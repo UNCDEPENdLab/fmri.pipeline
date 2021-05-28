@@ -107,7 +107,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   glm_software <- tolower(glm_software)
   checkmate::assert_subset(glm_software, c("fsl", "spm", "afni"))
-  checkmate::assert_integerish(n_expected_runs, null.ok=TRUE)
+  checkmate::assert_integerish(n_expected_runs, lower=1L, null.ok=TRUE)
 
   # setup working directory, if needed
   if (!dir.exists(working_directory)) {
@@ -231,6 +231,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     truncate_runs = truncate_runs,
     force_l1_creation = force_l1_creation,
     confound_settings = confound_settings,
+    n_expected_runs = n_expected_runs,
 
     # l1 analysis details
     fmri_file_regex = fmri_file_regex,
