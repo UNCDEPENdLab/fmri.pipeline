@@ -17,7 +17,8 @@
 #' @param pad_after Number of seconds to include in the epoch time window after the event of interest.
 #' @param logfile Name of log file containing event-locking problems
 #' 
-#' @importFrom dplyr filter pull bind_rows
+#' @importFrom dplyr filter pull
+#' @importFrom data.table rbindlist
 #' @importFrom checkmate assert_numeric assert_data_frame assert_string assert_subset
 #' 
 #' @export
@@ -95,7 +96,7 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
   names(tlist) <- trials
 
   #combine rows to stack trial-locked time series for this atlas value
-  tdf <- bind_rows(tlist)
+  tdf <- data.table::rbindlist(tlist)
 
   #convert to a keyed fmri_ts object for consistency
   res <- fmri_ts$new(ts_data=tdf, event_data=fmri_obj$event_data, vm=fmri_obj$vm, tr=fmri_obj$tr)
@@ -145,7 +146,7 @@ get_medusa_interpolated_ts <- function(fmri_obj, event=NULL, time_before=-3.0, t
   #talign is an fmri_ts object keyed by trial (and other keying variables)
   talign <- event_lock_ts(fmri_obj, event=event, time_before=time_before, time_after=time_after,
     pad_before=pad_before, pad_after=pad_after, collide_before=collide_before, collide_after=collide_after)
-
+  
   #need to interpolate by key variables
   interpolated_epochs <- interpolate_fmri_epochs(talign, time_before=time_before, time_after=time_after,
     output_resolution=output_resolution, group_by=group_by)  
@@ -269,7 +270,11 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
     vcols <- grep("value_.*", names(interp_agg), value=TRUE)
     tout <- seq(time_before, time_after, by=output_resolution)
     df <- data.frame(evt_time=tout, sapply(vcols, function(cname) {
-      approx(x=interp_agg[[evt_time]], y=interp_agg[[cname]], xout=tout)$y
+      if (all(is.na(interp_agg[[cname]]))) {
+        rep(NA_real_, length(tout)) #if all inputs are NA, do not try to interpolate
+      } else {
+        approx(x=interp_agg[[evt_time]], y=interp_agg[[cname]], xout=tout)$y
+      }
     }, simplify=FALSE))
 
     return(df)

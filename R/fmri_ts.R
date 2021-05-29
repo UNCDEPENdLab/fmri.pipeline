@@ -20,6 +20,17 @@ fmri_ts <- R6::R6Class("fmri_ts",
     kvars=NULL, #internal names of key variables
     vvars=NULL, #internal names of value variables
     vmvec=NULL,  #mapping between input names and internal names
+    update_variable_tracking=function(vm) {
+      private$vmvec <- unlist(vm) #yields key1, key2, etc.
+      if ("key" %in% names(vm)) {
+        # if there is more than one key, unlist adds a number to each element of the vector
+        # but if there is only one key, unlist keeps it as 'key'
+        private$kvars <- if (length(vm$key) > 1L) paste0("key", seq_along(vm$key)) else "key"
+      }
+      if ("value" %in% names(vm)) {
+        private$vvars <- if (length(vm$value) > 1L) paste0("value", seq_along(vm$value)) else "value"
+      }
+    },
     names_to_original=function(dt) {
       setnames(dt, names(private$vmvec), private$vmvec, skip_absent=TRUE)
     },
@@ -77,15 +88,7 @@ fmri_ts <- R6::R6Class("fmri_ts",
       checkmate::assert_data_frame(event_data, null.ok=TRUE)
 
       #setup standardized naming
-      private$vmvec <- unlist(vm) #yields key1, key2, etc.
-      if ("key" %in% names(vm)) {
-        # if there is more than one key, unlist adds a number to each element of the vector
-        # but if there is only one key, unlist keeps it as 'key'
-        private$kvars <- if (length(vm$key) > 1L) paste0("key", seq_along(vm$key)) else "key"
-      }
-      if ("value" %in% names(vm)) {
-        private$vvars <- if (length(vm$value) > 1L) paste0("value", seq_along(vm$value)) else "value"
-      }
+      private$update_variable_tracking(vm)
 
       if (!is.null(event_data)) {
         if (!is.null(vm$id)) {
@@ -113,7 +116,7 @@ fmri_ts <- R6::R6Class("fmri_ts",
         #handle internal renaming to make programming with these objects easy
         private$names_to_internal(event_data)
 
-        setorderv(event_data, vm$trial) #order by trial
+        data.table::setorderv(event_data, vm$trial) #order by trial
       }
 
       # verify presence of required columns
@@ -143,7 +146,7 @@ fmri_ts <- R6::R6Class("fmri_ts",
     get_ts = function(orig_names=FALSE) {
       tsd <- data.table::copy(self$ts_data) #ensure that we copy the object to avoid altering $ts_data
       for (kk in seq_along(self$ts_keys)) { tsd[, names(self$ts_keys)[kk] := inverse.rle(self$ts_keys[[kk]])] }
-      setcolorder(tsd, private$kvars) #put keying variables first in object
+      data.table::setcolorder(tsd, private$kvars) #put keying variables first in object
       if (isTRUE(orig_names)) { private$names_to_original(tsd) }
       return(tsd)
     },
@@ -151,17 +154,18 @@ fmri_ts <- R6::R6Class("fmri_ts",
     #' @description method to add a variable in ts_data to the set of keying variables for further use
     #' @param kv A vector of one or more variables to RLE-encode and add as keys the object
     add_keys = function(kv) {
+      checkmate::assert_character(kv)
       stopifnot(all(kv %in% names(self$ts_data)))
-      for (vname in kv) {
-        nkeys <- length(private$kvars)
-        newvar <- paste0("key", nkeys+1)
-        private$kvars <- c(private$kvars, newvar)
-        self$ts_keys[[newvar]] <- rle(self$ts_data[[vname]]) # RLE-compress the new key
+      nkeys <- length(private$kvars) #number of existing keys
+      for (vv in seq_along(kv)) {
+        vname <- kv[vv]
+        self$ts_keys[[nkeys+vv]] <- rle(self$ts_data[[vname]]) # RLE-compress the new key
       }
-
+      
       self$vm[["key"]] <- c(self$vm[["key"]], kv)
-      private$vmvec <- unlist(self$vm) #yields key1, key2, etc.
-
+      private$update_variable_tracking(self$vm) #refresh mapping to internal names
+      names(self$ts_keys) <- private$kvars #name ts_keys according to key variables to let get_ts() work
+      
       self$ts_data[, (kv) := NULL] #drop new keys from rectangular data
     },
 
