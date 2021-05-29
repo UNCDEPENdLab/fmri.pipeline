@@ -46,19 +46,24 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
   all_subj_l1_list <- foreach(subj_df = iter(gpa$subject_data, by="row"), .inorder=FALSE, .packages=c("dependlab", "dplyr"),
     .export=c("lg", "gpa", "truncateRuns", "fsl_l1_model", "spm_l1_model", "runFSLCommand")) %dopar% {
       subj_df <- subj_df # avoid complaints about visible global binding in R CMD check
-      subid <- subj_df$id
+      subj_id <- subj_df$id
+      subj_session <- subj_df$session
 
       #find the run data for analysis
-      rdata <- gpa$run_data %>% dplyr::filter(id == !!subid & run_nifti_present == TRUE)
-      mr_files <- rdata %>% dplyr::pull("run_nifti")
+      rdata <- gpa$run_data %>% dplyr::filter(id == !!subj_id & session == !!subj_session & run_nifti_present == TRUE)
+      mr_files <- get_mr_abspath(rdata, "run_nifti")
       mr_run_nums <- rdata %>% dplyr::pull("run_number")
 
       subj_mr_dir <- subj_df$mr_dir
 
-      #process files
+      # process files
       if (length(mr_files) == 0L) {
         lg$warn("Unable to find any preprocessed fMRI files in dir: %s", subj_mr_dir)
         return(NULL)
+      } else if (any(!file.exists(mr_files))) {
+        lg$warn("Could not find some of the expected preprocessed fMRI files. These will be dropped.")
+        lg$warn("Missing: %s", mr_files[!file.exists(mr_files)])
+        mr_files <- mr_files[file.exists(mr_files)]
       } else {
         lg$debug(paste("MR files to analyze:", mr_files)) #log files that were found
       }
@@ -98,14 +103,14 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         # setup design matrix for any given software package
         m_events <- data.table::rbindlist(
           lapply(gpa$l1_models$events, function(this_event) {
-            this_event %>% dplyr::filter(id == !!subid)
+            this_event %>% dplyr::filter(id == !!subj_id & session == !!subj_session)
           })
         )
 
         m_signals <- lapply(gpa$l1_models$signals[gpa$l1_models$models[[this_model]]$signals], function(this_signal) {
           # filter down to this id if the signal is a data.frame
           if (inherits(this_signal$value, "data.frame")) {
-            this_signal$value <- this_signal$value %>% dplyr::filter(id == !!subid)
+            this_signal$value <- this_signal$value %>% dplyr::filter(id == !!subj_id & session == !!subj_session)
           }
           return(this_signal)
         })
@@ -130,22 +135,23 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         bdm_args$runs_to_output <- mr_run_nums
         bdm_args$output_directory <- file.path(subj_out, "timing_files")
         d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error=function(e) {
-          lg$error("Failed build_design_matrix for subject: %s, model: %s", subid, this_model)
+          lg$error("Failed build_design_matrix for subject: %s, session: %s, model: %s", subj_id, subj_session, this_model)
           lg$error("Error message: %s", as.character(e))
           return(NULL)
         })
 
         if (is.null(d_obj)) { next } #skip to next iteration on error
 
-        save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, mr_files, run_lengths, subid, this_model,
+        save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, mr_files, run_lengths, subj_id, subj_session, this_model,
           file=file.path(subj_out, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData")))
 
         if ("fsl" %in% gpa$glm_software) {
           #Setup FSL run-level models for each combination of signals
           #Returns a data.frame of feat l1 inputs and the fsf file
-          feat_l1_df <- tryCatch(fsl_l1_model(id=subid, d_obj, gpa, this_model, nvoxels = nvoxels, lg=lg),
+          feat_l1_df <- tryCatch({fsl_l1_model(id=subj_id, session=subj_session, d_obj=d_obj,
+          gpa = gpa, this_model, nvoxels = nvoxels, lg=lg)},
             error=function(e) {
-              lg$error("Problem with fsl_l1_model. Model: %s, Subject: %s", this_model, subid)
+              lg$error("Problem with fsl_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)
               lg$error("Error message: %s", as.character(e))
               return(NULL)
             })
@@ -161,7 +167,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
           #Setup spm run-level models for each combination of signals
           spm_files <- tryCatch(spm_l1_model(d_obj, gpa, this_model, mr_files),
             error=function(e) {
-              lg$error("Problem running spm_l1_model. Model: %s, Subject: %s", this_model, subid)
+              lg$error("Problem running spm_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)
               lg$error("Error message: %s", as.character(e))
               return(NULL)
             })
@@ -169,7 +175,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         }
       }
 
-      lg$info("Completed processing of subject: %s", subid)
+      lg$info("Completed processing of subject: %s", subj_id)
       return(l1_file_setup)
     }
 

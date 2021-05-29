@@ -4,10 +4,22 @@
 \alias{get_confound_txt}
 \title{helper function to generate confounds txt file for inclusion as additional regressors}
 \usage{
-get_confound_txt(mr_file, gpa, drop_volumes = 0L, last_volume = NULL)
+get_confound_txt(
+  id = NULL,
+  session = NULL,
+  run_number = NULL,
+  gpa,
+  drop_volumes = 0L,
+  last_volume = NULL,
+  demean = TRUE
+)
 }
 \arguments{
-\item{mr_file}{an absolute path to a nifti file for a single run}
+\item{id}{The subject id}
+
+\item{session}{The session number}
+
+\item{run_number}{The run number}
 
 \item{gpa}{a \code{glm_pipeline_arguments} object containing pipeline specification}
 }

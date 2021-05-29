@@ -7,6 +7,13 @@
 #' @importFrom magrittr %>%
 finalize_pipeline_configuration <- function(gpa) {
 
+  lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
+
+  #sort out file locations
+  if (is.null(gpa$group_output_directory) || gpa$group_output_directory == "default") {
+    gpa$group_output_directory <- file.path(getwd(), "group_analyses", gpa$analysis_name)
+  }
+
   # new approach: use internal model names for creating output directories at subject level
   # default to <analysis_name>/<l1_model_name>
   # add suffix if using preconvolution approach
@@ -38,7 +45,9 @@ finalize_pipeline_configuration <- function(gpa) {
   gpa$l1_cope_names <- lapply(gpa$l1_models$models, function(mm) {
     rownames(mm$contrasts)
   }) # names of level 1 copes for each model
-  gpa$l1_working_directory <- file.path(gpa$working_directory, gpa$outdir) # temp folder for each analysis variant
+  
+  #TODO: not currently supported
+  #gpa$l1_working_directory <- file.path(gpa$working_directory, gpa$outdir) # temp folder for each analysis variant
   if (is.null(gpa$force_l1_creation)) {
     gpa$force_l1_creation <- FALSE
   } # whether to overwrite existing level 1 setup files (e.g., .fsf)
@@ -62,9 +71,7 @@ finalize_pipeline_configuration <- function(gpa) {
 
   # TODO: deprecate this -- should not be required when executing as an R package
   if (is.null(gpa$pipeline_home)) gpa$pipeline_home <- "/proj/mnhallqlab/users/michael/fmri.pipeline"
-  if (is.null(gpa$group_output_directory) || gpa$group_output_directory == "default") {
-    gpa$group_output_directory <- file.path(getwd(), "group_analyses", gpa$analysis_name)
-  }
+  
   if (is.null(gpa$center_l3_predictors)) gpa$center_l3_predictors <- TRUE
   if (is.null(gpa$bad_ids)) gpa$bad_ids <- c()
   if (is.null(gpa$scheduler)) gpa$scheduler <- "slurm" # HPC batch system
@@ -75,11 +82,16 @@ finalize_pipeline_configuration <- function(gpa) {
 
   if (is.null(gpa$log_json)) gpa$log_json <- TRUE # whether to write JSON log files
   if (is.null(gpa$log_txt)) gpa$log_txt <- TRUE # whether to write text log files
+
   if (is.null(gpa$l1_setup_log)) {
-    gpa$l1_setup_log <- paste0(names(gpa$l1_models$models), "_l1setup") %>% setNames(names(gpa$l1_models$models))
+    l1_setup_log <- paste0(names(gpa$l1_models$models), "_l1setup") %>% setNames(names(gpa$l1_models$models))
+    lg$debug("l1_setup_log is %s", l1_setup_log)
+    gpa$l1_setup_log <- l1_setup_log
   }
   if (is.null(gpa$l1_execution_log)) {
-    gpa$l1_execution_log <- paste0(names(gpa$l1_models$models), "_l1execution") %>% setNames(names(gpa$l1_models$models))
+    l1_execution_log <- paste0(names(gpa$l1_models$models), "_l1execution") %>% setNames(names(gpa$l1_models$models))
+    lg$debug("l1_execution_log is %s", l1_execution_log)
+    gpa$l1_execution_log <- l1_execution_log
   }
 
   if (is.null(gpa$n_expected_runs)) gpa$n_expected_runs <- 1 # assume single run case
@@ -111,11 +123,15 @@ finalize_pipeline_configuration <- function(gpa) {
     if ("motion_params" %in% names(gpa$run_data)) {
       message("motion_params column already in run_data. Not using motion_params_file specification.")
     } else {
-      gpa$run_data$motion_params <- normalizePath(
-        file.path(dirname(gpa$run_data$run_nifti), gpa$confound_settings$motion_params_file)
-      )
+      gpa$run_data$motion_params <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
+        if (isTRUE(gpa$run_data$run_nifti_present[ii])) {
+          normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$motion_params_file))
+        } else {
+          NA_character_
+        }
+      })
     }
-    gpa$run_data$motion_params_present <- file.exists(gpa$run_data$motion_params)
+    gpa$run_data$motion_params_present <- file.exists(get_mr_abspath(gpa$run_data, "motion_params"))
   } else {
     if (!"motion_params" %in% names(gpa$run_data)) {
       gpa$run_data$motion_params <- gpa$run_data$motion_params_present <- NA_character_
@@ -135,7 +151,7 @@ finalize_pipeline_configuration <- function(gpa) {
         }
       })
     }
-    gpa$run_data$confound_file_present <- file.exists(gpa$run_data$confound_file)
+    gpa$run_data$confound_file_present <- file.exists(get_mr_abspath(gpa$run_data, "confound_file"))
   } else {
     if (!"confound_file" %in% names(gpa$run_data)) {
       gpa$run_data$confound_file <- gpa$run_data$confound_file_present <- NA_character_

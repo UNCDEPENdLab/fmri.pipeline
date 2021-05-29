@@ -15,43 +15,19 @@ lookup_nifti_inputs <- function(gpa) {
 
   lg <- lgr::get_logger("glm_pipeline/pipeline_setup")
 
-  not_expected <- n_subj_runs %>% filter(n != gpa$n_expected_runs)
+  not_expected <- n_subj_runs %>% dplyr::filter(n != gpa$n_expected_runs)
 
   if (nrow(not_expected) > 1L) {
     lg$warn("Found an unexpected number of runs for some subjects.")
     lg$warn("Subject %s, Session %s, Number of runs %d.", not_expected$id, not_expected$session, not_expected$n)
   }
 
-
    #use specific run NIfTIs included in run_data, rather finding these by regex
   if ("run_nifti" %in% names(gpa$run_data)) {
-    lg$info("Using run_data to identify NIfTI files for analysis (this may take a few minutes)")
-
-    run_data <- gpa$run_data
-    mr_files <- run_data$run_nifti
-
-    mr_found <- file.exists(mr_files)
-    if (any(mr_found != TRUE)) {
-      lg$debug(
-        "Cannot find some files: %s. Prepending mr_dir and trying again.",
-        paste(mr_files[!mr_found], collapse = ", ")
-      )
-      mrdirs <- run_data$mr_dir
-
-      #try prepending the mr_dir path if run_nifti is relative
-      mr_files[!mr_found] <- file.path(mrdirs[!mr_found], mr_files[!mr_found])
-    }
-
-    mr_found <- file.exists(mr_files)
-    if (any(mr_found != TRUE)) {
-      lg$warn(
-        "Could not find the following run files: %s. Dropping from analysis",
-        paste(mr_files[!mr_found], collapse = ", ")
-      )
-    }
+    lg$info("Using run_data to identify NIfTI files for analysis")
   } else {
     # find run nifti files based on directory and regular expression settings
-    lg$info("Using regex-based find approach to identify run NIfTIs")
+    lg$info("Using regex-based find approach to identify run NIfTIs (this may take a few minutes)")
 
     mr_list <- list()
 
@@ -83,16 +59,26 @@ lookup_nifti_inputs <- function(gpa) {
 
       # extract run number from file name
       mr_run_nums <- as.integer(sub(paste0(gpa$run_number_regex), "\\1", mr_files, perl = TRUE))
+
       mr_list[[ii]] <- data.frame(
-        id = subj_id, session = subj_session,
-        run_nifti = mr_files, run_number = mr_run_nums
+        id = subj_id, session = subj_session, run_number = mr_run_nums,
+        run_nifti = basename(mr_files), mr_dir = dirname(mr_files)
       )
     }
 
     mr_df <- dplyr::bind_rows(mr_list)
 
     gpa$run_data <- dplyr::left_join(gpa$run_data, mr_df, by = c("id", "session", "run_number"))
-    mr_found <- file.exists(gpa$run_data$run_nifti)
+  }
+
+  system.time(mr_files <- get_mr_abspath(gpa$run_data, "run_nifti"))
+  mr_found <- file.exists(mr_files)
+
+  if (any(mr_found != TRUE & !is.na(mr_files))) {
+    lg$warn(
+      "Could not find the following run files: %s. Dropping from analysis",
+      paste(mr_files[!mr_found], collapse = ", ")
+    )
   }
 
   # populate field in run_data used to determine availability of data

@@ -305,41 +305,36 @@ pca_motion <- function(motion_df, num_pcs=3L, zscore=TRUE, verbose=FALSE) {
 
 
 #' helper function to generate confounds txt file for inclusion as additional regressors
-#'
-#' @param mr_file an absolute path to a nifti file for a single run
+#' @param id The subject id
+#' @param session The session number
+#' @param run_number The run number
 #' @param gpa a \code{glm_pipeline_arguments} object containing pipeline specification
-get_confound_txt <- function(mr_file, gpa, drop_volumes=0L, last_volume=NULL) {
-  checkmate::assert_string(mr_file)
+get_confound_txt <- function(id = NULL, session = NULL, run_number = NULL, gpa, drop_volumes=0L, last_volume=NULL, demean=TRUE) {
+  if (checkmate::test_null(id)) { stop("get_confound_txt requires a specific id for lookup") }
+  checkmate::assert_integerish(session, null.ok=TRUE)
+  if (is.null(session)) session <- 1
+  checkmate::assert_integerish(run_number, lower=1, null.ok = FALSE)
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_integerish(drop_volumes, lower = 0)
-  checkmate::assert_integerish(last_volumes, null.ok = TRUE)
+  checkmate::assert_integerish(last_volume, null.ok = TRUE)
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
 
-  rinfo <- gpa$run_data %>% dplyr::filter(run_nifti == !!mr_file)
+  rinfo <- gpa$run_data %>% dplyr::filter(id == !!id & session == !!session & run_number == !!run_number)
   if (nrow(rinfo) > 1L) {
     print(rinfo)
-    lg$error("Multiple matches for a single run_nifti in get_confound_txt.")
+    lg$error("Multiple matches for a single run in get_confound_txt.")
     return(NULL)
   } else if (nrow(rinfo) == 0L) {
-    lg$error("Unable to locate a record in gpa$run_data for run_nifti: ", mr_file)
+    lg$error("Unable to locate a record in gpa$run_data for id %s, session %s, run_number %s.", id, session, run_number)
     return(NULL)
   }
 
-  # part these in an analysis-level subfolder, not a particular model, since they
-  # are re-used across models.
-  # note: normalizePath will fail to evaluate properly if directory does not exist
-  analysis_outdir <- file.path(
-    normalizePath(file.path(dirname(mr_files[1L]), "..")),
-    gpa$analysis_name
-  )
+  # Park these in an analysis-level subfolder, not a particular model, since they are re-used across models.
+  # Note: normalizePath will fail to evaluate properly if directory does not exist
+  analysis_outdir <- get_l1_directory(id=id, session=session, run_number=run_number, gpa=gpa, create_if_missing = TRUE)
 
-  if (!dir.exists(analysis_outdir)) {
-    lg$info("Creating analysis directory: %s", analysis_outdir)
-    dir.create(analysis_outdir, showWarnings=FALSE, recursive=TRUE)
-  }
-
-  expect_file <- file.path(analysis_outdir, paste0("run", rinfo$run_number[1], "_l1_confounds.txt"))
+  expect_file <- file.path(analysis_outdir, paste0("run", run_number, "_l1_confounds.txt"))
   if (file.exists(expect_file)) {
     lg$debug("Returning extant file: %s in get_confound_txt", expect_file)
     return(expect_file)
@@ -347,9 +342,10 @@ get_confound_txt <- function(mr_file, gpa, drop_volumes=0L, last_volume=NULL) {
 
   confound_df <- NULL
   if (isTRUE(rinfo$confound_file_present[1])) {
-    lg$debug("Reading confound file: %s", rinfo$confound_file[1])
-    confound_df <- tryCatch(data.table::fread(rinfo$confound_file[1]), error = function(e) {
-      lg$error("Failed to read confound file: %s with error %s", rinfo$confound_file[1], as.character(e))
+    cfile <- get_mr_abspath(rinfo, "confound_file")[1]
+    lg$debug("Reading confound file: %s", cfile)
+    confound_df <- tryCatch(data.table::fread(cfile), error = function(e) {
+      lg$error("Failed to read confound file: %s with error %s", cfile, as.character(e))
       return(NULL)
     })
 
@@ -368,14 +364,15 @@ get_confound_txt <- function(mr_file, gpa, drop_volumes=0L, last_volume=NULL) {
 
   motion_df <- NULL
   if (isTRUE(rinfo$motion_params_present[1])) {
-    lg$debug("Reading motion file: %s", rinfo$motion_params[1])
+    mfile <- get_mr_abspath(rinfo, "motion_params")[1]
+    lg$debug("Reading motion file: %s", mfile)
     motion_df <- tryCatch({
       generate_motion_regressors(
-        rinfo$motion_params[1],
+        mfile,
         col.names = gpa$confound_settings$motion_params_columns,
-        regressors = gpa$confound_settings$confound_columns,
+        regressors = gpa$confound_settings$l1_confound_regressors,
         drop_volumes = drop_volumes, last_volume = last_volume
-      )} , error = function(e) {
+      )}, error = function(e) {
       lg$error("Failed to read motion file: %s with error %s", rinfo$motion_params[1], as.character(e))
       return(NULL)
     })
@@ -384,7 +381,7 @@ get_confound_txt <- function(mr_file, gpa, drop_volumes=0L, last_volume=NULL) {
       if (length(gpa$confound_settings$motion_params_columns) != ncol(motion_df)) {
         lg$warn(
           "Mismatch in number of columns in confound file: %s relative to $confound_settings$confound_columns",
-          rinfo$motion_params[1]
+          mfile
         )
       }
       data.table::setnames(motion_df, gpa$confound_settings$motion_params_columns)
@@ -392,22 +389,31 @@ get_confound_txt <- function(mr_file, gpa, drop_volumes=0L, last_volume=NULL) {
 
   }
 
-  if (nrow(motion_df) != nrow(confound_df)) {
-    lg$error("Number of rows in motion_df is: %d and in confound_df is %d. Cannot combine", nrow(motion_df), nrow(confound_df))
+  if (is.null(motion_df) && is.null(confound_df)) {
+    lg$info("Neither confounds nor motion parameters are available for %s", mr_file)
     return(NULL)
+  } else if (is.null(motion_df)) {
+    confounds <- confound_df
+  } else if (is.null(confound_df)) {
+    confounds <- motion_df
   } else {
-    #prefer confound_df as authoritative in cases where motion_df has overlapping columns
-    overlap_names <- intersect(names(motion_df), names(confound_df))
-    if (length(overlap_names) > 0L) {
-      lg$info(
-        "Motion parameters have overlapping columns with confounds file: %s. Preferring confounds to motion params",
-        rinfo$confound_file[1]
-      )
-      lg$info("Overlap: %s", overlap_names)
-      data.table::setnames(motion_df, old = overlap_names, new = paste0(overlap_names, ".mot"))
-    }
+    if (nrow(motion_df) != nrow(confound_df)) {
+      lg$error("Number of rows in motion_df is: %d and in confound_df is %d. Cannot combine", nrow(motion_df), nrow(confound_df))
+      return(NULL)
+    } else {
+      # prefer confound_df as authoritative in cases where motion_df has overlapping columns
+      overlap_names <- intersect(names(motion_df), names(confound_df))
+      if (length(overlap_names) > 0L) {
+        lg$info(
+          "Motion parameters have overlapping columns with confounds file: %s. Preferring confounds to motion params",
+          rinfo$confound_file[1]
+        )
+        lg$info("Overlap: %s", overlap_names)
+        data.table::setnames(motion_df, old = overlap_names, new = paste0(overlap_names, ".mot"))
+      }
 
-    confounds <- dplyr::bind_cols(confound_df, motion_df)
+      confounds <- dplyr::bind_cols(confound_df, motion_df)
+    }
   }
 
   if (!all(gpa$confound_settings$l1_confound_regressors %in% names(confounds))) {
@@ -417,8 +423,15 @@ get_confound_txt <- function(mr_file, gpa, drop_volumes=0L, last_volume=NULL) {
     confounds <- confounds[, intersect(gpa$confound_settings$l1_confound_regressors, names(confounds))]
   }
 
+  if (isTRUE(demean)) {
+    lg$debug("Demeaning columns of confounds matrix")
+    confounds <- as.data.frame(apply(confounds, 2, function(x) {
+      x - mean(x, na.rm = TRUE)
+    }))
+  }
+
   lg$debug("Writing l1 confounds to file: %s", expect_file)
-  write.table(confounds, expect_file, row.names=FALSE, col.names=FALSE)
+  write.table(confounds, file=expect_file, row.names=FALSE, col.names=FALSE)
 
   return(expect_file)
 }
@@ -591,4 +604,122 @@ names_to_internal <- function(df, vm) {
 
   return(nm)
 
+}
+
+#' small helper function to pull absolute paths to a given column in run_data or trial_data
+#'
+#' @param mr_df a data.frame from a gpa object, following standard variable mapping nomenclature
+#' @param col a character string denoting the column in \code{mr_df} to be used for looking up
+#'   absolute paths
+#'
+#' @details Note that if a given value of the requested column is an absolute path, it will
+#'   not be combined with $mr_dir to generate the combined path. Thus, the \code{col} in
+#'   \code{mr_df} can contain a mixture of relative an absolute paths. The relative paths will
+#'   be combined with 
+#' @return Absolute paths to all files in the specified \code{col}
+#' @importFrom R.utils getAbsolutePath
+#' @keywords internal
+get_mr_abspath <- function(mr_df, col="run_nifti") {
+  checkmate::assert_data_frame(mr_df)
+  checkmate::assert_string(col)
+  checkmate::assert_subset(col, names(mr_df))
+
+  sapply(seq_len(nrow(mr_df)), function(ii) {
+    if (!"mr_dir" %in% names(mr_df)) {
+      # this should be rare (or ideally, not happen at all)
+      # but if there is no mr_dir in the mr_df, we can only use the column itself
+      wd <- NULL # defaults to getwd()
+    } else {
+      this_dir <- mr_df$mr_dir[ii]
+      if (is.na(this_dir)) {
+        wd <- NULL # defaults to getwd()
+      } else {
+        wd <- this_dir
+      }
+    }
+
+    R.utils::getAbsolutePath(mr_df[[col]][ii], workDirectory = wd, expandTilde = TRUE)
+  })
+
+}
+
+#' small helper function to return the location of an l1 directory based on
+#'   id, session, and run number
+#' 
+#' @param id The id of a participant
+#' @param session The session number to lookup
+#' @param run_number The run number to lookup
+#' @param gpa A \code{glm_pipeline_arguments} object
+#' @param glm_software which software is being used for the analysis (since directories may vary)
+#' @param create_if_missing whether to create the directory if it does not exist
+get_l1_directory <- function(id = NULL, session = NULL, run_number = NULL, model_name = NULL,
+                             gpa, glm_software = "fsl", create_if_missing = FALSE) {
+  if (checkmate::test_null(id)) {
+    stop("get_l1_directory requires a specific id for lookup")
+  }
+  checkmate::assert_integerish(session, null.ok = TRUE)
+  if (is.null(session)) session <- 1
+  checkmate::assert_integerish(run_number, lower = 1, null.ok = TRUE)
+  checkmate::assert_string(model_name, null.ok=TRUE)
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  stopifnot("run_data" %in% names(gpa))
+  checkmate::assert_data_frame(gpa$run_data)
+  checkmate::assert_logical(create_if_missing)
+  if (!is.null(model_name)) checkmate::assert_subset(model_name, names(gpa$l1_models$models))
+
+  lg <- lgr::get_logger("glm_pipeline/l1_setup")
+
+  if (is.null(run_number)) {
+    rinfo <- gpa$run_data %>% dplyr::filter(id == !!id & session == !!session)
+  } else {
+    rinfo <- gpa$run_data %>% dplyr::filter(id == !!id & session == !!session & run_number == !!run_number)
+  }
+
+  # if (nrow(rinfo) > 1L) {
+  #   print(rinfo)
+  #   lg$error("Multiple matches for a single run in get_l1_directory.")
+  #   return(NULL)
+  if (nrow(rinfo) == 0L) {
+    lg$error("Unable to locate a record in gpa$run_data for id %s, session %s, run_number %s.", id, session, run_number)
+    return(NULL)
+  }
+
+  l1_dir <- NULL
+  if (gpa$output_settings$l1_directory == "local") {
+    if ("mr_dir" %in% names(rinfo)) {
+      lg$debug("Using mr_dir l1 directory lookup: %s", rinfo$mr_dir[1L])
+      if (is.null(model_name)) {
+        lg$debug("Lookup from analysis_name: %s", gpa$analysis_name)
+        l1_dir <- file.path(rinfo$mr_dir[1L], gpa$analysis_name)
+      } else {
+        lg$debug("Lookup from model outdir: %s", gpa$l1_models$models[[model_name]]$outdir)
+        l1_dir <- file.path(rinfo$mr_dir[1L], gpa$l1_models$models[[model_name]]$outdir)
+      }
+    } else {
+      # look in parent folder of relevant run nifti and place l1 model there
+      lg$debug("Using run_nifti l1 directory lookup: %s", rinfo$run_nifti[1L])
+      if (is.null(model_name)) {
+        lg$debug("Lookup from analysis_name: %s", gpa$analysis_name)
+        l1_dir <- file.path(
+          normalizePath(file.path(dirname(rinfo$run_nifti[1L]), "..")),
+          gpa$analysis_name
+        )
+      } else {
+        lg$debug("Lookup from model outdir: %s", gpa$l1_models$models[[model_name]]$outdir)
+        l1_dir <- file.path(
+          normalizePath(file.path(dirname(rinfo$run_nifti[1L]), "..")),
+          gpa$l1_models$models[[model_name]]$outdir
+        )
+      }
+    }
+  } else {
+    stop("not yet implemented in l1_get_directory")
+  }
+
+  if (isTRUE(create_if_missing)) {
+    lg$debug("Create l1 directory: %s", l1_dir)
+    dir.create(l1_dir, recursive = TRUE)
+  }
+
+  return(l1_dir)
 }

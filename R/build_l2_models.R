@@ -296,5 +296,6 @@ build_l2_models <- function(data, model_set = NULL,
 }
 
 #' @rdname build_l3_models
+#' @name build_l3_models
 #' @export
 build_l3_models <- build_l2_models

@@ -57,8 +57,9 @@
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 #'    test_string test_class
 setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm", working_directory = file.path(getwd(), "glm_out"),
-                               group_output_directory = "default",
                                subject_data = NULL, run_data = NULL, trial_data = NULL,
+                               group_output_directory = "default",
+                               output_settings = "default",
                                vm = c(
                                  id = "id", session = "session", run_number = "run_number", trial = "trial",
                                  run_trial = "run_trial", mr_dir = "mr_dir", run_nifti = "run_nifti"
@@ -95,6 +96,21 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   checkmate::assert_data_frame(run_data, null.ok = TRUE)
   checkmate::assert_data_frame(trial_data)
   checkmate::assert_character(vm, unique = TRUE) # all values of vm must refer to distinct columns
+
+  #build out ability to consolidate outputs in one folder, to use specific paths for some outputs, etc.
+  output_defaults_loc <- list(
+    l1_directory=""
+  )
+  if (checkmate::test_string(output_settings) && output_settings[1L] == "default") {
+    output_settings <- list(
+      l1_directory="local",
+      l2_directory="local"
+    )
+
+  } else {
+
+  }
+
   # would be insane to have super-long TR (suggests milliseconds, not seconds passed in)
   checkmate::assert_number(tr, lower = 0.01, upper = 20)
   checkmate::assert_string(fmri_file_regex, null.ok = TRUE)
@@ -232,6 +248,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     force_l1_creation = force_l1_creation,
     confound_settings = confound_settings,
     n_expected_runs = n_expected_runs,
+    output_settings = output_settings,
 
     # l1 analysis details
     fmri_file_regex = fmri_file_regex,

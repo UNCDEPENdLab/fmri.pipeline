@@ -18,7 +18,7 @@
 #' 
 build_l1_models <- function(
   trial_data, l1_model_set=NULL,
-  variable_mapping=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
+  variable_mapping=c(id="id", session="session", run_number="run_number", trial="trial", run_trial="trial", mr_dir="mr_dir"),
                            onset_cols=NULL, onset_regex=".*(onset|time).*", duration_regex=".*duration.*", value_cols=NULL) {
 
   # Maybe allow glm object to be passed in that would have trial_data and variable_mapping.
@@ -30,8 +30,7 @@ build_l1_models <- function(
   checkmate::assert_string(duration_regex, null.ok=TRUE)
   checkmate::assert_subset(value_cols, names(trial_data)) #make sure all parametric regressor columns are in the data frame
 
-  #possible_cols <- names(trial_data)
-  #possible_cols <- possible_cols[!names(possible_cols) %in% variable_mapping]
+  lg <- lgr::get_logger("glm_pipeline/build_l1_models")
 
   if (is.null(l1_model_set)) {
     ## initialize overall l1 design object (holds events, signals, and models)
@@ -94,8 +93,8 @@ build_l1_models <- function(
 
   #basal data frame for each event
   metadata_df <- trial_data %>%
-    dplyr::select(!!variable_mapping[c("id", "run", "run_trial")]) %>%
-    setNames(c("id", "run", "trial"))
+    dplyr::select(!!variable_mapping[c("id", "session", "run_number", "run_trial")]) %>%
+    setNames(c("id", "session", "run_number", "trial"))
 
   #build a list of data frames, one per event (to be rbind'ed later)
   event_list <- lapply(onset_cols, function(xx) {
@@ -138,7 +137,9 @@ build_l1_models <- function(
       while (!checkmate::test_number(duration, lower=0, upper=5000)) {
         duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", oo, ": ")))
       }
-      if (duration > 50) { warning("Duration more than 50s specified. Make sure that your durations are in seconds, not milliseconds!") }
+      if (duration > 50) {
+        lg$warn("Duration more than 50s specified. Make sure that your durations are in seconds, not milliseconds!")
+      }
       event_list[[oo]] <- event_list[[oo]] %>%
         mutate(duration = duration)
     } else {

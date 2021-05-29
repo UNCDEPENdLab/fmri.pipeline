@@ -7,6 +7,7 @@
 \usage{
 fsl_l1_model(
   id = NULL,
+  session = NULL,
   d_obj,
   gpa,
   model_name = NULL,

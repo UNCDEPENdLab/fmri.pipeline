@@ -15,7 +15,7 @@
 #' @export
 #'
 fsl_l1_model <- function(
-  id=NULL, d_obj, gpa, model_name=NULL, mr_files=NULL, nvoxels=NULL, execute_feat=FALSE, lg=NULL) {
+  id=NULL, session=NULL, d_obj, gpa, model_name=NULL, mr_files=NULL, nvoxels=NULL, execute_feat=FALSE, lg=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_class(d_obj, "bdm")
   checkmate::assert_string(model_name) # single string
@@ -37,10 +37,7 @@ fsl_l1_model <- function(
   fsf_template <- readLines(file.path(gpa$pipeline_home, "inst", "feat_lvl1_nparam_template.fsf"))
 
   # note: normalizePath will fail to evaluate properly if directory does not exist
-  fsl_run_output_dir <- file.path(
-    normalizePath(file.path(dirname(mr_files[1L]), "..")),
-    gpa$l1_models$models[[model_name]]$outdir
-  )
+  fsl_run_output_dir <- get_l1_directory(id = id, session = session, model_name = model_name, gpa = gpa, glm_software="fsl")
 
   l1_contrasts <- gpa$l1_models$models[[model_name]]$contrasts #contrast matrix for this model
   regressors <- gpa$l1_models$models[[model_name]]$regressors #names of regressors in design matrix for this model
@@ -57,7 +54,7 @@ fsl_l1_model <- function(
   timingdir <- file.path(fsl_run_output_dir, "timing_files")
 
   feat_l1_df <- data.frame(
-    id = id, run = d_obj$runs_to_output, run_volumes = d_obj$run_volumes,
+    id = id, session = session, run_number = d_obj$runs_to_output, run_volumes = d_obj$run_volumes,
     mr_files = mr_files, l1_model = model_name, feat_file = NA_character_
   )
   all_feat_files <- c()
@@ -67,9 +64,10 @@ fsl_l1_model <- function(
     lg$info("Creating FSF for file: %s", mr_files[rr])
     this_template <- fsf_template # start with default copy of template for this run
 
-
     if (!is.null(gpa$confound_settings$l1_confound_regressors)) {
-      confounds <- get_confound_txt(mr_files[rr], gpa,
+      browser()
+      confounds <- get_confound_txt(id = id, session = session,
+        run_number = feat_l1_df$run_number[rr], gpa,
         drop_volumes = gpa$drop_volumes,
         last_volume = feat_l1_df$run_volumes[rr]
       )
@@ -88,7 +86,7 @@ fsl_l1_model <- function(
     # .CONFOUNDS. is the confounds file for GLM
     # .TR. is the sequence TR in seconds
 
-    this_template <- gsub(".OUTPUTDIR.", file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run[rr])), this_template, fixed=TRUE)
+    this_template <- gsub(".OUTPUTDIR.", file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr])), this_template, fixed=TRUE)
     this_template <- gsub(".NVOL.", d_obj$run_volumes[rr], this_template, fixed=TRUE)
     this_template <- gsub(".FUNCTIONAL.", gsub(".nii(.gz)*$", "", mr_files[rr]), this_template, fixed=TRUE)
     this_template <- gsub(".TR.", d_obj$tr, this_template, fixed=TRUE)
@@ -121,7 +119,7 @@ fsl_l1_model <- function(
       #add common ingredients for preconvolved regressors
       regressors <- lapply(regressors, function(x) {
         list(name=x, waveform="custom_1", convolution="none",
-          tempfilt=1, timing_file=file.path(timingdir, paste0("run", feat_l1_df$run[rr], "_", x, ".1D")))
+          tempfilt=1, timing_file=file.path(timingdir, paste0("run", feat_l1_df$run_number[rr], "_", x, ".1D")))
       })
 
       lg$debug("dependlab::generate_fsf_lvl1_ev_syntax")
@@ -140,7 +138,7 @@ fsl_l1_model <- function(
       stop("cannot use FSL internal timing files right this moment...")
     }
 
-    feat_file <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run[rr], ".fsf"))
+    feat_file <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr], ".fsf"))
     feat_l1_df$feat_file[rr] <- feat_file
 
     #skip re-creation of FSF and do not run below unless force_l1_creation==TRUE

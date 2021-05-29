@@ -7,8 +7,8 @@
 build_l1_models(
   trial_data,
   l1_model_set = NULL,
-  variable_mapping = c(id = "id", run = "run", trial = "trial", run_trial = "trial",
-    mr_dir = "mr_dir"),
+  variable_mapping = c(id = "id", session = "session", run_number = "run_number", trial
+    = "trial", run_trial = "trial", mr_dir = "mr_dir"),
   onset_cols = NULL,
   onset_regex = ".*(onset|time).*",
   duration_regex = ".*duration.*",
