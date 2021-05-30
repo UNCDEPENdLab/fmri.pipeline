@@ -27,16 +27,41 @@ trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/
 #l1_models <- build_l1_model(trial_df, value_cols=c("pe_max", "v_chosen", "v_entropy"))
 #saveRDS(l1_models, "l1_model_cache.rds")
 l1_models <- readRDS("../local/l1_model_cache.rds")
+l1_models$models[[1]]$signals <- l1_models$models[[1]]$model_signals
+l1_models$models[[1]]$model_signals <- NULL
+l1_models$models[[2]]$signals <- l1_models$models[[2]]$model_signals
+l1_models$models[[2]]$model_signals <- NULL
+l1_models$models[[1]]$regressors <- l1_models$models[[1]]$model_regressors
+l1_models$models[[1]]$model_regressors <- NULL
+l1_models$models[[2]]$regressors <- l1_models$models[[2]]$model_regressors
+l1_models$models[[2]]$model_regressors <- NULL
+l1_models$events <- lapply(l1_models$events, function(ee) {
+  ee %>% mutate(session=1, run_number=run)
+})
+
+l1_models$signals <- lapply(l1_models$signals, function(ss) {
+  if (is.data.frame(ss$value)) {
+    ss$value <- ss$value %>%
+      mutate(session = 1, run_number = run)
+  }
+  return(ss)
+})
+
 
 subject_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/example_files/mmclock_subject_data.rds") %>%
   mutate(mr_dir=paste0(mr_dir, "/mni_5mm_aroma")) #make sure we're looking in the right folder
 
+run_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/example_files/mmclock_run_data.rds")
+#gpa$run_data$..id.. <- NULL
+#saveRDS(gpa$run_data, file = "/proj/mnhallqlab/users/michael/fmri.pipeline/example_files/mmclock_run_data.rds")
+
 #test naming collisions
 trial_df <- trial_df %>% rename(subid = id) %>% mutate(id=subid)
+run_df <- run_df %>% rename(subid = id, run=run_number) %>% mutate(id=subid)
 subject_df <- subject_df %>% rename(subid = id) %>% mutate(id=subid)
 
 gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm", working_directory = tempdir(),
-  subject_data=subject_df, run_data=NULL, trial_data=trial_df,
+  subject_data=subject_df, run_data=run_df, trial_data=trial_df,
   tr=1.0,
   vm=c(id="subid", run_number="run"),
   fmri_file_regex="nfaswuktm_clock[1-8]_5\\.nii\\.gz",
@@ -45,13 +70,12 @@ gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm", working_di
   n_expected_runs=8,
   l1_models=l1_models, bad_ids=c(10637), #test exclusion
   confound_settings=list(
+    motion_params_file = "motion.par",
     confound_file="nuisance_regressors.txt",
     confound_columns = c("csf", "dcsf", "wm", "dwm"),
-    l1_confound_regressors = c("csf", "dcsf", "wm", "dwm")
+    l1_confound_regressors = c("rx", "csf", "dcsf", "wm", "dwm")
   )
 )
-
-
 
 gpa <- setup_l1_models(gpa)
 

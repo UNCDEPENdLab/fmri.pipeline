@@ -28,7 +28,6 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
   if (isTRUE(gpa$log_txt)) { lg$add_appender(lgr::AppenderFile$new("setup_l1_models.txt"), name="txt") }
 
-  gpa$parallel$l1_setup_cores <- 1
   #setup parallel worker pool, if requested
   if (gpa$parallel$l1_setup_cores > 1L) {
     lg$info("Initializing l1 setup cluster with %d cores", gpa$parallel$l1_setup_cores)
@@ -40,6 +39,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
     foreach::registerDoSEQ() #formally register a sequential 'pool' so that dopar is okay
   }
 
+  #FOR TESTING
   gpa$subject_data <- gpa$subject_data[1:3,]
 
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
@@ -135,7 +135,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         bdm_args$runs_to_output <- mr_run_nums
         bdm_args$output_directory <- file.path(subj_out, "timing_files")
         d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error=function(e) {
-          lg$error("Failed build_design_matrix for subject: %s, session: %s, model: %s", subj_id, subj_session, this_model)
+          lg$error("Failed build_design_matrix for id: %s, session: %s, model: %s", subj_id, subj_session, this_model)
           lg$error("Error message: %s", as.character(e))
           return(NULL)
         })

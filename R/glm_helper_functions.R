@@ -218,7 +218,7 @@ generate_motion_regressors <- function(motion_params = "motion.par",
   #quadratics always computed after derivative calculation
   if (any(quadcols <- grepl("^q{1}.*", regressors, perl=TRUE))) {
     motquad <- mot[, lapply(.SD, function(x) { x^2 })]
-    setnames(motquad, paste0("q", names(mot))) #add delta to names
+    data.table::setnames(motquad, paste0("q", names(mot))) #add delta to names
     mot <- cbind(mot, motquad)
   }
 
@@ -332,7 +332,7 @@ get_confound_txt <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
 
   # Park these in an analysis-level subfolder, not a particular model, since they are re-used across models.
   # Note: normalizePath will fail to evaluate properly if directory does not exist
-  analysis_outdir <- get_l1_directory(id=id, session=session, run_number=run_number, gpa=gpa, create_if_missing = TRUE)
+  analysis_outdir <- get_l1_directory(id=id, session=session, gpa=gpa, create_if_missing = TRUE)
 
   expect_file <- file.path(analysis_outdir, paste0("run", run_number, "_l1_confounds.txt"))
   if (file.exists(expect_file)) {
@@ -460,7 +460,7 @@ visualizeDesignMatrix <- function(d, outfile=NULL, runboundaries=NULL, events=NU
 
   print(round(cor(d), 3))
   d <- as.data.frame(d)
-  d$volume <- 1:nrow(d)
+  d$volume <- seq_len(nrow(d))
   d.m <- melt(d, id.vars="volume")
   g <- ggplot(d.m, aes(x = volume, y = value)) +
     geom_line(size = 1.2) +
@@ -643,6 +643,11 @@ get_mr_abspath <- function(mr_df, col="run_nifti") {
 
 }
 
+#TODO: This function returns irregular results... the desired results for different
+# cases is not entirely clear.
+# consider whether we want a 'what' type argument, like subject directory, analysis directory,
+# run directory, model-specific analysis directory, etc.
+
 #' small helper function to return the location of an l1 directory based on
 #'   id, session, and run number
 #' 
@@ -668,7 +673,6 @@ get_l1_directory <- function(id = NULL, session = NULL, run_number = NULL, model
   if (!is.null(model_name)) checkmate::assert_subset(model_name, names(gpa$l1_models$models))
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
-
   if (is.null(run_number)) {
     rinfo <- gpa$run_data %>% dplyr::filter(id == !!id & session == !!session)
   } else {
@@ -690,24 +694,26 @@ get_l1_directory <- function(id = NULL, session = NULL, run_number = NULL, model
       lg$debug("Using mr_dir l1 directory lookup: %s", rinfo$mr_dir[1L])
       if (is.null(model_name)) {
         lg$debug("Lookup from analysis_name: %s", gpa$analysis_name)
-        l1_dir <- file.path(rinfo$mr_dir[1L], gpa$analysis_name)
+        l1_dir <- file.path(normalizePath(file.path(rinfo$mr_dir[1L], "..")), gpa$analysis_name)
       } else {
         lg$debug("Lookup from model outdir: %s", gpa$l1_models$models[[model_name]]$outdir)
-        l1_dir <- file.path(rinfo$mr_dir[1L], gpa$l1_models$models[[model_name]]$outdir)
+        l1_dir <- file.path(normalizePath(file.path(rinfo$mr_dir[1L], "..")), gpa$l1_models$models[[model_name]]$outdir)
       }
     } else {
       # look in parent folder of relevant run nifti and place l1 model there
-      lg$debug("Using run_nifti l1 directory lookup: %s", rinfo$run_nifti[1L])
+      rn <- get_mr_abspath(rinfo[1, , drop = F], "run_nifti")
+      lg$debug("Using run_nifti l1 directory lookup: %s", rn)
+
       if (is.null(model_name)) {
         lg$debug("Lookup from analysis_name: %s", gpa$analysis_name)
         l1_dir <- file.path(
-          normalizePath(file.path(dirname(rinfo$run_nifti[1L]), "..")),
+          normalizePath(file.path(dirname(rn), "..")),
           gpa$analysis_name
         )
       } else {
         lg$debug("Lookup from model outdir: %s", gpa$l1_models$models[[model_name]]$outdir)
         l1_dir <- file.path(
-          normalizePath(file.path(dirname(rinfo$run_nifti[1L]), "..")),
+          normalizePath(file.path(dirname(rn), "..")),
           gpa$l1_models$models[[model_name]]$outdir
         )
       }
@@ -716,7 +722,7 @@ get_l1_directory <- function(id = NULL, session = NULL, run_number = NULL, model
     stop("not yet implemented in l1_get_directory")
   }
 
-  if (isTRUE(create_if_missing)) {
+  if (isTRUE(create_if_missing) && !dir.exists(l1_dir)) {
     lg$debug("Create l1 directory: %s", l1_dir)
     dir.create(l1_dir, recursive = TRUE)
   }

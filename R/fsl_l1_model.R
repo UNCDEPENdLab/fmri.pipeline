@@ -36,7 +36,6 @@ fsl_l1_model <- function(
   #TODO use system.file to read from R package installation dir
   fsf_template <- readLines(file.path(gpa$pipeline_home, "inst", "feat_lvl1_nparam_template.fsf"))
 
-  # note: normalizePath will fail to evaluate properly if directory does not exist
   fsl_run_output_dir <- get_l1_directory(id = id, session = session, model_name = model_name, gpa = gpa, glm_software="fsl")
 
   l1_contrasts <- gpa$l1_models$models[[model_name]]$contrasts #contrast matrix for this model
@@ -65,7 +64,6 @@ fsl_l1_model <- function(
     this_template <- fsf_template # start with default copy of template for this run
 
     if (!is.null(gpa$confound_settings$l1_confound_regressors)) {
-      browser()
       confounds <- get_confound_txt(id = id, session = session,
         run_number = feat_l1_df$run_number[rr], gpa,
         drop_volumes = gpa$drop_volumes,

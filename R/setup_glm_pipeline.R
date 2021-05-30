@@ -76,9 +76,9 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                  confound_file = NULL, # assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
                                  confound_columns = NULL, # names of confound columns -- if null, we will attempt to find a header row
                                  l1_confound_regressors = NULL, # column names in motion_params and/or confound_file
-                                 exclude_run = expression(mean(FD) > 0.9 | max(FD) > 0.5),
-                                 exclude_subject = expression(nruns < 4),
-                                 spike_volume = expression(FD > 0.9)
+                                 exclude_run = "mean(FD) > 0.9 | max(FD) > 0.5)",
+                                 exclude_subject = "nruns < 4",
+                                 spike_volume = "FD > 0.9"
                                ),
                                parallel = list(
                                  # number of cores used when looping over l1 setup of design matrices and syntax for each subject

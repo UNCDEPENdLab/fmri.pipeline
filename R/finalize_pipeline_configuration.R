@@ -45,7 +45,7 @@ finalize_pipeline_configuration <- function(gpa) {
   gpa$l1_cope_names <- lapply(gpa$l1_models$models, function(mm) {
     rownames(mm$contrasts)
   }) # names of level 1 copes for each model
-  
+
   #TODO: not currently supported
   #gpa$l1_working_directory <- file.path(gpa$working_directory, gpa$outdir) # temp folder for each analysis variant
   if (is.null(gpa$force_l1_creation)) {
@@ -71,7 +71,7 @@ finalize_pipeline_configuration <- function(gpa) {
 
   # TODO: deprecate this -- should not be required when executing as an R package
   if (is.null(gpa$pipeline_home)) gpa$pipeline_home <- "/proj/mnhallqlab/users/michael/fmri.pipeline"
-  
+
   if (is.null(gpa$center_l3_predictors)) gpa$center_l3_predictors <- TRUE
   if (is.null(gpa$bad_ids)) gpa$bad_ids <- c()
   if (is.null(gpa$scheduler)) gpa$scheduler <- "slurm" # HPC batch system
@@ -111,7 +111,7 @@ finalize_pipeline_configuration <- function(gpa) {
 
   # default settings for feat l1
   if (is.null(gpa$additional$feat_l1_args)) {
-    gpa$additional$feat_l1_args <- list(feat_l1_zthresh = 1.96, feat_l1_pthresh = .05)
+    gpa$additional$feat_l1_args <- list(z_thresh = 1.96, prob_thresh = .05, paradigm_hp = 120)
   }
 
   # identify and validate niftis for each run

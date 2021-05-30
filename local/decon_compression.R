@@ -2,7 +2,7 @@ library(readr)
 library(dplyr)
 library(tidyr)
 library(data.table)
-
+source("/proj/mnhallqlab/users/michael/fmri.pipeline/R/fmri_ts.R")
 trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
   mutate(rt_time=clock_onset + rt_csv/1000, #should be pretty redundant with isi_onset, but still
     rt_vmax=rt_vmax/10, #to put into seconds
@@ -17,6 +17,18 @@ run_df <- trial_df %>% filter(id==11325 & run==7)
 
 x <- fmri_ts$new(ts_data=example, event_data=run_df, tr=1.0,
   vm=list(value=c("decon", "decon2"), key=c("vnum", "atlas_value")))
+
+x <- fmri_ts$new(
+  ts_data = example, event_data = run_df, tr = 1.0,
+  vm = list(value = c("decon"), key = c("vnum"))
+)
+
+
+x <- fmri_ts$new(
+  ts_data = example, event_data = run_df, tr = 1.0,
+  vm = list(value = c("decon"))
+)
+
 
 rm(example)
 
