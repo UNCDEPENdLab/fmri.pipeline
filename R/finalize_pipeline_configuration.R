@@ -138,25 +138,67 @@ finalize_pipeline_configuration <- function(gpa) {
     }
   }
 
-  if (!is.null(gpa$confound_settings$confound_file)) {
-    checkmate::assert_string(gpa$confound_settings$confound_file)
-    if ("confound_file" %in% names(gpa$run_data)) {
-      message("confound_file column already in run_data. Not using confound_file specification.")
+  if (!is.null(gpa$confound_settings$confound_input_file)) {
+    checkmate::assert_string(gpa$confound_settings$confound_input_file)
+    if ("confound_input_file" %in% names(gpa$run_data)) {
+      message("confound_input_file column already in run_data. Not using confound_input_file specification.")
     } else {
-      gpa$run_data$confound_file <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
+      gpa$run_data$confound_input_file <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
         if (isTRUE(gpa$run_data$run_nifti_present[ii])) {
-          normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$confound_file))
+          normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$confound_input_file))
         } else {
           NA_character_
         }
       })
     }
-    gpa$run_data$confound_file_present <- file.exists(get_mr_abspath(gpa$run_data, "confound_file"))
+    gpa$run_data$confound_input_file_present <- file.exists(get_mr_abspath(gpa$run_data, "confound_input_file"))
   } else {
-    if (!"confound_file" %in% names(gpa$run_data)) {
-      gpa$run_data$confound_file <- gpa$run_data$confound_file_present <- NA_character_
+    if (!"confound_input_file" %in% names(gpa$run_data)) {
+      gpa$run_data$confound_input_file <- gpa$run_data$confound_input_file_present <- NA_character_
     }
   }
+
+  #validate confound settings
+  if (is.null(gpa$confound_settings)) {
+    lg$info("Using default settings for confounds and exclusions")
+    lg$info("Look for confounds in confounds.tsv")
+    lg$info("Exclude run if mean(FD) > 0.5 or max(FD) > 6")
+    gpa$confound_settings <- list(
+      motion_params_file = NULL, 
+      motion_params_colnames = NULL,
+      confound_input_file = "confounds.tsv",
+      l1_confound_regressors = NULL, # column names in motion_params and/or confound_input_file
+      exclude_run = "mean(FD) > 0.5 || max(FD) > 6)",
+      spike_volume = "FD > 0.9"
+    )
+  } else {
+    checkmate::assert_string(gpa$confound_settings$exclude_run, null.ok=TRUE)
+    checkmate::assert_string(gpa$confound_settings$exclude_subject, null.ok = TRUE)
+  }
+
+  #figure out all confound columns that will be used in the pipeline
+  gpa$confound_settings$run_exclusion_columns <- if (is.null(gpa$confound_settings$exclude_run)) {
+    NULL
+  } else {
+    all.vars(as.formula(paste("~", gpa$confound_settings$exclude_run)))
+  }
+
+  #TODO: Should this become 'id_exclusion_columns' and should we support session versus subject exclusion
+  # (E.g., in longitudinal analysis)
+  gpa$confound_settings$subject_exclusion_columns <- if (is.null(gpa$confound_settings$exclude_subject)) {
+    NULL
+  } else {
+    all.vars(as.formula(paste("~", gpa$confound_settings$exclude_subject)))
+  }
+
+  gpa$confound_settings$all_confound_columns <- unique(c(
+    gpa$confound_settings$l1_confound_regressors,
+    gpa$confound_settings$run_exclusion_columns,
+    gpa$confound_settings$subject_exclusion_columns
+  ))
+
+  # numeric row number of each input to aid in tracking
+  gpa$run_data$input_number <- seq_len(nrow(gpa$run_data))
 
   return(gpa)
 }

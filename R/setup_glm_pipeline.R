@@ -72,10 +72,10 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                use_preconvolve = TRUE, truncate_runs = FALSE, force_l1_creation = FALSE,
                                confound_settings = list(
                                  motion_params_file = "motion.par", # assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
-                                 motion_params_columns = c("rx", "ry", "rz", "tx", "ty", "tz"),
-                                 confound_file = NULL, # assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
-                                 confound_columns = NULL, # names of confound columns -- if null, we will attempt to find a header row
-                                 l1_confound_regressors = NULL, # column names in motion_params and/or confound_file
+                                 motion_params_colnames = c("rx", "ry", "rz", "tx", "ty", "tz"),
+                                 confound_input_file = NULL, # assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
+                                 confound_input_colnames = NULL, # names of confound columns -- if null, we will attempt to find a header row
+                                 l1_confound_regressors = NULL, # column names in motion_params and/or confound_input_file
                                  exclude_run = "mean(FD) > 0.9 | max(FD) > 0.5)",
                                  exclude_subject = "nruns < 4",
                                  spike_volume = "FD > 0.9"

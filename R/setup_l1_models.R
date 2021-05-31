@@ -51,48 +51,57 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
 
       #find the run data for analysis
       rdata <- gpa$run_data %>% dplyr::filter(id == !!subj_id & session == !!subj_session & run_nifti_present == TRUE)
-      mr_files <- get_mr_abspath(rdata, "run_nifti")
+      run_nifti <- get_mr_abspath(rdata, "run_nifti")
       mr_run_nums <- rdata %>% dplyr::pull("run_number")
 
       subj_mr_dir <- subj_df$mr_dir
 
       # process files
-      if (length(mr_files) == 0L) {
+      if (length(run_nifti) == 0L) {
         lg$warn("Unable to find any preprocessed fMRI files in dir: %s", subj_mr_dir)
         return(NULL)
-      } else if (any(!file.exists(mr_files))) {
+      } else if (any(!file.exists(run_nifti))) {
         lg$warn("Could not find some of the expected preprocessed fMRI files. These will be dropped.")
-        lg$warn("Missing: %s", mr_files[!file.exists(mr_files)])
-        mr_files <- mr_files[file.exists(mr_files)]
+        lg$warn("Missing: %s", run_nifti[!file.exists(run_nifti)])
+        run_nifti <- run_nifti[file.exists(run_nifti)]
       } else {
-        lg$debug(paste("MR files to analyze:", mr_files)) #log files that were found
+        lg$debug(paste("MR files to analyze:", run_nifti)) #log files that were found
       }
 
       ## read number of volumes from NIfTI header
       # RNifti is unexpectedly slow compared to oro.nifti
-      mr_dims <- lapply(mr_files, function(x) { oro.nifti::readNIfTI(x, read_data = FALSE)@dim_ })
+      mr_dims <- lapply(run_nifti, function(x) { oro.nifti::readNIfTI(x, read_data = FALSE)@dim_ })
       run_lengths <- sapply(mr_dims, "[[", 5) # number of volumes is 4th dimension
       nvoxels <- sapply(mr_dims, function(x) { prod(x[2:5]) })
 
       #we also need xyz to get number of voxels
-      #run_lengths <- unname(sapply(mr_files, function(x) { oro.nifti::readNIfTI(x, read_data=FALSE)@dim_[5L] }))
-      lg$debug("Run lengths of mr_files: %s", paste(run_lengths, collapse=", "))
+      #run_lengths <- unname(sapply(run_nifti, function(x) { oro.nifti::readNIfTI(x, read_data=FALSE)@dim_[5L] }))
+      lg$debug("Run lengths of run_nifti: %s", paste(run_lengths, collapse=", "))
 
       ## create truncated run files to end analysis 12s after last ITI (or big head movement)
       ## also handle removal of N volumes from the beginning of each run due to steady state magnetization
 
-      #mrdf <- truncate_runs(b, mr_files, mr_run_nums, run_lengths, drop_volumes=drop_volumes)
+      #mrdf <- truncate_runs(b, run_nifti, mr_run_nums, run_lengths, drop_volumes=drop_volumes)
       mrdf <- data.frame(
-        mrfile_to_analyze = mr_files, run_number = mr_run_nums,
-        last_vol_analysis = run_lengths, drop_volumes = gpa$drop_volumes
+        id = subj_id, session=subj_session,
+        run_nifti = run_nifti, run_number = mr_run_nums,
+        last_volume = run_lengths, drop_volumes = gpa$drop_volumes
       )
 
-      mr_files <- mrdf$mrfile_to_analyze
-      run_lengths <- mrdf$last_vol_analysis
+      run_nifti <- mrdf$run_nifti
+      run_lengths <- mrdf$last_volume
+
+      mrdf$exclude_run <- sapply(seq_len(nrow(mrdf)), function(rr) {
+        ll <- as.list(mrdf[rr, , drop = FALSE]) # rrth row of mrdf
+        ll[["gpa"]] <- gpa
+        ll[["run_nifti"]] <- NULL
+        ex <- do.call(get_confound_txt, ll)$exclude_run
+        return(ex)
+      })
 
       # Tracking list containing data.frames for each software, where we expect one row per run-level model (FSL)
       # or subject-level model (AFNI). The structure varies because FSL estimates per-run GLMs, while AFNI concatenates.
-      l1_file_setup <- list(fsl=list(), spm=list(), afni=list())
+      l1_file_setup <- list(fsl = list(), spm = list(), afni = list(), metadata = mrdf)
 
       #loop over models to output
       for (ii in seq_along(to_setup)) {
@@ -131,7 +140,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         bdm_args$write_timing_files <- t_out
         bdm_args$drop_volumes <- gpa$drop_volumes
         bdm_args$run_volumes <- run_lengths
-        bdm_args$run_4d_files <- mr_files
+        bdm_args$run_4d_files <- run_nifti
         bdm_args$runs_to_output <- mr_run_nums
         bdm_args$output_directory <- file.path(subj_out, "timing_files")
         d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error=function(e) {
@@ -142,7 +151,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
 
         if (is.null(d_obj)) { next } #skip to next iteration on error
 
-        save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, mr_files, run_lengths, subj_id, subj_session, this_model,
+        save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, run_nifti, run_lengths, subj_id, subj_session, this_model,
           file=file.path(subj_out, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData")))
 
         if ("fsl" %in% gpa$glm_software) {
@@ -165,7 +174,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         #TODO: finalize SPM approach
         if ("spm" %in% gpa$glm_software) {
           #Setup spm run-level models for each combination of signals
-          spm_files <- tryCatch(spm_l1_model(d_obj, gpa, this_model, mr_files),
+          spm_files <- tryCatch(spm_l1_model(d_obj, gpa, this_model, run_nifti),
             error=function(e) {
               lg$error("Problem running spm_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)
               lg$error("Error message: %s", as.character(e))

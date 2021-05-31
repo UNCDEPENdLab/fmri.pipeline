@@ -41,7 +41,7 @@ lookup_nifti_inputs <- function(gpa) {
       }
 
       ## Find processed fMRI run-level data for this subject
-      # mr_files <- list.files(subj_mr_dir, pattern=gpa$fmri_file_regex, full.names=TRUE, recursive=TRUE)
+      # run_nifti <- list.files(subj_mr_dir, pattern=gpa$fmri_file_regex, full.names=TRUE, recursive=TRUE)
       ## cat(paste0("command: find ", subj_mr_dir, " -iname '", expectfile, "' -ipath '*", expectdir, "*' -type f\n"))
 
       # -ipath '*", expectdir, "*' -type f | sort -n"), intern=TRUE)
@@ -54,15 +54,15 @@ lookup_nifti_inputs <- function(gpa) {
         "find ", subj_mr_dir, " -regextype posix-egrep -iregex '.*",
         gpa$fmri_file_regex, "'", addon, " -type f | sort -n"
       )
-      lg$debug("mr_files find syntax: %s", find_string)
-      mr_files <- system(find_string, intern = TRUE)
+      lg$debug("run_nifti find syntax: %s", find_string)
+      run_nifti <- system(find_string, intern = TRUE)
 
       # extract run number from file name
-      mr_run_nums <- as.integer(sub(paste0(gpa$run_number_regex), "\\1", mr_files, perl = TRUE))
+      mr_run_nums <- as.integer(sub(paste0(gpa$run_number_regex), "\\1", run_nifti, perl = TRUE))
 
       mr_list[[ii]] <- data.frame(
         id = subj_id, session = subj_session, run_number = mr_run_nums,
-        run_nifti = basename(mr_files), mr_dir = dirname(mr_files)
+        run_nifti = basename(run_nifti), mr_dir = dirname(run_nifti)
       )
     }
 
@@ -71,13 +71,13 @@ lookup_nifti_inputs <- function(gpa) {
     gpa$run_data <- dplyr::left_join(gpa$run_data, mr_df, by = c("id", "session", "run_number"))
   }
 
-  system.time(mr_files <- get_mr_abspath(gpa$run_data, "run_nifti"))
-  mr_found <- file.exists(mr_files)
+  system.time(run_nifti <- get_mr_abspath(gpa$run_data, "run_nifti"))
+  mr_found <- file.exists(run_nifti)
 
-  if (any(mr_found != TRUE & !is.na(mr_files))) {
+  if (any(mr_found != TRUE & !is.na(run_nifti))) {
     lg$warn(
       "Could not find the following run files: %s. Dropping from analysis",
-      paste(mr_files[!mr_found], collapse = ", ")
+      paste(run_nifti[!mr_found], collapse = ", ")
     )
   }
 

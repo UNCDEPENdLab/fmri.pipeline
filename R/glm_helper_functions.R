@@ -140,24 +140,26 @@ truncate_runs <- function(s, mrfiles, mrrunnums, niftivols, drop_volumes=0) {
       }
       
       if (!file.exists(truncfile)) { runFSLCommand(paste("fslroi", mrfiles[r], truncfile, first_vol, trunc_length)) } #create truncated volume
-      mrfile_to_analyze <- truncfile
+      run_nifti <- truncfile
     } else {
-      last_vol_analysis <- niftivols[r] 
+      last_vol_analysis <- niftivols[r]
       if (drop_volumes > 0) {
         trunc_length <- niftivols[r] - drop_volumes
         truncfile <- sub("(^.*/[a-z]+_clock[0-9](?:_5)*)\\.nii\\.gz$",
           paste0("\\1_drop", drop_volumes, ".nii.gz"), mrfiles[r],
           perl = TRUE
         )
-        if (!file.exists(truncfile)) { runFSLCommand(paste("fslroi", mrfiles[r], truncfile, first_vol, trunc_length)) } #create truncated volume
-        mrfile_to_analyze <- truncfile
+        if (!file.exists(truncfile)) { # create truncated volume
+          runFSLCommand(paste("fslroi", mrfiles[r], truncfile, first_vol, trunc_length))
+        } 
+        run_nifti <- truncfile
       } else {
-        mrfile_to_analyze <- mrfiles[r] #just use original file  
+        run_nifti <- mrfiles[r] #just use original file  
       }
 
     }
     #cat(paste0(paste(mrfiles[r], niftivols[r], floor(last_iti), trunc_length, sep="\t"), "\n"), file="trunclog", append=TRUE)
-    return(data.frame(last_vol_analysis, mrfile_to_analyze, stringsAsFactors=FALSE))
+    return(data.frame(last_vol_analysis, run_nifti, stringsAsFactors=FALSE))
   }))
 
   mrdf
@@ -194,7 +196,7 @@ generate_motion_regressors <- function(motion_params = "motion.par",
   # l1_confound_regressors argument). These could include CSF, WM, or whatever. Subset down to just
   # the values that can be calculated from motion params alone so that the logic below of parameter naming holds up.
   regressors <- intersect(regressors,
-    c("fd", "rx", "ry", "rz", "tx", "ty", "tz",
+    c("FD", "rx", "ry", "rz", "tx", "ty", "tz",
     "drx", "dry", "drz", "dtx", "dty", "dtz",
     "qdrx", "qdry", "qdrz", "qdtx", "qdty", "qdtz")
   )
@@ -209,29 +211,32 @@ generate_motion_regressors <- function(motion_params = "motion.par",
 
   mot <- mot[(1+drop_volumes):last_volume, ]
 
-  if ("fd" %in% regressors || any(derivcols <- grepl("^q?d{1}.*", regressors, perl=TRUE))) {
-    motderiv <- mot[, lapply(.SD, function(x) { c(0, diff(x)) })]
-    setnames(motderiv, paste0("d", names(mot))) #add delta to names
-    mot <- cbind(mot, motderiv)
+  if ("FD" %in% regressors || any(derivcols <- grepl("^q?d{1}.*", regressors, perl=TRUE))) {
+    mot_deriv <- mot[, lapply(.SD, function(x) { c(0, diff(x)) })]
+    setnames(mot_deriv, paste0("d", names(mot))) #add delta to names
+    mot <- cbind(mot, mot_deriv)
   }
 
   #quadratics always computed after derivative calculation
   if (any(quadcols <- grepl("^q{1}.*", regressors, perl=TRUE))) {
-    motquad <- mot[, lapply(.SD, function(x) { x^2 })]
-    data.table::setnames(motquad, paste0("q", names(mot))) #add delta to names
-    mot <- cbind(mot, motquad)
+    mot_quad <- mot[, lapply(.SD, function(x) { x^2 })]
+    data.table::setnames(mot_quad, paste0("q", names(mot))) #add delta to names
+    mot <- cbind(mot, mot_quad)
   }
 
-  if ("fd" %in% regressors) {
+  if ("FD" %in% regressors) {
     #need to adapt in case of degrees (this is based on radians)
     #https://wiki.cam.ac.uk/bmuwiki/FMRI
     if (rot_units=="rad") {
-      fd <- apply(mot.deriv[,c("drx", "dry", "drz")], 1, function(x) sum(2*pi*50*(abs(x)/360))) +
-        apply(mot.deriv[,c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
+      FD <- apply(mot_deriv[,c("drx", "dry", "drz")], 1, function(x) 50 * sum(abs(x))) +
+        apply(mot_deriv[,c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
+    } else if (rot_units=="deg") {
+      FD <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * (pi / 180) * sum(abs(x))) +
+        apply(mot_deriv[, c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
     } else {
       stop("not done yet")
     }
-    mot <- cbind(mot, fd=fd)
+    mot <- cbind(mot, FD=FD)
   }
 
   mot <- mot[, ..regressors] #keep regressors of interest
@@ -240,11 +245,11 @@ generate_motion_regressors <- function(motion_params = "motion.par",
   }
 
   ##just PCA motion on the current run
-  ##mregressors <- pca_motion(mr_files[r], runlengths[r], motion_parfile="motion.par", numpcs=3, drop_volumes=drop_volumes)$motion_pcs_concat
+  ##mregressors <- pca_motion(run_nifti[r], runlengths[r], motion_parfile="motion.par", numpcs=3, drop_volumes=drop_volumes)$motion_pcs_concat
 
   #need to adapt this implementation -- create spike regressors based on a motion threshold
   ## if (spikeregressors) { #incorporate spike regressors if requested (not used in conventional AROMA)
-  ##   censorfile <- file.path(dirname(mr_files[rr]), "motion_info", "fd_0.9.mat")
+  ##   censorfile <- file.path(dirname(run_nifti[rr]), "motion_info", "fd_0.9.mat")
   ##   if (file.exists(censorfile) && file.info(censorfile)$size > 0) {
   ##     censor <- read.table(censorfile, header=FALSE)
   ##     censor <- censor[(1+drop_volumes):runlengths[rr],,drop=FALSE] #need no drop here in case there is just a single volume to censor
@@ -256,7 +261,7 @@ generate_motion_regressors <- function(motion_params = "motion.par",
   ## }
 
   ##add CSF and WM regressors (with their derivatives)
-  ## nuisancefile <- file.path(dirname(mr_files[rr]), "nuisance_regressors.txt")
+  ## nuisancefile <- file.path(dirname(run_nifti[rr]), "nuisance_regressors.txt")
   ## if (file.exists(nuisancefile)) {
   ##   nuisance <- read.table(nuisancefile, header=FALSE)
   ##   nuisance <- nuisance[(1+drop_volumes):runlengths[rr],,drop=FALSE]
@@ -267,7 +272,7 @@ generate_motion_regressors <- function(motion_params = "motion.par",
   ##   if (!is.null(mregressors)) { mregressors <- cbind(mregressors, nuisance) #note that in R 3.3.0, cbind with NULL or c() is no problem...
   ##   } else { mregressors <- nuisance }
   ## }
-  
+
   return(mot)
 }
 
@@ -335,33 +340,38 @@ get_confound_txt <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
   analysis_outdir <- get_l1_directory(id=id, session=session, gpa=gpa, create_if_missing = TRUE)
 
   expect_file <- file.path(analysis_outdir, paste0("run", run_number, "_l1_confounds.txt"))
-  if (file.exists(expect_file)) {
+  exclude_file <- file.path(analysis_outdir, paste0("run", run_number, "_l1_exclude.txt"))
+  exclude_data_file <- file.path(analysis_outdir, paste0("run", run_number, "_l1_exclude_data.txt"))
+  if (file.exists(expect_file) && file.exists(exclude_file)) {
     lg$debug("Returning extant file: %s in get_confound_txt", expect_file)
-    return(expect_file)
+    exclude_run <- as.logical(readLines(con = exclude_file, n = 1L))
+    return(list(confounds = expect_file, exclude_run = exclude_run, exclude_data = exclude_data_file))
   }
 
+  #read external confounds file
   confound_df <- NULL
-  if (isTRUE(rinfo$confound_file_present[1])) {
-    cfile <- get_mr_abspath(rinfo, "confound_file")[1]
+  if (isTRUE(rinfo$confound_input_file_present[1])) {
+    cfile <- get_mr_abspath(rinfo, "confound_input_file")[1]
     lg$debug("Reading confound file: %s", cfile)
-    confound_df <- tryCatch(data.table::fread(cfile), error = function(e) {
+    confound_df <- tryCatch(data.table::fread(cfile, data.table=FALSE), error = function(e) {
       lg$error("Failed to read confound file: %s with error %s", cfile, as.character(e))
       return(NULL)
     })
 
-    if (!is.null(gpa$confound_settings$confound_columns) && !is.null(confound_df)) {
-      if (length(gpa$confound_settings$confound_columns) != ncol(confound_df)) {
+    if (!is.null(gpa$confound_settings$confound_input_colnames) && !is.null(confound_df)) {
+      if (length(gpa$confound_settings$confound_input_colnames) != ncol(confound_df)) {
         lg$warn(
-          "Mismatch in number of columns in confound file: %s relative to $confound_settings$confound_columns",
-          rinfo$confound_file[1]
+          "Mismatch in number of columns in confound file: %s relative to $confound_settings$confound_input_colnames",
+          rinfo$confound_input_file[1]
         )
       }
-      data.table::setnames(confound_df, gpa$confound_settings$confound_columns)
+      data.table::setnames(confound_df, gpa$confound_settings$confound_input_colnames)
     }
 
     confound_df <- confound_df[(1 + drop_volumes):last_volume, ]
   }
 
+  #read motion parameters file
   motion_df <- NULL
   if (isTRUE(rinfo$motion_params_present[1])) {
     mfile <- get_mr_abspath(rinfo, "motion_params")[1]
@@ -369,28 +379,29 @@ get_confound_txt <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     motion_df <- tryCatch({
       generate_motion_regressors(
         mfile,
-        col.names = gpa$confound_settings$motion_params_columns,
-        regressors = gpa$confound_settings$l1_confound_regressors,
+        col.names = gpa$confound_settings$motion_params_colnames,
+        regressors = gpa$confound_settings$all_confound_columns,
         drop_volumes = drop_volumes, last_volume = last_volume
       )}, error = function(e) {
       lg$error("Failed to read motion file: %s with error %s", rinfo$motion_params[1], as.character(e))
       return(NULL)
     })
 
-    if (!is.null(gpa$confound_settings$motion_params_columns) && !is.null(motion_df)) {
-      if (length(gpa$confound_settings$motion_params_columns) != ncol(motion_df)) {
+    if (!is.null(gpa$confound_settings$motion_params_colnames) && !is.null(motion_df)) {
+      if (length(gpa$confound_settings$motion_params_colnames) != ncol(motion_df)) {
         lg$warn(
-          "Mismatch in number of columns in confound file: %s relative to $confound_settings$confound_columns",
+          "Mismatch in number of columns in confound file: %s relative to $confound_settings$confound_input_colnames",
           mfile
         )
       }
-      data.table::setnames(motion_df, gpa$confound_settings$motion_params_columns)
+      data.table::setnames(motion_df, gpa$confound_settings$motion_params_colnames)
     }
 
   }
 
+  # combine motion and confound files
   if (is.null(motion_df) && is.null(confound_df)) {
-    lg$info("Neither confounds nor motion parameters are available for %s", mr_file)
+    lg$info("Neither confounds nor motion parameters are available for %s", rinfo$run_nifti[1L])
     return(NULL)
   } else if (is.null(motion_df)) {
     confounds <- confound_df
@@ -406,7 +417,7 @@ get_confound_txt <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
       if (length(overlap_names) > 0L) {
         lg$info(
           "Motion parameters have overlapping columns with confounds file: %s. Preferring confounds to motion params",
-          rinfo$confound_file[1]
+          rinfo$confound_input_file[1L]
         )
         lg$info("Overlap: %s", overlap_names)
         data.table::setnames(motion_df, old = overlap_names, new = paste0(overlap_names, ".mot"))
@@ -416,24 +427,56 @@ get_confound_txt <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     }
   }
 
+  if (!is.null(gpa$confound_settings$run_exclusion_columns)) {
+    if (!all(gpa$confound_settings$run_exclusion_columns %in% names(confounds))) {
+      lg$warn("Missing exclusion columns for subject: %s, session: %s", rinfo$id[1L], rinfo$session[1L])
+      lg$warn("Column: %s", setdiff(gpa$confound_settings$run_exclusion_columns, names(confounds)))
+      lg$warn("We will exclude this run from analysis until this is resolved!")
+      exclude_run <- TRUE
+    } else {
+      exclude_run <- tryCatch(with(confounds, eval(parse(text = gpa$confound_settings$exclude_run))),
+        error = function(e) {
+          lg$error(
+            "Problem evaluating run exclusion for subject: %s, session: %s, run_number: %s, expr: %s",
+            id, session, run_number,
+            gpa$confound_settings$exclude_run
+          )
+          lg$error("Defaulting to exclusion of run.")
+          return(TRUE)
+        }
+      )
+
+      if (length(exclude_run) > 1L) {
+        lg$error("Run exclusion expression %s returned %d results!", gpa$confound_settings$exclude_run, length(exclude_run))
+        lg$error("Modify the expression so that it returns a single TRUE/FALSE.")
+        lg$error("Defaulting to exclusion of run.")
+        exclude_run <- TRUE
+      }
+    }
+
+    exclude_df <- confounds[, intersect(gpa$confound_settings$run_exclusion_columns, names(confounds)), drop=FALSE]
+    write.table(exclude_df, file = exclude_data_file, row.names = FALSE, col.names = TRUE)
+  }
+
   if (!all(gpa$confound_settings$l1_confound_regressors %in% names(confounds))) {
-    lg$warn("Missing confound columns for subject: %s, session: %s", rinfo$id[1], rinfo$session[1])
+    lg$warn("Missing confound columns for subject: %s, session: %s", rinfo$id[1L], rinfo$session[1L])
     lg$warn("Column: %s", setdiff(gpa$confound_settings$l1_confound_regressors, names(confounds)))
 
     confounds <- confounds[, intersect(gpa$confound_settings$l1_confound_regressors, names(confounds))]
   }
 
   if (isTRUE(demean)) {
-    lg$debug("Demeaning columns of confounds matrix")
+    lg$debug("Demeaning columns of l1 confounds matrix: %s", expect_file)
     confounds <- as.data.frame(apply(confounds, 2, function(x) {
       x - mean(x, na.rm = TRUE)
     }))
   }
 
   lg$debug("Writing l1 confounds to file: %s", expect_file)
-  write.table(confounds, file=expect_file, row.names=FALSE, col.names=FALSE)
+  write.table(confounds, file = expect_file, row.names = FALSE, col.names = FALSE)
+  writeLines(as.character(exclude_run), con = exclude_file)
 
-  return(expect_file)
+  return(list(confounds = expect_file, exclude = exclude_run))
 }
 
 generateRunMask <- function(mrfiles, outdir=getwd(), outfile="runmask") {
@@ -650,7 +693,7 @@ get_mr_abspath <- function(mr_df, col="run_nifti") {
 
 #' small helper function to return the location of an l1 directory based on
 #'   id, session, and run number
-#' 
+#'
 #' @param id The id of a participant
 #' @param session The session number to lookup
 #' @param run_number The run number to lookup
