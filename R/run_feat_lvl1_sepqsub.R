@@ -16,7 +16,7 @@
 ## #call function below
 ## run_feat_lvl1_sepqsub(feat_model_arguments, run_model_index, rerun=FALSE, wait_for=wait_for)
 
-run_feat_lvl1_sepqsub <- function(gpa, run_model_index, rerun=FALSE, wait_for="") {
+run_feat_lvl1_sepqsub <- function(gpa, model_name=NULL, rerun=FALSE, wait_for="") {
 
   #This function is now called within run_fsl_pipeline, rather than being run in its own qsub
   #to_run <- Sys.getenv("fsl_pipeline_file")

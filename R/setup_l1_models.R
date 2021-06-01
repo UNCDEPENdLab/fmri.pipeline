@@ -91,12 +91,13 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
       run_nifti <- mrdf$run_nifti
       run_lengths <- mrdf$last_volume
 
+      # determine whether to include each run
       mrdf$exclude_run <- sapply(seq_len(nrow(mrdf)), function(rr) {
         ll <- as.list(mrdf[rr, , drop = FALSE]) # rrth row of mrdf
         ll[["gpa"]] <- gpa
         ll[["run_nifti"]] <- NULL
-        ex <- do.call(get_confound_txt, ll)$exclude_run
-        return(ex)
+        ex <- do.call(get_l1_confounds, ll)
+        return(ex$exclude_run)
       })
 
       # Tracking list containing data.frames for each software, where we expect one row per run-level model (FSL)
@@ -189,7 +190,8 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
     }
 
   all_subj_l1_combined <- list(
-    fsl=rbindlist(lapply(all_subj_l1_list, "[[", "fsl"))
+    fsl=rbindlist(lapply(all_subj_l1_list, "[[", "fsl")),
+    metadata=rbindlist(lapply(all_subj_l1_list, "[[", "metadata"))
     #fsl = rbindlist(lapply(all_subj_l1_list, "[[", "spm"))
   )
 

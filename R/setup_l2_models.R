@@ -25,8 +25,6 @@ setup_l2_models <- function(gpa, to_setup=NULL) {
     "You must run setup_l1_models before running setup_l2_models.")
   }
 
-  #calculate motion exclusions
-  
 
   #split l1 models by ID
   l1_split <- split(gpa$l1_model_setup, gpa$l1_model_setup$id)
@@ -35,7 +33,9 @@ setup_l2_models <- function(gpa, to_setup=NULL) {
     this_model <- to_setup[ii]
 
     if ("fsl" %in% gpa$glm_software) {
-
+      # get list of runs to examine/include
+      to_run <- gpa$l1_setup$fsl
+      #if (is.null())
     }
   }
 

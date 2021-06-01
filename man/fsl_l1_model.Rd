@@ -11,7 +11,7 @@ fsl_l1_model(
   d_obj,
   gpa,
   model_name = NULL,
-  mr_files = NULL,
+  run_nifti = NULL,
   nvoxels = NULL,
   execute_feat = FALSE,
   lg = NULL
@@ -25,7 +25,7 @@ fsl_l1_model(
 \item{model_name}{a string indicating the model name within \code{gpa} to setup. If
 you wish to setup multiple models, this is handled upstream in setup_l1_models.R}
 
-\item{mr_files}{an optional character vector of NIfTI filenames used in l1 analysis.
+\item{run_nifti}{an optional character vector of NIfTI filenames used in l1 analysis.
 Prefer to pass these via the build_design_matrix object in $run_4d_files}
 }
 \description{

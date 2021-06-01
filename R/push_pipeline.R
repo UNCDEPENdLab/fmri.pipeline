@@ -20,9 +20,9 @@ push_pipeline <- function(fsl_model_arguments, ncpus=1) { #should this read from
   
   #setup parallel worker pool, if requested
   if (ncpus > 1) {
-    cl <- makeCluster(ncpus)
+    cl <- parallel::makeCluster(ncpus)
     registerDoParallel(cl)    
-    on.exit(try(stopCluster(cl))) #cleanup pool upon exit of this function
+    on.exit(try(parallel::stopCluster(cl))) #cleanup pool upon exit of this function
   } else {
     registerDoSEQ() #formally register a sequential 'pool' so that dopar is okay
   }

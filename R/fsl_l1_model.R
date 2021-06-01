@@ -64,13 +64,14 @@ fsl_l1_model <- function(
     this_template <- fsf_template # start with default copy of template for this run
 
     if (!is.null(gpa$confound_settings$l1_confound_regressors)) {
-      confounds <- get_confound_txt(
+      confounds <- get_l1_confounds(
         id = id, session = session,
         run_number = feat_l1_df$run_number[rr], gpa,
         drop_volumes = gpa$drop_volumes,
         last_volume = feat_l1_df$run_volumes[rr]
       )$confounds
       this_template <- gsub(".CONFOUNDS.", confounds, this_template, fixed = TRUE)
+      feat_l1_df$l1_confound_regressors[rr] <- confounds
     } else { #disable confounds
       this_template <- gsub("set fmri(confoundevs) 1", "set fmri(confoundevs) 0", this_template, fixed=TRUE) #disable
       l1 <- grep("# Confound EVs text file for analysis 1", this_template, fixed = TRUE)
@@ -85,7 +86,10 @@ fsl_l1_model <- function(
     # .CONFOUNDS. is the confounds file for GLM
     # .TR. is the sequence TR in seconds
 
-    this_template <- gsub(".OUTPUTDIR.", file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr])), this_template, fixed=TRUE)
+    this_template <- gsub(".OUTPUTDIR.",
+      file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr])), this_template,
+      fixed = TRUE
+    )
     this_template <- gsub(".NVOL.", d_obj$run_volumes[rr], this_template, fixed=TRUE)
     this_template <- gsub(".FUNCTIONAL.", gsub(".nii(.gz)*$", "", run_nifti[rr]), this_template, fixed=TRUE)
     this_template <- gsub(".TR.", d_obj$tr, this_template, fixed=TRUE)
@@ -103,7 +107,10 @@ fsl_l1_model <- function(
           lg$debug("Adding custom feat l1 setting: %s = %s", this_name, this_value)
           if (any(grepl(paste0("set fmri(", this_name, ")"), this_template, fixed=TRUE))) {
             lg$debug("Substituting existing value of feat l1 setting: %s", this_name)
-            this_template <- gsub("(set fmri\\s*\\(", this_name, "\\))\\s*(.*)", paste0("\\1 ", this_value), perl=TRUE)
+            this_template <- gsub(paste0("(set fmri\\s*\\(", this_name, "\\))\\s*(.*)"), paste0("\\1 ", this_value),
+              this_template,
+              perl = TRUE
+            )
           } else {
             this_template <- c(this_template, paste0("set fmri(", this_name, ") ", this_value))
           }

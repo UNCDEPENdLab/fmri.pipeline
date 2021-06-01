@@ -323,6 +323,6 @@ specify_contrasts <- function(mobj = NULL, include_diagonal = TRUE, include_fact
     }
 
     mobj$contrasts <- cmat
-    mobj$contrasts_noalias <- cmat_reduce
+    if (!is.null(mobj$aliased_terms)) mobj$contrasts_noalias <- cmat_reduce
     return(mobj)
 }

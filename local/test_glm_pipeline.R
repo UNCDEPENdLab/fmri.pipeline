@@ -18,6 +18,7 @@ source("specify_contrasts.R")
 source("build_l2_models.R")
 source("glm_helper_functions.R")
 source("lookup_nifti_inputs.R")
+source("get_l1_confounds.R")
 #source("build_design_matrix.R")
 
 trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
@@ -71,12 +72,18 @@ gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm", working_di
   l1_models=l1_models, bad_ids=c(10637), #test exclusion
   confound_settings=list(
     motion_params_file = "motion.par",
-    confound_file="nuisance_regressors.txt",
-    confound_columns = c("csf", "dcsf", "wm", "dwm"),
-    l1_confound_regressors = c("rx", "csf", "dcsf", "wm", "dwm")
+    confound_input_file="nuisance_regressors.txt",
+    confound_input_colnames = c("csf", "dcsf", "wm", "dwm"),
+    l1_confound_regressors = c("rx", "csf", "dcsf", "wm", "dwm"),
+    exclude_run = "max(FD) > 4 | sum(FD > .5)/length(FD) > .15",
+    exclude_subject = "n_runs < 4"
   )
 )
 
+rm(trial_df)
 gpa <- setup_l1_models(gpa)
 
-build_l2_models(gpa$run_data)
+
+
+gpa <- build_l2_models(gpa)
+gpa <- build_l3_models(gpa)
