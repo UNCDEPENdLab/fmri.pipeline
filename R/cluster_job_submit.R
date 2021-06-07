@@ -33,7 +33,7 @@
 #'
 #'   #To forward environment variables without explicitly providing values. Note that these must
 #'   #  be in R's system environment (cf. Sys.getenv) at execution time to forward as expected.
-#'   cluster_job_submit('myscript.sbatch', scheduler="slurm", 
+#'   cluster_job_submit('myscript.sbatch', scheduler="slurm",
 #'      sched_args=c('-p general', '-N 1', '-n 12', '--mem=10g', '-t 02-00:00:00'),
 #'      env_variables=c(RUN_INDEX=2, R_HOME=NA, JAVA_HOME=NA))
 #' }
@@ -66,7 +66,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     }
     sched_args <- NULL # not relevant
   }
-  
+
   # Scheduler arguments are just pasted together with spaces.
   # Thus, arguments like '--mem=5g' and '-n 12' are not handled differently
   if (!is.null(sched_args)) { sched_args <- paste(sched_args, collapse=" ") }

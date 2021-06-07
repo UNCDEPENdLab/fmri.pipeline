@@ -685,3 +685,26 @@ calculate_subject_exclusions <- function(gpa) {
 slurm_job_array <- function(job_name = "slurm_array") {
 
 }
+
+#' helper function to convert the $sched_args field to a vector
+#'  of directives that can be included dynamically in the header of
+#'  PBS or SBATCH scripts.
+#' 
+#' @param gpa a \code{glm_pipeline_arguments} object containing the
+#'   $parallel$sched_args field
+#'
+#' @return a character vector where the $sched_args elements are converted to
+#'   corresponding # SBATCH or # PBS directives for inclusion in scripts
+#' @keywords internal
+sched_args_to_header <- function(gpa) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+
+  #if there are no scheduler arguments, return nothing
+  if (is.null(gpa$parallel$sched_args)) return(NULL)
+
+  is_slurm <- gpa$scheduler == "slurm"
+  directives <- sapply(gpa$parallel$sched_args, function(x) {
+    ifelse(isTRUE(is_slurm), paste("#SBATCH", x), paste("#PBS", x))
+  }, USE.NAMES = FALSE)
+  return(directives)
+}

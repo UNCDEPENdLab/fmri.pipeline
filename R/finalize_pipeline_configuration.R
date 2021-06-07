@@ -71,14 +71,28 @@ finalize_pipeline_configuration <- function(gpa) {
   if (is.null(gpa$parallel$slurm)) gpa$parallel$slurm <- list()
   if (is.null(gpa$parallel$torque)) gpa$parallel$torque <- list()
   if (gpa$scheduler == "slurm") {
-
+    if (is.null(gpa$parallel$sched_args)) {
+      gpa$parallel$sched_args <- c("-p general")
+      lg$info("Using default SLURM scheduler arguments: ")
+      lg$info("Argument: %s", gpa$parallel$sched_args)
+    }
   } else if (gpa$scheduler == "torque") {
-
+    # gpa$parallel$sched_args <- c("-A mnh5174_c_g_sc_default", "-W group_list=mnh5174_collab")
+    if (is.null(gpa$parallel$sched_args)) {
+      gpa$parallel$sched_args <- c("-j oe", "-m n")
+      lg$info("Using default PBS scheduler arguments: ")
+      lg$info("Argument: %s", gpa$parallel$sched_args)
+    }
   }
 
   if (is.null(gpa$parallel$fsl$l2_cores)) gpa$parallel$fsl$l2_cores <- 20
   if (is.null(gpa$parallel$fsl$l1_feat_time)) gpa$parallel$fsl$l1_feat_time <- "6:00:00" # 6 hours
   if (is.null(gpa$parallel$fsl$l1_feat_memgb)) gpa$parallel$fsl$l1_feat_memgb <- "12" # 12 GB by default
+  if (is.null(gpa$parallel$fsl$l2_feat_time)) gpa$parallel$fsl$l2_feat_time <- "1:00:00" # 1 hour
+  if (is.null(gpa$parallel$fsl$l2_feat_memgb)) gpa$parallel$fsl$l2_feat_memgb <- "12" # 12 GB by default
+  if (is.null(gpa$parallel$fsl$l3_feat_time)) gpa$parallel$fsl$l3_feat_time <- "24:00:00" # 24 hours
+  if (is.null(gpa$parallel$fsl$l3_feat_memgb)) gpa$parallel$fsl$l3_feat_memgb <- "32" # 32 GB by default
+  
   if (is.null(gpa$parallel$fsl$compute_environment)) {
     lg$info("Using default compute environment for UNC Longleaf")
     gpa$parallel$fsl$compute_environment <- c(

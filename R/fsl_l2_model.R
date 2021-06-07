@@ -124,6 +124,14 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
 
   feat_l2_df$l2_feat_fsf <- l2_feat_fsf
   feat_l2_df$l2_feat_dir <- l2_feat_dir
+  feat_l2_df$fsf_modified_date <- ifelse(file.exists(l2_feat_fsf), file.info(l2_feat_fsf)$mtime, as.POSIXct(NA))
+  feat_l2_df$l2_feat_dir_exists <- dir.exists(l2_feat_dir)
+  if (dir.exists(l2_feat_dir) && file.exists(file.path(l2_feat_dir, ".feat_complete"))) {
+    l2_feat_complete <- readLines(file.path(l2_feat_dir, ".feat_complete"))[2]
+  } else {
+    l2_feat_complete <- NA_character_
+  }
+  feat_l2_df$l2_feat_complete <- l2_feat_complete
 
   # skip re-creation of FSF and do not run below unless force==TRUE
   if (!file.exists(l2_feat_fsf) || isTRUE(force)) {
@@ -131,7 +139,7 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
     cat(l2_fsf_syntax, file = l2_feat_fsf, sep = "\n")
   }
 
-  if (isTRUE(force) || !dir.exists(l2_feat_dir)) {
+  if (isTRUE(force) || !dir.exists(l2_feat_dir) || is.na(l2_feat_complete)) {
     feat_l2_df$to_run <- TRUE
   } else {
     feat_l2_df$to_run <- FALSE
