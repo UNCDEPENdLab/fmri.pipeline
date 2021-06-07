@@ -62,7 +62,8 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                output_settings = "default",
                                vm = c(
                                  id = "id", session = "session", run_number = "run_number", trial = "trial",
-                                 run_trial = "run_trial", mr_dir = "mr_dir", run_nifti = "run_nifti"
+                                 run_trial = "run_trial", mr_dir = "mr_dir", run_nifti = "run_nifti",
+                                 exclude_subject = "exclude_subject"
                                ),
                                bad_ids = NULL, tr = NULL,
                                fmri_file_regex = ".*\\.nii(\\.gz)?", fmri_path_regex = NULL,
@@ -77,7 +78,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                  confound_input_colnames = NULL, # names of confound columns -- if null, we will attempt to find a header row
                                  l1_confound_regressors = NULL, # column names in motion_params and/or confound_input_file
                                  exclude_run = "mean(FD) > 0.9 | max(FD) > 0.5)",
-                                 exclude_subject = "nruns < 4",
+                                 exclude_subject = NULL,
                                  spike_volume = "FD > 0.9"
                                ),
                                parallel = list(

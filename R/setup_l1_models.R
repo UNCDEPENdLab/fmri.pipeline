@@ -167,7 +167,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
             })
 
           if (!is.null(feat_l1_df)) {
-            #add to tracking data.frame (simple append)
+            #add to tracking data.frame (simple, inefficient append)
             l1_file_setup$fsl <- rbind(l1_file_setup$fsl, feat_l1_df)
           }
         }
@@ -189,10 +189,11 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
       return(l1_file_setup)
     }
 
+  # N.B. rbindlist converts the bound elements into a single data.table object
   all_subj_l1_combined <- list(
     fsl=rbindlist(lapply(all_subj_l1_list, "[[", "fsl")),
     metadata=rbindlist(lapply(all_subj_l1_list, "[[", "metadata"))
-    #fsl = rbindlist(lapply(all_subj_l1_list, "[[", "spm"))
+    #spm = rbindlist(lapply(all_subj_l1_list, "[[", "spm"))
   )
 
   class(all_subj_l1_combined) <- c("list", "l1_setup")

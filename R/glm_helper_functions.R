@@ -601,3 +601,87 @@ get_l1_directory <- function(id = NULL, session = NULL, run_number = NULL, model
 
   return(l1_dir)
 }
+
+#' small helper function to populate subject exclusions in $run_data and $subject_data
+#' 
+#' @param gpa a \code{glm_pipeline_arguments} object that already has the \code{$exclude_run}
+#'   column populated in \code{$l1_model_setup}.
+#' @return a modified copy of \code{gpa} where $exclude_subject has been added to $run_data
+#'   and $subject_data. This function also adds $n_good_runs to $subject_data which is useful
+#'   if we want to enforce a lower bound on the number of runs used to define subject exclusion.
+#' @keywords internal
+#' @importFrom dplyr filter count left_join
+#' @importFrom checkmate assert_class assert_data_table
+#' @importFrom lgr get_logger
+#' @author Michael Hallquist
+calculate_subject_exclusions <- function(gpa) {
+  lg <- lgr::get_logger("glm_pipeline/l2_setup")
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_class(gpa$l1_model_setup, "l1_setup")
+  checkmate::assert_data_table(gpa$l1_model_setup$metadata)
+  if (!"exclude_run" %in% names(gpa$l1_model_setup$metadata)) {
+    msg <- "calculate_subject_exclusions depends on exclude_run being populated by setup_l1_models."
+    lg$error(msg)
+    stop(msg)
+  }
+
+  if ("exclude_subject" %in% names(gpa$subject_data) && "exclude_subject" %in% names(gpa$run_data)) {
+    lg$debug("exclude_subject already calculated and populated in $subject_data and $run_data")
+    return(gpa)
+  }
+
+  # if no subject exclusion string is provided, then keep all subjects
+  if (is.null(gpa$confound_settings$exclude_subject)) {
+    gpa$run_data$exclude_subject <- FALSE
+    gpa$subject_data$exclude_subject <- FALSE
+    return(gpa)
+  }
+
+  n_good_runs_df <- gpa$l1_model_setup$metadata %>%
+    dplyr::filter(exclude_run == FALSE) %>%
+    dplyr::count(id, session, name = "n_good_runs")
+
+  gpa$subject_data <- gpa$subject_data %>%
+    dplyr::left_join(n_good_runs_df, by = c("id", "session"))
+
+  gpa$run_data <- gpa$run_data %>%
+    dplyr::left_join(n_good_runs_df, by = c("id", "session"))
+
+  # evaluate subject exclusion in the context of the broader $subject_data data.frame
+  gpa$subject_data$exclude_subject <- sapply(seq_len(nrow(gpa$subject_data)), function(ss) {
+    s_info <- gpa$subject_data[ss, , drop = FALSE]
+    tryCatch(with(s_info, eval(parse(text = gpa$confound_settings$exclude_subject))),
+      error = function(e) {
+        lg$error(
+          "Problem evaluating subject exclusion for subject: %s, session: %s, expr: %s",
+          s_info$id, s_info$session,
+          gpa$confound_settings$exclude_subject
+        )
+        lg$error("Defaulting to retaining this subject.")
+        return(FALSE)
+      }
+    )
+  })
+
+  # propagate subject exclusion down to $run_data for simplicity
+  gpa$run_data <- gpa$run_data %>%
+    dplyr::left_join(
+      gpa$subject_data %>% dplyr::select(id, session, exclude_subject),
+      by = c("id", "session")
+    )
+
+  # TODO: cleanup redundancy, or at least be more thoughtful about this
+  # For now, also populate exclude_subject into gpa$l1_model_setup$metadata to avoid
+  # additional joins in l2 model setup
+  gpa$l1_model_setup$metadata <- gpa$l1_model_setup$metadata %>%
+    dplyr::left_join(
+      gpa$subject_data %>% dplyr::select(id, session, exclude_subject),
+      by = c("id", "session")
+    )
+
+  return(gpa)
+}
+
+slurm_job_array <- function(job_name = "slurm_array") {
+
+}

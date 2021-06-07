@@ -21,9 +21,11 @@ build_l2_models <- function(gpa,
   # capture whether we are building level 2 (subject) or level 3 (sample) models
   fname <- match.call()[[1]]
   if (fname == "build_l2_models") {
+    menu_desc <- "second-level (subject)"
     data <- gpa$run_data # L2
     model_set <- gpa$l2_models
   } else {
+    menu_desc <- "third-level (sample)"
     data <- gpa$subject_data # L3
     model_set <- gpa$l3_models
   }
@@ -264,8 +266,8 @@ build_l2_models <- function(gpa,
   while (add_more != 4) {
     summarize_models(model_list)
 
-    add_more <- menu(c("Add model", "Modify model", "Delete model", "Done with higher-level model setup"),
-      title = "Higher-level model setup menu"
+    add_more <- menu(c("Add model", "Modify model", "Delete model", paste("Done with", menu_desc, "model setup")),
+      title = paste(sub("^(\\w{1})", "\\U\\1", menu_desc, perl = TRUE), "model setup menu")
     )
 
     if (add_more == 1L) { # add

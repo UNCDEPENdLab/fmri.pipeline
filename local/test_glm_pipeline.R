@@ -16,9 +16,14 @@ source("fsl_l1_model.R")
 source("setup_l1_models.R")
 source("specify_contrasts.R")
 source("build_l2_models.R")
+source("setup_l2_models.R")
+source("fsl_l2_model.R")
+source("build_l1_models.R")
 source("glm_helper_functions.R")
 source("lookup_nifti_inputs.R")
 source("get_l1_confounds.R")
+source("run_feat_lvl1_sepjobs.R")
+source("cluster_job_submit.R")
 #source("build_design_matrix.R")
 
 trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
@@ -48,6 +53,9 @@ l1_models$signals <- lapply(l1_models$signals, function(ss) {
   return(ss)
 })
 
+#rename from _dt to d_ for derivatives to match bdm
+l1_models$models$pe_only$regressors <- c("clock", "feedback", "pe", "d_pe" )
+rownames(l1_models$models$pe_only$contrasts) <- colnames(l1_models$models$pe_only$contrasts) <- c("clock", "feedback", "pe", "d_pe")
 
 subject_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/example_files/mmclock_subject_data.rds") %>%
   mutate(mr_dir=paste0(mr_dir, "/mni_5mm_aroma")) #make sure we're looking in the right folder
@@ -61,7 +69,8 @@ trial_df <- trial_df %>% rename(subid = id) %>% mutate(id=subid)
 run_df <- run_df %>% rename(subid = id, run=run_number) %>% mutate(id=subid)
 subject_df <- subject_df %>% rename(subid = id) %>% mutate(id=subid)
 
-gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm", working_directory = tempdir(),
+gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm", 
+  working_directory = "/proj/mnhallqlab/users/michael/fmri_test",
   subject_data=subject_df, run_data=run_df, trial_data=trial_df,
   tr=1.0,
   vm=c(id="subid", run_number="run"),
@@ -76,14 +85,29 @@ gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm", working_di
     confound_input_colnames = c("csf", "dcsf", "wm", "dwm"),
     l1_confound_regressors = c("rx", "csf", "dcsf", "wm", "dwm"),
     exclude_run = "max(FD) > 4 | sum(FD > .5)/length(FD) > .15",
-    exclude_subject = "n_runs < 4"
+    exclude_subject = "n_good_runs < 4"
   )
 )
 
 rm(trial_df)
 gpa <- setup_l1_models(gpa)
 
-
-
 gpa <- build_l2_models(gpa)
 gpa <- build_l3_models(gpa)
+
+jobs <- run_feat_lvl1_sepjobs(gpa)
+
+# todo
+# gpa <- verify_lv1_runs(gpa)
+
+load("test_gpa.RData")
+
+#new nomenclature
+gpa$l1_model_setup$fsl <- gpa$l1_model_setup$fsl %>%
+  dplyr::rename(l1_feat_fsf=feat_file) %>%
+  dplyr::mutate(l1_feat_dir=sub(".fsf", ".feat", l1_feat_fsf, fixed=TRUE))
+
+#save(gpa, file="test_gpa.RData")
+
+
+gpa <- setup_l2_models(gpa)

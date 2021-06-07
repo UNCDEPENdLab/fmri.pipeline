@@ -14,7 +14,8 @@ setup_glm_pipeline(
   group_output_directory = "default",
   output_settings = "default",
   vm = c(id = "id", session = "session", run_number = "run_number", trial = "trial",
-    run_trial = "run_trial", mr_dir = "mr_dir", run_nifti = "run_nifti"),
+    run_trial = "run_trial", mr_dir = "mr_dir", run_nifti = "run_nifti", exclude_subject
+    = "exclude_subject"),
   bad_ids = NULL,
   tr = NULL,
   fmri_file_regex = ".*\\\\.nii(\\\\.gz)?",
@@ -32,8 +33,7 @@ setup_glm_pipeline(
   confound_settings = list(motion_params_file = "motion.par", motion_params_colnames =
     c("rx", "ry", "rz", "tx", "ty", "tz"), confound_input_file = NULL,
     confound_input_colnames = NULL, l1_confound_regressors = NULL, exclude_run =
-    "mean(FD) > 0.9 | max(FD) > 0.5)", exclude_subject = "nruns < 4", spike_volume =
-    "FD > 0.9"),
+    "mean(FD) > 0.9 | max(FD) > 0.5)", exclude_subject = NULL, spike_volume = "FD > 0.9"),
   parallel = list(l1_setup_cores = 1L, pipeline_cores = "default"),
   additional = list(feat_l1_args = list(z_thresh = 1.96, prob_thresh = 0.05))
 )

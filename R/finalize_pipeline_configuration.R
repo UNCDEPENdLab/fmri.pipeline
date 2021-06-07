@@ -67,7 +67,36 @@ finalize_pipeline_configuration <- function(gpa) {
     checkmate::assert_integerish(gpa$parallel$l1_setup_cores, lower = 1)
   }
 
-  if (is.null(gpa$l2_cpus)) gpa$l2_cpus <- 20 # number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
+  # number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
+  if (is.null(gpa$parallel$slurm)) gpa$parallel$slurm <- list()
+  if (is.null(gpa$parallel$torque)) gpa$parallel$torque <- list()
+  if (gpa$scheduler == "slurm") {
+
+  } else if (gpa$scheduler == "torque") {
+
+  }
+
+  if (is.null(gpa$parallel$fsl$l2_cores)) gpa$parallel$fsl$l2_cores <- 20
+  if (is.null(gpa$parallel$fsl$l1_feat_time)) gpa$parallel$fsl$l1_feat_time <- "6:00:00" # 6 hours
+  if (is.null(gpa$parallel$fsl$l1_feat_memgb)) gpa$parallel$fsl$l1_feat_memgb <- "12" # 12 GB by default
+  if (is.null(gpa$parallel$fsl$compute_environment)) {
+    lg$info("Using default compute environment for UNC Longleaf")
+    gpa$parallel$fsl$compute_environment <- c(
+      "module unload fsl", # remove any current fsl module
+      "module load fsl/6.0.4" # load latest version (2021)
+    )
+  }
+
+  #old ICS-ACI settings
+  # "source /gpfs/group/mnh5174/default/lab_resources/ni_path.bash",
+  # "module unload fsl", #make sure that the ni_path version of FSL is unloaded
+  # "#module load \"openblas/0.2.20\" >/dev/null 2>&1",
+  # "module load \"fsl/6.0.1\" >/dev/null 2>&1",
+  # "module load gsl/2.5", #for dependlab R package to work (some new dependency)
+
+  if (is.null(gpa$parallel$fsl$slurm_l1_array)) {
+
+  }
 
   # TODO: deprecate this -- should not be required when executing as an R package
   if (is.null(gpa$pipeline_home)) gpa$pipeline_home <- "/proj/mnhallqlab/users/michael/fmri.pipeline"

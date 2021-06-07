@@ -22,7 +22,8 @@ case of conflicts, the directives passed with \code{sched_args} will take preced
 
 \item{scheduler}{Which scheduler to use for job submission. Options are 'qsub', 'torque', 'sbatch', 'slurm', or 'sh'.
 The terms 'qsub' and 'torque' are aliases (where 'torque' submits via the qsub command). Likewise for 'sbatch'
-and 'slurm'. The scheduler 'sh' does not submit to any scheduler at all, but instead executes the command immediately via sh.}
+and 'slurm'. The scheduler 'sh' does not submit to any scheduler at all, but instead executes the command 
+immediately via sh.}
 
 \item{sched_args}{A character vector of arguments to be included in the scheduling command. On TORQUE, these
 will typically begin with '-l' such as '-l walltime=10:00:00'.}
@@ -55,7 +56,8 @@ The function returns the jobid of the scheduled job.
 
   #To forward environment variables without explicitly providing values. Note that these must
   #  be in R's system environment (cf. Sys.getenv) at execution time to forward as expected.
-  cluster_job_submit('myscript.sbatch', scheduler="slurm", sched_args=c('-p general', '-N 1', '-n 12', '--mem=10g', '-t 02-00:00:00'),
+  cluster_job_submit('myscript.sbatch', scheduler="slurm", 
+     sched_args=c('-p general', '-N 1', '-n 12', '--mem=10g', '-t 02-00:00:00'),
      env_variables=c(RUN_INDEX=2, R_HOME=NA, JAVA_HOME=NA))
 }
 

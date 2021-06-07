@@ -483,7 +483,7 @@ build_l1_models <- function(
     if (is.null(mm$regressors)) {
       mm$regressors <- unlist(lapply(mm$signals, function(nn) {
         if (isTRUE(signal_list[[nn]]$add_deriv)) {
-          return(c(nn, paste0(nn, "_dt"))) #regressor and _dt temporal derivative
+          return(c(nn, paste0("d_", nn))) # regressor and temporal derivative
         } else if (isTRUE(signal_list[[nn]]$beta_series)) {
           if (is.data.frame(signal_list[[nn]]$value)) {
             #TODO: this approach is imperfect if there are jumps in trials for a subject

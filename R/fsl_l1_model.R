@@ -16,12 +16,15 @@
 #'
 fsl_l1_model <- function(
   id=NULL, session=NULL, d_obj, gpa, model_name=NULL, run_nifti=NULL, nvoxels=NULL, execute_feat=FALSE, lg=NULL) {
-  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+
+  checkmate::assert_scalar(id, null.ok = FALSE)
+  checkmate::assert_scalar(session, null.ok = FALSE)
   checkmate::assert_class(d_obj, "bdm")
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_string(model_name) # single string
   if (is.null(nvoxels)) { nvoxels <- rep(5e4, length(run_nifti)) } #arbitrarily use 50k voxels in fsf
 
-  if (is.null(lg)) { lg <- lgr::get_logger("glm_pipeline/fsl_l1_setup") }
+  if (is.null(lg)) { lg <- lgr::get_logger("glm_pipeline/l1_setup") }
   if (!is.null(d_obj$run_4d_files)) {
     lg$debug("Using internal NIfTI files (run_4d_files) within d_obj for Feat level 1 setup")
     run_nifti <- d_obj$run_4d_files
@@ -39,8 +42,9 @@ fsl_l1_model <- function(
   fsl_run_output_dir <- get_l1_directory(id = id, session = session, model_name = model_name, gpa = gpa, glm_software="fsl")
 
   l1_contrasts <- gpa$l1_models$models[[model_name]]$contrasts #contrast matrix for this model
-  regressors <- gpa$l1_models$models[[model_name]]$regressors #names of regressors in design matrix for this model
+  regressor_names <- gpa$l1_models$models[[model_name]]$regressors #names of regressors in design matrix for this model
 
+  # TODO: this is not implemented and may not be necessary
   if (dir.exists(fsl_run_output_dir) &&
     file.exists(file.path(fsl_run_output_dir, "feat_l1_inputs.rds")) &&
     isFALSE(gpa$force_l1_creation)) {
@@ -54,9 +58,10 @@ fsl_l1_model <- function(
 
   feat_l1_df <- data.frame(
     id = id, session = session, run_number = d_obj$runs_to_output, run_volumes = d_obj$run_volumes,
-    run_nifti = run_nifti, l1_model = model_name, feat_file = NA_character_, l1_confound_regressors = NA_character_
+    run_nifti = run_nifti, l1_model = model_name, l1_feat_fsf = NA_character_, l1_feat_dir = NA_character_,
+    l1_confound_regressors = NA_character_
   )
-  all_feat_files <- c()
+  all_l1_feat_fsfs <- c()
 
   #FSL computes first-level models on individual runs
   for (rr in seq_along(run_nifti)) {
@@ -79,6 +84,10 @@ fsl_l1_model <- function(
       this_template <- this_template[-1*c(l1, l2)] #drop confound files lines
     }
 
+    # TODO: perhaps support flexible names in the future
+    l1_feat_fsf <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr], ".fsf"))
+    l1_feat_dir <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr]))
+
     # search and replace within fsf file for appropriate sections
     # .OUTPUTDIR. is the feat output location
     # .NVOL. is the number of volumes in the run
@@ -86,10 +95,7 @@ fsl_l1_model <- function(
     # .CONFOUNDS. is the confounds file for GLM
     # .TR. is the sequence TR in seconds
 
-    this_template <- gsub(".OUTPUTDIR.",
-      file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr])), this_template,
-      fixed = TRUE
-    )
+    this_template <- gsub(".OUTPUTDIR.", l1_feat_dir, this_template, fixed = TRUE)
     this_template <- gsub(".NVOL.", d_obj$run_volumes[rr], this_template, fixed=TRUE)
     this_template <- gsub(".FUNCTIONAL.", gsub(".nii(.gz)*$", "", run_nifti[rr]), this_template, fixed=TRUE)
     this_template <- gsub(".TR.", d_obj$tr, this_template, fixed=TRUE)
@@ -120,10 +126,10 @@ fsl_l1_model <- function(
 
     if (isTRUE(gpa$use_preconvolve)) {
       lg$info("Using preconvolved regressors in Feat level 1 analysis")
-      #generate ev syntax
+      # generate ev syntax
 
       #add common ingredients for preconvolved regressors
-      regressors <- lapply(regressors, function(x) {
+      regressors <- lapply(regressor_names, function(x) {
         list(name=x, waveform="custom_1", convolution="none",
           tempfilt=1, timing_file=file.path(timingdir, paste0("run", feat_l1_df$run_number[rr], "_", x, ".1D")))
       })
@@ -144,27 +150,26 @@ fsl_l1_model <- function(
       stop("cannot use FSL internal timing files right this moment...")
     }
 
-    feat_file <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr], ".fsf"))
-    feat_l1_df$feat_file[rr] <- feat_file
+    feat_l1_df$l1_feat_fsf[rr] <- l1_feat_fsf
+    feat_l1_df$l1_feat_dir[rr] <- paste0(l1_feat_dir, ".feat") #add .feat extension, which is appended internally by FEAT
 
     #skip re-creation of FSF and do not run below unless force_l1_creation==TRUE
-    if (file.exists(feat_file) && isFALSE(gpa$force_l1_creation)) {
-      lg$info("Skipping existing feat fsf file: %s", feat_file)
+    if (file.exists(l1_feat_fsf) && isFALSE(gpa$force_l1_creation)) {
+      lg$info("Skipping existing feat fsf file: %s", l1_feat_fsf)
       next
     }
 
-    lg$info("Writing l1 fsf file: %s", feat_file)
-    cat(this_template, file=feat_file, sep="\n")
+    lg$info("Writing l1 fsf file: %s", l1_feat_fsf)
+    cat(this_template, file=l1_feat_fsf, sep="\n")
 
-    all_feat_files <- c(all_feat_files, feat_file)
+    all_l1_feat_fsfs <- c(all_l1_feat_fsfs, l1_feat_fsf)
   }
 
   # If execute_feat is TRUE, execute feat on each fsf files at this stage,
   # using an 8-node socket cluster (since we have 8 runs).
   # If execute_feat is FALSE, just create the fsf files but don't execute the analysis
-  if (isTRUE(execute_feat) && length(all_feat_files) > 0L) {
-    require(parallel)
-    nnodes <- min(length(all_feat_files), parallel::detectCores())
+  if (isTRUE(execute_feat) && length(all_l1_feat_fsfs) > 0L) {
+    nnodes <- min(length(all_l1_feat_fsfs), parallel::detectCores())
     lg$info("Starting fork cluster with %d workers", nnodes)
     cl_fork <- parallel::makeForkCluster(nnodes=nnodes)
     runfeat <- function(fsf) {
@@ -174,7 +179,7 @@ fsl_l1_model <- function(
     }
 
     lg$info("Executing all subject feat files with clusterApply")
-    parallel::clusterApply(cl_fork, all_feat_files, runfeat)
+    parallel::clusterApply(cl_fork, all_l1_feat_fsfs, runfeat)
     parallel::stopCluster(cl_fork)
   }
 
