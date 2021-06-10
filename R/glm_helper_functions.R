@@ -183,7 +183,7 @@ truncate_runs <- function(s, mrfiles, mrrunnums, niftivols, drop_volumes=0) {
 generate_motion_regressors <- function(motion_params = "motion.par",
                                        col.names = c("rx", "ry", "rz", "tx", "ty", "tz"),
                                        regressors = c("rx", "ry", "rz", "tx", "ty", "tz"),
-                                       demean = TRUE, drop_volumes = 0L, last_volume=NULL,
+                                       demean = FALSE, drop_volumes = 0L, last_volume=NULL,
                                        rot_units="rad", tra_units="mm") {
 
   checkmate::assert_file_exists(motion_params)
@@ -209,7 +209,7 @@ generate_motion_regressors <- function(motion_params = "motion.par",
   if (is.null(last_volume)) { last_volume <- nrow(mot) }
   checkmate::assert_integerish(last_volume, upper=nrow(mot))
 
-  mot <- mot[(1+drop_volumes):last_volume, ]
+  mot <- mot[(1 + drop_volumes):last_volume, ]
 
   if ("FD" %in% regressors || any(derivcols <- grepl("^q?d{1}.*", regressors, perl=TRUE))) {
     mot_deriv <- mot[, lapply(.SD, function(x) { c(0, diff(x)) })]
@@ -228,8 +228,8 @@ generate_motion_regressors <- function(motion_params = "motion.par",
     #need to adapt in case of degrees (this is based on radians)
     #https://wiki.cam.ac.uk/bmuwiki/FMRI
     if (rot_units=="rad") {
-      FD <- apply(mot_deriv[,c("drx", "dry", "drz")], 1, function(x) 50 * sum(abs(x))) +
-        apply(mot_deriv[,c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
+      FD <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * sum(abs(x))) +
+        apply(mot_deriv[, c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
     } else if (rot_units=="deg") {
       FD <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * (pi / 180) * sum(abs(x))) +
         apply(mot_deriv[, c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
@@ -707,4 +707,236 @@ sched_args_to_header <- function(gpa) {
     ifelse(isTRUE(is_slurm), paste("#SBATCH", x), paste("#PBS", x))
   }, USE.NAMES = FALSE)
   return(directives)
+}
+
+generate_subject_l2_models <- function(gpa) {
+
+}
+
+#' helper function to generate a contrast matrix from an lm() object
+#'   and a set of user-specified contrasts using emmeans
+#' 
+#' @param mobj a model object created by build_l<X>_models
+#' @param lmfit an optional lm() object used for emmeans calculations. If provided, this object
+#'   will be used instead of mobj$lmfit (the parent lm on the overall dataset).
+#' 
+#' @return a modified copy of the model object \code{mobj} with $contrast_list and $contrasts
+#'   fully populated 
+#' @keywords internal
+#' @importFrom emmeans emmeans emtrends pairs
+get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
+  checkmate::assert_multi_class(mobj, c("l1_model_spec", "hi_model_spec")) # verify that we have an object of known structure
+  if (is.null(lmfit)) {
+    lmfit <- mobj$lmfit # use parent lmfit
+  } else {
+    # override existing contrasts to force lmfit-specific respecification
+    mobj$contrast_list <- list()
+    mobj$contrasts <- NULL
+  }
+  spec <- mobj$contrast_spec
+  contrast_list <- mobj$contrast_list
+
+  checkmate::assert_class(lmfit, "lm", null.ok=TRUE)
+  checkmate::assert_list(spec)
+  checkmate::assert_list(contrast_list)
+
+  ### add diagonal contrasts
+  c_diagonal <- contrast_list$diagonal
+  if (isTRUE(spec$diagonal) && is.null(c_diagonal)) {
+    cnames <- spec$regressors
+    diag_mat <- diag(length(cnames))
+    rownames(diag_mat) <- paste0("EV_", cnames) # simple contrast naming for each individual regressor
+    colnames(diag_mat) <- cnames # always have columns named by regressor
+
+    c_diagonal <- diag_mat
+  }
+
+  ### add condition means, if requested
+  c_cond_means <- contrast_list$cond_means
+  if (length(spec$cond_means) > 0L && is.null(c_cond_means)) {
+    for (vv in spec$cond_means) {
+      ee <- emmeans(lmfit, as.formula(paste("~", vv)), weights = spec$weights)
+      edata <- summary(ee)
+      econ <- ee@linfct
+      enames <- as.character(edata[[vv]]) # names of contrasts
+
+      # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
+      which_na <- is.na(edata$emmean)
+      if (any(which_na)) {
+        econ <- econ[!which_na, , drop = FALSE]
+        enames <- enames[!which_na]
+      }
+
+      # add contrast names to matrix
+      rownames(econ) <- enames
+
+      # add contrasts to matrix
+      c_cond_means <- rbind(c_cond_means, econ)
+    }
+  }
+
+  ### add cell means for all factors, if requested
+  c_cell_means <- contrast_list$cell_means
+  if (isTRUE(spec$cell_means) && is.null(c_cell_means)) {
+    # get model-predicted means for each factor
+    ee <- emmeans(lmfit, as.formula(paste("~", paste(spec$cat_vars, collapse = "*"))), weights = spec$weights)
+    # pp <- pairs(ee)
+    edata <- summary(ee)
+    econ <- ee@linfct
+    enames <- apply(edata[, spec$cat_vars, drop = FALSE], 1, paste, collapse = ".")
+
+    # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
+    which_na <- is.na(edata$emmean)
+    if (any(which_na)) {
+      econ <- econ[!which_na, , drop = FALSE]
+      enames <- enames[!which_na]
+    }
+
+    rownames(econ) <- enames
+    c_cell_means <- rbind(c_cell_means, econ)
+  }
+
+  ### add overall response mean
+  c_overall <- contrast_list$overall
+  if (isTRUE(spec$overall_response) && is.null(c_overall)) {
+    ee <- emmeans(lmfit, ~1, weights = spec$weights)
+    econ <- ee@linfct
+    rownames(econ) <- "overall"
+    c_overall <- econ
+  }
+
+  ### add pairwise differences, if requested
+  c_pairwise_diffs <- contrast_list$pairwise_diffs
+  if (length(spec$pairwise_diffs) > 0L && is.null(c_pairwise_diffs)) {
+    for (vv in spec$pairwise_diffs) {
+      ee <- emmeans(lmfit, as.formula(paste("~", vv)), weights = spec$weights)
+      pp <- pairs(ee)
+      edata <- summary(pp)
+      econ <- pp@linfct
+      enames <- make.names(sub("\\s+-\\s+", "_M_", edata$contrast, perl = TRUE)) # names of contrasts
+
+      # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
+      which_na <- is.na(edata$estimate)
+      if (any(which_na)) {
+        econ <- econ[!which_na, , drop = FALSE]
+        enames <- enames[!which_na]
+      }
+
+      # add contrast names to matrix
+      rownames(econ) <- enames
+
+      # add pairwise differences for this factor to the pairwise matrix
+      c_pairwise_diffs <- rbind(c_pairwise_diffs, econ)
+    }
+  }
+
+  ### add per-cell model-predicted simple slopes
+  c_simple_slopes <- contrast_list$simple_slopes
+  if (length(spec$simple_slopes) > 0L && is.null(c_simple_slopes)) {
+    for (vv in seq_along(spec$simple_slopes)) {
+      trend_var <- names(spec$simple_slopes)[vv]
+      for (comb in spec$simple_slopes[[vv]]) {
+        ee <- emtrends(lmfit,
+          specs = as.formula(paste("~", paste(comb, collapse = "*"))),
+          var = trend_var, weights = spec$weights
+        )
+        edata <- summary(ee)
+        econ <- ee@linfct
+        enames <- paste(trend_var, apply(edata[, comb, drop = FALSE], 1, paste, collapse = "."), sep = ".")
+
+        # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
+        which_na <- is.na(edata[[paste(trend_var, "trend", sep=".")]])
+        if (any(which_na)) {
+          econ <- econ[!which_na, , drop = FALSE]
+          enames <- enames[!which_na]
+        }
+
+        rownames(econ) <- enames
+        c_simple_slopes <- rbind(c_simple_slopes, econ)
+      }
+    }
+  }
+
+  c_custom <- contrast_list$custom
+
+  #combine each element
+  cmat_full <- rbind(
+    c_diagonal,
+    c_cond_means,
+    c_cell_means,
+    c_overall,
+    c_pairwise_diffs,
+    c_simple_slopes,
+    c_custom
+  )
+
+  if (!is.null(spec$delete)) {
+    which_del <- match(spec$delete, rownames(cmat_full))
+    if (!is.na(which_del[1L])) {
+      cmat <- cmat_full[-1*which_del, , drop=FALSE]
+    }
+  } else {
+    cmat <- cmat_full
+  }
+
+  dupes <- duplicated(cmat, MARGIN = 1)
+  cmat <- cmat[!dupes, , drop=FALSE] # drop duplicated contrasts
+
+  # populate any updates to the contrast_list object based on new calculations
+  contrast_list$diagonal <- c_diagonal
+  contrast_list$cond_means <- c_cond_means
+  contrast_list$cell_means <- c_cell_means
+  contrast_list$overall <- c_overall
+  contrast_list$pairwise_diffs <- c_pairwise_diffs
+  contrast_list$simple_slopes <- c_simple_slopes
+  contrast_list$custom <- c_custom
+
+  # populate contrasts back into model object (spec should not be updated)
+  mobj$contrast_list <- contrast_list
+  mobj$contrasts <- cmat
+  return(mobj)
+}
+
+# get_run_lmfits <- function() {
+
+# }
+
+
+respecify_l2_models_by_subject <- function(mobj, data) {
+  checkmate::assert_multi_class(mobj, c("l1_model_spec", "hi_model_spec")) # verify that we have an object of known structure
+  checkmate::assert_data_frame(data)
+  checkmate::assert_subset(c("id", "session"), names(data))
+
+  # create a nested data.table object for fitting each id + session separately
+  data <- data.table(data, key = c("id", "session"))
+  data$dummy <- rnorm(nrow(data))
+  dsplit <- data[, .(dt = list(.SD)), by = c("id", "session")]
+
+  # use model formula from parent object
+  model_formula <- terms(mobj$lmfit)
+
+  cope_list <- list()
+  contrast_list <- list()
+  model_matrix_list <- list()
+  for (vv in seq_len(nrow(dsplit))) {
+    lmfit <- lm(model_formula, data = dsplit[[vv, "dt"]])
+
+    mm <- get_contrasts_from_spec(mobj, lmfit)
+    cope_df <- data.frame(
+      id = dsplit$id[1L], session = dsplit$session[1L],
+      l2_cope = seq_len(nrow(mm$contrasts)), l2_cope_names = rownames(mm$contrasts)
+    )
+
+    cope_list[[vv]] <- cope_df
+    contrast_list[[vv]] <- mm$contrasts
+    model_matrix_list[[vv]] <- model.matrix(lmfit)
+  }
+
+  dsplit[, cope_list := cope_list]
+  dsplit[, contrasts := contrast_list]
+  dsplit[, model_matrix := model_matrix_list]
+  dsplit[, dt := NULL] # no longer need original split data
+
+  mobj$by_subject <- dsplit
+  return(mobj)
 }

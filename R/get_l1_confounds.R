@@ -113,12 +113,15 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
   if (isTRUE(rinfo$motion_params_present[1])) {
     mfile <- get_mr_abspath(rinfo, "motion_params")[1]
     lg$debug("Reading motion file: %s", mfile)
+
+    # Note: Avoid demeaning columns within generate_motion_regressors so that calculated regressors do not
+    # change scale prior to testing the run exclusion criteria below. Demeaning can be applied safely thereafter.
     motion_df <- tryCatch({
       generate_motion_regressors(
         mfile,
         col.names = gpa$confound_settings$motion_params_colnames,
         regressors = gpa$confound_settings$all_confound_columns,
-        drop_volumes = drop_volumes, last_volume = last_volume
+        drop_volumes = drop_volumes, last_volume = last_volume, demean=FALSE
       )}, error = function(e) {
       lg$error("Failed to read motion file: %s with error %s", rinfo$motion_params[1], as.character(e))
       return(NULL)
@@ -172,6 +175,7 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
       lg$warn("We will exclude this run from analysis until this is resolved!")
       exclude_run <- TRUE
     } else {
+      # evaluate run exclusion expression
       exclude_run <- tryCatch(with(confounds, eval(parse(text = gpa$confound_settings$exclude_run))),
         error = function(e) {
           lg$error(

@@ -5,10 +5,9 @@
 \title{Interactive function to build an l1 model specification for setup_glm_pipeline}
 \usage{
 build_l1_models(
-  trial_data,
+  gpa = NULL,
+  trial_data = NULL,
   l1_model_set = NULL,
-  variable_mapping = c(id = "id", session = "session", run_number = "run_number", trial
-    = "trial", run_trial = "trial", mr_dir = "mr_dir"),
   onset_cols = NULL,
   onset_regex = ".*(onset|time).*",
   duration_regex = ".*duration.*",
@@ -20,8 +19,6 @@ build_l1_models(
 
 \item{l1_model_set}{optional existing l1_model_set to be modified}
 
-\item{variable_mapping}{a vector of mappings between columns in \code{trial_data} and internal constructs}
-
 \item{onset_cols}{an optional character vector of columns in \code{trial_data} that should be
 in the set of event onsets}
 
@@ -32,6 +29,8 @@ event onset columns in \code{trial_data}}
 event duration columns in \code{trial_data}}
 
 \item{value_cols}{an optional character vector of columns in \code{trial_data} that should be in the set of signal values}
+
+\item{variable_mapping}{a vector of mappings between columns in \code{trial_data} and internal constructs}
 }
 \value{
 a \code{l1_model_set} object containing events, signals, and models, compatible with build_design_matrix

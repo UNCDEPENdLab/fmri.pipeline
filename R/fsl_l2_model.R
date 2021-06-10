@@ -90,7 +90,6 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
   # Add EVs and contrasts into FSF
   l2_fsf_syntax <- c(l2_fsf_syntax, ev_syntax, contrast_syntax)
 
-  # Template nomenclature:
   # .OUTPUTDIR. : the feat output location
 
   # need to determine number of copes (contrasts) at level 1, which depends on the model being fit
@@ -124,7 +123,7 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
 
   feat_l2_df$l2_feat_fsf <- l2_feat_fsf
   feat_l2_df$l2_feat_dir <- l2_feat_dir
-  feat_l2_df$fsf_modified_date <- ifelse(file.exists(l2_feat_fsf), file.info(l2_feat_fsf)$mtime, as.POSIXct(NA))
+  feat_l2_df$fsf_modified_date <- if (file.exists(l2_feat_fsf)) file.info(l2_feat_fsf)$mtime else as.POSIXct(NA)
   feat_l2_df$l2_feat_dir_exists <- dir.exists(l2_feat_dir)
   if (dir.exists(l2_feat_dir) && file.exists(file.path(l2_feat_dir, ".feat_complete"))) {
     l2_feat_complete <- readLines(file.path(l2_feat_dir, ".feat_complete"))[2]

@@ -55,6 +55,9 @@ setup_l2_models <- function(gpa, l2_model_names=NULL, l1_model_names=NULL) {
   l1_meta <- l1_meta %>%
     dplyr::filter(exclude_run == FALSE & exclude_subject == FALSE)
 
+  run_data <- gpa$run_data %>%
+    right_join(l1_meta, by=c("id", "session", "run_number"))
+
   if (nrow(l1_meta) == 0L) {
     msg <- "In setup_l2_models, no runs survived the exclude_subject and exclude_run step."
     lg$warn(msg)
@@ -72,6 +75,12 @@ setup_l2_models <- function(gpa, l2_model_names=NULL, l1_model_names=NULL) {
     lg$error("You must run setup_l1_models before running setup_l2_models.")
     stop("No l1_model_setup found in the glm pipeline object.",
     "You must run setup_l1_models before running setup_l2_models.")
+  }
+
+  # respecify L2 models for each subject based on available runs
+  for (mname in l2_model_names) {
+    browser()
+    gpa$l2_models$models[[mname]] <- respecify_l2_models_by_subject(gpa$l2_models$models[[mname]], run_data)
   }
 
   # loop over and setup all requested combinations of L1 and L2 models

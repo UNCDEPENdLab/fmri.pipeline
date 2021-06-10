@@ -4,11 +4,7 @@
 \alias{specify_contrasts}
 \title{Internal function to add, edit, rename, delete contrasts}
 \usage{
-specify_contrasts(
-  mobj = NULL,
-  include_diagonal = TRUE,
-  include_factormeans = FALSE
-)
+specify_contrasts(mobj = NULL)
 }
 \arguments{
 \item{mobj}{\code{l1_model_spec} or \code{hi_model_spec} object}

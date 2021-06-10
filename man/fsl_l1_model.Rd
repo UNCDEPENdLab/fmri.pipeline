@@ -13,8 +13,7 @@ fsl_l1_model(
   model_name = NULL,
   run_nifti = NULL,
   nvoxels = NULL,
-  execute_feat = FALSE,
-  lg = NULL
+  execute_feat = FALSE
 )
 }
 \arguments{

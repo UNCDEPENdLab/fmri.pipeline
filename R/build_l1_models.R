@@ -16,19 +16,32 @@
 #' @importFrom checkmate assert_data_frame assert_class assert_subset
 #' @export
 #' 
-build_l1_models <- function(
-  trial_data, l1_model_set=NULL,
-  variable_mapping=c(id="id", session="session", run_number="run_number", trial="trial", run_trial="trial", mr_dir="mr_dir"),
-                           onset_cols=NULL, onset_regex=".*(onset|time).*", duration_regex=".*duration.*", value_cols=NULL) {
+build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
+                           onset_cols=NULL, onset_regex=".*(onset|time).*", 
+                           duration_regex=".*duration.*", value_cols=NULL) {
 
   # Maybe allow glm object to be passed in that would have trial_data and variable_mapping.
   # I guess that would be like "add_l1_model"
-  checkmate::assert_data_frame(trial_data) #yeah, move toward allowing the broader model specification object here
+  lg <- lgr::get_logger("glm_pipeline/l1_setup")
+
+  checkmate::assert_class(gpa, "glm_pipeline_arguments", null.ok = TRUE)
+  if (!is.null(gpa)) {
+    lg$info("In build_l1_models, using existing gpa object to build l1 models (ignoring trial_data argument etc.)")
+    use_gpa <- TRUE
+    trial_data <- gpa$trial_data
+    l1_model_set <- gpa$l1_models
+  } else {
+    lg$info("In build_l1_models, using trial_data passed in, rather than gpa object")
+    use_gpa <- FALSE
+  }
+
+  checkmate::assert_data_frame(trial_data, null.ok = FALSE)
   checkmate::assert_class(l1_model_set, "l1_model_set", null.ok=TRUE)
   checkmate::assert_subset(onset_cols, names(trial_data)) #make sure that all event columns are in the data frame
   checkmate::assert_string(onset_regex, null.ok=TRUE)
   checkmate::assert_string(duration_regex, null.ok=TRUE)
   checkmate::assert_subset(value_cols, names(trial_data)) #make sure all parametric regressor columns are in the data frame
+  checkmate::assert_subset(c("id", "session", "run_number", "trial"), names(trial_data)) # required metadata in trial_data
 
   lg <- lgr::get_logger("glm_pipeline/build_l1_models")
 
@@ -93,8 +106,7 @@ build_l1_models <- function(
 
   #basal data frame for each event
   metadata_df <- trial_data %>%
-    dplyr::select(!!variable_mapping[c("id", "session", "run_number", "run_trial")]) %>%
-    setNames(c("id", "session", "run_number", "trial"))
+    dplyr::select(id, session, run_number, trial)
 
   #build a list of data frames, one per event (to be rbind'ed later)
   event_list <- lapply(onset_cols, function(xx) {
@@ -306,7 +318,7 @@ build_l1_models <- function(
             if (val > 0) {
               #TODO: have build_design matrix support a simple value vector, which requires
               #same number of rows as metadata (avoid redundancy)
-              ss$value <- metadata_df %>% bind_cols(value = trial_data[[ value_cols[val] ]])
+              ss$value <- metadata_df %>% dplyr::bind_cols(value = trial_data[[ value_cols[val] ]])
             }
           }
         }
@@ -426,7 +438,7 @@ build_l1_models <- function(
   create_new_model <- function(signal_list, to_modify=NULL) {
     checkmate::assert_class(to_modify, "l1_model_spec", null.ok=TRUE)
     if (is.null(to_modify)) {
-      mm <- list()
+      mm <- list(level = 1L) #first-level model
       class(mm) <- c("list", "l1_model_spec")
       modify <- FALSE
     } else {
@@ -545,5 +557,11 @@ build_l1_models <- function(
 
   l1_model_set$models <- model_list
 
-  return(l1_model_set)
+  if (isTRUE(use_gpa)) {
+    gpa$l1_models <- l1_model_set
+    return(gpa)
+  } else {
+    return(l1_model_set)
+  }
+  
 }

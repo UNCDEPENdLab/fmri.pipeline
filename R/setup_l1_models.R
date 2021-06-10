@@ -132,34 +132,40 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
           dir.create(subj_out, showWarnings=FALSE, recursive=TRUE)
         }
 
-        t_out <- gpa$glm_software
-        if (isTRUE(gpa$use_preconvolve)) { t_out <- c("convolved", t_out) } #compute preconvolved regressors
-        bdm_args <- gpa$additional$bdm_args
-        bdm_args$events <- m_events
-        bdm_args$signals <- m_signals
-        bdm_args$tr <- gpa$tr
-        bdm_args$write_timing_files <- t_out
-        bdm_args$drop_volumes <- gpa$drop_volumes
-        bdm_args$run_volumes <- run_lengths
-        bdm_args$run_4d_files <- run_nifti
-        bdm_args$runs_to_output <- mr_run_nums
-        bdm_args$output_directory <- file.path(subj_out, "timing_files")
-        d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error=function(e) {
-          lg$error("Failed build_design_matrix for id: %s, session: %s, model: %s", subj_id, subj_session, this_model)
-          lg$error("Error message: %s", as.character(e))
-          return(NULL)
-        })
+        bdm_out_file <- file.path(subj_out, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData"))
+        if (file.exists(bdm_out_file)) {
+          lg$info("Loading BDM info from extant file: %s", bdm_out_file)
+        } else {
+          t_out <- gpa$glm_software
+          if (isTRUE(gpa$use_preconvolve)) { t_out <- c("convolved", t_out) } #compute preconvolved regressors
+          bdm_args <- gpa$additional$bdm_args
+          bdm_args$events <- m_events
+          bdm_args$signals <- m_signals
+          bdm_args$tr <- gpa$tr
+          bdm_args$write_timing_files <- t_out
+          bdm_args$drop_volumes <- gpa$drop_volumes
+          bdm_args$run_volumes <- run_lengths
+          bdm_args$run_4d_files <- run_nifti
+          bdm_args$runs_to_output <- mr_run_nums
+          bdm_args$output_directory <- file.path(subj_out, "timing_files")
+          d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error=function(e) {
+            lg$error("Failed build_design_matrix for id: %s, session: %s, model: %s", subj_id, subj_session, this_model)
+            lg$error("Error message: %s", as.character(e))
+            return(NULL)
+          })
 
-        if (is.null(d_obj)) { next } #skip to next iteration on error
+          if (is.null(d_obj)) { next } #skip to next iteration on error
 
-        save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, run_nifti, run_lengths, subj_id, subj_session, this_model,
-          file=file.path(subj_out, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData")))
+          save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, run_nifti, run_lengths,
+            subj_id, subj_session, this_model, file = bdm_out_file
+          )
+        }
 
         if ("fsl" %in% gpa$glm_software) {
           #Setup FSL run-level models for each combination of signals
           #Returns a data.frame of feat l1 inputs and the fsf file
           feat_l1_df <- tryCatch({fsl_l1_model(id=subj_id, session=subj_session, d_obj=d_obj,
-          gpa = gpa, this_model, nvoxels = nvoxels, lg=lg)},
+          gpa = gpa, this_model, nvoxels = nvoxels)},
             error=function(e) {
               lg$error("Problem with fsl_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)
               lg$error("Error message: %s", as.character(e))

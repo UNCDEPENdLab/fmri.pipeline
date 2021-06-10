@@ -24,11 +24,15 @@ build_l2_models <- function(gpa,
     menu_desc <- "second-level (subject)"
     data <- gpa$run_data # L2
     model_set <- gpa$l2_models
+    level <- 2L #model level inside model object
   } else {
     menu_desc <- "third-level (sample)"
     data <- gpa$subject_data # L3
     model_set <- gpa$l3_models
+    level <- 3L
   }
+
+  lg <- lgr::get_logger(paste0("glm_pipeline/l", level, "_setup"))
 
   # allow deferred model specification upstream
   if (model_set == "prompt") model_set <- NULL
@@ -118,7 +122,7 @@ build_l2_models <- function(gpa,
   create_new_model <- function(data, to_modify = NULL) {
     checkmate::assert_class(to_modify, "hi_model_spec", null.ok = TRUE)
     if (is.null(to_modify)) {
-      mm <- list()
+      mm <- list(level = level)
       class(mm) <- c("list", "hi_model_spec")
       modify <- FALSE
     } else {
@@ -175,11 +179,12 @@ build_l2_models <- function(gpa,
           "Example: ~ emotion * wmload + run_number\n",
           "Available column names: \n"
         ), sep = "\n")
-        cat(paste(names(data), collapse = ", "), sep = "\n")
+        cat(strwrap(paste(names(data), collapse = ", "), 70, exdent = 5), sep = "\n")
+
         res <- trimws(readline("Enter the model formula: "))
         # always trim any LHS specification
         res <- sub("^[^~]*", "", res, perl = TRUE)
-        res <- tryCatch(as.formula(res), error = function(e) {
+        model_formula <- tryCatch(as.formula(res), error = function(e) {
           print(e)
           cat("Problem converting your syntax to formula. Try again\n")
           return(NULL)
@@ -187,12 +192,12 @@ build_l2_models <- function(gpa,
       }
 
       # ensure that all variables in formula are present in the data frame
-      mm$model_variables <- all.vars(res)
+      mm$model_variables <- all.vars(model_formula)
       checkmate::assert_subset(mm$model_variables, names(data), empty.ok = FALSE)
     } else if (model_approach == 2L) {
       # walkthrough approach (only support additive model for now)
       mm$model_variables <- get_regressors(data, regressor_cols = mm$model_variables)
-      res <- as.formula(paste("~", paste(mm$model_variables, collapse = " + ")))
+      model_formula <- as.formula(paste("~", paste(mm$model_variables, collapse = " + ")))
     }
 
     # convert integer-like variables to integer
@@ -223,9 +228,9 @@ build_l2_models <- function(gpa,
     cat("Summary of variables included in model:\n")
     print(summary(data[, mm$model_variables]))
 
-    modelmat <- model.matrix(res, data)
+    modelmat <- model.matrix(model_formula, data)
     data$dummy <- rnorm(nrow(data))
-    ffit <- update.formula(res, "dummy ~ .") # add LHS
+    ffit <- update.formula(model_formula, "dummy ~ .") # add LHS
     mm$lmfit <- lm(ffit, data)
     mm$regressors <- colnames(modelmat) # actual regressors after expanding categorical variables
     mm$model_matrix <- modelmat

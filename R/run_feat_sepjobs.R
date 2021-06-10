@@ -78,7 +78,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   feat_working_directory <- file.path(gpa$working_directory, paste0("feat_l", level))
 
   cpusperjob <- 8 #number of cpus per qsub
-  runsperproc <- 3 #number of feat calls per processor
+  runsperproc <- 2 #number of feat calls per processor
 
   # figure out which fsf files have already been run
   # dir_expect <- gsub("\\.fsf$", ".feat", fsf_files, perl=TRUE)
@@ -152,9 +152,10 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   df <- data.frame(fsf=to_run, job=rep(1:njobs, each=cpusperjob*runsperproc, length.out=length(to_run)), stringsAsFactors=FALSE)
   df <- df[order(df$job), ]
 
+  submission_id <- basename(tempfile(pattern = "job"))
   joblist <- rep(NA_character_, njobs)
   for (j in seq_len(njobs)) {
-    outfile <- paste0(feat_working_directory, "/featsep_l", level, "_", j, "_", basename(tempfile()), file_suffix)
+    outfile <- paste0(feat_working_directory, "/featsep_l", level, "_", j, "_", submission_id, file_suffix)
     cat(preamble, file=outfile, sep="\n")
     thisrun <- with(df, fsf[job==j])
     cat(
@@ -181,8 +182,8 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "bash", file.path(gpa$pipeline_home, "inst", "bash", "gen_feat_reg_dir"),
       unique(dirname(thisrun))
     ), sep = "\n", file = outfile, append = TRUE)
-    #joblist[j] <- cluster_job_submit(outfile)
-    joblist[j] <- "dummy"
+    joblist[j] <- cluster_job_submit(outfile)
+    #joblist[j] <- "dummy"
   }
 
   # write the list of separate feat qsub jobs that are now queued (so that LVL2 can wait on these)

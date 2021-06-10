@@ -8,7 +8,7 @@ generate_motion_regressors(
   motion_params = "motion.par",
   col.names = c("rx", "ry", "rz", "tx", "ty", "tz"),
   regressors = c("rx", "ry", "rz", "tx", "ty", "tz"),
-  demean = TRUE,
+  demean = FALSE,
   drop_volumes = 0L,
   last_volume = NULL,
   rot_units = "rad",

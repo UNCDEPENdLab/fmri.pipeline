@@ -15,7 +15,7 @@
 #' @export
 #'
 fsl_l1_model <- function(
-  id=NULL, session=NULL, d_obj, gpa, model_name=NULL, run_nifti=NULL, nvoxels=NULL, execute_feat=FALSE, lg=NULL) {
+  id=NULL, session=NULL, d_obj, gpa, model_name=NULL, run_nifti=NULL, nvoxels=NULL, execute_feat=FALSE) {
 
   checkmate::assert_scalar(id, null.ok = FALSE)
   checkmate::assert_scalar(session, null.ok = FALSE)
@@ -24,7 +24,7 @@ fsl_l1_model <- function(
   checkmate::assert_string(model_name) # single string
   if (is.null(nvoxels)) { nvoxels <- rep(5e4, length(run_nifti)) } #arbitrarily use 50k voxels in fsf
 
-  if (is.null(lg)) { lg <- lgr::get_logger("glm_pipeline/l1_setup") }
+  lg <- lgr::get_logger("glm_pipeline/l1_setup")
   if (!is.null(d_obj$run_4d_files)) {
     lg$debug("Using internal NIfTI files (run_4d_files) within d_obj for Feat level 1 setup")
     run_nifti <- d_obj$run_4d_files
@@ -59,7 +59,8 @@ fsl_l1_model <- function(
   feat_l1_df <- data.frame(
     id = id, session = session, run_number = d_obj$runs_to_output, run_volumes = d_obj$run_volumes,
     run_nifti = run_nifti, l1_model = model_name, l1_feat_fsf = NA_character_, l1_feat_dir = NA_character_,
-    l1_confound_regressors = NA_character_
+    l1_feat_dir_exists = NA_integer_, l1_feat_complete=NA_integer_, fsf_modified_date = as.POSIXct(NA),
+    l1_confound_regressors = NA_character_, to_run=as.logical(NA)
   )
   all_l1_feat_fsfs <- c()
 
@@ -152,6 +153,21 @@ fsl_l1_model <- function(
 
     feat_l1_df$l1_feat_fsf[rr] <- l1_feat_fsf
     feat_l1_df$l1_feat_dir[rr] <- paste0(l1_feat_dir, ".feat") #add .feat extension, which is appended internally by FEAT
+    feat_l1_df$l1_feat_dir_exists <- dir.exists(feat_l1_df$l1_feat_dir[rr])
+    feat_l1_df$fsf_modified_date[rr] <- if (file.exists(l1_feat_fsf)) file.info(l1_feat_fsf)$mtime else as.POSIXct(NA)
+
+    if (dir.exists(l1_feat_dir) && file.exists(file.path(l1_feat_dir, ".feat_complete"))) {
+      l1_feat_complete <- readLines(file.path(l1_feat_dir, ".feat_complete"))[2]
+    } else {
+      l1_feat_complete <- NA_character_
+    }
+    feat_l1_df$l1_feat_complete[rr] <- l1_feat_complete
+
+    if (!dir.exists(feat_l1_df$l1_feat_dir[rr]) || is.na(l1_feat_complete)) {
+      feat_l1_df$to_run[rr] <- TRUE
+    } else {
+      feat_l1_df$to_run[rr] <- FALSE
+    }
 
     #skip re-creation of FSF and do not run below unless force_l1_creation==TRUE
     if (file.exists(l1_feat_fsf) && isFALSE(gpa$force_l1_creation)) {
