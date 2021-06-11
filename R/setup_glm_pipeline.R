@@ -56,6 +56,7 @@
 #'
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 #'    test_string test_class
+#' @export
 setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm", working_directory = file.path(getwd(), "glm_out"),
                                subject_data = NULL, run_data = NULL, trial_data = NULL,
                                group_output_directory = "default",
