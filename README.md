@@ -1,4 +1,13 @@
 # fmri.pipeline
+
+Installing package directly from Github:
+
+```
+library(devtools)
+
+install_github("UNCDEPENdLab/fmri.pipeline")
+```
+
 R package for running full fMRI GLM analyses in FSL and other software.
 
 ## overview
