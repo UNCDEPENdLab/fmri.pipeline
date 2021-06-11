@@ -228,7 +228,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   if (!is.null(l1_models)) {
     if (checkmate::test_string(l1_models) && l1_models[1L] == "prompt") {
-      l1_models <- build_l1_models(trial_data)
+      l1_models <- build_l1_models(trial_data=trial_data)
     } else if (!checkmate::test_class(l1_models, "l1_model_set")) {
       stop("l1_models argument is not of class l1_model_set. Use build_l1_model to create this.")
     }
