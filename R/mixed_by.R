@@ -210,6 +210,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
     data <- data[, .(dt = list(.SD)), by = split_on]
 
     # loop over outcomes and rhs formulae within each chunk to maximize compute time by chunk (reduce worker overhead)
+    message("Starting parallel processing")
     mresults[[i]] <- foreach(
       dt_split = iter(data, by = "row"), .packages = c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed"),
       .noexport = "data", .export = "split_on", .inorder = FALSE, .combine = rbind
