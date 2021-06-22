@@ -40,6 +40,7 @@
 #' @importFrom parallel makeCluster stopCluster
 #' @importFrom doParallel registerDoParallel
 #' @importFrom broom.mixed tidy
+#' @importFrom data.table fread setDT setkeyv
 mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on = NULL,
                      external_df = NULL, external_merge_by = NULL,
                      padjust_by = "term", padjust_method = "BY", outcome_transform = NULL,
@@ -138,7 +139,8 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
     if (!is.data.table(data)) {
       setDT(data)
     } # convert to data.table by reference to avoid RAM copy
-    # bad idea -- will copy data and then original dataset is maintained in calling environment after rm() since it is not fully dereferenced
+    # bad idea -- will copy data and then original dataset is maintained in calling
+    # environment after rm() since it is not fully dereferenced
     # dt <- data.table(data)
     # rm(data) #avoid any lingering RAM demand
     df_set <- c("internal")
@@ -243,6 +245,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
   # data[, filename:=df_i] #tag for later
 
   mresults <- rbindlist(mresults) # combine results from each df (in the multiple df case)
+  setattr(mresults, "split_on", split_on) #tag split variables for secondary analysis
   setorderv(mresults, split_on) # since we allow out-of-order foreach, reorder coefs here.
 
   # compute adjusted p values

@@ -1,8 +1,9 @@
 #' Interactive function to build an l1 model specification for setup_glm_pipeline
-#'
+#' 
+#' @param gpa a \code{glm_pipeline_arguments} object containing an analysis pipeline to which $l1_models
+#'   shoudl be added. If $l1_models is already present, these will be amended.
 #' @param trial_data a data.frame containing trial-level data for one or more subjects
 #' @param l1_model_set optional existing l1_model_set to be modified
-#' @param variable_mapping a vector of mappings between columns in \code{trial_data} and internal constructs
 #' @param onset_cols an optional character vector of columns in \code{trial_data} that should be
 #'   in the set of event onsets
 #' @param onset_regex an optional PCRE-compatible regular expression for identifying potential
@@ -11,27 +12,41 @@
 #'   event duration columns in \code{trial_data}
 #' @param value_cols an optional character vector of columns in \code{trial_data} that should be in the set of signal values
 #'
+#' @details if \code{gpa} is not passed in, then we will work from trial_data and l1_model_set.
+#' 
 #' @return a \code{l1_model_set} object containing events, signals, and models, compatible with build_design_matrix
 #' @author Michael Hallquist
 #' @importFrom checkmate assert_data_frame assert_class assert_subset
 #' @export
 #' 
-build_l1_models <- function(
-  trial_data, l1_model_set=NULL,
-  variable_mapping=c(id="id", run="run", trial="trial", run_trial="trial", mr_dir="mr_dir"),
-                           onset_cols=NULL, onset_regex=".*(onset|time).*", duration_regex=".*duration.*", value_cols=NULL) {
+build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
+                           onset_cols=NULL, onset_regex=".*(onset|time).*", 
+                           duration_regex=".*duration.*", value_cols=NULL) {
 
   # Maybe allow glm object to be passed in that would have trial_data and variable_mapping.
   # I guess that would be like "add_l1_model"
-  checkmate::assert_data_frame(trial_data) #yeah, move toward allowing the broader model specification object here
+  lg <- lgr::get_logger("glm_pipeline/l1_setup")
+
+  checkmate::assert_class(gpa, "glm_pipeline_arguments", null.ok = TRUE)
+  if (!is.null(gpa)) {
+    lg$info("In build_l1_models, using existing gpa object to build l1 models (ignoring trial_data argument etc.)")
+    use_gpa <- TRUE
+    trial_data <- gpa$trial_data
+    l1_model_set <- gpa$l1_models
+  } else {
+    lg$info("In build_l1_models, using trial_data passed in, rather than gpa object")
+    use_gpa <- FALSE
+  }
+
+  checkmate::assert_data_frame(trial_data, null.ok = FALSE)
   checkmate::assert_class(l1_model_set, "l1_model_set", null.ok=TRUE)
   checkmate::assert_subset(onset_cols, names(trial_data)) #make sure that all event columns are in the data frame
   checkmate::assert_string(onset_regex, null.ok=TRUE)
   checkmate::assert_string(duration_regex, null.ok=TRUE)
   checkmate::assert_subset(value_cols, names(trial_data)) #make sure all parametric regressor columns are in the data frame
+  checkmate::assert_subset(c("id", "session", "run_number", "trial"), names(trial_data)) # required metadata in trial_data
 
-  #possible_cols <- names(trial_data)
-  #possible_cols <- possible_cols[!names(possible_cols) %in% variable_mapping]
+  lg <- lgr::get_logger("glm_pipeline/build_l1_models")
 
   if (is.null(l1_model_set)) {
     ## initialize overall l1 design object (holds events, signals, and models)
@@ -94,8 +109,7 @@ build_l1_models <- function(
 
   #basal data frame for each event
   metadata_df <- trial_data %>%
-    dplyr::select(!!variable_mapping[c("id", "run", "run_trial")]) %>%
-    setNames(c("id", "run", "trial"))
+    dplyr::select(id, session, run_number, trial)
 
   #build a list of data frames, one per event (to be rbind'ed later)
   event_list <- lapply(onset_cols, function(xx) {
@@ -138,7 +152,9 @@ build_l1_models <- function(
       while (!checkmate::test_number(duration, lower=0, upper=5000)) {
         duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", oo, ": ")))
       }
-      if (duration > 50) { warning("Duration more than 50s specified. Make sure that your durations are in seconds, not milliseconds!") }
+      if (duration > 50) {
+        lg$warn("Duration more than 50s specified. Make sure that your durations are in seconds, not milliseconds!")
+      }
       event_list[[oo]] <- event_list[[oo]] %>%
         mutate(duration = duration)
     } else {
@@ -305,7 +321,7 @@ build_l1_models <- function(
             if (val > 0) {
               #TODO: have build_design matrix support a simple value vector, which requires
               #same number of rows as metadata (avoid redundancy)
-              ss$value <- metadata_df %>% bind_cols(value = trial_data[[ value_cols[val] ]])
+              ss$value <- metadata_df %>% dplyr::bind_cols(value = trial_data[[ value_cols[val] ]])
             }
           }
         }
@@ -413,7 +429,7 @@ build_l1_models <- function(
       this <- ml[[ii]]
       cat("--------\nModel ", ii, "\n\n")
       cat("  Name:", this$name, "\n")
-      cat("  Signals:", paste(this$model_signals, collapse=", "), "\n")
+      cat("  Signals:", paste(this$signals, collapse=", "), "\n")
       if (ncol(this$contrasts) < 30) {
         cat("  Contrasts:\n\n")
         print(round(this$contrasts, 3))
@@ -425,7 +441,7 @@ build_l1_models <- function(
   create_new_model <- function(signal_list, to_modify=NULL) {
     checkmate::assert_class(to_modify, "l1_model_spec", null.ok=TRUE)
     if (is.null(to_modify)) {
-      mm <- list()
+      mm <- list(level = 1L) #first-level model
       class(mm) <- c("list", "l1_model_spec")
       modify <- FALSE
     } else {
@@ -454,35 +470,35 @@ build_l1_models <- function(
     }
 
     if (isTRUE(modify)) {
-      cat("Current model signals:", paste(names(mm$model_signals), collapse=", "), "\n")
+      cat("Current model signals:", paste(names(mm$signals), collapse=", "), "\n")
       res <- menu(c("No", "Yes"), title="Change model signals (and contrasts)?")
       if (res == 2) { #clear out so that it is respecified
-        mm$model_signals <- mm$model_regressors <- mm$contrasts <- NULL
+        mm$signals <- mm$regressors <- mm$contrasts <- NULL
       }
     }
 
     #signals
     summarize_signals(signal_list) #print summary
 
-    while (is.null(mm$model_signals)) {
-      model_signals <- select.list(names(signal_list), multiple=TRUE, preselect=mm$model_signals,
+    while (is.null(mm$signals)) {
+      signals <- select.list(names(signal_list), multiple=TRUE, preselect=mm$signals,
         title="Choose all signals to include in this model\n(Command/Control-click to select multiple)")
 
-      if (length(model_signals) == 0L) {
+      if (length(signals) == 0L) {
         proceed <- menu(c("Yes", "No"), title="Nothing entered. Do you want to cancel model setup?")
         if (proceed == 1L) {
           return(invisible(NULL)) #return nothing from function
         }
       } else {
-        mm$model_signals <- model_signals
+        mm$signals <- signals
       }
     }
 
     #look up what the regressors will be for this.
-    if (is.null(mm$model_regressors)) {
-      mm$model_regressors <- unlist(lapply(mm$model_signals, function(nn) {
+    if (is.null(mm$regressors)) {
+      mm$regressors <- unlist(lapply(mm$signals, function(nn) {
         if (isTRUE(signal_list[[nn]]$add_deriv)) {
-          return(c(nn, paste0(nn, "_dt"))) #regressor and _dt temporal derivative
+          return(c(nn, paste0("d_", nn))) # regressor and temporal derivative
         } else if (isTRUE(signal_list[[nn]]$beta_series)) {
           if (is.data.frame(signal_list[[nn]]$value)) {
             #TODO: this approach is imperfect if there are jumps in trials for a subject
@@ -544,5 +560,11 @@ build_l1_models <- function(
 
   l1_model_set$models <- model_list
 
-  return(l1_model_set)
+  if (isTRUE(use_gpa)) {
+    gpa$l1_models <- l1_model_set
+    return(gpa)
+  } else {
+    return(l1_model_set)
+  }
+  
 }

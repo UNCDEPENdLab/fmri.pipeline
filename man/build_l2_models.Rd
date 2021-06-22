@@ -5,22 +5,21 @@
 \title{Interactive function to build an l1 model specification for setup_glm_pipeline}
 \usage{
 build_l2_models(
-  data,
-  model_set = NULL,
+  gpa,
   variable_mapping = c(id = "id", run = "run", trial = "trial", run_trial = "trial",
     mr_dir = "mr_dir"),
   regressor_cols = NULL
 )
 }
 \arguments{
-\item{data}{a data.frame containing trial-level data for one or more subjects}
-
-\item{model_set}{optional existing model_set to be modified}
-
 \item{variable_mapping}{a vector of mappings between columns in \code{data} and internal constructs}
 
 \item{regressor_cols}{an optional character vector of columns in \code{data} that should be considered
 as possible regressors}
+
+\item{data}{a data.frame containing trial-level data for one or more subjects}
+
+\item{model_set}{optional existing model_set to be modified}
 }
 \value{
 a \code{hi_model_set} object containing a list of higher-level regression models

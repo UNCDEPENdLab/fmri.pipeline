@@ -105,7 +105,8 @@ method to replace one or more variable mappings in the object
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{...}}{a set of arguments, each one of which replaces a field in the variable mapping with a new specification}
+\item{\code{...}}{a set of arguments, each one of which replaces a field in
+the variable mapping with a new specification}
 }
 \if{html}{\out{</div>}}
 }

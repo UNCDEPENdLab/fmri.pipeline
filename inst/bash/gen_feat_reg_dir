@@ -1,0 +1,82 @@
+#!/bin/bash
+set -e
+
+if ! command -v slicer >/dev/null && command -v module >/dev/null; then
+    module load fsl >/dev/null 2>&1
+fi
+
+#this script is used to setup reg dirs for first-level analyses in Feat.
+#because we have preprocessed the data and warped into standard space, we do not need to
+#warp the copes into standard space, as is conventional in FSL.
+
+#thus, we emulate the output of standard Feat here by copying the identity matrix (i.e., no spatial transformation)
+#into the .feat directory for each run of the task. This specifies no transformation, but provides
+#the inputs that FSL looks for in second-level analyses (i.e., combining copes from each run)
+
+[ $# -eq 0 ] && echo "Expect one input: directory containing all first-level .feat folders." && exit 1
+[ ! -d "$1" ] && echo "Unable to find directory: $1" && exit 1
+if [ $# -eq 2 ]; then
+  #optional second argument for the location of the standard template to link into reg folder
+  std="$2"
+  suffix=
+  if [ ! -r "$std" ]; then
+    std= #unset std if the file is non-existent or not readable
+  else
+    case "$std" in
+      *.nii.gz) suffix=".nii.gz" ;;
+      *.nii) suffix=".nii" ;;
+      *.hdr) suffix=".hdr" ;;
+      *) echo "unknown suffix in $std" && std=
+    esac
+  fi
+fi
+
+cd "$1"
+
+featDirs=$(find $PWD -maxdepth 1 -iname "FEAT_LVL1_run*.feat" -type d)
+
+for dir in ${featDirs}; do
+    if [ -d "${dir}/reg" ]; then
+	    echo "Registration directory already exists: ${dir}/reg. Skipping run."
+	    continue
+    fi
+
+    if [ $( imtest "${dir}/example_func" ) -eq 0 ]; then
+	    echo "FEAT appears to have failed in ${dir}. Skipping to next subject"
+	    continue
+    fi
+
+    echo "Generating reg directory: ${dir}/reg"
+    mkdir "${dir}/reg"
+
+    #directory structure should include example_func images in root of each Feat directory. Copy these to reg
+    imcp "${dir}/example_func" "${dir}/reg/example_func"
+    imcp "${dir}/example_func" "${dir}/reg/example_func2standard"
+
+    cp "${FSLDIR}/etc/flirtsch/ident.mat" "${dir}/reg/example_func2standard.mat"
+    cp "${FSLDIR}/etc/flirtsch/ident.mat" "${dir}/reg/example_standard2example_func.mat"
+
+    if [ -n "$std" ]; then
+      ln -sfn "$std" "${dir}/reg/standard{suffix}"
+    else
+      imcp "${dir}/example_func" "${dir}/reg/standard"
+    fi
+
+    cd "${dir}/reg"
+    slicer example_func2standard standard -s 2 -x 0.35 sla.png -x 0.45 slb.png -x 0.55 slc.png -x 0.65 sld.png \
+	-y 0.35 sle.png -y 0.45 slf.png -y 0.55 slg.png -y 0.65 slh.png \
+	-z 0.35 sli.png -z 0.45 slj.png -z 0.55 slk.png -z 0.65 sll.png
+
+    pngappend sla.png + slb.png + slc.png + sld.png + sle.png + slf.png + slg.png + slh.png + sli.png + slj.png + slk.png + sll.png example_func2standard1.png 
+
+    slicer standard example_func2standard -s 2 -x 0.35 sla.png -x 0.45 slb.png -x 0.55 slc.png -x 0.65 sld.png \
+	-y 0.35 sle.png -y 0.45 slf.png -y 0.55 slg.png -y 0.65 slh.png \
+	-z 0.35 sli.png -z 0.45 slj.png -z 0.55 slk.png -z 0.65 sll.png
+
+    pngappend sla.png + slb.png + slc.png + sld.png + sle.png + slf.png + slg.png + slh.png + sli.png + slj.png + slk.png + sll.png example_func2standard2.png
+
+    pngappend example_func2standard1.png - example_func2standard2.png example_func2standard.png
+
+    rm -f sl?.png example_func2standard2.png
+
+done

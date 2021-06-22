@@ -5,10 +5,9 @@
 \title{Interactive function to build an l1 model specification for setup_glm_pipeline}
 \usage{
 build_l1_models(
-  trial_data,
+  gpa = NULL,
+  trial_data = NULL,
   l1_model_set = NULL,
-  variable_mapping = c(id = "id", run = "run", trial = "trial", run_trial = "trial",
-    mr_dir = "mr_dir"),
   onset_cols = NULL,
   onset_regex = ".*(onset|time).*",
   duration_regex = ".*duration.*",
@@ -16,11 +15,12 @@ build_l1_models(
 )
 }
 \arguments{
+\item{gpa}{a \code{glm_pipeline_arguments} object containing an analysis pipeline to which $l1_models
+shoudl be added. If $l1_models is already present, these will be amended.}
+
 \item{trial_data}{a data.frame containing trial-level data for one or more subjects}
 
 \item{l1_model_set}{optional existing l1_model_set to be modified}
-
-\item{variable_mapping}{a vector of mappings between columns in \code{trial_data} and internal constructs}
 
 \item{onset_cols}{an optional character vector of columns in \code{trial_data} that should be
 in the set of event onsets}
@@ -38,6 +38,9 @@ a \code{l1_model_set} object containing events, signals, and models, compatible 
 }
 \description{
 Interactive function to build an l1 model specification for setup_glm_pipeline
+}
+\details{
+if \code{gpa} is not passed in, then we will work from trial_data and l1_model_set.
 }
 \author{
 Michael Hallquist

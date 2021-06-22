@@ -8,10 +8,10 @@ generate_motion_regressors(
   motion_params = "motion.par",
   col.names = c("rx", "ry", "rz", "tx", "ty", "tz"),
   regressors = c("rx", "ry", "rz", "tx", "ty", "tz"),
-  demean = TRUE,
-  drop_volumes = 0,
+  demean = FALSE,
+  drop_volumes = 0L,
   last_volume = NULL,
-  rot_unit = "rad",
+  rot_units = "rad",
   tra_units = "mm"
 )
 }
@@ -23,7 +23,15 @@ generate_motion_regressors(
 \item{regressors}{names of regressors to generate and return to caller}
 
 \item{drop_volumes}{number of volumes to drop from beginning of motion params}
+
+\item{last_volume}{final volume to include from motion params (if truncated at end). If \code{NULL},
+then the end of the time series is not truncated.}
+
+\item{rot_units}{The units of the rotation parameters. Default is "rad" for radians}
+
+\item{tra_units}{The units of the translation parameter. Default is "mm" for millimeters}
 }
 \description{
 helper function for generating motion regressors from raw 6-parameter motion coregistration
 }
+\keyword{internal}
