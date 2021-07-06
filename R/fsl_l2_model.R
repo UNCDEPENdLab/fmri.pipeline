@@ -52,31 +52,52 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
 
   #regressor_names <- gpa$l2_models$models[[l2_model_name]]$regressors # names of regressors in design matrix for this model
 
-  # TODO: wouldn't this be easier if we could just use $exclude_run in $run_data?
-  dmat_rows <- gpa$run_data %>%
-    dplyr::mutate(rownum = 1:n()) %>%
-    dplyr::filter(id == !!id & session == !!session) %>%
-    dplyr::select(id, session, run_number, rownum) %>%
-    dplyr::right_join(l1_df, by=c("id", "session", "run_number")) %>% # enforce drops
-    dplyr::pull(rownum)
+  if (!is.null(gpa$l2_models$models[[l2_model_name]]$by_subject)) {
+    lg$info("Using per-subject l2 model specification for model: %s", l2_model_name)
 
-  if (length(dmat_rows) != nrow(l1_df)) {
-    msg <- "Number of rows in gpa$run_data does not match l1_df in fsl_l2_model"
-    lg$error(msg)
-    stop(msg)
+    # get subject-specific model and contrast matrices
+    ss_df <- gpa$l2_models$models[[l2_model_name]]$by_subject %>%
+      dplyr::filter(id == !!id & session == !!session)
+  
+    if (nrow(ss_df) == 0L) {
+      lg$error("Unable to locate a subject-specific entry for id %s, session %s", id, session)
+      return(NULL)
+    } else if (nrow(ss_df) > 1L) {
+      lg$error("More than one subject-specific entry for id %s, session %s", id, session)
+      return(NULL)
+    } else {
+      dmat <- ss_df$model_matrix[[1L]]
+      cmat <- ss_df$contrasts[[1L]]
+    }
+    
+  } else {
+    # TODO: wouldn't this be easier if we could just use $exclude_run in $run_data?
+    dmat_rows <- gpa$run_data %>%
+      dplyr::mutate(rownum = 1:n()) %>%
+      dplyr::filter(id == !!id & session == !!session) %>%
+      dplyr::select(id, session, run_number, rownum) %>%
+      dplyr::right_join(l1_df, by=c("id", "session", "run_number")) %>% # enforce drops
+      dplyr::pull(rownum)
+
+    if (length(dmat_rows) != nrow(l1_df)) {
+      msg <- "Number of rows in gpa$run_data does not match l1_df in fsl_l2_model"
+      lg$error(msg)
+      stop(msg)
+    }
+
+    # should never happen, but sanity check the model matrix against the run data
+    stopifnot(nrow(gpa$run_data) == nrow(gpa$l2_models$models[[l2_model_name]]$model_matrix))
+
+    # obtain rows of design for this subject
+    dmat <- gpa$l2_models$models[[l2_model_name]]$model_matrix[dmat_rows, , drop=FALSE]
+
+    # obtain contrasts for this L2 model
+    cmat <- gpa$l2_models$models[[l2_model_name]]$contrasts # l2 model contrasts
+
   }
-
-  # should never happen, but sanity check the model matrix against the run data
-  stopifnot(nrow(gpa$run_data) == nrow(gpa$l2_models$models[[l2_model_name]]$model_matrix))
-
-  # obtain rows of design for this subject
-  dmat <- gpa$l2_models$models[[l2_model_name]]$model_matrix[dmat_rows, , drop=FALSE]
 
   # generate FSL EV syntax for these regressors
   ev_syntax <- generate_fsf_ev_syntax(inputs = l1_feat_dirs, dmat = dmat)
-
-  # obtain contrasts for this L2 model
-  cmat <- gpa$l2_models$models[[l2_model_name]]$contrasts # l2 model contrasts
 
   # generate FSF contrast syntax for this setup
   contrast_syntax <- generate_fsf_contrast_syntax(cmat)
@@ -84,13 +105,10 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
   # need to support respecification of model per subject
   # for now, just subset the correct rows of the model matrix
 
-  # TODO use system.file to read from R package installation dir
-  l2_fsf_syntax <- readLines(file.path(gpa$pipeline_home, "inst", "feat_lvl2_nparam_template.fsf"))
+  l2_fsf_syntax <- readLines(system.file("feat_lvl2_nparam_template.fsf", package = "fmri.pipeline"))
 
   # Add EVs and contrasts into FSF
   l2_fsf_syntax <- c(l2_fsf_syntax, ev_syntax, contrast_syntax)
-
-  # .OUTPUTDIR. : the feat output location
 
   # need to determine number of copes (contrasts) at level 1, which depends on the model being fit
   # FSL usually reads this from the .feat directories itself, but for batch processing, better to insert into the FSF ourselves
@@ -119,6 +137,7 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
   lg$debug("Expected L2 feat fsf is: %s", l2_feat_fsf)
 
   # specify output directory (removing .gfeat suffix)
+  # .OUTPUTDIR. : the feat output location
   l2_fsf_syntax <- gsub(".OUTPUTDIR.", sub("\\.gfeat$", "", l2_feat_dir), l2_fsf_syntax, fixed = TRUE)
 
   feat_l2_df$l2_feat_fsf <- l2_feat_fsf
@@ -136,6 +155,8 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
   if (!file.exists(l2_feat_fsf) || isTRUE(force)) {
     lg$info("Writing L2 FSF syntax to: %s", l2_feat_fsf)
     cat(l2_fsf_syntax, file = l2_feat_fsf, sep = "\n")
+  } else {
+    lg$info("Skipping existing L2 FSF syntax: %s", l2_feat_fsf)
   }
 
   if (isTRUE(force) || !dir.exists(l2_feat_dir) || is.na(l2_feat_complete)) {

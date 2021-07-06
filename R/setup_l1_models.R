@@ -135,6 +135,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
         bdm_out_file <- file.path(subj_out, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData"))
         if (file.exists(bdm_out_file)) {
           lg$info("Loading BDM info from extant file: %s", bdm_out_file)
+          load(bdm_out_file)
         } else {
           t_out <- gpa$glm_software
           if (isTRUE(gpa$use_preconvolve)) { t_out <- c("convolved", t_out) } #compute preconvolved regressors

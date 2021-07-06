@@ -36,8 +36,7 @@ fsl_l1_model <- function(
 
   stopifnot(model_name %in% names(gpa$l1_models$models))
 
-  #TODO use system.file to read from R package installation dir
-  fsf_template <- readLines(file.path(gpa$pipeline_home, "inst", "feat_lvl1_nparam_template.fsf"))
+  fsf_template <- readLines(system.file("feat_lvl1_nparam_template.fsf", package = "fmri.pipeline"))
 
   fsl_run_output_dir <- get_l1_directory(id = id, session = session, model_name = model_name, gpa = gpa, glm_software="fsl")
 

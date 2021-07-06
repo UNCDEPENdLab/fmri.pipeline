@@ -79,7 +79,7 @@ setup_l2_models <- function(gpa, l2_model_names=NULL, l1_model_names=NULL) {
 
   # respecify L2 models for each subject based on available runs
   for (mname in l2_model_names) {
-    browser()
+    lg$info("Recalculating per-subject L2 models based on available runs for model: %s", mname)
     gpa$l2_models$models[[mname]] <- respecify_l2_models_by_subject(gpa$l2_models$models[[mname]], run_data)
   }
 
