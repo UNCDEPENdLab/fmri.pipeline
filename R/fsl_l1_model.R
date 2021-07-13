@@ -15,10 +15,12 @@
 #' @export
 #'
 fsl_l1_model <- function(
-  id=NULL, session=NULL, d_obj, gpa, model_name=NULL, run_nifti=NULL, nvoxels=NULL, execute_feat=FALSE) {
+  id=NULL, session=NULL, l1_confound_files=NULL, d_obj, gpa, 
+  model_name=NULL, run_nifti=NULL, nvoxels=NULL, execute_feat=FALSE) {
 
   checkmate::assert_scalar(id, null.ok = FALSE)
   checkmate::assert_scalar(session, null.ok = FALSE)
+  checkmate::assert_character(l1_confound_files, null.ok = TRUE)
   checkmate::assert_class(d_obj, "bdm")
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_string(model_name) # single string
@@ -28,6 +30,10 @@ fsl_l1_model <- function(
   if (!is.null(d_obj$run_4d_files)) {
     lg$debug("Using internal NIfTI files (run_4d_files) within d_obj for Feat level 1 setup")
     run_nifti <- d_obj$run_4d_files
+  }
+
+  if (!is.null(l1_confound_files)) {
+    stopifnot(length(l1_confound_files) == length(run_nifti))
   }
 
   stopifnot(length(run_nifti) == length(d_obj$run_volumes)) #need these to align
@@ -53,13 +59,13 @@ fsl_l1_model <- function(
 
   lg$info("Create l1 fsl_run_output_dir: %s", fsl_run_output_dir)
   dir.create(fsl_run_output_dir, showWarnings=FALSE) #one directory up from a given run
-  timingdir <- file.path(fsl_run_output_dir, "timing_files")
+  timing_dir <- file.path(fsl_run_output_dir, "timing_files")
 
   feat_l1_df <- data.frame(
     id = id, session = session, run_number = d_obj$runs_to_output, run_volumes = d_obj$run_volumes,
     run_nifti = run_nifti, l1_model = model_name, l1_feat_fsf = NA_character_, l1_feat_dir = NA_character_,
     l1_feat_dir_exists = NA_integer_, l1_feat_complete=NA_integer_, fsf_modified_date = as.POSIXct(NA),
-    l1_confound_regressors = NA_character_, to_run=as.logical(NA)
+    l1_confound_file = NA_character_, to_run=as.logical(NA)
   )
   all_l1_feat_fsfs <- c()
 
@@ -68,16 +74,24 @@ fsl_l1_model <- function(
     lg$info("Creating FSF for file: %s", run_nifti[rr])
     this_template <- fsf_template # start with default copy of template for this run
 
+    disable_confounds <- FALSE # whether to turn off confound regressors in FSF specification
     if (!is.null(gpa$confound_settings$l1_confound_regressors)) {
-      confounds <- get_l1_confounds(
-        id = id, session = session,
-        run_number = feat_l1_df$run_number[rr], gpa,
-        drop_volumes = gpa$drop_volumes,
-        last_volume = feat_l1_df$run_volumes[rr]
-      )$confounds
-      this_template <- gsub(".CONFOUNDS.", confounds, this_template, fixed = TRUE)
-      feat_l1_df$l1_confound_regressors[rr] <- confounds
-    } else { #disable confounds
+      # TODO: consider treating confound regressors as a feature of a given l1 model, rather than enforcing across all models
+      l1_confound_file <- l1_confound_files[rr]
+      if (!file.exists(l1_confound_file)) {
+        lg$warn(
+          "Cannot find l1_confound_file for id: %d, session: %d, run_number: %d, file: %s",
+          id, session, feat_l1_df$run_number[rr], l1_confound_file
+        )
+        disable_confounds <- TRUE
+      } else {
+        this_template <- gsub(".CONFOUNDS.", l1_confound_file, this_template, fixed = TRUE)
+        feat_l1_df$l1_confound_file[rr] <- l1_confound_file
+      }
+    }
+
+    # turn off confounds, if needed (missing l1 confounds file, or no confounds requested)
+    if (isTRUE(disable_confounds)) { #disable confounds
       this_template <- gsub("set fmri(confoundevs) 1", "set fmri(confoundevs) 0", this_template, fixed=TRUE) #disable
       l1 <- grep("# Confound EVs text file for analysis 1", this_template, fixed = TRUE)
       l2 <- grep("set confoundev_files(1) \".CONFOUNDS.\"", this_template, fixed = TRUE)
@@ -131,7 +145,7 @@ fsl_l1_model <- function(
       #add common ingredients for preconvolved regressors
       regressors <- lapply(regressor_names, function(x) {
         list(name=x, waveform="custom_1", convolution="none",
-          tempfilt=1, timing_file=file.path(timingdir, paste0("run", feat_l1_df$run_number[rr], "_", x, ".1D")))
+          tempfilt=1, timing_file=file.path(timing_dir, paste0("run", feat_l1_df$run_number[rr], "_", x, ".1D")))
       })
 
       lg$debug("dependlab::generate_fsf_lvl1_ev_syntax")

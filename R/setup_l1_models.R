@@ -21,6 +21,8 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_character(l1_model_names, null.ok=TRUE)
   checkmate::assert_data_frame(gpa$subject_data)
+  checkmate::assert_data_frame(gpa$run_data)
+  checkmate::assert_subset(c("id", "session", "run_number", "run_nifti", "exclude_run"), names(gpa$run_data)) # required columns
 
   #if no model subset is requested, output all models
   if (is.null(l1_model_names)) { l1_model_names <- names(gpa$l1_models$models) }
@@ -52,7 +54,13 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       #find the run data for analysis
       rdata <- gpa$run_data %>% dplyr::filter(id == !!subj_id & session == !!subj_session & run_nifti_present == TRUE)
       run_nifti <- get_mr_abspath(rdata, "run_nifti")
-      mr_run_nums <- rdata %>% dplyr::pull("run_number")
+      mr_run_nums <- rdata$run_number
+      exclude_run <- rdata$exclude_run
+      if ("l1_confound_file" %in% names(rdata)) {
+        l1_confound_files <- rdata$l1_confound_file
+      } else {
+        l1_confound_files <- rep("", length(run_nifti))
+      }
 
       subj_mr_dir <- subj_df$mr_dir
 
@@ -83,20 +91,11 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       mrdf <- data.frame(
         id = subj_id, session=subj_session,
         run_nifti = run_nifti, run_number = mr_run_nums,
-        last_volume = run_lengths, drop_volumes = gpa$drop_volumes
+        last_volume = run_lengths, drop_volumes = gpa$drop_volumes, exclude_run = exclude_run
       )
 
       run_nifti <- mrdf$run_nifti
       run_lengths <- mrdf$last_volume
-
-      # determine whether to include each run
-      mrdf$exclude_run <- sapply(seq_len(nrow(mrdf)), function(rr) {
-        ll <- as.list(mrdf[rr, , drop = FALSE]) # rrth row of mrdf
-        ll[["gpa"]] <- gpa
-        ll[["run_nifti"]] <- NULL
-        ex <- do.call(get_l1_confounds, ll)
-        return(ex$exclude_run)
-      })
 
       # Tracking list containing data.frames for each software, where we expect one row per run-level model (FSL)
       # or subject-level model (AFNI). The structure varies because FSL estimates per-run GLMs, while AFNI concatenates.
@@ -163,7 +162,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         if ("fsl" %in% gpa$glm_software) {
           #Setup FSL run-level models for each combination of signals
           #Returns a data.frame of feat l1 inputs and the fsf file
-          feat_l1_df <- tryCatch({fsl_l1_model(id=subj_id, session=subj_session, d_obj=d_obj,
+          feat_l1_df <- tryCatch({fsl_l1_model(id=subj_id, session=subj_session, l1_confound_files=l1_confound_files, d_obj=d_obj,
           gpa = gpa, this_model, nvoxels = nvoxels)},
             error=function(e) {
               lg$error("Problem with fsl_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)

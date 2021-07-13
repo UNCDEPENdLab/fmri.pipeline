@@ -8,6 +8,7 @@
 fsl_l1_model(
   id = NULL,
   session = NULL,
+  l1_confound_files = NULL,
   d_obj,
   gpa,
   model_name = NULL,

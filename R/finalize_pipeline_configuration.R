@@ -152,7 +152,7 @@ finalize_pipeline_configuration <- function(gpa) {
 
   # remove bad ids before running anything further
   if (!is.null(gpa$bad_ids) && length(gpa$bad_ids) > 0L) {
-    lg$info("Removing the following IDs from data structure before beginning analysis: ", paste(gpa$bad_ids, collapse=", "))
+    lg$info("Removing the following IDs from data structure before beginning analysis: %s", paste(gpa$bad_ids, collapse=", "))
     gpa$subject_data <- gpa$subject_data %>% filter(!id %in% gpa$bad_ids) # remove bad ids
     gpa$run_data <- gpa$run_data %>% filter(!id %in% gpa$bad_ids) # remove bad ids
     gpa$trial_data <- gpa$trial_data %>% filter(!id %in% gpa$bad_ids) # remove bad ids
@@ -260,46 +260,39 @@ finalize_pipeline_configuration <- function(gpa) {
   # numeric row number of each input to aid in tracking
   gpa$run_data$input_number <- seq_len(nrow(gpa$run_data))
 
-  lg$debug("Setting pipeline_finalized to TRUE")
-  gpa$pipeline_finalized <- TRUE
+  # populate confounds in SQLite database and calculate run exclusions
+  # TODO: allow external $exclude_run from user, add internal calculated $calc_exclude run
 
-  #cache gpa object to file
-  saveRDS(gpa, file=gpa$object_cache)
+  confound_info <- lapply(seq_len(nrow(gpa$run_data)), function(ii) {
+    # this should add rows to the SQLite data for a subject if not yet present, or just return those rows if they exist
+    l1_info <- get_l1_confounds(
+      id = gpa$run_data$id[ii], session = gpa$run_data$session[ii], run_number = gpa$run_data$run_number[ii],
+      gpa = gpa, drop_volumes = gpa$drop_volumes
+    )[c("l1_confound_file", "exclude_run")]
+    return(l1_info)
+  })
 
-  #save subject, run, and trial data to the database, too
+  gpa$run_data$exclude_run <- sapply(confound_info, "[[", "exclude_run")
+  gpa$run_data$l1_confound_file <- sapply(confound_info, "[[", "l1_confound_file")
+
+  # populate subject exclusions
+  gpa <- calculate_subject_exclusions(gpa)
+
+  # cache gpa object to file
+  saveRDS(gpa, file = gpa$object_cache)
+
+  # save subject, run, and trial data to the database, too
   lg$info("Writing run_data to sqlite db: %s", gpa$sqlite_db)
-  DBI::dbWriteTable(conn=gpa$sqlite_con, name="run_data", value=gpa$run_data, overwrite=TRUE)
+  DBI::dbWriteTable(conn = gpa$sqlite_con, name = "run_data", value = gpa$run_data, overwrite = TRUE)
 
   lg$info("Writing subject_data to sqlite db: %s", gpa$sqlite_db)
-  DBI::dbWriteTable(conn=gpa$sqlite_con, name="subject_data", value=gpa$subject_data, overwrite=TRUE)
+  DBI::dbWriteTable(conn = gpa$sqlite_con, name = "subject_data", value = gpa$subject_data, overwrite = TRUE)
 
   lg$info("Writing trial_data to sqlite db: %s", gpa$sqlite_db)
   DBI::dbWriteTable(conn = gpa$sqlite_con, name = "trial_data", value = gpa$trial_data, overwrite = TRUE)
 
-  # populate confounds in SQLite database
-  # TODO: allow external $exclude_run from user, add internal calculated $calc_exclude run
-
-  gpa$run_data$exclude_run <- FALSE
-  xx <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
-    browser()
-    # this should add rows to the SQLite data for a subject if not yet present, or just return those rows if they exist
-    l1_info <- get_l1_confounds(id = gpa$run_data$id[ii], session = gpa$run_data$session[ii], run_number = gpa$run_data$run_number[ii], gpa = gpa, drop_volumes = gpa$drop_volumes)
-    insert_df_sqlite(gpa, id = gpa$run_data$id[ii], session = gpa$run_data$session[ii], run_number = gpa$run_data$run_number[ii], data=l1_info$confounds_df, table="test")
-
-    #
-    
-  })
-
-  #get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, drop_volumes=0L, last_volume=NULL, demean=TRUE) {
-
-  # determine whether to include each run
-  mrdf$exclude_run <- sapply(seq_len(nrow(mrdf)), function(rr) {
-    ll <- as.list(mrdf[rr, , drop = FALSE]) # rrth row of mrdf
-    ll[["gpa"]] <- gpa
-    ll[["run_nifti"]] <- NULL
-    ex <- do.call(get_l1_confounds, ll)
-    return(ex$exclude_run)
-  })
+  lg$debug("Setting pipeline_finalized to TRUE")
+  gpa$pipeline_finalized <- TRUE
 
   return(gpa)
 }

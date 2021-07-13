@@ -33,14 +33,8 @@ setup_l2_models <- function(gpa, l2_model_names=NULL, l1_model_names=NULL) {
   lg$debug("In setup_l2_models, passing the following L1 models to L2:")
   lg$debug("L1 model: %s", l1_model_names)
 
-  # Run exclusions are populated in setup_l1_models, but we currently do not
-  # calculate subject exclusions at that stage. For now, calculate these here.
-  gpa <- calculate_subject_exclusions(gpa)
-
-  l1_meta <- gpa$l1_model_setup$metadata %>%
-    dplyr::select(id, session, run_number, exclude_run, exclude_subject)
-
-  excluded_runs <- l1_meta %>%
+  excluded_runs <- gpa$run_data %>%
+    dplyr::select(id, session, run_number, exclude_run, exclude_subject) %>%
     dplyr::filter(exclude_run == TRUE | exclude_subject == TRUE)
 
   if (nrow(excluded_runs) > 1L) {
@@ -52,13 +46,14 @@ setup_l2_models <- function(gpa, l2_model_names=NULL, l1_model_names=NULL) {
   }
 
   # only retain good runs and subjects
-  l1_meta <- l1_meta %>%
+  run_data <- gpa$run_data %>%
     dplyr::filter(exclude_run == FALSE & exclude_subject == FALSE)
 
-  run_data <- gpa$run_data %>%
-    right_join(l1_meta, by=c("id", "session", "run_number"))
+  # subset basic metadata to merge against a given l1 model to enforce run/subject exclusions
+  good_runs <- run_data %>%
+    dplyr::select(id, session, run_number, exclude_run, exclude_subject)
 
-  if (nrow(l1_meta) == 0L) {
+  if (nrow(run_data) == 0L) {
     msg <- "In setup_l2_models, no runs survived the exclude_subject and exclude_run step."
     lg$warn(msg)
     warning(msg)
@@ -97,8 +92,8 @@ setup_l2_models <- function(gpa, l2_model_names=NULL, l1_model_names=NULL) {
           dplyr::filter(l1_model == !!this_l1_model) %>%
           dplyr::select(id, session, run_number, l1_model, l1_feat_fsf, l1_feat_dir)
 
-        # handle run and subject exclusions (exclude_run should be FALSE in l1_meta, per filter above)
-        to_run <- dplyr::left_join(l1_meta, to_run, by = c("id", "session", "run_number"))
+        # handle run and subject exclusions by joining against good runs
+        to_run <- dplyr::left_join(good_runs, to_run, by = c("id", "session", "run_number"))
         data.table::setDT(to_run) #convert to data.table for split
 
         by_subj_session <- split(to_run, by=c("id", "session"))

@@ -20,5 +20,7 @@ Imports:
   checkmate,
   doParallel,
   foreach,
-  oro.nifti
-  
+  oro.nifti,
+  DBI,
+  RSQLite
+

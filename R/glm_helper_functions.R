@@ -615,15 +615,10 @@ get_l1_directory <- function(id = NULL, session = NULL, run_number = NULL, model
 #' @importFrom lgr get_logger
 #' @author Michael Hallquist
 calculate_subject_exclusions <- function(gpa) {
-  lg <- lgr::get_logger("glm_pipeline/l2_setup")
+  lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
-  checkmate::assert_class(gpa$l1_model_setup, "l1_setup")
-  checkmate::assert_data_table(gpa$l1_model_setup$metadata)
-  if (!"exclude_run" %in% names(gpa$l1_model_setup$metadata)) {
-    msg <- "calculate_subject_exclusions depends on exclude_run being populated by setup_l1_models."
-    lg$error(msg)
-    stop(msg)
-  }
+  checkmate::assert_data_frame(gpa$run_data)
+  checkmate::assert_subset(c("id", "session", "run_number", "exclude_run"), names(gpa$run_data)) # verify that exclude_run is populated
 
   if ("exclude_subject" %in% names(gpa$subject_data) && "exclude_subject" %in% names(gpa$run_data)) {
     lg$debug("exclude_subject already calculated and populated in $subject_data and $run_data")
@@ -637,7 +632,7 @@ calculate_subject_exclusions <- function(gpa) {
     return(gpa)
   }
 
-  n_good_runs_df <- gpa$l1_model_setup$metadata %>%
+  n_good_runs_df <- gpa$run_data %>%
     dplyr::filter(exclude_run == FALSE) %>%
     dplyr::count(id, session, name = "n_good_runs")
 
@@ -663,17 +658,8 @@ calculate_subject_exclusions <- function(gpa) {
     )
   })
 
-  # propagate subject exclusion down to $run_data for simplicity
+  # propagate subject exclusion down to $run_data
   gpa$run_data <- gpa$run_data %>%
-    dplyr::left_join(
-      gpa$subject_data %>% dplyr::select(id, session, exclude_subject),
-      by = c("id", "session")
-    )
-
-  # TODO: cleanup redundancy, or at least be more thoughtful about this
-  # For now, also populate exclude_subject into gpa$l1_model_setup$metadata to avoid
-  # additional joins in l2 model setup
-  gpa$l1_model_setup$metadata <- gpa$l1_model_setup$metadata %>%
     dplyr::left_join(
       gpa$subject_data %>% dplyr::select(id, session, exclude_subject),
       by = c("id", "session")
@@ -956,4 +942,21 @@ respecify_l2_models_by_subject <- function(mobj, data) {
 
   mobj$by_subject <- dsplit
   return(mobj)
+}
+
+lookup_run_volumes <- function(nifti) {
+  # fslval is much faster than any internal R command. Use it, if possible
+  # TODO: Make this more robust, more like runFSLCommand with path expectations
+  has_fslval <- system2("which", "fslval", stdout = FALSE, stderr = FALSE)
+  has_fslval <- ifelse(has_fslval == 0L, TRUE, FALSE)
+  if (isTRUE(has_fslval)) {
+    nvol <- as.integer(system2("fslval", args = c(nifti, "dim4"), stdout = TRUE))
+  } else {
+    nvol <- oro.nifti::readNIfTI(nifti, read_data = FALSE)@dim_[5L]
+  }
+
+  # system.time(run_volumes <- oro.nifti::readNIfTI(run_nifti[nn], read_data = FALSE)@dim_[5L])
+  # system.time(run_volumes <- RNifti::readNifti(run_nifti[nn], internal = TRUE))
+
+  return(nvol)
 }

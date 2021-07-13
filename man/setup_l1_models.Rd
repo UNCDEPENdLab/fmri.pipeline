@@ -4,19 +4,19 @@
 \alias{setup_l1_models}
 \title{Function for setting up level 1 model specifications and corresponding files}
 \usage{
-setup_l1_models(gpa, to_setup = NULL)
+setup_l1_models(gpa, l1_model_names = NULL)
 }
 \arguments{
 \item{gpa}{A glm_model_arguments function setup by the \code{setup_glm_pipeline} function}
 
-\item{to_setup}{A character vector of model names within \code{gpa$l1_models} whose l1
+\item{l1_model_names}{A character vector of model names within \code{gpa$l1_models} whose l1
 inputs should be generated. If omitted, all models within \code{gpa$l1_models} will be generated.}
 }
 \description{
 Function for setting up level 1 model specifications and corresponding files
 }
 \details{
-The \code{to_setup} argument allows the creation of multiple l1 models to be parallelized at
+The \code{l1_model_names} argument allows the creation of multiple l1 models to be parallelized at
   a superordinate level or, even better, to be spread across independent jobs on a cluster. This function
   already provides the option to parallelize over subjects for a single model if \code{gpa$l1_setup_cpus}
   is greater than 1.

@@ -7,7 +7,10 @@
 #' @author Michael Hallquist
 #' @importFrom dplyr count group_by left_join filter
 #' @importFrom magrittr %>%
-lookup_nifti_inputs <- function(gpa) {
+lookup_nifti_inputs <- function(gpa, add_run_volumes = TRUE) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_logical(add_run_volumes, len=1L)
+
   # look at whether we have the number of expected runs for each subject
   n_subj_runs <- gpa$run_data %>%
     group_by(id, session) %>%
@@ -83,6 +86,19 @@ lookup_nifti_inputs <- function(gpa) {
 
   # populate field in run_data used to determine availability of data
   gpa$run_data$run_nifti_present <- mr_found
+
+  # add number of volumes for each run
+  if (isTRUE(add_run_volumes)) {
+    lg$info("Lookup up number of volumes from NIfTI headers")
+    gpa$run_data$run_volumes <- sapply(seq_along(run_nifti), function(nn) {
+      if (isFALSE(mr_found[nn])) {
+        run_volumes <- NA_integer_ # none
+      } else {
+        run_volumes <- lookup_run_volumes(run_nifti[nn])
+      }
+      return(run_volumes)
+    })
+  }
 
   return(gpa)
 

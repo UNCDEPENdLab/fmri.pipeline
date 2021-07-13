@@ -29,30 +29,37 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
 
+  # strucuture to return if this lookup fails (predictable elements so that caller can handle them)
+  empty_set <- list(
+    l1_confound_file = NA_character_, l1_confounds_df = data.frame(),
+    exclude_run = FALSE, exclude_data = data.frame()
+  )
+
+  # lookup run information
   rinfo <- gpa$run_data %>% dplyr::filter(id == !!id & session == !!session & run_number == !!run_number)
   if (nrow(rinfo) > 1L) {
     print(rinfo)
     lg$error("Multiple matches for a single run in get_l1_confounds.")
-    return(NULL)
+    return(empty_set)
   } else if (nrow(rinfo) == 0L) {
     lg$error("Unable to locate a record in gpa$run_data for id %s, session %s, run_number %s.", id, session, run_number)
-    return(NULL)
+    return(empty_set)
   }
 
-  # Park these in an analysis-level subfolder, not a particular model, since they are re-used across models.
+  # Park confound files in an analysis-level subfolder, not a particular model, since they are re-used across models.
   # Note: normalizePath will fail to evaluate properly if directory does not exist
   analysis_outdir <- get_l1_directory(id=id, session=session, gpa=gpa, create_if_missing = TRUE)
 
-  # determine whether we should be returning information about l1 confound regressors
+  # Determine whether we should be returning information about l1 confound regressors
   # and whether this information has already been calculated
   generate_l1_confounds <- FALSE
   if (is.null(gpa$confound_settings$l1_confound_regressors)) {
     # no confounds requested
-    expected_l1_confounds_file <- NA_character_
+    expected_l1_confound_file <- NA_character_
   } else {
-    expected_l1_confounds_file <- file.path(analysis_outdir, paste0("run", run_number, "_l1_confounds.txt"))
-    if (!file.exists(expected_l1_confounds_file)) {
-      lg$debug("Expected confounds file file does not exist: %s.", expected_l1_confounds_file)
+    expected_l1_confound_file <- file.path(analysis_outdir, paste0("run", run_number, "_l1_confounds.txt"))
+    if (!file.exists(expected_l1_confound_file)) {
+      lg$debug("Expected confounds file does not exist: %s.", expected_l1_confound_file)
       generate_l1_confounds <- TRUE
     }
   }
@@ -62,35 +69,34 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
   generate_run_exclusion <- FALSE
   if (is.null(gpa$confound_settings$exclude_run)) {
     # no basis for exclusion (all runs okay)
-    exclude_file <- NA_character_
-    exclude_data_file <- NA_character_
     exclude_run <- FALSE
   } else {
-    exclude_file <- file.path(analysis_outdir, paste0("run", run_number, "_l1_exclude.txt"))
-    exclude_data_file <- file.path(analysis_outdir, paste0("run", run_number, "_l1_exclude_data.txt"))
-    if (file.exists(exclude_data_file)) {
-      exclude_run <- as.logical(readLines(con = exclude_file, n = 1L))
+    exclude_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_run_exclusions")
+    exclude_data <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_exclusion_data")
+    if (!is.null(exclude_df)) {
+      exclude_run <- as.logical(exclude_df$exclude_run)
     } else {
-      lg$debug("Expected exclude data file does not exist: %s.", exclude_data_file)
-      exclude_run <- NULL
+      lg$debug("No record of run exclusion exists in database: %s.", gpa$sqlite_db)
+      exclude_run <- NA #default to missing
       generate_run_exclusion <- TRUE
     }
   }
 
-  # If both run exclusion and l1 confounds exist, just the precalculated information
+  # If both run exclusion and l1 confounds exist, just use the precalculated information
   if (!(generate_l1_confounds || generate_run_exclusion)) {
-    if (!is.na(expected_l1_confounds_file)) lg$debug("Returning extant file: %s in get_l1_confounds", expected_l1_confounds_file)
-    if (!is.na(exclude_data_file)) lg$debug("Returning extant run exclusion: %s in get_l1_confounds", exclude_data_file)
+    if (!is.na(expected_l1_confound_file)) lg$debug("Returning extant file: %s in get_l1_confounds", expected_l1_confound_file)
 
     return(list(
-      confounds = expected_l1_confounds_file, confounds_df = data.table::fread(expected_l1_confounds_file, data.table = FALSE),
-      exclude_run = exclude_run, exclude_data = exclude_data_file
+      l1_confound_file = expected_l1_confound_file, 
+      l1_confounds_df = data.table::fread(expected_l1_confound_file, data.table = FALSE),
+      exclude_run = exclude_run, exclude_data = exclude_data
     ))
   }
 
-  #read external confounds file
-  confound_df <- NULL
-  if (isTRUE(rinfo$confound_input_file_present[1])) {
+  # read external confounds file
+  confound_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_confound_inputs")
+  if (is.null(confound_df) && isTRUE(rinfo$confound_input_file_present[1])) {
+    lg$debug("Generating l1 confounds for id: %s, session: %s, run_number: %s", id, session, run_number)
     cfile <- get_mr_abspath(rinfo, "confound_input_file")[1]
     lg$debug("Reading confound file: %s", cfile)
     confound_df <- tryCatch(data.table::fread(cfile, data.table=FALSE), error = function(e) {
@@ -108,14 +114,20 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
       data.table::setnames(confound_df, gpa$confound_settings$confound_input_colnames)
     }
 
+    if (is.null(last_volume)) {
+      last_volume <- nrow(confound_df)
+      lg$debug("Assuming that last row of confounds file is final volume: %d", last_volume)
+    }
     confound_df <- confound_df[(1 + drop_volumes):last_volume, ]
 
-    insert_df_sqlite(gpa, id = id, session = session, run_number = run_number, data = confound_df, table = "confounds")
+    # cache original confounds to db
+    insert_df_sqlite(gpa, id = id, session = session, run_number = run_number, data = confound_df, table = "l1_confound_inputs")
   }
 
   #read motion parameters file
-  motion_df <- NULL
-  if (isTRUE(rinfo$motion_params_present[1])) {
+  motion_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_motion_parameters")
+  if (is.null(motion_df) && isTRUE(rinfo$motion_params_present[1])) {
+    lg$debug("Generating motion params for id: %s, session: %s, run_number: %s", id, session, run_number)
     mfile <- get_mr_abspath(rinfo, "motion_params")[1]
     lg$debug("Reading motion file: %s", mfile)
 
@@ -132,32 +144,22 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
       return(NULL)
     })
 
-    if (!is.null(gpa$confound_settings$motion_params_colnames) && !is.null(motion_df)) {
-      if (length(gpa$confound_settings$motion_params_colnames) != ncol(motion_df)) {
-        lg$warn(
-          "Mismatch in number of columns in confound file: %s relative to $confound_settings$confound_input_colnames",
-          mfile
-        )
-      }
-      data.table::setnames(motion_df, gpa$confound_settings$motion_params_colnames)
-    }
-
-    insert_df_sqlite(gpa, id=id, session=session, run_number=run_number, data=motion_df, table="motion_parameters")
-
+    # cache motion parameters to db
+    insert_df_sqlite(gpa, id=id, session=session, run_number=run_number, data=motion_df, table="l1_motion_parameters")
   }
 
   # combine motion and confound files
   if (is.null(motion_df) && is.null(confound_df)) {
     lg$info("Neither confounds nor motion parameters are available for %s", rinfo$run_nifti[1L])
-    return(NULL)
+    return(empty_set)
   } else if (is.null(motion_df)) {
-    confounds <- confound_df
+    all_confounds <- confound_df
   } else if (is.null(confound_df)) {
-    confounds <- motion_df
+    all_confounds <- motion_df
   } else {
     if (nrow(motion_df) != nrow(confound_df)) {
       lg$error("Number of rows in motion_df is: %d and in confound_df is %d. Cannot combine", nrow(motion_df), nrow(confound_df))
-      return(NULL)
+      return(empty_set)
     } else {
       # prefer confound_df as authoritative in cases where motion_df has overlapping columns
       overlap_names <- intersect(names(motion_df), names(confound_df))
@@ -170,20 +172,20 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
         data.table::setnames(motion_df, old = overlap_names, new = paste0(overlap_names, ".mot"))
       }
 
-      confounds <- dplyr::bind_cols(confound_df, motion_df)
+      all_confounds <- dplyr::bind_cols(confound_df, motion_df)
     }
   }
 
   # calculate whether to retain or exclude this run
-  if (!is.null(gpa$confound_settings$exclude_run)) {
-    if (!all(gpa$confound_settings$run_exclusion_columns %in% names(confounds))) {
+  if (isTRUE(generate_run_exclusion) && !is.null(gpa$confound_settings$exclude_run)) {
+    if (!all(gpa$confound_settings$run_exclusion_columns %in% names(all_confounds))) {
       lg$warn("Missing exclusion columns for subject: %s, session: %s", rinfo$id[1L], rinfo$session[1L])
-      lg$warn("Column: %s", setdiff(gpa$confound_settings$run_exclusion_columns, names(confounds)))
+      lg$warn("Column: %s", setdiff(gpa$confound_settings$run_exclusion_columns, names(all_confounds)))
       lg$warn("We will exclude this run from analysis until this is resolved!")
       exclude_run <- TRUE
     } else {
       # evaluate run exclusion expression
-      exclude_run <- tryCatch(with(confounds, eval(parse(text = gpa$confound_settings$exclude_run))),
+      exclude_run <- tryCatch(with(all_confounds, eval(parse(text = gpa$confound_settings$exclude_run))),
         error = function(e) {
           lg$error(
             "Problem evaluating run exclusion for subject: %s, session: %s, run_number: %s, expr: %s",
@@ -203,35 +205,41 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
       }
     }
 
-    # write the exclusion basis to file
-    exclude_df <- confounds[, intersect(gpa$confound_settings$run_exclusion_columns, names(confounds)), drop=FALSE]
-    write.table(exclude_df, file = exclude_data_file, row.names = FALSE, col.names = TRUE)
-  } else {
-    exclude_run <- FALSE
+    # write the exclusion basis to the database
+    exclude_data <- all_confounds[, intersect(gpa$confound_settings$run_exclusion_columns, names(all_confounds)), drop = FALSE]
+    insert_df_sqlite(gpa, id = id, session = session, run_number = run_number, data = exclude_data, table = "l1_exclusion_data")
+    insert_df_sqlite(gpa,
+      id = id, session = session, run_number = run_number,
+      data = data.frame(exclude_run = exclude_run), table = "l1_run_exclusions"
+    )
+  }
+
+  # check for missing confound columns
+  if (!all(gpa$confound_settings$l1_confound_regressors %in% names(all_confounds))) {
+    lg$warn("Missing confound columns for subject: %s, session: %s", rinfo$id[1L], rinfo$session[1L])
+    lg$warn("Column: %s", setdiff(gpa$confound_settings$l1_confound_regressors, names(all_confounds)))
   }
 
   # trim l1 confounds to only those requested
-  if (!all(gpa$confound_settings$l1_confound_regressors %in% names(confounds))) {
-    lg$warn("Missing confound columns for subject: %s, session: %s", rinfo$id[1L], rinfo$session[1L])
-    lg$warn("Column: %s", setdiff(gpa$confound_settings$l1_confound_regressors, names(confounds)))
-
-    confounds <- confounds[, intersect(gpa$confound_settings$l1_confound_regressors, names(confounds))]
-  }
+  all_confounds <- all_confounds[, intersect(gpa$confound_settings$l1_confound_regressors, names(all_confounds))]
 
   # demean confound regressors, if requested (usually a good idea)
   if (isTRUE(demean)) {
-    lg$debug("Demeaning columns of l1 confounds matrix: %s", expected_l1_confounds_file)
-    confounds <- as.data.frame(apply(confounds, 2, function(x) {
+    lg$debug("Demeaning columns of l1 confounds matrix: %s", expected_l1_confound_file)
+    all_confounds <- as.data.frame(apply(all_confounds, 2, function(x) {
       x - mean(x, na.rm = TRUE)
     }))
   }
 
-  lg$debug("Writing l1 confounds to file: %s", expected_l1_confounds_file)
-  write.table(confounds, file = expected_l1_confounds_file, row.names = FALSE, col.names = FALSE)
-  writeLines(as.character(exclude_run), con = exclude_file)
+  lg$debug("Writing l1 confounds to file: %s", expected_l1_confound_file)
+  write.table(all_confounds, file = expected_l1_confound_file, row.names = FALSE, col.names = FALSE)
+
+  # cache final confounds to db
+  insert_df_sqlite(gpa, id = id, session = session, run_number = run_number, data = all_confounds, table = "l1_confounds")
 
   return(list(
-    confounds = expected_l1_confounds_file, l1_confounds = confounds,
-    motion_df = motion_df, confound_df = confound_df, exclude_run = exclude_run, exclude_data = exclude_data_file
+    l1_confound_file = expected_l1_confound_file,
+    l1_confounds_df = all_confounds,
+    exclude_run = exclude_run, exclude_data = exclude_data
   ))
 }

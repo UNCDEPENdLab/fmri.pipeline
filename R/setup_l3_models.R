@@ -41,10 +41,6 @@ setup_l2_models <- function(gpa, l3_model_names=NULL, l2_model_names=NULL, l1_mo
   lg$debug("In setup_l3_models, passing the following L1 models to L3:")
   lg$debug("L1 model: %s", l1_model_names)
 
-  # Run exclusions are populated in setup_l1_models, but we currently do not
-  # calculate subject exclusions at that stage. For now, calculate these here.
-  gpa <- calculate_subject_exclusions(gpa)
-
   l1_meta <- gpa$l1_model_setup$metadata %>%
     dplyr::select(id, session, run_number, exclude_run, exclude_subject)
 
