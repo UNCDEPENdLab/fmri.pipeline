@@ -7,27 +7,25 @@ library(foreach)
 library(doParallel)
 library(dependlab)
 library(emmeans)
-library(fmri.pipeline)
+#library(fmri.pipeline)
 
-
-
-# setwd("/proj/mnhallqlab/users/michael/fmri.pipeline/R")
-# source("setup_glm_pipeline.R")
-# source("finalize_pipeline_configuration.R")
-# source("glm_helper_functions.R")
-# source("fsl_l1_model.R")
-# source("setup_l1_models.R")
-# source("specify_contrasts.R")
-# source("build_l2_models.R")
-# source("setup_l2_models.R")
-# source("fsl_l2_model.R")
-# source("build_l1_models.R")
-# source("glm_helper_functions.R")
-# source("lookup_nifti_inputs.R")
-# source("get_l1_confounds.R")
-# source("run_feat_sepjobs.R")
-# source("cluster_job_submit.R")
-# source("build_design_matrix.R")
+setwd("/proj/mnhallqlab/users/michael/fmri.pipeline/R")
+source("setup_glm_pipeline.R")
+source("finalize_pipeline_configuration.R")
+source("glm_helper_functions.R")
+source("fsl_l1_model.R")
+source("setup_l1_models.R")
+source("specify_contrasts.R")
+source("build_l2_models.R")
+source("setup_l2_models.R")
+source("fsl_l2_model.R")
+source("build_l1_models.R")
+source("glm_helper_functions.R")
+source("lookup_nifti_inputs.R")
+source("get_l1_confounds.R")
+source("run_feat_sepjobs.R")
+source("cluster_job_submit.R")
+#source("build_design_matrix.R")
 
 trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
   mutate(rt_sec = rt_csv / 1000) %>%
@@ -62,10 +60,10 @@ l1_models$signals <- lapply(l1_models$signals, function(ss) {
 l1_models$models$pe_only$regressors <- c("clock", "feedback", "pe", "d_pe" )
 rownames(l1_models$models$pe_only$contrasts) <- colnames(l1_models$models$pe_only$contrasts) <- c("clock", "feedback", "pe", "d_pe")
 
-subject_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/example_files/mmclock_subject_data.rds") %>%
+subject_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example_files/mmclock_subject_data.rds") %>%
   mutate(mr_dir=paste0(mr_dir, "/mni_5mm_aroma")) #make sure we're looking in the right folder
 
-run_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/example_files/mmclock_run_data.rds")
+run_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example_files/mmclock_run_data.rds")
 #gpa$run_data$..id.. <- NULL
 #saveRDS(gpa$run_data, file = "/proj/mnhallqlab/users/michael/fmri.pipeline/example_files/mmclock_run_data.rds")
 
@@ -95,6 +93,8 @@ gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm",
 )
 
 rm(trial_df)
+
+gpa <- finalize_pipeline_configuration(gpa)
 
 #gpa <- build_l1_models(gpa)
 
@@ -136,6 +136,12 @@ jobs <- run_feat_sepjobs(gpa, level=1L)
 
 gpa <- setup_l2_models(gpa)
 
+save(gpa, file="gpa_tmp_9Jul2021.RData")
+
 jobs <- run_feat_sepjobs(gpa, level=2)
+
+gpa <- setup_l3_models(gpa)
+
+jobs <- run_feat_sepjobs(gpa, level = 3)
 
 push_pipeline(gpa, l1_model_set = c("pe_only"), l2_model_set = "with_run_number")

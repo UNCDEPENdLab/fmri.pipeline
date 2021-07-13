@@ -82,7 +82,10 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     if (!is.na(expected_l1_confounds_file)) lg$debug("Returning extant file: %s in get_l1_confounds", expected_l1_confounds_file)
     if (!is.na(exclude_data_file)) lg$debug("Returning extant run exclusion: %s in get_l1_confounds", exclude_data_file)
 
-    return(list(confounds = expected_l1_confounds_file, exclude_run = exclude_run, exclude_data = exclude_data_file))
+    return(list(
+      confounds = expected_l1_confounds_file, confounds_df = data.table::fread(expected_l1_confounds_file, data.table = FALSE),
+      exclude_run = exclude_run, exclude_data = exclude_data_file
+    ))
   }
 
   #read external confounds file
@@ -106,6 +109,8 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     }
 
     confound_df <- confound_df[(1 + drop_volumes):last_volume, ]
+
+    insert_df_sqlite(gpa, id = id, session = session, run_number = run_number, data = confound_df, table = "confounds")
   }
 
   #read motion parameters file
@@ -136,6 +141,8 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
       }
       data.table::setnames(motion_df, gpa$confound_settings$motion_params_colnames)
     }
+
+    insert_df_sqlite(gpa, id=id, session=session, run_number=run_number, data=motion_df, table="motion_parameters")
 
   }
 
@@ -223,5 +230,8 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
   write.table(confounds, file = expected_l1_confounds_file, row.names = FALSE, col.names = FALSE)
   writeLines(as.character(exclude_run), con = exclude_file)
 
-  return(list(confounds = expected_l1_confounds_file, exclude_run = exclude_run, exclude_data = exclude_data_file))
+  return(list(
+    confounds = expected_l1_confounds_file, l1_confounds = confounds,
+    motion_df = motion_df, confound_df = confound_df, exclude_run = exclude_run, exclude_data = exclude_data_file
+  ))
 }

@@ -160,7 +160,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     thisrun <- with(df, fsf[job==j])
     cat(
       "function feat_runner() {",
-      "  local odir=\"${1/.fsf/.feat}\"",
+      ifelse(level == 1L, "  local odir=\"${1/.fsf/.feat}\"", "  local odir=\"${1/.fsf/.gfeat}\""),
       "  [ -f \"${odir}/.feat_fail\" ] && rm -f \"${odir}/.feat_fail\"",
       "  start_time=$( date )",
       "  feat $1",
@@ -179,7 +179,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     cat(paste("feat_runner", thisrun, "&"), file=outfile, sep="\n", append=TRUE)
     cat("wait\n\n", file=outfile, append=TRUE)
     cat(paste(
-      "bash", file.path(gpa$pipeline_home, "inst", "bash", "gen_feat_reg_dir"),
+      "bash", system.file("bash/gen_feat_reg_dir", package = "fmri.pipeline"),      
       unique(dirname(thisrun))
     ), sep = "\n", file = outfile, append = TRUE)
     joblist[j] <- cluster_job_submit(outfile)

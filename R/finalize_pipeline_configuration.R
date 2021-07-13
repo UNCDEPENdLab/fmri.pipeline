@@ -5,6 +5,8 @@
 #' @param gpa A \code{glm_pipeline_arguments} object setup by \code{setup_glm_pipeline}
 #' @importFrom stringr str_count fixed
 #' @importFrom magrittr %>%
+#' @importFrom lgr get_logger
+#' @importFrom rhdf h5save
 finalize_pipeline_configuration <- function(gpa) {
 
   lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
@@ -12,6 +14,14 @@ finalize_pipeline_configuration <- function(gpa) {
   #sort out file locations
   if (is.null(gpa$group_output_directory) || gpa$group_output_directory == "default") {
     gpa$group_output_directory <- file.path(getwd(), "group_analyses", gpa$analysis_name)
+  }
+
+  gpa$sqlite_db <- file.path(gpa$working_directory, paste0(gpa$analysis_name, ".sqlite"))
+  gpa$object_cache <- file.path(gpa$working_directory, paste0(gpa$analysis_name, ".rds"))
+
+  if (is.null(gpa$sqlite_con) || !DBI::dbIsValid(gpa$sqlite_con)) {
+    lg$info("Opening SQLite connection to: %s", gpa$sqlite_db)
+    gpa$sqlite_con <- DBI::dbConnect(RSQLite::SQLite(), gpa$sqlite_db)
   }
 
   # new approach: use internal model names for creating output directories at subject level
@@ -49,8 +59,9 @@ finalize_pipeline_configuration <- function(gpa) {
   #TODO: not currently supported
   #gpa$l1_working_directory <- file.path(gpa$working_directory, gpa$outdir) # temp folder for each analysis variant
   if (is.null(gpa$force_l1_creation)) {
+    # whether to overwrite existing level 1 setup files (e.g., .fsf)
     gpa$force_l1_creation <- FALSE
-  } # whether to overwrite existing level 1 setup files (e.g., .fsf)
+  }
 
   # ---- PARALLELISM SETUP
   # pipeline_cores: number of cores used in push_pipeline when looping over l1 model variants
@@ -60,7 +71,7 @@ finalize_pipeline_configuration <- function(gpa) {
   }
 
   # l1_setup_cores defines how many cores to use when looping over subjects within a single l1 model setup
-  if (is.null(gpa$parallel$l1_setup_cores) || gpal$parallel$l1_setup_cores == "default") {
+  if (is.null(gpa$parallel$l1_setup_cores) || gpa$parallel$l1_setup_cores == "default") {
     # default to serial execution within a single l1 model variant in setup_lvl1_models
     gpa$parallel$l1_setup_cores <- 1L
   } else {
@@ -92,7 +103,7 @@ finalize_pipeline_configuration <- function(gpa) {
   if (is.null(gpa$parallel$fsl$l2_feat_memgb)) gpa$parallel$fsl$l2_feat_memgb <- "12" # 12 GB by default
   if (is.null(gpa$parallel$fsl$l3_feat_time)) gpa$parallel$fsl$l3_feat_time <- "24:00:00" # 24 hours
   if (is.null(gpa$parallel$fsl$l3_feat_memgb)) gpa$parallel$fsl$l3_feat_memgb <- "32" # 32 GB by default
-  
+
   if (is.null(gpa$parallel$fsl$compute_environment)) {
     lg$info("Using default compute environment for UNC Longleaf")
     gpa$parallel$fsl$compute_environment <- c(
@@ -141,7 +152,10 @@ finalize_pipeline_configuration <- function(gpa) {
 
   # remove bad ids before running anything further
   if (!is.null(gpa$bad_ids) && length(gpa$bad_ids) > 0L) {
+    lg$info("Removing the following IDs from data structure before beginning analysis: ", paste(gpa$bad_ids, collapse=", "))
     gpa$subject_data <- gpa$subject_data %>% filter(!id %in% gpa$bad_ids) # remove bad ids
+    gpa$run_data <- gpa$run_data %>% filter(!id %in% gpa$bad_ids) # remove bad ids
+    gpa$trial_data <- gpa$trial_data %>% filter(!id %in% gpa$bad_ids) # remove bad ids
   }
 
   # build design matrix default arguments
@@ -240,8 +254,52 @@ finalize_pipeline_configuration <- function(gpa) {
     gpa$confound_settings$subject_exclusion_columns
   ))
 
+  # handle lookup and creation of all confound files
+
+
   # numeric row number of each input to aid in tracking
   gpa$run_data$input_number <- seq_len(nrow(gpa$run_data))
+
+  lg$debug("Setting pipeline_finalized to TRUE")
+  gpa$pipeline_finalized <- TRUE
+
+  #cache gpa object to file
+  saveRDS(gpa, file=gpa$object_cache)
+
+  #save subject, run, and trial data to the database, too
+  lg$info("Writing run_data to sqlite db: %s", gpa$sqlite_db)
+  DBI::dbWriteTable(conn=gpa$sqlite_con, name="run_data", value=gpa$run_data, overwrite=TRUE)
+
+  lg$info("Writing subject_data to sqlite db: %s", gpa$sqlite_db)
+  DBI::dbWriteTable(conn=gpa$sqlite_con, name="subject_data", value=gpa$subject_data, overwrite=TRUE)
+
+  lg$info("Writing trial_data to sqlite db: %s", gpa$sqlite_db)
+  DBI::dbWriteTable(conn = gpa$sqlite_con, name = "trial_data", value = gpa$trial_data, overwrite = TRUE)
+
+  # populate confounds in SQLite database
+  # TODO: allow external $exclude_run from user, add internal calculated $calc_exclude run
+
+  gpa$run_data$exclude_run <- FALSE
+  xx <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
+    browser()
+    # this should add rows to the SQLite data for a subject if not yet present, or just return those rows if they exist
+    l1_info <- get_l1_confounds(id = gpa$run_data$id[ii], session = gpa$run_data$session[ii], run_number = gpa$run_data$run_number[ii], gpa = gpa, drop_volumes = gpa$drop_volumes)
+    insert_df_sqlite(gpa, id = gpa$run_data$id[ii], session = gpa$run_data$session[ii], run_number = gpa$run_data$run_number[ii], data=l1_info$confounds_df, table="test")
+
+    #
+    
+  })
+
+  #get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, drop_volumes=0L, last_volume=NULL, demean=TRUE) {
+
+  # determine whether to include each run
+  mrdf$exclude_run <- sapply(seq_len(nrow(mrdf)), function(rr) {
+    ll <- as.list(mrdf[rr, , drop = FALSE]) # rrth row of mrdf
+    ll[["gpa"]] <- gpa
+    ll[["run_nifti"]] <- NULL
+    ex <- do.call(get_l1_confounds, ll)
+    return(ex$exclude_run)
+  })
 
   return(gpa)
 }

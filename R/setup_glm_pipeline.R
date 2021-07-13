@@ -264,11 +264,13 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     l2_models = l2_models,
 
     # l3 analysis details
-    l3_models = l3_models
+    l3_models = l3_models,
+
+    pipeline_finalized=FALSE
   )
 
   # validate and populate any other pipeline details before execution
-  gpa <- finalize_pipeline_configuration(gpa)
+  # gpa <- finalize_pipeline_configuration(gpa)
 
   class(gpa) <- c("list", "glm_pipeline_arguments")
   return(gpa)

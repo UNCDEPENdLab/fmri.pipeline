@@ -739,7 +739,12 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   ### add diagonal contrasts
   c_diagonal <- contrast_list$diagonal
   if (isTRUE(spec$diagonal) && is.null(c_diagonal)) {
-    cnames <- spec$regressors
+    if (is.null(lmfit)) {
+      cnames <- spec$regressors
+    } else {
+      cnames <- names(coef(lmfit)) # prefer model-specific regressors (if they vary by subject)
+    }
+    
     diag_mat <- diag(length(cnames))
     rownames(diag_mat) <- paste0("EV_", cnames) # simple contrast naming for each individual regressor
     colnames(diag_mat) <- cnames # always have columns named by regressor

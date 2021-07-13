@@ -1,10 +1,10 @@
 #' Function for setting up level 1 model specifications and corresponding files
 #'
 #' @param gpa A glm_model_arguments function setup by the \code{setup_glm_pipeline} function
-#' @param to_setup A character vector of model names within \code{gpa$l1_models} whose l1
+#' @param l1_model_names A character vector of model names within \code{gpa$l1_models} whose l1
 #'    inputs should be generated. If omitted, all models within \code{gpa$l1_models} will be generated.
 #'
-#' @details The \code{to_setup} argument allows the creation of multiple l1 models to be parallelized at
+#' @details The \code{l1_model_names} argument allows the creation of multiple l1 models to be parallelized at
 #'   a superordinate level or, even better, to be spread across independent jobs on a cluster. This function
 #'   already provides the option to parallelize over subjects for a single model if \code{gpa$l1_setup_cpus}
 #'   is greater than 1.
@@ -17,13 +17,13 @@
 #' @importFrom dplyr filter pull
 #' @importFrom rlang sym
 #' @importFrom magrittr %>%
-setup_l1_models <- function(gpa, to_setup=NULL) {
+setup_l1_models <- function(gpa, l1_model_names=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
-  checkmate::assert_character(to_setup, null.ok=TRUE)
+  checkmate::assert_character(l1_model_names, null.ok=TRUE)
   checkmate::assert_data_frame(gpa$subject_data)
 
   #if no model subset is requested, output all models
-  if (is.null(to_setup)) { to_setup <- names(gpa$l1_models$models) }
+  if (is.null(l1_model_names)) { l1_model_names <- names(gpa$l1_models$models) }
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
   if (isTRUE(gpa$log_txt)) { lg$add_appender(lgr::AppenderFile$new("setup_l1_models.txt"), name="txt") }
@@ -40,7 +40,7 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
   }
 
   #FOR TESTING
-  gpa$subject_data <- gpa$subject_data[1:3,]
+  gpa$subject_data <- gpa$subject_data[1:3, ]
 
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
   all_subj_l1_list <- foreach(subj_df = iter(gpa$subject_data, by="row"), .inorder=FALSE, .packages=c("dependlab", "dplyr"),
@@ -72,10 +72,8 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
       # RNifti is unexpectedly slow compared to oro.nifti
       mr_dims <- lapply(run_nifti, function(x) { oro.nifti::readNIfTI(x, read_data = FALSE)@dim_ })
       run_lengths <- sapply(mr_dims, "[[", 5) # number of volumes is 4th dimension
-      nvoxels <- sapply(mr_dims, function(x) { prod(x[2:5]) })
+      nvoxels <- sapply(mr_dims, function(x) { prod(x[2:5]) }) # FSL nvoxels is x * y * z * t
 
-      #we also need xyz to get number of voxels
-      #run_lengths <- unname(sapply(run_nifti, function(x) { oro.nifti::readNIfTI(x, read_data=FALSE)@dim_[5L] }))
       lg$debug("Run lengths of run_nifti: %s", paste(run_lengths, collapse=", "))
 
       ## create truncated run files to end analysis 12s after last ITI (or big head movement)
@@ -105,8 +103,8 @@ setup_l1_models <- function(gpa, to_setup=NULL) {
       l1_file_setup <- list(fsl = list(), spm = list(), afni = list(), metadata = mrdf)
 
       #loop over models to output
-      for (ii in seq_along(to_setup)) {
-        this_model <- to_setup[ii]
+      for (ii in seq_along(l1_model_names)) {
+        this_model <- l1_model_names[ii]
         if (isTRUE(gpa$log_json)) { lg$add_appender(lgr::AppenderJson$new(paste0(gpa$l1_setup_log[ii], ".json")), name="json") }
         if (isTRUE(gpa$log_txt)) { lg$add_appender(lgr::AppenderFile$new(paste0(gpa$l1_setup_log[ii], ".txt")), name="txt") }
 

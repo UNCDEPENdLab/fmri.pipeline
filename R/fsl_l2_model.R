@@ -58,7 +58,7 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
     # get subject-specific model and contrast matrices
     ss_df <- gpa$l2_models$models[[l2_model_name]]$by_subject %>%
       dplyr::filter(id == !!id & session == !!session)
-  
+
     if (nrow(ss_df) == 0L) {
       lg$error("Unable to locate a subject-specific entry for id %s, session %s", id, session)
       return(NULL)
@@ -69,7 +69,7 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
       dmat <- ss_df$model_matrix[[1L]]
       cmat <- ss_df$contrasts[[1L]]
     }
-    
+
   } else {
     # TODO: wouldn't this be easier if we could just use $exclude_run in $run_data?
     dmat_rows <- gpa$run_data %>%
