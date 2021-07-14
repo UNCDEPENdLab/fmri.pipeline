@@ -944,6 +944,15 @@ respecify_l2_models_by_subject <- function(mobj, data) {
   return(mobj)
 }
 
+#' Helper function to obtain the number of volumes in a 4D nifti file
+#' 
+#' @details This function prefers to use fslval instead of an internal R library
+#'   because both oro.nifti and RNifti are rather slow to obtain a single value from
+#'   the NIfTI header
+#' 
+#' @param nifti a 4D nifti file
+#' @return the number of volumes in \code{nifti}
+#' @keywords internal
 lookup_run_volumes <- function(nifti) {
   # fslval is much faster than any internal R command. Use it, if possible
   # TODO: Make this more robust, more like runFSLCommand with path expectations
@@ -959,4 +968,94 @@ lookup_run_volumes <- function(nifti) {
   # system.time(run_volumes <- RNifti::readNifti(run_nifti[nn], internal = TRUE))
 
   return(nvol)
+}
+
+#' helper function to look at whether feat ingredients exist for a .feat/.gfeat directory
+#' 
+#' @param feat_dir an expected .feat/.gfeat directory for an analysis
+#' @param fsf_file an expected .fsf file corresponding to the feat analysis
+#' @param lg an optional lgr logger object to be used for logging. If not passed, the root
+#'   logger will be used
+#' 
+#' @return a data.frame containing information about whether the .feat analysis is complete
+#'   and whether various ingredients are present
+#' 
+#' @importFrom anytime anytime
+#' @keywords internal
+get_feat_status <- function(feat_dir, fsf_file=NULL, lg=NULL, prefix=NULL) {
+  checkmate::assert_string(feat_dir)
+  checkmate::assert_string(fsf_file, null.ok = TRUE)
+  if (is.null(lg)) lg <- lgr::get_logger() #just use root logger
+
+  # handle feat_dir with no extension
+  if (!grepl(".feat$", feat_dir)) {
+    feat_dir <- paste0(feat_dir, ".feat")
+    if (!dir.exists(feat_dir) && dir.exists(sub(".feat$", ".gfeat", feat_dir))) {
+      feat_dir <- sub(".feat$", ".gfeat", feat_dir)
+    }
+  }
+
+  if (is.null(fsf_file)) {
+    # assume that fsf of same name as feat_dir exists at same level of filesystem hierarchy
+    fsf_file <- sub("\\.g?feat$", ".fsf", feat_dir)
+  }
+
+  if (dir.exists(feat_dir) && !file.exists(fsf_file) && file.exists(file.path(feat_dir, "design.fsf"))) {
+    # fall back to design.fsf inside the .feat folder if .fsf is not present in parent folder
+    fsf_file <- file.path(feat_dir, "design.fsf")
+  }
+
+  feat_checks <- list()
+  feat_checks$feat_fsf <- fsf_file
+  feat_checks$feat_fsf_modified_date <- if (file.exists(fsf_file)) file.info(fsf_file)$mtime else as.POSIXct(NA)
+  feat_checks$feat_fsf_exists <- file.exists(fsf_file)
+  feat_checks$feat_dir <- feat_dir
+  feat_checks$feat_dir_exists <- dir.exists(feat_dir)
+  feat_checks$feat_execution_start <- as.POSIXct(NA)
+  feat_checks$feat_execution_end <- as.POSIXct(NA)
+  feat_checks$feat_execution_min <- as.POSIXct(NA)
+  feat_checks$feat_complete <- FALSE # default: FALSE for anything but a .feat_complete outcome
+  feat_checks$feat_failed <- NA # default: NA if feat hasn't even been run
+
+
+  if (dir.exists(feat_dir)) {
+    if (file.exists(file.path(feat_dir, ".feat_complete"))) {
+      lg$debug("Feat directory is complete: %s", feat_dir)
+      timing_file <- file.path(feat_dir, ".feat_complete")
+      if (file.exists(file.path(feat_dir, ".feat_fail"))) {
+        lg$warn("Both .feat_complete and .feat_fail objects exist in %s", feat_dir)
+        lg$warn("Assuming that .feat_complete reflects a successful completion of feat")
+      }
+      feat_checks$feat_complete <- TRUE
+      feat_checks$feat_failed <- FALSE
+    } else if (file.exists(file.path(feat_dir, ".feat_fail"))) {
+      lg$debug("Detected feat failure in: %s", feat_dir)
+      timing_file <- file.path(feat_dir, ".feat_fail")
+      feat_checks$feat_failed <- TRUE
+    } else {
+      timing_file <- NULL
+    }
+
+    if (!is.null(timing_file)) {
+      timing <- readLines(timing_file)
+       if (length(timing) > 0L) {
+         # convert to POSIXct object to allow for any date calculations
+         timing <- anytime::anytime(timing)
+         feat_checks$feat_execution_start <- timing[1L]
+         if (length(timing) == 2L) {
+           feat_checks$feat_execution_end <- timing[2L]
+           feat_checks$feat_execution_min <- as.numeric(difftime(timing[2L], timing[1L], units = "mins"))
+         } else {
+           lg$warn("Did not find two timing entries in %s.", timing_file)
+           lg$warn("File contents: %s", timing)
+         }
+       }
+    }
+  }
+
+  df <- as.data.frame(feat_checks)
+  if (!is.null(prefix)) { #support naming prefix like "l1_"
+    names(df) <- paste0(prefix, names(df))
+  }
+  return(df)
 }

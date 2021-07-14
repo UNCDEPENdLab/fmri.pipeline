@@ -70,7 +70,7 @@ finalize_pipeline_configuration <- function(gpa) {
     gpa$pipeline_cpus <- length(gpa$l1_models$models)
   }
 
-  # l1_setup_cores defines how many cores to use when looping over subjects within a single l1 model setup
+  # l1_setup_cores defines how many cores to use when looping over subjects within setup_l1_models
   if (is.null(gpa$parallel$l1_setup_cores) || gpa$parallel$l1_setup_cores == "default") {
     # default to serial execution within a single l1 model variant in setup_lvl1_models
     gpa$parallel$l1_setup_cores <- 1L
@@ -78,7 +78,14 @@ finalize_pipeline_configuration <- function(gpa) {
     checkmate::assert_integerish(gpa$parallel$l1_setup_cores, lower = 1)
   }
 
-  # number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
+  # l2_setup_cores defines how many cores to use when looping over models in setup_l2_models
+  if (is.null(gpa$parallel$l2_setup_cores) || gpa$parallel$l2_setup_cores == "default") {
+    # default to serial execution across all l1 and l2 models to be setup
+    gpa$parallel$l2_setup_cores <- 1L
+  } else {
+    checkmate::assert_integerish(gpa$parallel$l2_setup_cores, lower = 1)
+  }
+  
   if (is.null(gpa$parallel$slurm)) gpa$parallel$slurm <- list()
   if (is.null(gpa$parallel$torque)) gpa$parallel$torque <- list()
   if (gpa$scheduler == "slurm") {
@@ -96,6 +103,7 @@ finalize_pipeline_configuration <- function(gpa) {
     }
   }
 
+  # number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
   if (is.null(gpa$parallel$fsl$l2_cores)) gpa$parallel$fsl$l2_cores <- 20
   if (is.null(gpa$parallel$fsl$l1_feat_time)) gpa$parallel$fsl$l1_feat_time <- "6:00:00" # 6 hours
   if (is.null(gpa$parallel$fsl$l1_feat_memgb)) gpa$parallel$fsl$l1_feat_memgb <- "12" # 12 GB by default
