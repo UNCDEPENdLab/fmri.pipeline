@@ -20,6 +20,8 @@ setup_l2_models <- function(gpa, l2_model_names=NULL, l1_model_names=NULL) {
   checkmate::assert_character(l1_model_names, null.ok = TRUE)
   checkmate::assert_character(l2_model_names, null.ok = TRUE)
   checkmate::assert_data_frame(gpa$run_data)
+  checkmate::assert_class(gpa$l2_models, "hi_model_set")
+  checkmate::assert_class(gpa$l1_models, "l1_model_set")
 
   # if no l2 model subset is requested, output all models
   if (is.null(l2_model_names)) l2_model_names <- names(gpa$l2_models$models)
@@ -37,7 +39,7 @@ setup_l2_models <- function(gpa, l2_model_names=NULL, l1_model_names=NULL) {
     dplyr::select(id, session, run_number, exclude_run, exclude_subject) %>%
     dplyr::filter(exclude_run == TRUE | exclude_subject == TRUE)
 
-  if (nrow(excluded_runs) > 1L) {
+  if (nrow(excluded_runs) > 0L) {
     lg$info("In setup_l2_models, the following runs will be excluded from L2 modeling: ")
     lg$info(
       "  subject: %s, session: %s, run_number: %s",
@@ -93,7 +95,7 @@ setup_l2_models <- function(gpa, l2_model_names=NULL, l1_model_names=NULL) {
           dplyr::select(id, session, run_number, l1_model, l1_feat_fsf, l1_feat_dir)
 
         # handle run and subject exclusions by joining against good runs
-        to_run <- dplyr::left_join(good_runs, to_run, by = c("id", "session", "run_number"))
+        to_run <- dplyr::inner_join(good_runs, to_run, by = c("id", "session", "run_number"))
         data.table::setDT(to_run) #convert to data.table for split
 
         by_subj_session <- split(to_run, by=c("id", "session"))

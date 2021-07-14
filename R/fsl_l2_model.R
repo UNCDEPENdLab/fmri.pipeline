@@ -71,12 +71,11 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
     }
 
   } else {
-    # TODO: wouldn't this be easier if we could just use $exclude_run in $run_data?
+    #find rows in run_data that match this subject
     dmat_rows <- gpa$run_data %>%
       dplyr::mutate(rownum = 1:n()) %>%
       dplyr::filter(id == !!id & session == !!session) %>%
-      dplyr::select(id, session, run_number, rownum) %>%
-      dplyr::right_join(l1_df, by=c("id", "session", "run_number")) %>% # enforce drops
+      dplyr::filter(exclude_run == FALSE) %>%
       dplyr::pull(rownum)
 
     if (length(dmat_rows) != nrow(l1_df)) {

@@ -17,7 +17,7 @@
 #' @importFrom checkmate assert_class assert_character assert_data_frame
 #' @importFrom lgr get_logger
 #' @export
-setup_l2_models <- function(gpa, l3_model_names=NULL, l2_model_names=NULL, l1_model_names=NULL) {
+setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l1_model_names = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_character(l3_model_names, null.ok = TRUE)
   checkmate::assert_character(l2_model_names, null.ok = TRUE)
@@ -60,7 +60,7 @@ setup_l2_models <- function(gpa, l3_model_names=NULL, l2_model_names=NULL, l1_mo
     dplyr::filter(exclude_run == FALSE & exclude_subject == FALSE)
 
   run_data <- gpa$run_data %>%
-    right_join(l1_meta, by=c("id", "session", "run_number"))
+    right_join(l1_meta, by = c("id", "session", "run_number"))
 
   if (nrow(l1_meta) == 0L) {
     msg <- "In setup_l2_models, no runs survived the exclude_subject and exclude_run step."
@@ -77,8 +77,10 @@ setup_l2_models <- function(gpa, l3_model_names=NULL, l2_model_names=NULL, l1_mo
   if (is.null(gpa$l1_model_setup) || !inherits(gpa$l1_model_setup, "l1_setup")) {
     lg$error("No l1_model_setup found in the glm pipeline object.")
     lg$error("You must run setup_l1_models before running setup_l2_models.")
-    stop("No l1_model_setup found in the glm pipeline object.",
-    "You must run setup_l1_models before running setup_l2_models.")
+    stop(
+      "No l1_model_setup found in the glm pipeline object.",
+      "You must run setup_l1_models before running setup_l2_models."
+    )
   }
 
   # respecify L2 models for each subject based on available runs
@@ -97,56 +99,56 @@ setup_l2_models <- function(gpa, l3_model_names=NULL, l2_model_names=NULL, l1_mo
       for (kk in seq_along(l3_model_names)) {
         this_l3_model <- l3_model_names[kk]
 
-      if ("fsl" %in% gpa$glm_software) {
-        # get list of runs to examine/include
-        to_run <- gpa$l1_model_setup$fsl %>%
-          dplyr::filter(l1_model == !!this_l1_model) %>%
-          dplyr::select(id, session, run_number, l1_model, l1_feat_fsf, l1_feat_dir)
+        if ("fsl" %in% gpa$glm_software) {
+          # get list of runs to examine/include
+          to_run <- gpa$l1_model_setup$fsl %>%
+            dplyr::filter(l1_model == !!this_l1_model) %>%
+            dplyr::select(id, session, run_number, l1_model, l1_feat_fsf, l1_feat_dir)
 
-        # handle run and subject exclusions (exclude_run should be FALSE in l1_meta, per filter above)
-        to_run <- dplyr::left_join(l1_meta, to_run, by = c("id", "session", "run_number"))
-        data.table::setDT(to_run) #convert to data.table for split
+          # handle run and subject exclusions (exclude_run should be FALSE in l1_meta, per filter above)
+          to_run <- dplyr::left_join(l1_meta, to_run, by = c("id", "session", "run_number"))
+          data.table::setDT(to_run) # convert to data.table for split
 
-        by_subj_session <- split(to_run, by=c("id", "session"))
+          by_subj_session <- split(to_run, by = c("id", "session"))
 
-        # setup Feat L2 files for each id and session
-        for (l1_df in by_subj_session) {
-          subj_id <- l1_df$id[1L]
-          subj_session <- l1_df$session[1L]
-          feat_l3_df[[ff]] <- tryCatch({
-              fsl_l2_model(
-                l1_df = l1_df,
-                l2_model_name = this_l2_model, gpa = gpa
-              )
-            },
-            error = function(e) {
-              lg$error(
-                "Problem with fsl_l2_model. L1 Model: %s, L2 Model: %s, Subject: %s, Session: %s",
-                this_l1_model, this_l2_model, subj_id, subj_session
-              )
-              lg$error("Error message: %s", as.character(e))
-              return(NULL)
-            }
-          )
+          # setup Feat L2 files for each id and session
+          for (l1_df in by_subj_session) {
+            subj_id <- l1_df$id[1L]
+            subj_session <- l1_df$session[1L]
+            feat_l3_df[[ff]] <- tryCatch(
+              {
+                fsl_l2_model(
+                  l1_df = l1_df,
+                  l2_model_name = this_l2_model, gpa = gpa
+                )
+              },
+              error = function(e) {
+                lg$error(
+                  "Problem with fsl_l2_model. L1 Model: %s, L2 Model: %s, Subject: %s, Session: %s",
+                  this_l1_model, this_l2_model, subj_id, subj_session
+                )
+                lg$error("Error message: %s", as.character(e))
+                return(NULL)
+              }
+            )
 
-          if (!is.null(feat_l3_df[1L])) ff <- ff + 1 #increment position in multi-subject list
+            if (!is.null(feat_l3_df[1L])) ff <- ff + 1 # increment position in multi-subject list
+          }
         }
 
-      }
+        if ("spm" %in% gpa$glm_software) {
+          lg$warn("spm not supported in setup_l2_models")
+        }
 
-      if ("spm" %in% gpa$glm_software) {
-        lg$warn("spm not supported in setup_l2_models")
-      }
-
-      if ("afni" %in% gpa$glm_software) {
-        lg$warn("afni not supported in setup_l2_models")
-      }
+        if ("afni" %in% gpa$glm_software) {
+          lg$warn("afni not supported in setup_l2_models")
+        }
       }
     }
   }
 
   all_subj_l2_combined <- list(
-    fsl=rbindlist(feat_l3_df)
+    fsl = rbindlist(feat_l3_df)
   )
 
   class(all_subj_l2_combined) <- c("list", "l2_setup")
