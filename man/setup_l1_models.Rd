@@ -21,3 +21,6 @@ The \code{l1_model_names} argument allows the creation of multiple l1 models to 
   already provides the option to parallelize over subjects for a single model if \code{gpa$l1_setup_cpus}
   is greater than 1.
 }
+\author{
+Michael Hallquist
+}

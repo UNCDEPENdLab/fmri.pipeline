@@ -6,7 +6,6 @@
 #' @importFrom stringr str_count fixed
 #' @importFrom magrittr %>%
 #' @importFrom lgr get_logger
-#' @importFrom rhdf h5save
 finalize_pipeline_configuration <- function(gpa) {
 
   lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
@@ -58,10 +57,6 @@ finalize_pipeline_configuration <- function(gpa) {
 
   #TODO: not currently supported
   #gpa$l1_working_directory <- file.path(gpa$working_directory, gpa$outdir) # temp folder for each analysis variant
-  if (is.null(gpa$force_l1_creation)) {
-    # whether to overwrite existing level 1 setup files (e.g., .fsf)
-    gpa$force_l1_creation <- FALSE
-  }
 
   # ---- PARALLELISM SETUP
   # pipeline_cores: number of cores used in push_pipeline when looping over l1 model variants
@@ -182,6 +177,33 @@ finalize_pipeline_configuration <- function(gpa) {
   # identify and validate niftis for each run
   gpa <- lookup_nifti_inputs(gpa)
 
+  #####
+  # handle GLM settings and defaults
+  if (is.null(gpa$glm_settings) || gpa$glm_settings[1L] == "default") {
+    lg$info("Using default settings for GLM implementation")
+    gpa$glm_settings <- list(
+      fsl = list(),
+      afni = list(),
+      spm = list()
+    )
+  }
+
+  if (is.null(gpa$glm_settings$fsl$force_l1_creation)) {
+    # whether to overwrite existing level 1 setup files (e.g., .fsf)
+    gpa$glm_settings$fsl$force_l1_creation <- FALSE
+  }
+
+  if (is.null(gpa$glm_settings$fsl$force_l2_creation)) {
+    # whether to overwrite existing level 2 setup files (e.g., .fsf)
+    gpa$glm_settings$fsl$force_l2_creation <- FALSE
+  }
+
+  if (is.null(gpa$glm_settings$fsl$force_l3_creation)) {
+    # whether to overwrite existing level 3 setup files (e.g., .fsf)
+    gpa$glm_settings$fsl$force_l3_creation <- FALSE
+  }
+
+  #####
   # populate confounds
   if (!is.null(gpa$confound_settings$motion_params_file)) {
     checkmate::assert_string(gpa$confound_settings$motion_params_file)

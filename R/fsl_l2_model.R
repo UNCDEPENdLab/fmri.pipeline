@@ -1,21 +1,20 @@
 #' Estimate a level 2 (subject) model using FSL FEAT with fixed effects integration of runs
 #'
-#' @param l1_df a data.frame containing all runs for a single subject and a single l1 model
+#' @param l1_df a data.frame containing all runs for a single subject and a single l1 model. This
+#'   data.frame defines the inputs for the L2 analysis (i.e., which runs to combine).
 #' @param l2_model_name a model string in gpa$l2_models containing the L2 model to setup
 #' @param gpa a \code{glm_pipeline_arguments} object containing model specification
 #' @param execute_feat a logical indicating whether to run the L2 model after creating it
-#' @param force a logical indicating whether to re-create L2 fsfs
 #'
 #' @importFrom dplyr mutate filter select right_join pull
 #' @author Michael Hallquist
 #' @export
-fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, force=FALSE) {
+fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
   checkmate::assert_data_frame(l1_df)
   checkmate::assert_subset(c("id", "session", "l1_model"), names(l1_df))
   checkmate::assert_string(l2_model_name) # single l2 model
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_logical(execute_feat, len=1L)
-  checkmate::assert_logical(force, len=1L)
 
   lg <- lgr::get_logger("glm_pipeline/l2_setup")
 
@@ -42,7 +41,7 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
   session <- l1_df$session[1L]
   l1_model <- l1_df$l1_model[1L]
   n_l1_copes <- gpa$n_l1_copes[l1_model] # number of lvl1 copes to combine for this model
-  l1_feat_dirs <- l1_df$l1_feat_dir
+  l1_feat_dirs <- l1_df$feat_dir
 
   # tracking data frame for this model
   feat_l2_df <- data.frame(
@@ -92,7 +91,6 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
 
     # obtain contrasts for this L2 model
     cmat <- gpa$l2_models$models[[l2_model_name]]$contrasts # l2 model contrasts
-
   }
 
   # generate FSL EV syntax for these regressors
@@ -100,9 +98,6 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
 
   # generate FSF contrast syntax for this setup
   contrast_syntax <- generate_fsf_contrast_syntax(cmat)
-
-  # need to support respecification of model per subject
-  # for now, just subset the correct rows of the model matrix
 
   l2_fsf_syntax <- readLines(system.file("feat_lvl2_nparam_template.fsf", package = "fmri.pipeline"))
 
@@ -132,6 +127,12 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
   l2_feat_dir <- file.path(dirname(l1_feat_dirs[1L]), paste0("FEAT_LVL2_", l2_model_name, ".gfeat"))
   l2_feat_fsf <- file.path(dirname(l1_feat_dirs[1L]), paste0("FEAT_LVL2_", l2_model_name, ".fsf"))
 
+  # add columns regarding whether inputs already exist and FEAT is already complete
+  feat_l2_df <- feat_l2_df %>%
+    dplyr::bind_cols(get_feat_status(feat_dir = l2_feat_dir, feat_fsf = l2_feat_fsf, lg = lg))
+
+  feat_l2_df$to_run <- !feat_l2_df$feat_complete
+
   lg$debug("Expected L2 feat directory is: %s", l2_feat_dir)
   lg$debug("Expected L2 feat fsf is: %s", l2_feat_fsf)
 
@@ -139,29 +140,15 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE, for
   # .OUTPUTDIR. : the feat output location
   l2_fsf_syntax <- gsub(".OUTPUTDIR.", sub("\\.gfeat$", "", l2_feat_dir), l2_fsf_syntax, fixed = TRUE)
 
-  feat_l2_df$l2_feat_fsf <- l2_feat_fsf
-  feat_l2_df$l2_feat_dir <- l2_feat_dir
-  feat_l2_df$fsf_modified_date <- if (file.exists(l2_feat_fsf)) file.info(l2_feat_fsf)$mtime else as.POSIXct(NA)
-  feat_l2_df$l2_feat_dir_exists <- dir.exists(l2_feat_dir)
-  if (dir.exists(l2_feat_dir) && file.exists(file.path(l2_feat_dir, ".feat_complete"))) {
-    l2_feat_complete <- readLines(file.path(l2_feat_dir, ".feat_complete"))[2]
-  } else {
-    l2_feat_complete <- NA_character_
-  }
-  feat_l2_df$l2_feat_complete <- l2_feat_complete
+  # handle custom L1 FSF syntax
+  l2_fsf_syntax <- add_custom_feat_syntax(l2_fsf_syntax, gpa$additional$feat_l2_args, lg)
 
   # skip re-creation of FSF and do not run below unless force==TRUE
-  if (!file.exists(l2_feat_fsf) || isTRUE(force)) {
+  if (!file.exists(l2_feat_fsf) || isTRUE(gpa$glm_settings$fsl$force_l2_creation)) {
     lg$info("Writing L2 FSF syntax to: %s", l2_feat_fsf)
     cat(l2_fsf_syntax, file = l2_feat_fsf, sep = "\n")
   } else {
     lg$info("Skipping existing L2 FSF syntax: %s", l2_feat_fsf)
-  }
-
-  if (isTRUE(force) || !dir.exists(l2_feat_dir) || is.na(l2_feat_complete)) {
-    feat_l2_df$to_run <- TRUE
-  } else {
-    feat_l2_df$to_run <- FALSE
   }
 
   # not currently supporting l2 execution here

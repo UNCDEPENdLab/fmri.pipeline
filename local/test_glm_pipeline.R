@@ -13,6 +13,7 @@ setwd("/proj/mnhallqlab/users/michael/fmri.pipeline/R")
 source("setup_glm_pipeline.R")
 source("finalize_pipeline_configuration.R")
 source("glm_helper_functions.R")
+source("fsl_helper_functions.R")
 source("fsl_l1_model.R")
 source("setup_l1_models.R")
 source("specify_contrasts.R")
@@ -25,6 +26,8 @@ source("lookup_nifti_inputs.R")
 source("get_l1_confounds.R")
 source("run_feat_sepjobs.R")
 source("cluster_job_submit.R")
+source("insert_df_sqlite.R")
+source("read_df_sqlite.R")
 #source("build_design_matrix.R")
 
 trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
@@ -69,14 +72,14 @@ run_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example_fil
 
 #test naming collisions
 trial_df <- trial_df %>% rename(subid = id) %>% mutate(id=subid)
-run_df <- run_df %>% rename(subid = id, run=run_number) %>% mutate(id=subid)
+run_df <- run_df %>% rename(subid = id) %>% mutate(id=subid)
 subject_df <- subject_df %>% rename(subid = id) %>% mutate(id=subid)
 
 gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm",
   working_directory = "/proj/mnhallqlab/users/michael/fmri_test",
   subject_data=subject_df, run_data=run_df, trial_data=trial_df,
   tr=1.0,
-  vm=c(id="subid", run_number="run"),
+  vm=c(id="subid"),
   fmri_file_regex="nfaswuktm_clock[1-8]_5\\.nii\\.gz",
   fmri_path_regex="clock[0-9]",
   run_number_regex=".*clock([0-9]+)_5.*",
@@ -87,16 +90,16 @@ gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm",
     confound_input_file="nuisance_regressors.txt",
     confound_input_colnames = c("csf", "dcsf", "wm", "dwm"),
     l1_confound_regressors = c("csf", "dcsf", "wm", "dwm"),
-    exclude_run = "max(FD) > 4 | sum(FD > .5)/length(FD) > .15", #this must evaluate to a scalar per run
+    exclude_run = "max(FD) > 5 | sum(FD > .5)/length(FD) > .15", #this must evaluate to a scalar per run
     exclude_subject = "n_good_runs < 4"
   )
 )
 
-rm(trial_df)
+#rm(trial_df)
 
 gpa <- finalize_pipeline_configuration(gpa)
 
-#gpa <- build_l1_models(gpa)
+gpa <- build_l1_models(gpa)
 
 # interactive model builder for level 2
 gpa <- build_l2_models(gpa)
@@ -137,6 +140,8 @@ jobs <- run_feat_sepjobs(gpa, level=1L)
 gpa <- setup_l2_models(gpa)
 
 save(gpa, file="gpa_tmp_9Jul2021.RData")
+load(file="gpa_tmp_9Jul2021.RData")
+
 
 jobs <- run_feat_sepjobs(gpa, level=2)
 

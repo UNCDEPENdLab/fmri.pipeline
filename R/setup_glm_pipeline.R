@@ -71,7 +71,8 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                run_number_regex = ".*run-*([0-9]+).*", drop_volumes = 0L,
                                l1_models = "prompt", l2_models = "prompt", l3_models = "prompt",
                                glm_software = "fsl", n_expected_runs = 1L,
-                               use_preconvolve = TRUE, truncate_runs = FALSE, force_l1_creation = FALSE,
+                               use_preconvolve = TRUE, truncate_runs = FALSE,
+                               glm_settings = "default",
                                confound_settings = list(
                                  motion_params_file = "motion.par", # assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
                                  motion_params_colnames = c("rx", "ry", "rz", "tx", "ty", "tz"),
@@ -121,7 +122,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   checkmate::assert_character(glm_software)
   checkmate::assert_logical(use_preconvolve, null.ok = FALSE)
   checkmate::assert_logical(truncate_runs, null.ok = FALSE)
-  checkmate::assert_logical(force_l1_creation, null.ok = FALSE)
+  
 
   glm_software <- tolower(glm_software)
   checkmate::assert_subset(glm_software, c("fsl", "spm", "afni"))
@@ -247,7 +248,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     tr = tr,
     multi_run = multi_run, # 2- or 3-level analysis
     truncate_runs = truncate_runs,
-    force_l1_creation = force_l1_creation,
+    glm_settings = glm_settings,
     confound_settings = confound_settings,
     n_expected_runs = n_expected_runs,
     output_settings = output_settings,

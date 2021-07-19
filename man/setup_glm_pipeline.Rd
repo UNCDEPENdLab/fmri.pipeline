@@ -29,7 +29,7 @@ setup_glm_pipeline(
   n_expected_runs = 1L,
   use_preconvolve = TRUE,
   truncate_runs = FALSE,
-  force_l1_creation = FALSE,
+  glm_settings = "default",
   confound_settings = list(motion_params_file = "motion.par", motion_params_colnames =
     c("rx", "ry", "rz", "tx", "ty", "tz"), confound_input_file = NULL,
     confound_input_colnames = NULL, l1_confound_regressors = NULL, exclude_run =

@@ -8,15 +8,19 @@
 #'   a superordinate level or, even better, to be spread across independent jobs on a cluster. This function
 #'   already provides the option to parallelize over subjects for a single model if \code{gpa$l1_setup_cpus}
 #'   is greater than 1.
+#' 
+#' @author Michael Hallquist
 #'
 #' @importFrom checkmate assert_class assert_character
 #' @importFrom doParallel registerDoParallel
-#' @importFrom foreach registerDoSEQ
+#' @importFrom foreach foreach registerDoSEQ
+#' @importFrom iterators iter
 #' @importFrom parallel makeCluster stopCluster
 #' @importFrom RNifti niftiHeader
 #' @importFrom dplyr filter pull
 #' @importFrom rlang sym
 #' @importFrom magrittr %>%
+#' @export
 setup_l1_models <- function(gpa, l1_model_names=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_character(l1_model_names, null.ok=TRUE)
@@ -30,6 +34,19 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
   if (isTRUE(gpa$log_txt)) { lg$add_appender(lgr::AppenderFile$new("setup_l1_models.txt"), name="txt") }
 
+  # TODO: This is a mess if use the l1_model_names since we will always be overwriting what's in the l1_model_setup
+  # data.frame. We need more of an append/update approach, perhaps like the sqlite setup for the overall pipeline.
+  if ("l1_model_setup" %in% names(gpa)) {
+    lg$info("Found existing l1_model_setup field. Will refresh status of l1 models but not attempt to setup new models.")
+    refresh_l1 <- gpa$l1_model_setup$fsl %>%
+      dplyr::select(feat_dir, feat_fsf) %>%
+      purrr::pmap_dfr(get_feat_status, lg = lg)
+
+    # copy back relevant columns into data structure
+    gpa$l1_model_setup$fsl[, names(refresh_l1)] <- refresh_l1
+    return(gpa)
+  }
+
   #setup parallel worker pool, if requested
   if (gpa$parallel$l1_setup_cores > 1L) {
     lg$info("Initializing l1 setup cluster with %d cores", gpa$parallel$l1_setup_cores)
@@ -42,7 +59,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   }
 
   #FOR TESTING
-  gpa$subject_data <- gpa$subject_data[1:3, ]
+  #gpa$subject_data <- gpa$subject_data[1:3, ]
 
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
   all_subj_l1_list <- foreach(subj_df = iter(gpa$subject_data, by="row"), .inorder=FALSE, .packages=c("dependlab", "dplyr"),
@@ -162,13 +179,19 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         if ("fsl" %in% gpa$glm_software) {
           #Setup FSL run-level models for each combination of signals
           #Returns a data.frame of feat l1 inputs and the fsf file
-          feat_l1_df <- tryCatch({fsl_l1_model(id=subj_id, session=subj_session, l1_confound_files=l1_confound_files, d_obj=d_obj,
-          gpa = gpa, this_model, nvoxels = nvoxels)},
-            error=function(e) {
+          feat_l1_df <- tryCatch(
+            {
+              fsl_l1_model(
+                id = subj_id, session = subj_session, l1_confound_files = l1_confound_files, d_obj = d_obj,
+                gpa = gpa, this_model, nvoxels = nvoxels
+              )
+            },
+            error = function(e) {
               lg$error("Problem with fsl_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)
               lg$error("Error message: %s", as.character(e))
               return(NULL)
-            })
+            }
+          )
 
           if (!is.null(feat_l1_df)) {
             #add to tracking data.frame (simple, inefficient append)

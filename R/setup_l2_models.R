@@ -14,8 +14,11 @@
 #' @author Michael Hallquist
 #' @importFrom checkmate assert_class assert_character assert_data_frame
 #' @importFrom lgr get_logger
+#' @importFrom iterators iter
+#' @importFrom doParallel registerDoParallel
+#' @importFrom foreach foreach registerDoSEQ
 #' @export
-setup_l2_models <- function(gpa, l2_model_names=NULL, l1_model_names=NULL) {
+setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_character(l1_model_names, null.ok = TRUE)
   checkmate::assert_character(l2_model_names, null.ok = TRUE)
@@ -34,6 +37,17 @@ setup_l2_models <- function(gpa, l2_model_names=NULL, l1_model_names=NULL) {
   lg$debug("L2 model: %s", l2_model_names)
   lg$debug("In setup_l2_models, passing the following L1 models to L2:")
   lg$debug("L1 model: %s", l1_model_names)
+
+  # setup parallel worker pool, if requested
+  if (!is.null(gpa$parallel$l2_setup_cores) && gpa$parallel$l2_setup_cores > 1L) {
+    lg$info("Initializing l2 setup cluster with %d cores", gpa$parallel$l2_setup_cores)
+    cl <- parallel::makeCluster(gpa$parallel$l2_setup_cores)
+    doParallel::registerDoParallel(cl)
+    on.exit(try(parallel::stopCluster(cl))) # cleanup pool upon exit of this function
+  } else {
+    lg$info("Initializing l2 setup with serial execution")
+    foreach::registerDoSEQ() # formally register a sequential 'pool' so that dopar is okay
+  }
 
   excluded_runs <- gpa$run_data %>%
     dplyr::select(id, session, run_number, exclude_run, exclude_subject) %>%
@@ -80,64 +94,84 @@ setup_l2_models <- function(gpa, l2_model_names=NULL, l1_model_names=NULL) {
     gpa$l2_models$models[[mname]] <- respecify_l2_models_by_subject(gpa$l2_models$models[[mname]], run_data)
   }
 
+  # refresh l1 model status in $l1_model_setup
+  if ("fsl" %in% gpa$glm_software) {
+    lg$info("Refreshing L1 Feat model status prior to setting up L2")
+    refresh_l1 <- gpa$l1_model_setup$fsl %>%
+      dplyr::select(feat_dir, feat_fsf) %>%
+      purrr::pmap_dfr(get_feat_status, lg=lg)
+
+    # copy back relevant columns into data structure
+    gpa$l1_model_setup$fsl[, names(refresh_l1)] <- refresh_l1
+  }
+
   # loop over and setup all requested combinations of L1 and L2 models
-  feat_l2_df <- list()
-  ff <- 1
-  for (ii in seq_along(l1_model_names)) {
-    this_l1_model <- l1_model_names[ii]
-    for (jj in seq_along(l2_model_names)) {
-      this_l2_model <- l2_model_names[jj]
+  model_set <- expand.grid(l1_model = l1_model_names, l2_model = l2_model_names, stringsAsFactors = FALSE)
+  all_l2_list <- foreach(
+    model_info = iter(model_set, by = "row"), .inorder = FALSE,
+    .packages = c("dependlab", "dplyr", "data.table"),
+    .export = c("lg", "gpa", "fsl_l2_model")
+  ) %dopar% {
 
-      if ("fsl" %in% gpa$glm_software) {
-        # get list of runs to examine/include
-        to_run <- gpa$l1_model_setup$fsl %>%
-          dplyr::filter(l1_model == !!this_l1_model) %>%
-          dplyr::select(id, session, run_number, l1_model, l1_feat_fsf, l1_feat_dir)
+    model_info <- model_info # avoid complaints about visible global binding in R CMD check
+    this_l1_model <- model_info$l1_model
+    this_l2_model <- model_info$l2_model
 
-        # handle run and subject exclusions by joining against good runs
-        to_run <- dplyr::inner_join(good_runs, to_run, by = c("id", "session", "run_number"))
-        data.table::setDT(to_run) #convert to data.table for split
+    l2_file_setup <- list(fsl = list(), spm = list(), afni = list())
 
-        by_subj_session <- split(to_run, by=c("id", "session"))
+    if ("fsl" %in% gpa$glm_software) {
+      # get list of runs to examine/include
+      to_run <- gpa$l1_model_setup$fsl %>%
+        dplyr::filter(l1_model == !!this_l1_model) %>%
+        dplyr::select(id, session, run_number, l1_model, feat_fsf, feat_dir)
 
-        # setup Feat L2 files for each id and session
-        for (l1_df in by_subj_session) {
-          subj_id <- l1_df$id[1L]
-          subj_session <- l1_df$session[1L]
-          feat_l2_df[[ff]] <- tryCatch({
-              fsl_l2_model(
-                l1_df = l1_df,
-                l2_model_name = this_l2_model, gpa = gpa
-              )
-            },
-            error = function(e) {
-              lg$error(
-                "Problem with fsl_l2_model. L1 Model: %s, L2 Model: %s, Subject: %s, Session: %s",
-                this_l1_model, this_l2_model, subj_id, subj_session
-              )
-              lg$error("Error message: %s", as.character(e))
-              return(NULL)
-            }
-          )
+      # handle run and subject exclusions by joining against good runs
+      to_run <- dplyr::inner_join(good_runs, to_run, by = c("id", "session", "run_number"))
+      data.table::setDT(to_run) # convert to data.table for split
 
-          if (!is.null(feat_l2_df[1L])) ff <- ff + 1 #increment position in multi-subject list
+      by_subj_session <- split(to_run, by = c("id", "session"))
+
+      # setup Feat L2 files for each id and session
+      for (l1_df in by_subj_session) {
+        subj_id <- l1_df$id[1L]
+        subj_session <- l1_df$session[1L]
+        feat_l2_df <- tryCatch({
+          fsl_l2_model(
+            l1_df = l1_df,
+            l2_model_name = this_l2_model, gpa = gpa
+          )},
+          error = function(e) {
+            lg$error(
+              "Problem with fsl_l2_model. L1 Model: %s, L2 Model: %s, Subject: %s, Session: %s",
+              this_l1_model, this_l2_model, subj_id, subj_session
+            )
+            lg$error("Error message: %s", as.character(e))
+            return(NULL)
+          }
+        )
+
+        if (!is.null(feat_l2_df)) {
+          # add to tracking data.frame
+          l2_file_setup$fsl <- rbind(l2_file_setup$fsl, feat_l2_df)
         }
-
       }
-
-      if ("spm" %in% gpa$glm_software) {
-        lg$warn("spm not supported in setup_l2_models")
-      }
-
-      if ("afni" %in% gpa$glm_software) {
-        lg$warn("afni not supported in setup_l2_models")
-      }
-
     }
+
+    if ("spm" %in% gpa$glm_software) {
+      lg$warn("spm not supported in setup_l2_models")
+    }
+
+    if ("afni" %in% gpa$glm_software) {
+      lg$warn("afni not supported in setup_l2_models")
+    }
+
+    return(l2_file_setup)
   }
 
   all_subj_l2_combined <- list(
-    fsl=rbindlist(feat_l2_df)
+    fsl = rbindlist(lapply(all_l2_list, "[[", "fsl"))
+    # spm = rbindlist(lapply(all_l2_list, "[[", "spm"))
+    # afni = rbindlist(lapply(all_l2_list, "[[", "afni"))
   )
 
   class(all_subj_l2_combined) <- c("list", "l2_setup")

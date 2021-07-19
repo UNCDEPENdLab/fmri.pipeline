@@ -52,7 +52,7 @@ fsl_l1_model <- function(
   # TODO: this is not implemented and may not be necessary
   if (dir.exists(fsl_run_output_dir) &&
     file.exists(file.path(fsl_run_output_dir, "feat_l1_inputs.rds")) &&
-    isFALSE(gpa$force_l1_creation)) {
+    isFALSE(gpa$glm_settings$fsl$force_l1_creation)) {
     lg$info("%s exists. Skipping l1 fsf setup in fsl_l1_model().", fsl_run_output_dir)
     subj_l1_spec <- readRDS(file.path(fsl_run_output_dir, "feat_l1_inputs.rds"))
   }
@@ -63,10 +63,9 @@ fsl_l1_model <- function(
 
   feat_l1_df <- data.frame(
     id = id, session = session, run_number = d_obj$runs_to_output, run_volumes = d_obj$run_volumes,
-    run_nifti = run_nifti, l1_model = model_name, l1_feat_fsf = NA_character_, l1_feat_dir = NA_character_,
-    l1_feat_dir_exists = NA_integer_, l1_feat_complete=NA_integer_, fsf_modified_date = as.POSIXct(NA),
-    l1_confound_file = NA_character_, to_run=as.logical(NA)
+    run_nifti = run_nifti, l1_model = model_name, l1_confound_file = NA_character_, to_run = as.logical(NA)
   )
+  feat_info <- list() #to hold status of feat runs
   all_l1_feat_fsfs <- c()
 
   #FSL computes first-level models on individual runs
@@ -101,6 +100,7 @@ fsl_l1_model <- function(
     # TODO: perhaps support flexible names in the future
     l1_feat_fsf <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr], ".fsf"))
     l1_feat_dir <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr]))
+    feat_info[[rr]] <- get_feat_status(feat_dir = l1_feat_dir, feat_fsf = l1_feat_fsf, lg = lg)
 
     # search and replace within fsf file for appropriate sections
     # .OUTPUTDIR. is the feat output location
@@ -115,28 +115,8 @@ fsl_l1_model <- function(
     this_template <- gsub(".TR.", d_obj$tr, this_template, fixed=TRUE)
     this_template <- gsub(".NVOXELS.", nvoxels[rr], this_template, fixed=TRUE)
 
-    #handle additional custom feat level 1 fields in fsf syntax
-    if (!is.null(gpa$additional$feat_l1_args)) {
-      for (ii in seq_along(gpa$additional$feat_l1_args)) {
-        this_name <- names(gpa$additional$feat_l1_args)[ii]
-        this_value <- gpa$additional$feat_l1_args[[ii]]
-        if (length(this_value) > 1L) {
-          lg$warn("feat_l1_args: Cannot handle settings with multiple values: %s. Skipping out.", this_name)
-          next
-        } else {
-          lg$debug("Adding custom feat l1 setting: %s = %s", this_name, this_value)
-          if (any(grepl(paste0("set fmri(", this_name, ")"), this_template, fixed=TRUE))) {
-            lg$debug("Substituting existing value of feat l1 setting: %s", this_name)
-            this_template <- gsub(paste0("(set fmri\\s*\\(", this_name, "\\))\\s*(.*)"), paste0("\\1 ", this_value),
-              this_template,
-              perl = TRUE
-            )
-          } else {
-            this_template <- c(this_template, paste0("set fmri(", this_name, ") ", this_value))
-          }
-        }
-      }
-    }
+    # handle custom L1 FSF syntax
+    this_template <- add_custom_feat_syntax(this_template, gpa$additional$feat_l1_args, lg)
 
     if (isTRUE(gpa$use_preconvolve)) {
       lg$info("Using preconvolved regressors in Feat level 1 analysis")
@@ -164,26 +144,8 @@ fsl_l1_model <- function(
       stop("cannot use FSL internal timing files right this moment...")
     }
 
-    feat_l1_df$l1_feat_fsf[rr] <- l1_feat_fsf
-    feat_l1_df$l1_feat_dir[rr] <- paste0(l1_feat_dir, ".feat") #add .feat extension, which is appended internally by FEAT
-    feat_l1_df$l1_feat_dir_exists <- dir.exists(feat_l1_df$l1_feat_dir[rr])
-    feat_l1_df$fsf_modified_date[rr] <- if (file.exists(l1_feat_fsf)) file.info(l1_feat_fsf)$mtime else as.POSIXct(NA)
-
-    if (dir.exists(l1_feat_dir) && file.exists(file.path(l1_feat_dir, ".feat_complete"))) {
-      l1_feat_complete <- readLines(file.path(l1_feat_dir, ".feat_complete"))[2]
-    } else {
-      l1_feat_complete <- NA_character_
-    }
-    feat_l1_df$l1_feat_complete[rr] <- l1_feat_complete
-
-    if (!dir.exists(feat_l1_df$l1_feat_dir[rr]) || is.na(l1_feat_complete)) {
-      feat_l1_df$to_run[rr] <- TRUE
-    } else {
-      feat_l1_df$to_run[rr] <- FALSE
-    }
-
     #skip re-creation of FSF and do not run below unless force_l1_creation==TRUE
-    if (file.exists(l1_feat_fsf) && isFALSE(gpa$force_l1_creation)) {
+    if (file.exists(l1_feat_fsf) && isFALSE(gpa$glm_settings$fsl$force_l1_creation)) {
       lg$info("Skipping existing feat fsf file: %s", l1_feat_fsf)
       next
     }
@@ -193,6 +155,12 @@ fsl_l1_model <- function(
 
     all_l1_feat_fsfs <- c(all_l1_feat_fsfs, l1_feat_fsf)
   }
+
+  # combined feat lookups with other columns
+  feat_info_df <- data.table::rbindlist(feat_info)
+  stopifnot(nrow(feat_info_df) == nrow(feat_l1_df))
+  feat_l1_df <- dplyr::bind_cols(feat_l1_df, feat_info_df)
+  feat_l1_df$to_run <- !feat_l1_df$feat_complete
 
   # If execute_feat is TRUE, execute feat on each fsf files at this stage,
   # using an 8-node socket cluster (since we have 8 runs).

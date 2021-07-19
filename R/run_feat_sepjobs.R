@@ -34,8 +34,8 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       feat_queue <- gpa$l1_model_setup$fsl
     }
 
-    fsf_files <- feat_queue$l1_feat_fsf
-    dir_expect <- feat_queue$l1_feat_dir
+    fsf_files <- feat_queue$feat_fsf
+    dir_expect <- feat_queue$feat_dir
     feat_time <- gpa$parallel$fsl$l1_feat_time
     feat_memgb <- gpa$parallel$fsl$l1_feat_memgb
   } else if (level == 2) {
@@ -51,8 +51,8 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       feat_queue <- gpa$l2_model_setup$fsl
     }
 
-    fsf_files <- feat_queue$l2_feat_fsf
-    dir_expect <- feat_queue$l2_feat_dir
+    fsf_files <- feat_queue$feat_fsf
+    dir_expect <- feat_queue$feat_dir
     feat_time <- gpa$parallel$fsl$l2_feat_time
     feat_memgb <- gpa$parallel$fsl$l2_feat_memgb
   } else if (level == 3) {
@@ -68,8 +68,8 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       feat_queue <- gpa$l3_model_setup$fsl
     }
 
-    fsf_files <- feat_queue$l3_feat_fsf
-    dir_expect <- feat_queue$l3_feat_dir
+    fsf_files <- feat_queue$feat_fsf
+    dir_expect <- feat_queue$feat_dir
     feat_time <- gpa$parallel$fsl$l3_feat_time
     feat_memgb <- gpa$parallel$fsl$l3_feat_memgb
   }
@@ -77,6 +77,8 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   # need this to be cached somewhere...
   feat_working_directory <- file.path(gpa$working_directory, paste0("feat_l", level))
 
+  # TODO: probably use a jobs | wc -l approach to throttling jobs within a submission
+  # and we need to make this more flexible
   cpusperjob <- 8 #number of cpus per qsub
   runsperproc <- 2 #number of feat calls per processor
 
@@ -84,6 +86,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   # dir_expect <- gsub("\\.fsf$", ".feat", fsf_files, perl=TRUE)
 
   to_run <- c()
+  # TODO: use $feat_complete and $feat_failed fields that are now standard to inform what gets run
 
   for (f in seq_along(fsf_files)) {
     if (dir.exists(dir_expect[f])) {

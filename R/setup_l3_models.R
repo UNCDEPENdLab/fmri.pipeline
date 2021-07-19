@@ -24,6 +24,8 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   checkmate::assert_character(l1_model_names, null.ok = TRUE)
   checkmate::assert_data_frame(gpa$run_data)
 
+  
+
   # if no l3 model subset is requested, output all models
   if (is.null(l3_model_names)) l3_model_names <- names(gpa$l3_models$models)
 
@@ -41,14 +43,12 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   lg$debug("In setup_l3_models, passing the following L1 models to L3:")
   lg$debug("L1 model: %s", l1_model_names)
 
-  l1_meta <- gpa$l1_model_setup$metadata %>%
-    dplyr::select(id, session, run_number, exclude_run, exclude_subject)
-
-  excluded_runs <- l1_meta %>%
+  excluded_runs <- gpa$run_data %>%
+    dplyr::select(id, session, run_number, exclude_run, exclude_subject) %>%
     dplyr::filter(exclude_run == TRUE | exclude_subject == TRUE)
 
   if (nrow(excluded_runs) > 1L) {
-    lg$info("In setup_l2_models, the following runs will be excluded from L2 modeling: ")
+    lg$info("In setup_l3_models, the following runs will be excluded from L3 modeling: ")
     lg$info(
       "  subject: %s, session: %s, run_number: %s",
       excluded_runs$id, excluded_runs$session, excluded_runs$run_number
@@ -56,14 +56,11 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   }
 
   # only retain good runs and subjects
-  l1_meta <- l1_meta %>%
+  run_data <- gpa$run_data %>%
     dplyr::filter(exclude_run == FALSE & exclude_subject == FALSE)
 
-  run_data <- gpa$run_data %>%
-    right_join(l1_meta, by = c("id", "session", "run_number"))
-
-  if (nrow(l1_meta) == 0L) {
-    msg <- "In setup_l2_models, no runs survived the exclude_subject and exclude_run step."
+  if (nrow(run_data) == 0L) {
+    msg <- "In setup_l3_models, no runs survived the exclude_subject and exclude_run step."
     lg$warn(msg)
     warning(msg)
     return(NULL)
@@ -71,7 +68,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
 
   if (isTRUE(gpa$log_txt)) {
     # TODO: abstract the log file name to finalize_pipeline_configuration function
-    lg$add_appender(lgr::AppenderFile$new("setup_l2_models.txt"), name = "txt")
+    lg$add_appender(lgr::AppenderFile$new("setup_l3_models.txt"), name = "txt")
   }
 
   if (is.null(gpa$l1_model_setup) || !inherits(gpa$l1_model_setup, "l1_setup")) {
@@ -82,6 +79,16 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
       "You must run setup_l1_models before running setup_l2_models."
     )
   }
+
+  if (is.null(gpa$l2_model_setup) || !inherits(gpa$l2_model_setup, "l2_setup")) {
+    lg$error("No l2_model_setup found in the glm pipeline object.")
+    lg$error("You must run setup_l2_models before running setup_l3_models.")
+    stop(
+      "No l2_model_setup found in the glm pipeline object.",
+      "You must run setup_l2_models before running setup_l2_models."
+    )
+  }
+
 
   # respecify L2 models for each subject based on available runs
   for (mname in l2_model_names) {
@@ -103,7 +110,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
           # get list of runs to examine/include
           to_run <- gpa$l1_model_setup$fsl %>%
             dplyr::filter(l1_model == !!this_l1_model) %>%
-            dplyr::select(id, session, run_number, l1_model, l1_feat_fsf, l1_feat_dir)
+            dplyr::select(id, session, run_number, l1_model, feat_fsf, feat_dir)
 
           # handle run and subject exclusions (exclude_run should be FALSE in l1_meta, per filter above)
           to_run <- dplyr::left_join(l1_meta, to_run, by = c("id", "session", "run_number"))
