@@ -63,16 +63,28 @@ fsl_l1_model <- function(
 
   feat_l1_df <- data.frame(
     id = id, session = session, run_number = d_obj$runs_to_output, run_volumes = d_obj$run_volumes,
-    run_nifti = run_nifti, l1_model = model_name, l1_confound_file = NA_character_, to_run = as.logical(NA)
+    run_nifti = run_nifti, l1_model = model_name, l1_confound_file = l1_confound_files, to_run = as.logical(NA)
   )
   feat_info <- list() #to hold status of feat runs
   all_l1_feat_fsfs <- c()
 
   #FSL computes first-level models on individual runs
   for (rr in seq_along(run_nifti)) {
-    lg$info("Creating FSF for file: %s", run_nifti[rr])
+    lg$info("Processing FSL L1 model setup for NIfTI: %s", run_nifti[rr])
     this_template <- fsf_template # start with default copy of template for this run
 
+    # TODO: perhaps support flexible names in the future
+    l1_feat_fsf <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr], ".fsf"))
+    l1_feat_dir <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr]))
+    feat_info[[rr]] <- get_feat_status(feat_dir = l1_feat_dir, feat_fsf = l1_feat_fsf, lg = lg)
+
+    # skip re-creation of FSF and do not run below unless force_l1_creation==TRUE
+    if (file.exists(l1_feat_fsf) && isFALSE(gpa$glm_settings$fsl$force_l1_creation)) {
+      lg$info("Skipping existing feat fsf file: %s", l1_feat_fsf)
+      next
+    }
+
+    # handle inclusion of confound regressors
     disable_confounds <- FALSE # whether to turn off confound regressors in FSF specification
     if (!is.null(gpa$confound_settings$l1_confound_regressors)) {
       # TODO: consider treating confound regressors as a feature of a given l1 model, rather than enforcing across all models
@@ -85,22 +97,16 @@ fsl_l1_model <- function(
         disable_confounds <- TRUE
       } else {
         this_template <- gsub(".CONFOUNDS.", l1_confound_file, this_template, fixed = TRUE)
-        feat_l1_df$l1_confound_file[rr] <- l1_confound_file
       }
     }
 
     # turn off confounds, if needed (missing l1 confounds file, or no confounds requested)
-    if (isTRUE(disable_confounds)) { #disable confounds
-      this_template <- gsub("set fmri(confoundevs) 1", "set fmri(confoundevs) 0", this_template, fixed=TRUE) #disable
+    if (isTRUE(disable_confounds)) { # disable confounds
+      this_template <- gsub("set fmri(confoundevs) 1", "set fmri(confoundevs) 0", this_template, fixed = TRUE) # disable
       l1 <- grep("# Confound EVs text file for analysis 1", this_template, fixed = TRUE)
       l2 <- grep("set confoundev_files(1) \".CONFOUNDS.\"", this_template, fixed = TRUE)
-      this_template <- this_template[-1*c(l1, l2)] #drop confound files lines
+      this_template <- this_template[-1 * c(l1, l2)] # drop confound files lines
     }
-
-    # TODO: perhaps support flexible names in the future
-    l1_feat_fsf <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr], ".fsf"))
-    l1_feat_dir <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr]))
-    feat_info[[rr]] <- get_feat_status(feat_dir = l1_feat_dir, feat_fsf = l1_feat_fsf, lg = lg)
 
     # search and replace within fsf file for appropriate sections
     # .OUTPUTDIR. is the feat output location
@@ -142,12 +148,6 @@ fsl_l1_model <- function(
       #TODO -- add back in standard 3-column FSL timing
       lg$error("No support for FSL-internal convolved yet")
       stop("cannot use FSL internal timing files right this moment...")
-    }
-
-    #skip re-creation of FSF and do not run below unless force_l1_creation==TRUE
-    if (file.exists(l1_feat_fsf) && isFALSE(gpa$glm_settings$fsl$force_l1_creation)) {
-      lg$info("Skipping existing feat fsf file: %s", l1_feat_fsf)
-      next
     }
 
     lg$info("Writing l1 fsf file: %s", l1_feat_fsf)

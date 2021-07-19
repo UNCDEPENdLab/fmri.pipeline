@@ -197,3 +197,33 @@ add_custom_feat_syntax <- function(fsf_syntax, feat_args, lg=NULL) {
   return(fsf_syntax)
 
 }
+
+#' small helper function to look at feat outputs and files to determine if execution is complete
+#'
+#' @param gpa a \code{glm_pipeline_arguments object}
+#' @param level the level of analysis to be refreshed (1, 2, or 3)
+#' @return a modified copy of \code{gpa} with the feat columns of
+#'   $l1_model_setup, $l2_model_setup, or $l3_model_setup refreshed
+#'
+#' @keywords internal
+#' @importFrom dplyr select
+#' @importFrom purrr pmap_dfr
+refresh_feat_status <- function(gpa, level = 1L, lg = NULL) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_integerish(level, lower = 1L, upper = 3L)
+  checkmate::assert_class(lg, "Logger", null.ok = TRUE)
+  setup_name <- paste0("l", level, "_model_setup")
+
+  if ("fsl" %in% gpa$glm_software && setup_name %in% names(gpa)) {
+    if (is.null(lg)) lg <- lgr::get_logger()
+    lg$info("Found existing %s field. Refreshing status of L%d feat execution and outputs.", setup_name, level)
+    refresh <- gpa[[setup_name]]$fsl %>%
+      dplyr::select(feat_dir, feat_fsf) %>%
+      purrr::pmap_dfr(get_feat_status, lg = lg)
+
+    # copy back relevant columns into data structure
+    gpa[[setup_name]]$fsl[, names(refresh)] <- refresh
+  }
+
+  return(gpa)
+}

@@ -36,16 +36,9 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
   # TODO: This is a mess if use the l1_model_names since we will always be overwriting what's in the l1_model_setup
   # data.frame. We need more of an append/update approach, perhaps like the sqlite setup for the overall pipeline.
-  if ("l1_model_setup" %in% names(gpa)) {
-    lg$info("Found existing l1_model_setup field. Will refresh status of l1 models but not attempt to setup new models.")
-    refresh_l1 <- gpa$l1_model_setup$fsl %>%
-      dplyr::select(feat_dir, feat_fsf) %>%
-      purrr::pmap_dfr(get_feat_status, lg = lg)
 
-    # copy back relevant columns into data structure
-    gpa$l1_model_setup$fsl[, names(refresh_l1)] <- refresh_l1
-    return(gpa)
-  }
+  # refresh status of feat inputs and outputs at level 1 before continuing
+  gpa <- refresh_feat_status(gpa, level=1L, lg=lg)
 
   #setup parallel worker pool, if requested
   if (gpa$parallel$l1_setup_cores > 1L) {
