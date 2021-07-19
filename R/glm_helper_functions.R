@@ -922,6 +922,8 @@ respecify_l2_models_by_subject <- function(mobj, data) {
 #' @return the number of volumes in \code{nifti}
 #' @keywords internal
 lookup_run_volumes <- function(nifti) {
+  if (!file.exists(nifti)) return(NA_integer_)
+
   # fslval is much faster than any internal R command. Use it, if possible
   # TODO: Make this more robust, more like runFSLCommand with path expectations
   has_fslval <- system2("which", "fslval", stdout = FALSE, stderr = FALSE)
@@ -936,4 +938,36 @@ lookup_run_volumes <- function(nifti) {
   # system.time(run_volumes <- RNifti::readNifti(run_nifti[nn], internal = TRUE))
 
   return(nvol)
+}
+
+
+#' Helper function to obtain the number of voxels in a 4D file for populating FEAT FSF
+#'
+#' @details This function prefers to use fslval instead of an internal R library
+#'   because both oro.nifti and RNifti are rather slow to obtain a single value from
+#'   the NIfTI header
+#'
+#' @param nifti a 4D nifti file
+#' @return the number of voxels in \code{nifti} as calculated by x * y * z * t
+#' @keywords internal
+lookup_nvoxels <- function(nifti) {
+  if (!file.exists(nifti)) return(NA_integer_)
+
+  # fslval is much faster than any internal R command. Use it, if possible
+  # TODO: Make this more robust, more like runFSLCommand with path expectations
+  # TODO: should probably have a single global lookup for fslval in gpa (finalize step)
+  has_fslval <- system2("which", "fslval", stdout = FALSE, stderr = FALSE)
+  has_fslval <- ifelse(has_fslval == 0L, TRUE, FALSE)
+  if (isTRUE(has_fslval)) {
+    ndim <- as.integer(system2("fslval", args = c(nifti, "dim0"), stdout = TRUE))
+    nvoxels <- prod(sapply(1:ndim, function(xx) {
+      as.integer(system2("fslval", args = c(nifti, paste0("dim", xx)), stdout = TRUE))
+    }))
+  } else {
+    nihead <- oro.nifti::readNIfTI(nifti, read_data = FALSE)
+    ndim <- nihead@dim_[1L]
+    nvoxels <- prod(nihead@dim_[2:(ndim + 1)])
+  }
+
+  return(nvoxels)
 }

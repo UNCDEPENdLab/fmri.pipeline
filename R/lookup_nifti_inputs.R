@@ -7,7 +7,7 @@
 #' @author Michael Hallquist
 #' @importFrom dplyr count group_by left_join filter
 #' @importFrom magrittr %>%
-lookup_nifti_inputs <- function(gpa, add_run_volumes = TRUE) {
+lookup_nifti_inputs <- function(gpa, add_run_volumes = TRUE, add_nvoxels = TRUE) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_logical(add_run_volumes, len=1L)
 
@@ -90,14 +90,13 @@ lookup_nifti_inputs <- function(gpa, add_run_volumes = TRUE) {
   # add number of volumes for each run
   if (isTRUE(add_run_volumes)) {
     lg$info("Lookup up number of volumes from NIfTI headers")
-    gpa$run_data$run_volumes <- sapply(seq_along(run_nifti), function(nn) {
-      if (isFALSE(mr_found[nn])) {
-        run_volumes <- NA_integer_ # none
-      } else {
-        run_volumes <- lookup_run_volumes(run_nifti[nn])
-      }
-      return(run_volumes)
-    })
+    gpa$run_data$run_volumes <- sapply(run_nifti, lookup_run_volumes)
+  }
+
+  # add number of voxels for each run (used in FSL FEAT)
+  if (isTRUE(add_nvoxels)) {
+    lg$info("Lookup up number of voxels (x * y * z * t) from NIfTI headers")
+    gpa$run_data$nvoxels <- sapply(run_nifti, lookup_nvoxels)
   }
 
   return(gpa)

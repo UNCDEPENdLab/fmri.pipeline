@@ -72,7 +72,10 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       rdata <- gpa$run_data %>% dplyr::filter(id == !!subj_id & session == !!subj_session & run_nifti_present == TRUE)
       run_nifti <- get_mr_abspath(rdata, "run_nifti")
       mr_run_nums <- rdata$run_number
+      run_volumes <- rdata$run_volumes
+      nvoxels <- rdata$nvoxels
       exclude_run <- rdata$exclude_run
+
       if ("l1_confound_file" %in% names(rdata)) {
         l1_confound_files <- rdata$l1_confound_file
       } else {
@@ -93,26 +96,20 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         lg$debug(paste("MR files to analyze:", run_nifti)) #log files that were found
       }
 
-      ## read number of volumes from NIfTI header
-      # RNifti is unexpectedly slow compared to oro.nifti
-      mr_dims <- lapply(run_nifti, function(x) { oro.nifti::readNIfTI(x, read_data = FALSE)@dim_ })
-      run_lengths <- sapply(mr_dims, "[[", 5) # number of volumes is 4th dimension
-      nvoxels <- sapply(mr_dims, function(x) { prod(x[2:5]) }) # FSL nvoxels is x * y * z * t
-
-      lg$debug("Run lengths of run_nifti: %s", paste(run_lengths, collapse=", "))
+      lg$debug("Volumes in run_nifti: %s", paste(run_volumes, collapse=", "))
 
       ## create truncated run files to end analysis 12s after last ITI (or big head movement)
       ## also handle removal of N volumes from the beginning of each run due to steady state magnetization
 
-      #mrdf <- truncate_runs(b, run_nifti, mr_run_nums, run_lengths, drop_volumes=drop_volumes)
+      #mrdf <- truncate_runs(b, run_nifti, mr_run_nums, run_volumes, drop_volumes=drop_volumes)
       mrdf <- data.frame(
         id = subj_id, session=subj_session,
         run_nifti = run_nifti, run_number = mr_run_nums,
-        last_volume = run_lengths, drop_volumes = gpa$drop_volumes, exclude_run = exclude_run
+        last_volume = run_volumes, drop_volumes = gpa$drop_volumes, exclude_run = exclude_run
       )
 
       run_nifti <- mrdf$run_nifti
-      run_lengths <- mrdf$last_volume
+      run_volumes <- mrdf$last_volume
 
       # Tracking list containing data.frames for each software, where we expect one row per run-level model (FSL)
       # or subject-level model (AFNI). The structure varies because FSL estimates per-run GLMs, while AFNI concatenates.
@@ -159,7 +156,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
           bdm_args$tr <- gpa$tr
           bdm_args$write_timing_files <- t_out
           bdm_args$drop_volumes <- gpa$drop_volumes
-          bdm_args$run_volumes <- run_lengths
+          bdm_args$run_volumes <- run_volumes
           bdm_args$run_4d_files <- run_nifti
           bdm_args$runs_to_output <- mr_run_nums
           bdm_args$output_directory <- file.path(subj_out, "timing_files")
@@ -171,7 +168,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
           if (is.null(d_obj)) { next } #skip to next iteration on error
 
-          save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, run_nifti, run_lengths,
+          save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, run_nifti, run_volumes,
             subj_id, subj_session, this_model, file = bdm_out_file
           )
         }
