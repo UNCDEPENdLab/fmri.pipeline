@@ -56,7 +56,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
   all_subj_l1_list <- foreach(subj_df = iter(gpa$subject_data, by="row"), .inorder=FALSE, .packages=c("dependlab", "dplyr"),
-    .export=c("lg", "gpa", "truncateRuns", "fsl_l1_model", "spm_l1_model", "runFSLCommand")) %dopar% {
+    .export=c("lg", "gpa", "truncate_runs", "fsl_l1_model", "get_mr_abspath", "get_l1_directory", "runFSLCommand", "get_feat_status")) %dopar% {
       subj_df <- subj_df # avoid complaints about visible global binding in R CMD check
       subj_id <- subj_df$id
       subj_session <- subj_df$session

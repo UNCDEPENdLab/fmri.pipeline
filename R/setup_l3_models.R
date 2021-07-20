@@ -33,7 +33,6 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
 
     # if no l2 model subset is requested, output all models
     if (is.null(l2_model_names)) l2_model_names <- names(gpa$l2_models$models)
-
   }
 
   # if no l3 model subset is requested, output all models
@@ -48,7 +47,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   if (isTRUE(gpa$multi_run)) {
     lg$debug("In setup_l3_models, passing the following L2 models to L3:")
     lg$debug("L2 model: %s", l2_model_names)
-  }  
+  }
   lg$debug("In setup_l3_models, passing the following L1 models to L3:")
   lg$debug("L1 model: %s", l1_model_names)
 
@@ -64,22 +63,6 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     )
   }
 
-  # only retain good runs and subjects
-  run_data <- gpa$run_data %>%
-    dplyr::filter(exclude_run == FALSE & exclude_subject == FALSE)
-
-  if (nrow(run_data) == 0L) {
-    msg <- "In setup_l3_models, no runs survived the exclude_subject and exclude_run step."
-    lg$warn(msg)
-    warning(msg)
-    return(NULL)
-  }
-
-  if (isTRUE(gpa$log_txt)) {
-    # TODO: abstract the log file name to finalize_pipeline_configuration function
-    lg$add_appender(lgr::AppenderFile$new("setup_l3_models.txt"), name = "txt")
-  }
-
   if (is.null(gpa$l1_model_setup) || !inherits(gpa$l1_model_setup, "l1_setup")) {
     lg$error("No l1_model_setup found in the glm pipeline object.")
     lg$error("You must run setup_l1_models before running setup_l3_models.")
@@ -89,20 +72,70 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     )
   }
 
-  if (is.null(gpa$l2_model_setup) || !inherits(gpa$l2_model_setup, "l2_setup")) {
-    lg$error("No l2_model_setup found in the glm pipeline object.")
-    lg$error("You must run setup_l2_models before running setup_l3_models.")
-    stop(
-      "No l2_model_setup found in the glm pipeline object.",
-      "You must run setup_l2_models before running setup_l3_models."
-    )
+  # FSL 2-level versus 3-level setup
+  #
+  # 2-level setup (one run per subject)
+  #   - Pass L1 .feat folders as input to L3 .fsf setup
+  #   - In this approach, the copes in the .fsf pertain to the L1 cope numbers
+  #   - Requires one .fsf per L3 model
+  #
+  # 3-level setup (multiple runs per subject, combined at L2)
+  #   - Pass individual cope*.feat folders within subject .gfeat folders
+  #   - The folder cope numbers pertain to L1 copes
+  #   - The cope*.nii.gz in the cope*.feat subfolders pertain to the L2 contrasts
+  #   - Requires one .fsf per L1 cope x L3 model combination
+  #   - Example: FSL_L2.gfeat/cope3.feat/stats/cope1.nii.gz
+  #      ==> cope3 is the third contrast in the L1 feat model
+  #      ==> cope1 is the first contrast in the L2 feat model
+
+  if (isTRUE(gpa$multi_run)) {
+    lg$info("In setup_l3_models, using a multi-run 3-level setup with runs (l1), subjects (l2), sample (l3)")
+
+    # in multi-run setup, an l2_model_setup must be present
+    if (is.null(gpa$l2_model_setup) || !inherits(gpa$l2_model_setup, "l2_setup")) {
+      lg$error("No l2_model_setup found in the glm pipeline object.")
+      lg$error("You must run setup_l2_models before running setup_l3_models.")
+      stop(
+        "No l2_model_setup found in the glm pipeline object.",
+        "You must run setup_l2_models before running setup_l3_models."
+      )
+    }
+
+  } else {
+    lg$info("In setup_l3_models, using a single run 2-level setup with subjects (l1), sample (l3)")
+      # only retain good runs and subjects
+      run_data <- gpa$run_data %>%
+        dplyr::filter(exclude_run == FALSE & exclude_subject == FALSE)
+
+      if (nrow(run_data) == 0L) {
+        msg <- "In setup_l3_models, no runs survived the exclude_subject and exclude_run step."
+        lg$warn(msg)
+        warning(msg)
+        return(NULL)
+      }
+
+
   }
+
+  # subjects and sessions to run at l3
+  subj_df <- gpa$subject_data %>%
+    dplyr::filter(exclude_subject==FALSE) %>%
+    select(id, session)
+
+
+
+  if (isTRUE(gpa$log_txt)) {
+    # TODO: abstract the log file name to finalize_pipeline_configuration function
+    lg$add_appender(lgr::AppenderFile$new("setup_l3_models.txt"), name = "txt")
+  }
+
+
 
   # loop over and setup all requested combinations of L1, L2, and L3 models
   feat_l3_df <- list()
   model_set <- expand.grid(
     l1_model = l1_model_names, l2_model = l2_model_names,
-    l3_model = l3_model_name, stringsAsFactors = FALSE
+    l3_model = l3_model_names, stringsAsFactors = FALSE
   )
 
   ff <- 1
@@ -171,4 +204,96 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   gpa$l3_model_setup <- all_subj_l3_combined
 
   return(gpa)
+}
+
+# helper function to get a cope data.frame for all level 1 models
+get_l1_cope_df <- function(gpa, model_set, subj_df) {
+  checkmate::assert_data_frame(model_set)
+  dt <- data.table::rbindlist(
+    lapply(unique(model_set$l1_model), function(mm) {
+      data.frame(
+        l1_model = mm,
+        l1_cope_number = seq_along(gpa$l1_cope_names[[mm]]),
+        l1_cope_name = gpa$l1_cope_names[[mm]]
+      )
+    })
+  )
+
+  #return subject-specific rows for each cope
+  dt <- dt %>% tidyr::crossing(subj_df)
+  return(dt)
+}
+
+# helper function to get a cope data.frame for all level 3 models
+# handles the per-subject cope numbering problem
+get_l2_cope_df <- function(gpa, model_set, subj_df) {
+  checkmate::assert_data_frame(model_set)
+  data.table::rbindlist(
+    lapply(unique(model_set$l2_model), function(mm) {
+      if (!is.null(gpa$l2_models$models[[mm]]$by_subject)) {
+        # combine as single data frame from nested list columns
+        l2_df <- rbindlist(gpa$l2_models$models[[mm]]$by_subject$cope_list)
+        l2_df$l2_model <- mm #retain model name
+      } else {
+        cope_names <- rownames(gpa$l2_models$models[[mm]]$contrasts)
+        l2_df <- data.frame(
+          l2_model = mm, l2_cope_number = seq_along(cope_names),
+          l2_cope_name = cope_names
+        )
+        l2_df <- l2_df %>% tidyr::crossing(subj_df)
+      }
+      return(l2_df)
+
+    })
+  )
+}
+
+# helper function to get a cope data.frame for all level 3 models
+get_l3_cope_df <- function(gpa, model_set, subj_df) {
+  checkmate::assert_data_frame(model_set)
+  dt <- data.table::rbindlist(
+    lapply(unique(model_set$l3_model), function(mm) {
+      cope_names <- rownames(gpa$l3_models$models[[mm]]$contrasts)
+      data.frame(
+        l3_model = mm,
+        l3_cope_number = seq_along(cope_names),
+        l3_cope_name = cope_names
+      )
+    })
+  )
+
+  # return subject-specific rows for each cope
+  dt <- dt %>% tidyr::crossing(subj_df)
+  return(dt)
+
+}
+
+
+# data.table cross-join (tidyr::crossing is a bit faster and already exists)
+# https://stackoverflow.com/questions/10600060/how-to-do-cross-join-in-r
+# CJ.table <- function(X, Y) {
+#   setkey(X[, c(k = 1, .SD)], k)[Y[, c(k = 1, .SD)], allow.cartesian = TRUE][, k := NULL]
+# }
+
+get_fsl_l3_model_df <- function(gpa, model_df, subj_df) {
+  model_df$model_id <- seq_len(nrow(model_df))
+
+  l1_df <- get_l1_cope_df(gpa, model_df, subj_df)
+
+  l3_df <- get_l3_cope_df(gpa, model_df, subj_df)
+
+  if (isTRUE(gpa$multi_run)) {
+    #model_df has l1_model, l2_model, l3_model
+    l2_df <- get_l2_cope_df(gpa, model_df)
+
+    combined <- model_df %>%
+      tidyr::crossing(subj_df) %>%
+      left_join(l1_df, by = c("id", "session", "l1_model")) %>%
+      left_join(l2_df, by = c("id", "session", "l2_model")) %>%
+      left_join(l3_df, by = c("id", "session", "l3_model"))
+  } else {
+    combined <- model_df %>%
+      tidyr::crossing(subj_df) %>%
+      left_join(l1_df, by = c("id", "session", "l1_model")) %>%
+      left_join(l3_df, by = c("id", "session", "l3_model"))  }
 }
