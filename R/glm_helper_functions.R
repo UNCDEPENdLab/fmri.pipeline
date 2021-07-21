@@ -152,7 +152,7 @@ generate_motion_regressors <- function(motion_params = "motion.par",
                                        col.names = c("rx", "ry", "rz", "tx", "ty", "tz"),
                                        regressors = c("rx", "ry", "rz", "tx", "ty", "tz"),
                                        demean = FALSE, drop_volumes = 0L, last_volume=NULL,
-                                       rot_units="rad", tra_units="mm") {
+                                       rot_units="rad", tra_units="mm", na.strings="NA") {
 
   checkmate::assert_file_exists(motion_params)
   if (is.null(col.names)) { col.names <- c("rx", "ry", "rz", "tx", "ty", "tz") } #explicit defaults in case of null
@@ -172,7 +172,7 @@ generate_motion_regressors <- function(motion_params = "motion.par",
   #if none of the confound regressors is a motion parameter, then quietly return NULL
   if (length(regressors) == 0L) { return(invisible(NULL)) }
 
-  mot <- data.table::fread(motion_params, col.names=col.names)
+  mot <- data.table::fread(motion_params, col.names=col.names, na.strings=na.strings)
 
   if (is.null(last_volume)) { last_volume <- nrow(mot) }
   checkmate::assert_integerish(last_volume, upper=nrow(mot))

@@ -13,6 +13,22 @@
 #'   This function will setup FSL level 2 (subject) .fsf files for all combinations of
 #'   \code{l2_model_names} and \code{l1_model_names}.
 #'
+#' FSL 2-level versus 3-level setup
+#'
+#' 2-level setup (one run per subject)
+#'   - Pass L1 .feat folders as input to L3 .fsf setup
+#'   - In this approach, the copes in the .fsf pertain to the L1 cope numbers
+#'   - Requires one .fsf per L3 model
+#'
+#' 3-level setup (multiple runs per subject, combined at L2)
+#'   - Pass individual cope*.feat folders within subject .gfeat folders
+#'   - The folder cope numbers pertain to L1 copes
+#'   - The cope*.nii.gz in the cope*.feat subfolders pertain to the L2 contrasts
+#'   - Requires one .fsf per L1 cope x L3 model combination
+#'   - Example: FSL_L2.gfeat/cope3.feat/stats/cope1.nii.gz
+#'      ==> cope3 is the third contrast in the L1 feat model
+#'      ==> cope1 is the first contrast in the L2 feat model
+#'
 #' @author Michael Hallquist
 #' @importFrom checkmate assert_class assert_character assert_data_frame
 #' @importFrom lgr get_logger
@@ -71,22 +87,6 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
       "You must run setup_l1_models before running setup_l3_models."
     )
   }
-
-  # FSL 2-level versus 3-level setup
-  #
-  # 2-level setup (one run per subject)
-  #   - Pass L1 .feat folders as input to L3 .fsf setup
-  #   - In this approach, the copes in the .fsf pertain to the L1 cope numbers
-  #   - Requires one .fsf per L3 model
-  #
-  # 3-level setup (multiple runs per subject, combined at L2)
-  #   - Pass individual cope*.feat folders within subject .gfeat folders
-  #   - The folder cope numbers pertain to L1 copes
-  #   - The cope*.nii.gz in the cope*.feat subfolders pertain to the L2 contrasts
-  #   - Requires one .fsf per L1 cope x L3 model combination
-  #   - Example: FSL_L2.gfeat/cope3.feat/stats/cope1.nii.gz
-  #      ==> cope3 is the third contrast in the L1 feat model
-  #      ==> cope1 is the first contrast in the L2 feat model
 
   if (isTRUE(gpa$multi_run)) {
     lg$info("In setup_l3_models, using a multi-run 3-level setup with runs (l1), subjects (l2), sample (l3)")
@@ -275,6 +275,7 @@ get_l3_cope_df <- function(gpa, model_set, subj_df) {
 #   setkey(X[, c(k = 1, .SD)], k)[Y[, c(k = 1, .SD)], allow.cartesian = TRUE][, k := NULL]
 # }
 
+# 
 get_fsl_l3_model_df <- function(gpa, model_df, subj_df) {
   model_df$model_id <- seq_len(nrow(model_df))
 
@@ -283,7 +284,7 @@ get_fsl_l3_model_df <- function(gpa, model_df, subj_df) {
   l3_df <- get_l3_cope_df(gpa, model_df, subj_df)
 
   if (isTRUE(gpa$multi_run)) {
-    #model_df has l1_model, l2_model, l3_model
+    # model_df has l1_model, l2_model, l3_model
     l2_df <- get_l2_cope_df(gpa, model_df)
 
     combined <- model_df %>%
@@ -295,5 +296,8 @@ get_fsl_l3_model_df <- function(gpa, model_df, subj_df) {
     combined <- model_df %>%
       tidyr::crossing(subj_df) %>%
       left_join(l1_df, by = c("id", "session", "l1_model")) %>%
-      left_join(l3_df, by = c("id", "session", "l3_model"))  }
+      left_join(l3_df, by = c("id", "session", "l3_model"))
+  }
+
+  return(combined)
 }

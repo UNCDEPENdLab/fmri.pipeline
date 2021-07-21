@@ -99,7 +99,8 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     lg$debug("Generating l1 confounds for id: %s, session: %s, run_number: %s", id, session, run_number)
     cfile <- get_mr_abspath(rinfo, "confound_input_file")[1]
     lg$debug("Reading confound file: %s", cfile)
-    confound_df <- tryCatch(data.table::fread(cfile, data.table=FALSE), error = function(e) {
+    confound_df <- tryCatch(data.table::fread(cfile, data.table=FALSE, na.strings=gpa$confound_settings$na_strings), 
+    error = function(e) {
       lg$error("Failed to read confound file: %s with error %s", cfile, as.character(e))
       return(NULL)
     })
@@ -110,8 +111,10 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
           "Mismatch in number of columns in confound file: %s relative to $confound_settings$confound_input_colnames",
           rinfo$confound_input_file[1]
         )
+      } else {
+        # only set names in confound_df if the number of columns matches
+        data.table::setnames(confound_df, gpa$confound_settings$confound_input_colnames)
       }
-      data.table::setnames(confound_df, gpa$confound_settings$confound_input_colnames)
     }
 
     if (is.null(last_volume)) {
@@ -138,7 +141,8 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
         mfile,
         col.names = gpa$confound_settings$motion_params_colnames,
         regressors = gpa$confound_settings$all_confound_columns,
-        drop_volumes = drop_volumes, last_volume = last_volume, demean=FALSE
+        drop_volumes = drop_volumes, last_volume = last_volume, demean=FALSE,
+        na.strings=gpa$confound_settings$na_strings
       )}, error = function(e) {
       lg$error("Failed to read motion file: %s with error %s", rinfo$motion_params[1], as.character(e))
       return(NULL)
@@ -174,6 +178,17 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
 
       all_confounds <- dplyr::bind_cols(confound_df, motion_df)
     }
+  }
+
+  # handle NA values in confounds -> convert to 0
+  has_na <- sapply(all_confounds, anyNA)
+  if (any(has_na)) {
+    lg$warn("NA values found in confounds file: %s", cfile)
+    lg$warn("These will be converted to 0s before evaluating exclude_run and writing l1_confound_file: %s", expected_l1_confound_file)
+    all_confounds[, has_na] <- as.data.frame(apply(all_confounds[, has_na], 2, function(x) {
+      x[is.na(x)] <- 0
+      return(x)
+    }))
   }
 
   # calculate whether to retain or exclude this run
@@ -222,13 +237,20 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
 
   # trim l1 confounds to only those requested
   all_confounds <- all_confounds[, intersect(gpa$confound_settings$l1_confound_regressors, names(all_confounds))]
+  num_cols <- sapply(all_confounds, class) %in% c("integer", "numeric")
+  if (any(!num_cols)) {
+    lg$warn("Confound file contains non-numeric columns. Not sure what will happen!")
+    lg$warn("Column: %s", names(all_confounds)[!num_cols])
+  }
 
   # demean confound regressors, if requested (usually a good idea)
   if (isTRUE(demean)) {
     lg$debug("Demeaning columns of l1 confounds matrix: %s", expected_l1_confound_file)
-    all_confounds <- as.data.frame(apply(all_confounds, 2, function(x) {
+
+    all_confounds[, num_cols] <- as.data.frame(apply(all_confounds[, num_cols], 2, function(x) {
       x - mean(x, na.rm = TRUE)
     }))
+
   }
 
   lg$debug("Writing l1 confounds to file: %s", expected_l1_confound_file)

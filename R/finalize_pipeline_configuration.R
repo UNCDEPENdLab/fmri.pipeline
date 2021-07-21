@@ -225,26 +225,27 @@ finalize_pipeline_configuration <- function(gpa) {
     }
   }
 
-  if (!is.null(gpa$confound_settings$confound_input_file)) {
+
+  if ("confound_input_file" %in% names(gpa$run_data)) {
+    lg$info("confound_input_file column already in run_data. Not using confound_input_file specification.")
+  } else if (!is.null(gpa$confound_settings$confound_input_file)) {
     checkmate::assert_string(gpa$confound_settings$confound_input_file)
-    if ("confound_input_file" %in% names(gpa$run_data)) {
-      message("confound_input_file column already in run_data. Not using confound_input_file specification.")
-    } else {
-      gpa$run_data$confound_input_file <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
-        if (isTRUE(gpa$run_data$run_nifti_present[ii])) {
-          normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$confound_input_file))
-        } else {
-          NA_character_
-        }
-      })
-    }
-    gpa$run_data$confound_input_file_present <- file.exists(get_mr_abspath(gpa$run_data, "confound_input_file"))
-  } else {
-    if (!"confound_input_file" %in% names(gpa$run_data)) {
-      gpa$run_data$confound_input_file <- gpa$run_data$confound_input_file_present <- NA_character_
-    }
+    gpa$run_data$confound_input_file <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
+      if (isTRUE(gpa$run_data$run_nifti_present[ii])) {
+        normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$confound_input_file))
+      } else {
+        NA_character_
+      }
+    })
   }
 
+  # determine whether confound input files are present
+  gpa$run_data$confound_input_file_present <- if ("confound_input_file" %in% names(gpa$run_data)) {
+    file.exists(get_mr_abspath(gpa$run_data, "confound_input_file"))
+  } else {
+    NA_character_
+  }
+  
   #validate confound settings
   if (is.null(gpa$confound_settings)) {
     lg$info("Using default settings for confounds and exclusions")
@@ -261,6 +262,11 @@ finalize_pipeline_configuration <- function(gpa) {
   } else {
     checkmate::assert_string(gpa$confound_settings$exclude_run, null.ok=TRUE)
     checkmate::assert_string(gpa$confound_settings$exclude_subject, null.ok = TRUE)
+  }
+
+  # default na.strings argument for data.table::fread calls to motion parameters and confounds
+  if (is.null(gpa$confound_settings$na_strings)) {
+    gpa$confound_settings$na_strings <- getOption("datatable.na.strings", "NA")
   }
 
   #figure out all confound columns that will be used in the pipeline
@@ -309,7 +315,10 @@ finalize_pipeline_configuration <- function(gpa) {
   gpa <- calculate_subject_exclusions(gpa)
 
   # cache gpa object to file
-  saveRDS(gpa, file = gpa$object_cache)
+  res <- tryCatch(saveRDS(gpa, file = gpa$object_cache), error = function(e) {
+    lg$error("Could not save gpa object to file: %s", gpa$object_cache)
+    return(NULL)
+  })
 
   # save subject, run, and trial data to the database, too
   lg$info("Writing run_data to sqlite db: %s", gpa$sqlite_db)
