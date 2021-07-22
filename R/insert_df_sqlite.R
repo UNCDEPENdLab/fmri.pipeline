@@ -31,15 +31,52 @@ insert_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number =
     con <- gpa$sqlite_con # recycle connection
   }
 
+  # handle columns in data that are not in table
+  has_table <- DBI::dbExistsTable(con, table)
+  if (isTRUE(has_table)) {
+    table_names <- DBI::dbListFields(con, table)
+    uniq_df <- setdiff(names(data), table_names)
+    if (length(uniq_df) > 0L) {
+      DBI::dbBegin(con) # begin transaction
+      alter_failed <- FALSE
+      for (nn in uniq_df) {
+        dtype <- DBI::dbDataType(con, data[[nn]])
+        query <- glue::glue_sql("ALTER TABLE {table} ADD COLUMN {nn} {dtype};", .con = con)
+        q_result <- tryCatch(DBI::dbExecute(con, query), error = function(e) {
+          message("Error with query: ", query)
+          message(as.character(e))
+          DBI::dbRollback(con)
+          return(FALSE)
+        })
+        if (isFALSE(q_result)) {
+          alter_failed <- TRUE
+          break # end loop
+        }
+      }
+      if (!alter_failed) DBI::dbCommit(con) # commit transaction
+    }
+  }
+
+
+  # treat the delete and append as a single transaction so that if either fails, the table is unchanged
+  DBI::dbBegin(con)
+  transaction_failed <- FALSE
+
   # delete any existing record
-  if (isTRUE(delete_extant) && DBI::dbExistsTable(con, table)) {
+  if (isTRUE(delete_extant) && isTRUE(has_table)) {
     query <- glue::glue_sql(
       "DELETE FROM {`table`}",
       "WHERE id = {id} AND session = {session}",
       ifelse(is.null(run_number), "", "AND run_number = {run_number}"),
       .con = con, .sep = " "
     )
-    DBI::dbExecute(con, query)
+    q_result <- tryCatch(DBI::dbExecute(con, query), error = function(e) {
+      message("Problem with query: ", query)
+      message(as.character(e))
+      DBI::dbRollback(con)
+      return(FALSE)
+    })
+    if (isFALSE(q_result)) { transaction_failed <- TRUE }
   }
 
   # add record -- include keying fields for lookup
@@ -47,7 +84,7 @@ insert_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number =
   data$session <- session
   if (!is.null(run_number)) data$run_number <- run_number
 
-  res <- tryCatch(
+  q_result <- tryCatch(
     DBI::dbWriteTable(conn = con, name = table, value = data, append = append, overwrite = overwrite),
     error = function(e) {
       print(as.character(e))
@@ -55,5 +92,11 @@ insert_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number =
     }
   )
 
-  return(res)
+  if (isFALSE(q_result)) {
+    transaction_failed <- TRUE
+  }
+
+  if (isFALSE(transaction_failed)) { DBI::dbCommit(con) }
+
+  return(invisible(NULL))
 }
