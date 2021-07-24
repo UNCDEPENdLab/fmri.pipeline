@@ -895,7 +895,7 @@ respecify_l2_models_by_subject <- function(mobj, data) {
     mm <- get_contrasts_from_spec(mobj, lmfit)
     cope_df <- data.frame(
       id = dsplit$id[vv], session = dsplit$session[vv],
-      l2_cope = seq_len(nrow(mm$contrasts)), l2_cope_names = rownames(mm$contrasts)
+      l2_cope_number = seq_len(nrow(mm$contrasts)), l2_cope_name = rownames(mm$contrasts)
     )
 
     cope_list[[vv]] <- cope_df

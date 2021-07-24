@@ -122,67 +122,65 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     dplyr::filter(exclude_subject==FALSE) %>%
     select(id, session)
 
-
-
   if (isTRUE(gpa$log_txt)) {
     # TODO: abstract the log file name to finalize_pipeline_configuration function
     lg$add_appender(lgr::AppenderFile$new("setup_l3_models.txt"), name = "txt")
   }
 
-
-
   # loop over and setup all requested combinations of L1, L2, and L3 models
   feat_l3_df <- list()
-  model_set <- expand.grid(
-    l1_model = l1_model_names, l2_model = l2_model_names,
-    l3_model = l3_model_names, stringsAsFactors = FALSE
-  )
+  if (isTRUE(gpa$multi_run)) {
+    model_set <- expand.grid(
+      l1_model = l1_model_names, l2_model = l2_model_names,
+      l3_model = l3_model_names, stringsAsFactors = FALSE
+    )
+  } else {
+    model_set <- expand.grid(l1_model = l1_model_names, l3_model = l3_model_names, stringsAsFactors = FALSE)
+  }
 
-  ff <- 1
+  # Get the copes for each contrast, respecting differences in l2 copes across subjects
+  # This has the full combination of l1, l2, and l3 copes
+  l3_cope_config <- get_fsl_l3_model_df(gpa, model_set, subj_df)
+
+  # For obtaining inputs to l3 models, we don't need the multiple rows for each third level cope
+  # since these are part of the l3 model (contrasts to be specified). Thus, just get the first row of
+  # each l3 model for calculating inputs to l3.
+  l3_cope_input_df <- l3_cope_config %>%
+    dplyr::filter(l3_cope_number == 1L) %>%
+    dplyr::select(-l3_cope_number, -l3_cope_name)
+
+  to_run <- get_feat_l3_inputs(gpa, l3_cope_input_df, lg)
+
   all_l3_list <- foreach(
-    model_info = iter(model_set, by = "row"), .inorder = FALSE, 
+    model_info = iter(to_run), .inorder = FALSE,
     .packages = c("dependlab", "dplyr", "data.table"), .export = c("lg", "gpa", "fsl_l3_model")
   ) %dopar% {
-    this_l1_model <- model_info$l1_model
-    this_l2_model <- model_info$l2_model
-    this_l3_model <- model_info$l3_model
+    model_info <- model_info # to avoid complaints about global variable binding in R CMD check
 
     if ("fsl" %in% gpa$glm_software) {
-      # get list of runs to examine/include
-      to_run <- gpa$l1_model_setup$fsl %>%
-        dplyr::filter(l1_model == !!this_l1_model) %>%
-        dplyr::select(id, session, run_number, l1_model, feat_fsf, feat_dir)
 
-      # handle run and subject exclusions (exclude_run should be FALSE in l1_meta, per filter above)
-      to_run <- dplyr::left_join(l1_meta, to_run, by = c("id", "session", "run_number"))
-      data.table::setDT(to_run) # convert to data.table for split
-
-      by_subj_session <- split(to_run, by = c("id", "session"))
+      if (nrow(model_info) <= 3) {
+        lg$warn(
+          "Fewer than 4 complete feat input directories for l1 model %s, l2 model %s, l3 model %s",
+          model_info$l1_model, model_info$l2_model, model_info$l3_model
+        )
+        return(NULL)
+      }
 
       # setup Feat L3 files for each combination of lower-level models
+      browser()
+      feat_l3_df[[ff]] <- tryCatch(fsl_l3_model(model_info, gpa = gpa),
+        error = function(e) {
+          lg$error(
+            "Problem with fsl_l3_model. L1 Model: %s, L2 Model: %s, Subject: %s, Session: %s",
+            this_l1_model, this_l2_model, subj_id, subj_session
+          )
+          lg$error("Error message: %s", as.character(e))
+          return(NULL)
+        }
+      )
 
-      for (l1_df in by_subj_session) {
-        subj_id <- l1_df$id[1L]
-        subj_session <- l1_df$session[1L]
-        feat_l3_df[[ff]] <- tryCatch(
-          {
-            fsl_l3_model(
-              l1_df = l1_df,
-              l2_model_name = this_l2_model, gpa = gpa
-            )
-          },
-          error = function(e) {
-            lg$error(
-              "Problem with fsl_l3_model. L1 Model: %s, L2 Model: %s, Subject: %s, Session: %s",
-              this_l1_model, this_l2_model, subj_id, subj_session
-            )
-            lg$error("Error message: %s", as.character(e))
-            return(NULL)
-          }
-        )
-
-        if (!is.null(feat_l3_df[1L])) ff <- ff + 1 # increment position in multi-subject list
-      }
+        
     }
 
     if ("spm" %in% gpa$glm_software) {
@@ -275,7 +273,6 @@ get_l3_cope_df <- function(gpa, model_set, subj_df) {
 #   setkey(X[, c(k = 1, .SD)], k)[Y[, c(k = 1, .SD)], allow.cartesian = TRUE][, k := NULL]
 # }
 
-# 
 get_fsl_l3_model_df <- function(gpa, model_df, subj_df) {
   model_df$model_id <- seq_len(nrow(model_df))
 
@@ -300,4 +297,59 @@ get_fsl_l3_model_df <- function(gpa, model_df, subj_df) {
   }
 
   return(combined)
+}
+
+get_feat_l3_inputs <- function(gpa, l3_cope_config, lg=NULL) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_data_frame(l3_cope_config)
+
+  if (is.null(lg)) { lg <- lgr::get_logger() }
+  if (isTRUE(gpa$multi_run)) {
+    # feat directories in $l2_model_setup
+    feat_inputs <- gpa$l2_model_setup$fsl %>%
+      dplyr::filter(feat_complete == TRUE)
+
+    #join up combination of all models with cope directories
+    feat_inputs <- feat_inputs %>%
+      dplyr::inner_join(l3_cope_config, by=c("id", "session", "l1_model", "l2_model"))
+
+    # sort out expected cope files for each model combination
+    feat_inputs <- feat_inputs %>%
+      dplyr::mutate(cope_file = file.path(
+        feat_dir,
+        paste0("cope", l1_cope_number, ".feat"),
+        "stats",
+        paste0("cope", l2_cope_number, ".nii.gz")
+      )) %>%
+      dplyr::select(
+        id, session, l1_model, l2_model, l3_model, l1_cope_name, l2_cope_name, feat_dir, cope_file
+      )
+
+    split_on <- c("l1_cope_name", "l2_cope_name", "l1_model", "l2_model", "l3_model")
+  } else {
+    # feat directories in $l1_model_setup
+    feat_inputs <- gpa$l1_model_setup$fsl %>%
+      dplyr::filter(feat_complete == TRUE)
+
+    feat_inputs <- feat_inputs %>%
+      dplyr::left_join(l3_cope_config, by = c("id", "session", "l1_model"))
+
+    feat_inputs <- feat_inputs %>%
+      dplyr::mutate(cope_file = file.path(
+        feat_dir,
+        "stats",
+        paste0("cope", l1_cope_number, ".nii.gz")
+      )) %>%
+      dplyr::select(
+        id, session, l1_model, l3_model, l1_cope_name, feat_dir, cope_file
+      )
+
+    split_on <- c("l1_cope_name", "l1_model", "l3_model")
+
+  }
+
+  if (!is.data.table(feat_inputs)) data.table::setDT(feat_inputs)
+  feat_inputs <- split(feat_inputs, by = split_on)
+
+  return(feat_inputs)
 }

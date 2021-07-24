@@ -22,6 +22,9 @@ insert_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number =
   checkmate::assert_integerish(run_number, lower = 1, null.ok = TRUE)
   checkmate::assert_data_frame(data, null.ok = FALSE)
   checkmate::assert_string(table, null.ok = FALSE)
+  checkmate::assert_logical(delete_extant, null.ok = FALSE, len=1L)
+  checkmate::assert_logical(append, null.ok = FALSE, len = 1L)
+  checkmate::assert_logical(overwrite, null.ok = FALSE, len = 1L)
 
   # open connection if needed
   if (is.null(gpa$sqlite_con) || !DBI::dbIsValid(gpa$sqlite_con)) {
@@ -96,6 +99,7 @@ insert_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number =
     transaction_failed <- TRUE
   }
 
+  # commit delete and insert if no errors in subcomponents
   if (isFALSE(transaction_failed)) { DBI::dbCommit(con) }
 
   return(invisible(NULL))
