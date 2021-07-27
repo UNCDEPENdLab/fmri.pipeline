@@ -4,7 +4,7 @@
 \alias{lookup_nifti_inputs}
 \title{helper function to locate nifti inputs for each run of data}
 \usage{
-lookup_nifti_inputs(gpa, add_run_volumes = TRUE)
+lookup_nifti_inputs(gpa, add_run_volumes = TRUE, add_nvoxels = TRUE)
 }
 \arguments{
 \item{gpa}{a \code{glm_pipeline_arguments} object created by setup_glm_pipeline}

@@ -113,8 +113,6 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
         warning(msg)
         return(NULL)
       }
-
-
   }
 
   # subjects and sessions to run at l3
@@ -157,6 +155,8 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   ) %dopar% {
     model_info <- model_info # to avoid complaints about global variable binding in R CMD check
 
+    l3_file_setup <- list(fsl = list(), spm = list(), afni = list())
+
     if ("fsl" %in% gpa$glm_software) {
 
       if (nrow(model_info) <= 3) {
@@ -164,23 +164,20 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
           "Fewer than 4 complete feat input directories for l1 model %s, l2 model %s, l3 model %s",
           model_info$l1_model, model_info$l2_model, model_info$l3_model
         )
-        return(NULL)
+        l3_file_setup$fsl <- NULL
       }
 
       # setup Feat L3 files for each combination of lower-level models
-      browser()
-      feat_l3_df[[ff]] <- tryCatch(fsl_l3_model(model_info, gpa = gpa),
+      l3_file_setup$fsl <- tryCatch(fsl_l3_model(model_info, gpa = gpa),
         error = function(e) {
           lg$error(
-            "Problem with fsl_l3_model. L1 Model: %s, L2 Model: %s, Subject: %s, Session: %s",
-            this_l1_model, this_l2_model, subj_id, subj_session
+            "Problem with fsl_l3_model. L1 Model: %s, L2 Model: %s, L3 model %s",
+            model_info$l1_model, model_info$l2_model, model_info$l3_model
           )
           lg$error("Error message: %s", as.character(e))
           return(NULL)
         }
       )
-
-        
     }
 
     if ("spm" %in% gpa$glm_software) {
@@ -190,10 +187,13 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     if ("afni" %in% gpa$glm_software) {
       lg$warn("afni not supported in setup_l3_models")
     }
+
+    return(l3_file_setup)
   }
 
   all_subj_l3_combined <- list(
-    fsl = rbindlist(feat_l3_df)
+    metadata = l3_cope_config,
+    fsl = rbindlist(lapply(all_l3_list, "[[", "fsl"))
   )
 
   class(all_subj_l3_combined) <- c("list", "l3_setup")
@@ -204,6 +204,8 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   return(gpa)
 }
 
+
+############
 # helper function to get a cope data.frame for all level 1 models
 get_l1_cope_df <- function(gpa, model_set, subj_df) {
   checkmate::assert_data_frame(model_set)

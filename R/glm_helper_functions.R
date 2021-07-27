@@ -698,7 +698,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     } else {
       cnames <- names(coef(lmfit)) # prefer model-specific regressors (if they vary by subject)
     }
-    
+
     diag_mat <- diag(length(cnames))
     rownames(diag_mat) <- paste0("EV_", cnames) # simple contrast naming for each individual regressor
     colnames(diag_mat) <- cnames # always have columns named by regressor
@@ -909,6 +909,42 @@ respecify_l2_models_by_subject <- function(mobj, data) {
   dsplit[, dt := NULL] # no longer need original split data
 
   mobj$by_subject <- dsplit
+  return(mobj)
+}
+
+#' Helper function to re-calculate the l3 design matrix for a model based on available data
+#'
+#' @param mobj a \code{hi_model_spec} object containing the L3 GLM model to run
+#' @param data The run-level data frame containing data for all ids and sessions. This will be split into individual chunks
+#'
+#' @return a modified copy of \code{mobj} where the $by_subject field has been added
+#'
+#' @details The function adds the $by_subject field, which contains the design matrices and contrasts
+#'   for each subject and session in \code{data} based on the available data for that session. For example, if
+#'   a subject is missing a few runs (or these are dropped from analysis), then some contrasts may change or drop out of the model.
+#'
+#' The $by_subject field is a keyed data.table object containing list elements for the cope_list (mapping cope numbers to contrast names),
+#'   the contrasts, and the design matrix for each session.
+#'
+#' @keywords internal
+#' @importFrom checkmate assert_data_frame assert_multi_class assert_subset
+#' @importFrom data.table data.table
+respecify_l3_model <- function(mobj, data) {
+  checkmate::assert_multi_class(mobj, c("l1_model_spec", "hi_model_spec")) # verify that we have an object of known structure
+  checkmate::assert_data_frame(data)
+  checkmate::assert_subset(c("id", "session"), names(data))
+
+  # use model formula from parent object
+  model_formula <- terms(mobj$lmfit)
+
+  mobj$lmfit <- lm(model_formula, data = data)
+  mobj$regressors <- colnames(mobj$model_matrix)
+  mobj$model_matrix <- model.matrix(mobj$lmfit)
+  mobj$metadata <- data %>% dplyr::select(id, session)
+  mobj$model_data <- data
+
+  mobj <- get_contrasts_from_spec(mobj, mobj$lmfit)
+
   return(mobj)
 }
 

@@ -12,7 +12,8 @@ generate_motion_regressors(
   drop_volumes = 0L,
   last_volume = NULL,
   rot_units = "rad",
-  tra_units = "mm"
+  tra_units = "mm",
+  na.strings = "NA"
 )
 }
 \arguments{

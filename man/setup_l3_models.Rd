@@ -31,6 +31,22 @@ This function generates the inputs for level 3 analyses, where multi-subject dat
 \details{
 This function will setup FSL level 2 (subject) .fsf files for all combinations of
   \code{l2_model_names} and \code{l1_model_names}.
+
+FSL 2-level versus 3-level setup
+
+2-level setup (one run per subject)
+  - Pass L1 .feat folders as input to L3 .fsf setup
+  - In this approach, the copes in the .fsf pertain to the L1 cope numbers
+  - Requires one .fsf per L3 model
+
+3-level setup (multiple runs per subject, combined at L2)
+  - Pass individual cope*.feat folders within subject .gfeat folders
+  - The folder cope numbers pertain to L1 copes
+  - The cope*.nii.gz in the cope*.feat subfolders pertain to the L2 contrasts
+  - Requires one .fsf per L1 cope x L3 model combination
+  - Example: FSL_L2.gfeat/cope3.feat/stats/cope1.nii.gz
+     ==> cope3 is the third contrast in the L1 feat model
+     ==> cope1 is the first contrast in the L2 feat model
 }
 \author{
 Michael Hallquist

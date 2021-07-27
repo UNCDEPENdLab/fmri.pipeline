@@ -23,11 +23,13 @@ build_l2_models <- function(gpa,
   if (fname == "build_l2_models") {
     menu_desc <- "second-level (subject)"
     data <- gpa$run_data # L2
+    metadata <- gpa$run_data %>% dplyr::select(id, session, run_number)
     model_set <- gpa$l2_models
     level <- 2L #model level inside model object
   } else {
     menu_desc <- "third-level (sample)"
     data <- gpa$subject_data # L3
+    metadata <- gpa$subject_data %>% dplyr::select(id, session)
     model_set <- gpa$l3_models
     level <- 3L
   }
@@ -234,6 +236,9 @@ build_l2_models <- function(gpa,
     mm$lmfit <- lm(ffit, data)
     mm$regressors <- colnames(modelmat) # actual regressors after expanding categorical variables
     mm$model_matrix <- modelmat
+    stopifnot(nrow(data) == nrow(metadata)) # sanity check
+    mm$metadata <- metadata # for merging model matrix against identifying columns
+    mm$model_data <- data #keep track of data used for fitting model for refitting it at l3 in case of missing data
 
     # handle coefficient aliasing
     al <- alias(mm$lmfit)

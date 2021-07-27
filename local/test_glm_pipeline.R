@@ -15,11 +15,13 @@ source("finalize_pipeline_configuration.R")
 source("glm_helper_functions.R")
 source("fsl_helper_functions.R")
 source("fsl_l1_model.R")
+source("fsl_l2_model.R")
+source("fsl_l3_model.R")
 source("setup_l1_models.R")
+source("setup_l2_models.R")
+source("setup_l3_models.R")
 source("specify_contrasts.R")
 source("build_l2_models.R")
-source("setup_l2_models.R")
-source("fsl_l2_model.R")
 source("build_l1_models.R")
 source("glm_helper_functions.R")
 source("lookup_nifti_inputs.R")
@@ -99,7 +101,8 @@ gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm",
 
 gpa <- finalize_pipeline_configuration(gpa)
 
-gpa <- build_l1_models(gpa)
+# cached above
+# gpa <- build_l1_models(gpa)
 
 # interactive model builder for level 2
 gpa <- build_l2_models(gpa)
@@ -139,9 +142,16 @@ jobs <- run_feat_sepjobs(gpa, level=1L)
 
 gpa <- setup_l2_models(gpa)
 
-save(gpa, file="gpa_tmp_9Jul2021.RData")
+#save(gpa, file="gpa_tmp_9Jul2021.RData")
 load(file="gpa_tmp_9Jul2021.RData")
+gpa$l2_models$models$l2$by_subject$cope_list <- lapply(
+  gpa$l2_models$models$l2$by_subject$cope_list, function(xx) {
+    xx %>% dplyr::rename(l2_cope_number=l2_cope, l2_cope_name=l2_cope_names)
+  }
+)
 
+gpa$parallel$fsl$l3_feat_cpusperjob <- 16
+gpa$group_output_directory <- "/proj/mnhallqlab/users/michael/fmri_test/group_analyses"
 
 jobs <- run_feat_sepjobs(gpa, level=2)
 

@@ -34,10 +34,10 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       feat_queue <- gpa$l1_model_setup$fsl
     }
 
-    fsf_files <- feat_queue$feat_fsf
-    dir_expect <- feat_queue$feat_dir
     feat_time <- gpa$parallel$fsl$l1_feat_time
     feat_memgb <- gpa$parallel$fsl$l1_feat_memgb
+    feat_cpus <- 8 # TODO: populate parallel settings for l1
+    runsperproc <- 2 # number of feat calls per processor
   } else if (level == 2) {
     if (!checkmate::test_class(gpa$l2_model_setup, "l2_setup")) {
       lg$error("In run_feat_sepjobs, did not find an l2_setup object in gpa$l2_model_setup.")
@@ -51,10 +51,10 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       feat_queue <- gpa$l2_model_setup$fsl
     }
 
-    fsf_files <- feat_queue$feat_fsf
-    dir_expect <- feat_queue$feat_dir
     feat_time <- gpa$parallel$fsl$l2_feat_time
     feat_memgb <- gpa$parallel$fsl$l2_feat_memgb
+    feat_cpus <- 8 # TODO: populate parallel settings for l2
+    runsperproc <- 2 # number of feat calls per processor
   } else if (level == 3) {
     if (!checkmate::test_class(gpa$l3_model_setup, "l3_setup")) {
       lg$error("In run_feat_sepjobs, did not find an l3_setup object in gpa$l3_model_setup.")
@@ -68,20 +68,23 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       feat_queue <- gpa$l3_model_setup$fsl
     }
 
-    fsf_files <- feat_queue$feat_fsf
-    dir_expect <- feat_queue$feat_dir
     feat_time <- gpa$parallel$fsl$l3_feat_time
-    feat_memgb <- gpa$parallel$fsl$l3_feat_memgb
+    # memory is for total job, not per cpu at l3
+    feat_memgb <- ceiling(as.numeric(gpa$parallel$fsl$l3_feat_memgb) / gpa$parallel$fsl$l3_feat_cpusperjob)
+    feat_cpus <- gpa$parallel$fsl$l3_feat_cpusperjob
+    runsperproc <- 1 # number of feat calls per processor
+
   }
+
+  fsf_files <- feat_queue$feat_fsf
+  dir_expect <- feat_queue$feat_dir
 
   # need this to be cached somewhere...
   feat_working_directory <- file.path(gpa$working_directory, paste0("feat_l", level))
 
   # TODO: probably use a jobs | wc -l approach to throttling jobs within a submission
   # and we need to make this more flexible
-  cpusperjob <- 8 #number of cpus per qsub
-  runsperproc <- 2 #number of feat calls per processor
-
+  
   # figure out which fsf files have already been run
   # dir_expect <- gsub("\\.fsf$", ".feat", fsf_files, perl=TRUE)
 
@@ -116,7 +119,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     preamble <- c(
       "#!/bin/bash",
       "#SBATCH -N 1", #always single node for now
-      paste0("#SBATCH -n ", cpusperjob),
+      paste0("#SBATCH -n ", feat_cpus),
       paste0("#SBATCH --time=", feat_time),
       paste0("#SBATCH --mem-per-cpu=", feat_memgb, "G"),
       sched_args_to_header(gpa), # analysis-level SBATCH directives
@@ -131,7 +134,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     file_suffix <- ".pbs"
     preamble <- c(
       "#!/bin/bash",
-      paste0("#PBS -l nodes=1:ppn=", cpusperjob),
+      paste0("#PBS -l nodes=1:ppn=", feat_cpus),
       paste0("#PBS -l pmem=", feat_memgb, "gb"),
       ifelse(wait_for != "", paste0("#PBS -W depend=afterok:", wait_for), ""), # allow job dependency on upstream setup
       paste0("#PBS -l walltime=", feat_time),
@@ -149,10 +152,21 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     dir.create(feat_working_directory, recursive = TRUE)
   }
 
-  njobs <- ceiling(length(to_run) / (cpusperjob*runsperproc))
+  if (level == 3) {
+    njobs <- length(to_run) # parallel across slices, one job per model
+    feat_binary <- system.file("bin/feat_parallel", package = "fmri.pipeline")
+    stopifnot(file.exists(feat_binary))
+    df <- data.frame(fsf = to_run, job = 1:njobs, stringsAsFactors = FALSE)
+  } else {
+    njobs <- ceiling(length(to_run) / (feat_cpus * runsperproc))
+    feat_binary <- "feat"
+    # use length.out on rep to ensure that the vectors align even if chunks are uneven wrt files to run
+    df <- data.frame(
+      fsf = to_run,
+      job = rep(1:njobs, each = feat_cpus * runsperproc, length.out = length(to_run)), stringsAsFactors = FALSE
+    )
+  }
 
-  #use length.out on rep to ensure that the vectors align even if chunks are uneven wrt files to run
-  df <- data.frame(fsf=to_run, job=rep(1:njobs, each=cpusperjob*runsperproc, length.out=length(to_run)), stringsAsFactors=FALSE)
   df <- df[order(df$job), ]
 
   submission_id <- basename(tempfile(pattern = "job"))
@@ -166,7 +180,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       ifelse(level == 1L, "  local odir=\"${1/.fsf/.feat}\"", "  local odir=\"${1/.fsf/.gfeat}\""),
       "  [ -f \"${odir}/.feat_fail\" ] && rm -f \"${odir}/.feat_fail\"",
       "  start_time=$( date )",
-      "  feat $1",
+      paste0("  ", feat_binary, " $1"),
       "  exit_code=$?",
       "  end_time=$( date )",
       "  if [ $exit_code -eq 0 ]; then",
@@ -181,10 +195,12 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     )
     cat(paste("feat_runner", thisrun, "&"), file=outfile, sep="\n", append=TRUE)
     cat("wait\n\n", file=outfile, append=TRUE)
-    cat(paste(
-      "bash", system.file("bash/gen_feat_reg_dir", package = "fmri.pipeline"),      
-      unique(dirname(thisrun))
-    ), sep = "\n", file = outfile, append = TRUE)
+    if (level != 3L) {
+      cat(paste(
+        "bash", system.file("bash/gen_feat_reg_dir", package = "fmri.pipeline"),
+        unique(dirname(thisrun))
+      ), sep = "\n", file = outfile, append = TRUE)
+    }
     joblist[j] <- cluster_job_submit(outfile)
     #joblist[j] <- "dummy"
   }
