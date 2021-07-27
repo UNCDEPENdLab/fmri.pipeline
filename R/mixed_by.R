@@ -46,7 +46,8 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
                      padjust_by = "term", padjust_method = "BY", outcome_transform = NULL,
                      ncores = 1L, cl = NULL, refit_on_nonconvergence = 3,
                      tidy_args = list(effects = "fixed", conf.int = TRUE),
-                     lmer_control = lmerControl(optimizer = "nloptwrap")) {
+                     lmer_control = lmerControl(optimizer = "nloptwrap"),
+                     calculate=c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics")) {
   require(data.table) # remove for package
   require(dplyr)
   require(lme4)
@@ -79,6 +80,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
   checkmate::assert_string(padjust_method)
   checkmate::assert_integerish(ncores, lower = 1L)
   checkmate::assert_class(cl, "cluster", null.ok = TRUE)
+  checkmate::assert_subset(calculate, c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"))
 
   # turn off refitting if user specifies 'FALSE'
   if (is.logical(refit_on_nonconvergence) && isFALSE(refit_on_nonconvergence)) {
@@ -220,26 +222,49 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
       split_results <- lapply(seq_len(nrow(model_set)), function(mm) {
         ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) # replace LHS
         ret <- copy(dt_split)
-        thism <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform)
-        thism_ml <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, REML=FALSE) #refit with ML for AIC/BIC
-        ret[, dt := NULL] # drop original data.table for this split
         ret[, outcome := model_set$outcome[[mm]]]
         ret[, model_name := names(model_set$rhs)[mm]]
         ret[, rhs := as.character(model_set$rhs[mm])]
+        
+        if ("parameter_estimates_reml" %in% calculate) {
+          thism <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform)
+          ret[, coef_df_reml := list(do.call(tidy, append(tidy_args, x = thism)))]
+        }
+        
+        if (any(c("parameter_estimates_ml", "fit_statistics") %in% calculate)) {
+          thism_ml <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, REML=FALSE) #refit with ML for AIC/BIC
+          ret[, fit_df := list(glance(thism_ml))]
+          ret[, coef_df_ml := list(do.call(tidy, append(tidy_args, x = thism_ml)))]
+        }
+        
+        # no option to return model object at present
         # ret[, model := list(list(thism))] #not sure why a double list is needed, but a single list does not make a list-column
-        ret[, coef_df := list(do.call(tidy, append(tidy_args, x = thism)))]
-        ret[, fit_df := list(glance(thism_ml))]
+        
+        ret[, dt := NULL] # drop original data.table for this split from data
+        
         return(ret)
       })
 
       split_results <- rbindlist(split_results)
-      coef_df <- split_results[, coef_df[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
-      coef_df <- cbind(dt_split[, ..split_on], coef_df) # add back metadata for this split
-
-      fit_df <- split_results[, fit_df[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
-      fit_df <- cbind(dt_split[, ..split_on], fit_df) # add back metadata for this split
+      coef_df_reml <- NULL
+      if ("parameter_estimates_reml" %in% calculate) {
+        coef_df_reml <- split_results[, coef_df_reml[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
+        coef_df_reml <- cbind(dt_split[, ..split_on], coef_df_reml) # add back metadata for this split
+      }
       
-      list(coef_df=coef_df, fit_df=fit_df) # return
+      coef_df_ml <- NULL
+      if ("parameter_estimates_ml" %in% calculate) {
+        coef_df_ml <- split_results[, coef_df_ml[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
+        coef_df_ml <- cbind(dt_split[, ..split_on], coef_df_ml) # add back metadata for this split
+      }
+
+      fit_df <- NULL
+      if ("fit_statistics" %in% calculate) {
+        fit_df <- split_results[, fit_df[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
+        fit_df <- cbind(dt_split[, ..split_on], fit_df) # add back metadata for this split
+      }
+      
+      list(coef_df_reml=coef_df_reml, coef_df_ml=coef_df_ml, fit_df=fit_df) # return
     }
     
     rm(data) # cleanup big datasets and force memory release before next iteration
@@ -248,34 +273,46 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
 
   # need to put this above, but trying to avoid tmp objects
   # data[, filename:=df_i] #tag for later
-
-  coef_results <- rbindlist(lapply(mresults, function(df_set) {
-    rbindlist(lapply(df_set, "[[", "coef_df"))
-  })) # combine results from each df (in the multiple df case)
-  setattr(coef_results, "split_on", split_on) #tag split variables for secondary analysis
-  setorderv(coef_results, split_on) # since we allow out-of-order foreach, reorder coefs here.
-
-  fit_results <- rbindlist(lapply(mresults, function(df_set) {
-    rbindlist(lapply(df_set, "[[", "fit_df"))
-  })) # combine results from each df (in the multiple df case)
-  setattr(fit_results, "split_on", split_on) #tag split variables for secondary analysis
-  setorderv(fit_results, split_on) # since we allow out-of-order foreach, reorder coefs here.
   
+  #helper subfunction to pull out and rbind element from doubly nested structure above
+  extract_df <- function(nested_list, element, split_on) {
+    result_df <- rbindlist(lapply(nested_list, function(df_set) {
+      rbindlist(lapply(df_set, "[[", element))
+    })) # combine results from each df (in the multiple df case)
+    setattr(result_df, "split_on", split_on) #tag split variables for secondary analysis
+    setorderv(result_df, split_on) # since we allow out-of-order foreach, reorder coefs here.
+    return(result_df)
+  }
+  
+  coef_results_reml <- NULL
+  coef_results_ml <- NULL
+  fit_results <- NULL
+  if ("parameter_estimates_reml" %in% calculate) { coef_results_reml <- extract_df(mresults, "coef_df_reml", split_on) }
+  if ("parameter_estimates_ml" %in% calculate) { coef_results_ml <- extract_df(mresults, "coef_df_ml", split_on) }
+  if ("fit_statistics" %in% calculate) { fit_results <- extract_df(mresults, "fit_df", split_on) }
+  
+  #helper subfunction to adjust p-values
+  adjust_dt <- function(dt, padjust_by) {
+    for (ff in padjust_by) {
+      checkmate::assert_subset(ff, names(dt))
+      cname <- paste0("padj_", padjust_method, "_", paste(ff, collapse = "_"))
+      dt <- dt[, (cname) := p.adjust(p.value, method = padjust_method), by = ff]
+    }
+    return(dt)
+  }
   # compute adjusted p values
   if (!is.null(padjust_by)) {
     checkmate::assert_subset(padjust_method, c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr", "none"))
-    for (ff in padjust_by) {
-      checkmate::assert_subset(ff, names(coef_results))
-      cname <- paste0("padj_", padjust_method, "_", paste(ff, collapse = "_"))
-      coef_results <- coef_results[, (cname) := p.adjust(p.value, method = padjust_method), by = ff]
-    }
+    if (!is.null(coef_results_reml)) coef_results_reml <- adjust_dt(coef_results_reml, padjust_by)
+    if (!is.null(coef_results_ml)) coef_results_ml <- adjust_dt(coef_results_ml, padjust_by)
   }
 
   # drop off dummy split if irrelevant
   if (isFALSE(has_split)) {
-    coef_results[, split := NULL]
-    fit_results[, split := NULL]
+    if (!is.null(coef_results_reml)) { coef_results_reml[, split := NULL] }
+    if (!is.null(coef_results_ml)) { coef_results_ml[, split := NULL] }
+    if (!is.null(fit_results)) { fit_results[, split := NULL] }
   }
 
-  return(list(coef_df=coef_results, fit_df=fit_results))
+  return(list(coef_df_reml=coef_results_reml, coef_df_ml=coef_results_ml, fit_df=fit_results))
 }
