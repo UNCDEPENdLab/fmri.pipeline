@@ -86,6 +86,7 @@ set PROCID     [ pid ]
 set HOSTNAME   [ exec hostname ]
 set OS         [ exec uname ]
 
+
 #dynamically use script location to find tcl subfolder
 set localfeat [ file dirname [ file normalize [ info script ] ] ]
 #set localfeat [ file dirname [ file normalize [ $argv0 ] ] ] 
@@ -310,6 +311,7 @@ Usage: feat <design.fsf> \[options\]
 If no options are set then the whole design.fsf is processed
 
 Misc options (these need to come before the partial analysis options):
+ -P <N>   : number of concurrent flameo jobs to run in flame
  -I <N>   : run just session <N> of the multiple setups in <design.fsf>
  -D <dir> : use <dir> as the working output directory (instead of what is in <design.fsf>)
 
@@ -335,6 +337,9 @@ if { [ string range $fsfroot 0 0 ] != "/" } {
 set session 0
 set done_something 0
 
+#number of concurrent jobs to run in flame
+set njobs 1
+
 feat5:setupdefaults
 feat5:load -1 1 ${fsfroot}.fsf
 
@@ -353,6 +358,11 @@ for { set argindex 1 } { $argindex < $argc } { incr argindex 1 } {
 	    incr argindex 1
 	    set fmri(outputdir) [ lindex $argv $argindex ]
 	}
+
+	-P {
+	    incr argindex 1
+	    set njobs [ lindex $argv $argindex ]
+	}	   
 
 	-init {
 	    feat5:proc_init $session
@@ -387,7 +397,7 @@ for { set argindex 1 } { $argindex < $argc } { incr argindex 1 } {
 	}
 
 	-flame2 { 
-	    feat5:proc_flame2
+	    feat5:proc_flame2 $njobs
  	    set done_something 1
 	}
 
@@ -414,7 +424,6 @@ for { set argindex 1 } { $argindex < $argc } { incr argindex 1 } {
         feat5:proc_stop
         return -code error "$errMsg"
 }
-
 
 # if we haven't processed a single-task job, this must be a full analysis:
 if { $done_something == 0 } {
@@ -673,8 +682,8 @@ set logout ${GFD}/logs/feat1
         set howlong 60
         if { $fmri(robust_yn) } { set howlong [ expr int( $fmri(npts) * $fmri(evs_real) / 10 ) ] }
 	set ID [ fsl:exec "${localfeat}/feat_parallel ${fsfroot}.fsf -D $FD -I $session -flame1" -b 60 -N feat3a_flame -h $preID -l logs ]
-	#set ID [ fsl:exec "bash ./.flame" -b $howlong -N feat3b_flame -h $ID -l logs -f ]
-	set ID [ fsl:exec "bash ./.flame" -b $howlong -N feat3b_flame -h $ID -l logs ]
+	#set ID [ fsl:exec "./.flame" -b $howlong -N feat3b_flame -h $ID -l logs -f ]
+	set ID [ fsl:exec "${localfeat}/feat_parallel ${fsfroot}.fsf -D $FD -flame2" -b $howlong -N feat3b_flame -h $ID -l logs ]
 	set ID [ fsl:exec "${localfeat}/feat_parallel ${fsfroot}.fsf -D $FD -flame3" -b 60 -N feat3c_flame -h $ID -l logs ]
 	set ID [ fsl:exec "${localfeat}/feat_parallel ${fsfroot}.fsf -D $FD -poststats 1" -b 60 -N feat4_post -h $ID -l logs ]
 	set allID "$allID -h [ fsl:exec "${localfeat}/feat_parallel ${fsfroot}.fsf -D $FD -stop" -b 1 -h $ID -N feat5_stop -l logs ]"

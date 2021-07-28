@@ -6594,10 +6594,6 @@ if { $fmri(mixed_yn) == 4 } {
 	fsl:exec "$FSLDIR/bin/fslsplit tdof_filtered_func_data tmptdof -z"
     }
 
-    #add header to .flame for job management
-    #for now, just fork and allow to finish later
-    #fsl:echo .flame "while [ $(jobs | wc -l) -ge 20]; do sleep 20; done"
-    fsl:echo .flame "#!/bin/bash"
     set DIMZ [ exec sh -c "$FSLDIR/bin/fslval example_func dim3" ]
     for { set slice 0 } { $slice < $DIMZ } { incr slice 1 } {
         set pad [ format %04d $slice ]
@@ -6613,13 +6609,11 @@ if { $fmri(mixed_yn) == 4 } {
 	        incr evnn 1
 	    }
 	}
-	fsl:echo .flame "$FSLDIR/bin/flameo --cope=tmpcope$pad --vc=tmpvarcope$pad $DOFS --mask=tmpmask$pad --ld=stats$pad --dm=design.mat --cs=design.grp --tc=design.con $FLAMEp &"
+	fsl:echo .flame "$FSLDIR/bin/flameo --cope=tmpcope$pad --vc=tmpvarcope$pad $DOFS --mask=tmpmask$pad --ld=stats$pad --dm=design.mat --cs=design.grp --tc=design.con $FLAMEp"
     }
-    fsl:echo .flame "wait"
 }
 
-#fsl:echo $logout [ exec sh -c "cat .flame | head -n 1" ]
-fsl:echo $logout [ exec sh -c "sed -n '2p' .flame" ]
+fsl:echo $logout [ exec sh -c "cat .flame | head -n 1" ]
 
 fsl:echo dof "[ expr $NumPoints - $NumWaves ]"
 new_file stats
@@ -6637,10 +6631,10 @@ return 0
 #
 }
 
-proc feat5:proc_flame2 { } {
+proc feat5:proc_flame2 { njobs } {
     # basic setups
 
-global FSLDIR FSLSLASH PWD HOME HOSTNAME OSFLAVOUR logout fmri feat_files unwarp_files unwarp_files_mag initial_highres_files highres_files FD report ps rs comout gui_ext FSLPARALLEL
+global FSLDIR FSLSLASH PWD HOME HOSTNAME OSFLAVOUR logout fmri feat_files unwarp_files unwarp_files_mag initial_highres_files highres_files FD report ps rs comout gui_ext FSLPARALLEL localfeat
 
 cd $fmri(outputdir)
 set FD [ pwd ]
@@ -6649,7 +6643,8 @@ set logout ${FD}/logs/feat3b_flame
 
 #
 #fsl:exec "sh ./.flame"
-fsl:exec "bash ./.flame"
+fsl:exec "${localfeat}/flame_runner ./.flame ${njobs}"
+
     return 0
 }
 

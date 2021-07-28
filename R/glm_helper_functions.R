@@ -896,6 +896,7 @@ respecify_l2_models_by_subject <- function(mobj, data) {
   cope_list <- list()
   contrast_list <- list()
   model_matrix_list <- list()
+  n_l2_copes <- rep(NA_integer_, nrow(dsplit))
   for (vv in seq_len(nrow(dsplit))) {
     lmfit <- lm(model_formula, data = dsplit[[vv, "dt"]])
 
@@ -908,11 +909,13 @@ respecify_l2_models_by_subject <- function(mobj, data) {
     cope_list[[vv]] <- cope_df
     contrast_list[[vv]] <- mm$contrasts
     model_matrix_list[[vv]] <- model.matrix(lmfit)
+    n_l2_copes[vv] <- ncol(mm$contrasts)
   }
 
   dsplit[, cope_list := cope_list]
   dsplit[, contrasts := contrast_list]
   dsplit[, model_matrix := model_matrix_list]
+  dsplit[, n_l2_copes := n_l2_copes]
   dsplit[, dt := NULL] # no longer need original split data
 
   mobj$by_subject <- dsplit

@@ -1,0 +1,31 @@
+#!/bin/bash
+if [ $# -ne 2 ]; then
+    echo "flame_runner expects two arguments: <list of flame commands> <max jobs>"
+    exit 1
+fi
+
+flame_list="$1"
+njobs="$2"
+cmd_parallel=$( command -v parallel )
+[ $? -eq 0 ] && has_parallel=1 || has_parallel=0
+
+cmd_xargs=$( command -v xargs )
+[ $? -eq 0 ] && has_xargs=1 || has_xargs=0
+
+if [ $has_parallel -eq 1 ]; then
+    #echo "Using parallel"
+    $cmd_parallel -j $njobs < $flame_list
+elif [ $has_xargs -eq 1 ]; then
+    #echo "Using xargs"
+    cat $flame_list | xargs -n 1 -P $njobs -I '{}' sh -c '{}'
+else
+    #echo "Using while loop"
+    while read -r line;
+    do
+	while [[ $(jobs -r -p | wc -l) -ge $njobs ]]; do
+	    sleep 20 #wait for 20 seconds before repolling
+	done
+	sh -c "$line" & #run line
+    done < $flame_list
+    wait
+fi

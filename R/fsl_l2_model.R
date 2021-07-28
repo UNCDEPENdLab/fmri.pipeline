@@ -40,14 +40,8 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
   id <- l1_df$id[1L]
   session <- l1_df$session[1L]
   l1_model <- l1_df$l1_model[1L]
-  n_l1_copes <- gpa$l1_models$n_contrasts[l1_model] # number of lvl1 copes to combine for this model
   l1_feat_dirs <- l1_df$feat_dir
-
-  # tracking data frame for this model
-  feat_l2_df <- data.frame(
-    id = id, session = session,
-    l1_model = l1_model, l2_model = l2_model_name
-  )
+  n_l1_copes <- gpa$l1_models$n_contrasts[l1_model] # number of lvl1 copes to combine for this model
 
   #regressor_names <- gpa$l2_models$models[[l2_model_name]]$regressors # names of regressors in design matrix for this model
 
@@ -57,6 +51,8 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
     # get subject-specific model and contrast matrices
     ss_df <- gpa$l2_models$models[[l2_model_name]]$by_subject %>%
       dplyr::filter(id == !!id & session == !!session)
+
+    n_l2_copes <- ss_df$n_l2_copes
 
     if (nrow(ss_df) == 0L) {
       lg$error("Unable to locate a subject-specific entry for id %s, session %s", id, session)
@@ -70,6 +66,8 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
     }
 
   } else {
+    n_l2_copes <- gpa$l2_models$n_contrasts[l2_model_name] # number of lvl1 copes to combine for this model
+
     #find rows in run_data that match this subject
     dmat_rows <- gpa$run_data %>%
       dplyr::mutate(rownum = 1:n()) %>%
@@ -92,6 +90,12 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
     # obtain contrasts for this L2 model
     cmat <- gpa$l2_models$models[[l2_model_name]]$contrasts # l2 model contrasts
   }
+
+  # tracking data frame for this model
+  feat_l2_df <- data.frame(
+    id = id, session = session,
+    l1_model = l1_model, l2_model = l2_model_name, n_l2_copes = n_l2_copes
+  )
 
   # generate FSL EV syntax for these regressors
   ev_syntax <- generate_fsf_ev_syntax(inputs = l1_feat_dirs, dmat = dmat)
@@ -124,7 +128,10 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
   }
 
   # TODO: make this more flexible and actually use the $output_locations$feat_l2
-  fsl_l1_output_dir <- get_output_directory(id = id, session = session, model_name = l1_model, gpa = gpa, glm_software = "fsl", what="l1")
+  fsl_l1_output_dir <- get_output_directory(
+    id = id, session = session,
+    l1_model_name = l1_model, gpa = gpa, glm_software = "fsl", what = "l1"
+  )
 
   # TODO: make output location more flexible and not always relative to L1 outputs
   l2_feat_dir <- file.path(fsl_l1_output_dir, paste0("FEAT_LVL2_", l2_model_name, ".gfeat"))

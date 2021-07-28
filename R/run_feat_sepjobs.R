@@ -70,7 +70,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
 
     feat_time <- gpa$parallel$fsl$l3_feat_time
     # memory is for total job, not per cpu at l3
-    feat_memgb <- ceiling(as.numeric(gpa$parallel$fsl$l3_feat_memgb) / gpa$parallel$fsl$l3_feat_cpusperjob)
+    feat_memgb <- ceiling(as.numeric(gpa$parallel$fsl$l3_feat_memgb) / as.numeric(gpa$parallel$fsl$l3_feat_cpusperjob))
     feat_cpus <- gpa$parallel$fsl$l3_feat_cpusperjob
     runsperproc <- 1 # number of feat calls per processor
 
@@ -79,12 +79,12 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   fsf_files <- feat_queue$feat_fsf
   dir_expect <- feat_queue$feat_dir
 
-  # need this to be cached somewhere...
-  feat_output_directory <- file.path(gpa$output_directory, paste0("feat_l", level))
+  # location of scheduler scripts
+  feat_output_directory <- file.path(gpa$output_locations$scheduler_scripts, paste0("feat_l", level))
 
   # TODO: probably use a jobs | wc -l approach to throttling jobs within a submission
   # and we need to make this more flexible
-  
+
   # figure out which fsf files have already been run
   # dir_expect <- gsub("\\.fsf$", ".feat", fsf_files, perl=TRUE)
 
@@ -147,9 +147,9 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     )
   }
 
-  if (!file.exists(feat_working_directory)) {
-    lg$debug("Creating l%d working directory: %s", level, feat_working_directory)
-    dir.create(feat_working_directory, recursive = TRUE)
+  if (!file.exists(feat_output_directory)) {
+    lg$debug("Creating l%d working directory: %s", level, feat_output_directory)
+    dir.create(feat_output_directory, recursive = TRUE)
   }
 
   if (level == 3) {
@@ -172,7 +172,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   submission_id <- basename(tempfile(pattern = "job"))
   joblist <- rep(NA_character_, njobs)
   for (j in seq_len(njobs)) {
-    outfile <- paste0(feat_working_directory, "/featsep_l", level, "_", j, "_", submission_id, file_suffix)
+    outfile <- paste0(feat_output_directory, "/featsep_l", level, "_", j, "_", submission_id, file_suffix)
     cat(preamble, file=outfile, sep="\n")
     thisrun <- with(df, fsf[job==j])
     cat(
@@ -207,7 +207,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
 
   # write the list of separate feat qsub jobs that are now queued (so that LVL2 can wait on these)
   # should also return this to the caller as a function?
-  writeLines(joblist, con = file.path(feat_working_directory, paste0("sep_l", level, "_jobs.txt")))
+  writeLines(joblist, con = file.path(feat_output_directory, paste0("sep_l", level, "_jobs.txt")))
 
   return(joblist)
 }
