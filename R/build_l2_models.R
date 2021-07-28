@@ -313,6 +313,7 @@ build_l2_models <- function(gpa,
   }
 
   model_set$models <- model_list
+  model_set$n_contrasts <- sapply(model_list, function(mm) { ncol(mm$contrasts) })
 
   if (fname == "build_l2_models") {
     gpa$l2_models <- model_set

@@ -7,12 +7,12 @@
 setup_glm_pipeline(
   analysis_name = "glm_analysis",
   scheduler = "slurm",
-  working_directory = file.path(getwd(), "glm_out"),
+  output_directory = file.path(getwd(), analysis_name),
   subject_data = NULL,
   run_data = NULL,
   trial_data = NULL,
   group_output_directory = "default",
-  output_settings = "default",
+  output_locations = "default",
   vm = c(id = "id", session = "session", run_number = "run_number", trial = "trial",
     run_trial = "run_trial", mr_dir = "mr_dir", run_nifti = "run_nifti", exclude_subject
     = "exclude_subject"),
@@ -41,11 +41,11 @@ setup_glm_pipeline(
 \arguments{
 \item{analysis_name}{A character string providing a useful name for identifying this analysis. Practically, this
 influences the top-level folder name of the group analysis outputs, as well as the name of .RData objects
-saved by this function to the working directory for the analysis.}
+saved by this function to the output directory for the analysis.}
 
 \item{scheduler}{Which HPC scheduler system should be used for queueing jobs. Options are 'slurm' or 'torque'.}
 
-\item{working_directory}{The working directory for all configuration and job submission files for this analysis.
+\item{output_directory}{The output directory for all configuration and job submission files for this analysis.
 Default is a subfolder called "glm_out" in the current working directory.}
 
 \item{subject_data}{A data.frame containing all subject-level data such as age, sex, or other covariates. Columns

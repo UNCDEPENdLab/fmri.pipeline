@@ -56,7 +56,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
   all_subj_l1_list <- foreach(subj_df = iter(gpa$subject_data, by="row"), .inorder=FALSE, .packages=c("dependlab", "dplyr"),
-    .export=c("lg", "gpa", "truncate_runs", "fsl_l1_model", "get_mr_abspath", "get_l1_directory", "runFSLCommand", "get_feat_status")) %dopar% {
+    .export=c("lg", "gpa", "truncate_runs", "fsl_l1_model", "get_mr_abspath", "get_output_directory", "runFSLCommand", "get[_feat_status")) %dopar% {
       subj_df <- subj_df # avoid complaints about visible global binding in R CMD check
       subj_id <- subj_df$id
       subj_session <- subj_df$session
@@ -129,14 +129,17 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
           return(this_signal)
         })
 
-        subj_out <- file.path(subj_mr_dir, gpa$l1_models$models[[this_model]]$outdir)
+        l1_output_dir <- get_output_directory(
+          id = subj_id, session = subj_session,
+          l1_model_name = this_model, gpa = gpa, what = "l1"
+        )
 
-        if (!dir.exists(subj_out)) {
-          lg$info("Creating subject output directory: %s", subj_out)
-          dir.create(subj_out, showWarnings=FALSE, recursive=TRUE)
+        if (!dir.exists(l1_output_dir)) {
+          lg$info("Creating subject output directory: %s", l1_output_dir)
+          dir.create(l1_output_dir, showWarnings=FALSE, recursive=TRUE)
         }
 
-        bdm_out_file <- file.path(subj_out, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData"))
+        bdm_out_file <- file.path(l1_output_dir, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData"))
         if (file.exists(bdm_out_file)) {
           lg$info("Loading BDM info from extant file: %s", bdm_out_file)
           load(bdm_out_file)
@@ -152,7 +155,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
           bdm_args$run_volumes <- run_volumes
           bdm_args$run_4d_files <- run_nifti
           bdm_args$runs_to_output <- mr_run_nums
-          bdm_args$output_directory <- file.path(subj_out, "timing_files")
+          bdm_args$output_directory <- file.path(l1_output_dir, "timing_files")
           d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error=function(e) {
             lg$error("Failed build_design_matrix for id: %s, session: %s, model: %s", subj_id, subj_session, this_model)
             lg$error("Error message: %s", as.character(e))

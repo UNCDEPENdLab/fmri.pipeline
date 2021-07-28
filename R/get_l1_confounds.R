@@ -29,7 +29,7 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
 
-  # strucuture to return if this lookup fails (predictable elements so that caller can handle them)
+  # structure to return if this lookup fails (predictable elements so that caller can handle them)
   empty_set <- list(
     l1_confound_file = NA_character_, l1_confounds_df = data.frame(),
     exclude_run = FALSE, exclude_data = data.frame()
@@ -48,7 +48,7 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
 
   # Park confound files in an analysis-level subfolder, not a particular model, since they are re-used across models.
   # Note: normalizePath will fail to evaluate properly if directory does not exist
-  analysis_outdir <- get_l1_directory(id=id, session=session, gpa=gpa, create_if_missing = TRUE)
+  analysis_outdir <- get_output_directory(id=id, session=session, gpa=gpa, create_if_missing = TRUE, what="sub")
 
   # Determine whether we should be returning information about l1 confound regressors
   # and whether this information has already been calculated
@@ -76,7 +76,7 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     if (!is.null(exclude_df)) {
       exclude_run <- as.logical(exclude_df$exclude_run)
     } else {
-      lg$debug("No record of run exclusion exists in database: %s.", gpa$sqlite_db)
+      lg$debug("No record of run exclusion exists in database: %s.", gpa$output_locations$sqlite_db)
       exclude_run <- NA #default to missing
       generate_run_exclusion <- TRUE
     }

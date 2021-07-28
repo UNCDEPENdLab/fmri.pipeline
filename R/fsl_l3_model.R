@@ -79,23 +79,6 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   # FSL usually reads this from the .feat directories itself, but for batch processing, better to insert into the FSF ourselves
   # Need to put this just after the high pass filter cutoff line for Feat to digest it happily
 
-  # this stuff is only needed for the FEAT L2.gfeat -> FEAT L3 approach, which does
-  # not support heterogeneity in the cope mapping between subjects (due to missingness)
-  # l3_fsf_syntax <- c(
-  #   l3_fsf_syntax,
-  #   "# Number of lower-level copes feeding into higher-level analysis",
-  #   paste0("set fmri(ncopeinputs) ", n_l1_copes)
-  # )
-
-  # # tell FSL to analyze all lower-level copes in LVL2
-  # for (n in seq_len(n_l1_copes)) {
-  #   l3_fsf_syntax <- c(
-  #     l3_fsf_syntax,
-  #     paste0("# Use lower-level cope ", n, " for higher-level analysis"),
-  #     paste0("set fmri(copeinput.", n, ") 1"), ""
-  #   )
-  # }
-
   n_l3_models <- length(gpa$l3_models$models)
   n_l1_models <- length(gpa$l1_models$models)
 
@@ -125,6 +108,7 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
       #structure as L1cope/L2cope/L3fsf
       l3_outdir <- file.path(gpa$group_output_directory, make.names(l1_cope_name), make.names(l2_cope_name))
     }
+    
     l3_feat_dir <- file.path(
       l3_outdir,
       paste0(

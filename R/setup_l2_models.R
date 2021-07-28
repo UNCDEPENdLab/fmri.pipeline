@@ -96,7 +96,7 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL) {
 
   # refresh l1 model status in $l1_model_setup
   gpa <- refresh_feat_status(gpa, level=1L, lg=lg)
-  
+
   # loop over and setup all requested combinations of L1 and L2 models
   model_set <- expand.grid(l1_model = l1_model_names, l2_model = l2_model_names, stringsAsFactors = FALSE)
   all_l2_list <- foreach(

@@ -40,7 +40,7 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
   id <- l1_df$id[1L]
   session <- l1_df$session[1L]
   l1_model <- l1_df$l1_model[1L]
-  n_l1_copes <- gpa$n_l1_copes[l1_model] # number of lvl1 copes to combine for this model
+  n_l1_copes <- gpa$l1_models$n_contrasts[l1_model] # number of lvl1 copes to combine for this model
   l1_feat_dirs <- l1_df$feat_dir
 
   # tracking data frame for this model
@@ -123,9 +123,12 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
     )
   }
 
+  # TODO: make this more flexible and actually use the $output_locations$feat_l2
+  fsl_l1_output_dir <- get_output_directory(id = id, session = session, model_name = l1_model, gpa = gpa, glm_software = "fsl", what="l1")
+
   # TODO: make output location more flexible and not always relative to L1 outputs
-  l2_feat_dir <- file.path(dirname(l1_feat_dirs[1L]), paste0("FEAT_LVL2_", l2_model_name, ".gfeat"))
-  l2_feat_fsf <- file.path(dirname(l1_feat_dirs[1L]), paste0("FEAT_LVL2_", l2_model_name, ".fsf"))
+  l2_feat_dir <- file.path(fsl_l1_output_dir, paste0("FEAT_LVL2_", l2_model_name, ".gfeat"))
+  l2_feat_fsf <- file.path(fsl_l1_output_dir, paste0("FEAT_LVL2_", l2_model_name, ".fsf"))
 
   # add columns regarding whether inputs already exist and FEAT is already complete
   feat_l2_df <- feat_l2_df %>%

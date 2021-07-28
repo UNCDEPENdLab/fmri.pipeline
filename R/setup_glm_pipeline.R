@@ -2,7 +2,7 @@
 #'
 #' @param analysis_name A character string providing a useful name for identifying this analysis. Practically, this
 #'   influences the top-level folder name of the group analysis outputs, as well as the name of .RData objects
-#'   saved by this function to the working directory for the analysis.
+#'   saved by this function to the output directory for the analysis.
 #' @param scheduler Which HPC scheduler system should be used for queueing jobs. Options are 'slurm' or 'torque'.
 #' @param subject_data A data.frame containing all subject-level data such as age, sex, or other covariates. Columns
 #'   from \code{subject_data} can be used as covariates in group (aka 'level 3') analyses. If \code{NULL}, then
@@ -26,7 +26,7 @@
 #' @param fmri_file_regex A character string containing a Perl-compatible regular expression for the subfolder and filename
 #'   within the \code{mr_dir} field in \code{subject_data}.
 #' @param tr The repetition time of the scanning sequence in seconds. Used for setting up design matrices
-#' @param working_directory The working directory for all configuration and job submission files for this analysis.
+#' @param output_directory The output directory for all configuration and job submission files for this analysis.
 #'   Default is a subfolder called "glm_out" in the current working directory.
 #' @param drop_volumes The number of volumes to drop from the fMRI data and convolved regressors prior to analysis.
 #'   Default is 0.
@@ -57,10 +57,11 @@
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 #'    test_string test_class
 #' @export
-setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm", working_directory = file.path(getwd(), "glm_out"),
+setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm",
+                               output_directory = file.path(getwd(), analysis_name),
                                subject_data = NULL, run_data = NULL, trial_data = NULL,
                                group_output_directory = "default",
-                               output_settings = "default",
+                               output_locations = "default",
                                vm = c(
                                  id = "id", session = "session", run_number = "run_number", trial = "trial",
                                  run_trial = "run_trial", mr_dir = "mr_dir", run_nifti = "run_nifti",
@@ -100,20 +101,6 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   checkmate::assert_data_frame(trial_data)
   checkmate::assert_character(vm, unique = TRUE) # all values of vm must refer to distinct columns
 
-  #build out ability to consolidate outputs in one folder, to use specific paths for some outputs, etc.
-  output_defaults_loc <- list(
-    l1_directory=""
-  )
-  if (checkmate::test_string(output_settings) && output_settings[1L] == "default") {
-    output_settings <- list(
-      l1_directory="local",
-      l2_directory="local"
-    )
-
-  } else {
-
-  }
-
   # would be insane to have super-long TR (suggests milliseconds, not seconds passed in)
   checkmate::assert_number(tr, lower = 0.01, upper = 20)
   checkmate::assert_string(fmri_file_regex, null.ok = TRUE)
@@ -122,16 +109,16 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   checkmate::assert_character(glm_software)
   checkmate::assert_logical(use_preconvolve, null.ok = FALSE)
   checkmate::assert_logical(truncate_runs, null.ok = FALSE)
-  
+
 
   glm_software <- tolower(glm_software)
   checkmate::assert_subset(glm_software, c("fsl", "spm", "afni"))
-  checkmate::assert_integerish(n_expected_runs, lower=1L, null.ok=TRUE)
+  checkmate::assert_integerish(n_expected_runs, lower = 1L, null.ok = TRUE)
 
-  # setup working directory, if needed
-  if (!dir.exists(working_directory)) {
-    message("Setting up working directory for pipeline: ", working_directory)
-    dir.create(working_directory, recursive = TRUE)
+  # setup output directory, if needed
+  if (!dir.exists(output_directory)) {
+    message("Setting up output directory for pipeline: ", output_directory)
+    dir.create(output_directory, recursive = TRUE)
   }
 
   # validate and fill in variable mapping vector (if user only passes some fields)
@@ -229,7 +216,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   if (!is.null(l1_models)) {
     if (checkmate::test_string(l1_models) && l1_models[1L] == "prompt") {
-      l1_models <- build_l1_models(trial_data=trial_data)
+      l1_models <- build_l1_models(trial_data = trial_data)
     } else if (!checkmate::test_class(l1_models, "l1_model_set")) {
       stop("l1_models argument is not of class l1_model_set. Use build_l1_model to create this.")
     }
@@ -239,7 +226,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     # metadata
     analysis_name = analysis_name,
     scheduler = scheduler,
-    working_directory = working_directory,
+    output_directory = output_directory,
     subject_data = subject_data,
     run_data = run_data,
     trial_data = trial_data,
@@ -251,7 +238,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     glm_settings = glm_settings,
     confound_settings = confound_settings,
     n_expected_runs = n_expected_runs,
-    output_settings = output_settings,
+    output_locations = output_locations,
 
     # l1 analysis details
     fmri_file_regex = fmri_file_regex,
@@ -266,8 +253,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
     # l3 analysis details
     l3_models = l3_models,
-
-    pipeline_finalized=FALSE
+    pipeline_finalized = FALSE
   )
 
   # validate and populate any other pipeline details before execution

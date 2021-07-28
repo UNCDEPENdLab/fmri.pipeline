@@ -19,7 +19,8 @@ mixed_by(
   cl = NULL,
   refit_on_nonconvergence = 3,
   tidy_args = list(effects = "fixed", conf.int = TRUE),
-  lmer_control = lmerControl(optimizer = "nloptwrap")
+  lmer_control = lmerControl(optimizer = "nloptwrap"),
+  calculate = c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics")
 )
 }
 \arguments{

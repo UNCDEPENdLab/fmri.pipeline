@@ -44,22 +44,25 @@ fsl_l1_model <- function(
 
   fsf_template <- readLines(system.file("feat_lvl1_nparam_template.fsf", package = "fmri.pipeline"))
 
-  fsl_run_output_dir <- get_l1_directory(id = id, session = session, model_name = model_name, gpa = gpa, glm_software="fsl")
+  fsl_l1_output_dir <- get_output_directory(
+    id = id, session = session, l1_model_name = model_name,
+    gpa = gpa, glm_software = "fsl", what = "l1"
+  )
 
   l1_contrasts <- gpa$l1_models$models[[model_name]]$contrasts #contrast matrix for this model
   regressor_names <- gpa$l1_models$models[[model_name]]$regressors #names of regressors in design matrix for this model
 
   # TODO: this is not implemented and may not be necessary
-  if (dir.exists(fsl_run_output_dir) &&
-    file.exists(file.path(fsl_run_output_dir, "feat_l1_inputs.rds")) &&
+  if (dir.exists(fsl_l1_output_dir) &&
+    file.exists(file.path(fsl_l1_output_dir, "feat_l1_inputs.rds")) &&
     isFALSE(gpa$glm_settings$fsl$force_l1_creation)) {
-    lg$info("%s exists. Skipping l1 fsf setup in fsl_l1_model().", fsl_run_output_dir)
-    subj_l1_spec <- readRDS(file.path(fsl_run_output_dir, "feat_l1_inputs.rds"))
+    lg$info("%s exists. Skipping l1 fsf setup in fsl_l1_model().", fsl_l1_output_dir)
+    subj_l1_spec <- readRDS(file.path(fsl_l1_output_dir, "feat_l1_inputs.rds"))
   }
 
-  lg$info("Create l1 fsl_run_output_dir: %s", fsl_run_output_dir)
-  dir.create(fsl_run_output_dir, showWarnings=FALSE) #one directory up from a given run
-  timing_dir <- file.path(fsl_run_output_dir, "timing_files")
+  lg$info("Create l1 fsl_l1_output_dir: %s", fsl_l1_output_dir)
+  dir.create(fsl_l1_output_dir, showWarnings=FALSE) #one directory up from a given run
+  timing_dir <- file.path(fsl_l1_output_dir, "timing_files")
 
   feat_l1_df <- data.frame(
     id = id, session = session, run_number = d_obj$runs_to_output, run_volumes = d_obj$run_volumes,
@@ -73,9 +76,8 @@ fsl_l1_model <- function(
     lg$info("Processing FSL L1 model setup for NIfTI: %s", run_nifti[rr])
     this_template <- fsf_template # start with default copy of template for this run
 
-    # TODO: perhaps support flexible names in the future
-    l1_feat_fsf <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr], ".fsf"))
-    l1_feat_dir <- file.path(fsl_run_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr]))
+    l1_feat_fsf <- file.path(fsl_l1_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr], ".fsf"))
+    l1_feat_dir <- file.path(fsl_l1_output_dir, paste0("FEAT_LVL1_run", feat_l1_df$run_number[rr]))
     feat_info[[rr]] <- get_feat_status(feat_dir = l1_feat_dir, feat_fsf = l1_feat_fsf, lg = lg)
 
     # skip re-creation of FSF and do not run below unless force_l1_creation==TRUE

@@ -1,5 +1,5 @@
 #' Interactive function to build an l1 model specification for setup_glm_pipeline
-#' 
+#'
 #' @param gpa a \code{glm_pipeline_arguments} object containing an analysis pipeline to which $l1_models
 #'   shoudl be added. If $l1_models is already present, these will be amended.
 #' @param trial_data a data.frame containing trial-level data for one or more subjects
@@ -13,12 +13,12 @@
 #' @param value_cols an optional character vector of columns in \code{trial_data} that should be in the set of signal values
 #'
 #' @details if \code{gpa} is not passed in, then we will work from trial_data and l1_model_set.
-#' 
+#'
 #' @return a \code{l1_model_set} object containing events, signals, and models, compatible with build_design_matrix
 #' @author Michael Hallquist
 #' @importFrom checkmate assert_data_frame assert_class assert_subset
 #' @export
-#' 
+#'
 build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
                            onset_cols=NULL, onset_regex=".*(onset|time).*", 
                            duration_regex=".*duration.*", value_cols=NULL) {
@@ -559,6 +559,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
   }
 
   l1_model_set$models <- model_list
+  l1_model_set$n_contrasts <- sapply(model_list, function(mm) { ncol(mm$contrasts) })
 
   if (isTRUE(use_gpa)) {
     gpa$l1_models <- l1_model_set
@@ -566,5 +567,4 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
   } else {
     return(l1_model_set)
   }
-  
 }

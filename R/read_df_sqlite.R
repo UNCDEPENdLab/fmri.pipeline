@@ -24,7 +24,7 @@ read_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number = N
 
   # open connection if needed
   if (is.null(gpa$sqlite_con) || !DBI::dbIsValid(gpa$sqlite_con)) {
-    con <- DBI::dbConnect(RSQLite::SQLite(), gpa$sqlite_db)
+    con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
     on.exit(try(DBI::dbDisconnect(con)))
   } else {
     con <- gpa$sqlite_con # recycle connection

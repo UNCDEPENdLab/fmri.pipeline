@@ -80,7 +80,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   dir_expect <- feat_queue$feat_dir
 
   # need this to be cached somewhere...
-  feat_working_directory <- file.path(gpa$working_directory, paste0("feat_l", level))
+  feat_output_directory <- file.path(gpa$output_directory, paste0("feat_l", level))
 
   # TODO: probably use a jobs | wc -l approach to throttling jobs within a submission
   # and we need to make this more flexible

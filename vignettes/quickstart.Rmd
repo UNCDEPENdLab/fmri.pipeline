@@ -1,0 +1,35 @@
+# Quickstart
+
+## Structuring outputs
+
+$output_locations
+- feat_l1_directory: location of Feat level 1 directories
+- feat_l2_directory: location of Feat level 2 directories
+- feat_l3_directory: location of Feat level 3 directories
+- sqlite_db: location of sqlite database for tracking
+- object_cache: location of .rds object to hold updated version of gpa
+
+
+notes on file structure
+output_directory: The directory where all outputs and processing scripts for this analysis will be stored
+
+If `output_directory` ends with the `analysis_name`, then no subfolder will be created.
+
+Example:
+- `gpa$output_directory <- "/proj/mnhallqlab/users/michael/fmri_test"`
+- `gpa$analysis_name <- "social_trust"`
+- result: file.path(gpa$output_directory, gpa$analysis_name)
+
+For $feat_l1_directory, the following variables are available to glue (see get_output_directory)
+-id
+-session
+-run_number
+-model_name
+-gpa[[<anything here>]] (flexible)
+
+
+
+If consolidated = TRUE,
+
+1. All l1 models will be nested in $output_directory
+2. 
