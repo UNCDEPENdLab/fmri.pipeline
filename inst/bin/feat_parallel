@@ -683,7 +683,7 @@ set logout ${GFD}/logs/feat1
         if { $fmri(robust_yn) } { set howlong [ expr int( $fmri(npts) * $fmri(evs_real) / 10 ) ] }
 	set ID [ fsl:exec "${localfeat}/feat_parallel ${fsfroot}.fsf -D $FD -I $session -flame1" -b 60 -N feat3a_flame -h $preID -l logs ]
 	#set ID [ fsl:exec "./.flame" -b $howlong -N feat3b_flame -h $ID -l logs -f ]
-	set ID [ fsl:exec "${localfeat}/feat_parallel ${fsfroot}.fsf -D $FD -flame2" -b $howlong -N feat3b_flame -h $ID -l logs ]
+	set ID [ fsl:exec "${localfeat}/feat_parallel ${fsfroot}.fsf -D $FD -P $njobs -flame2" -b $howlong -N feat3b_flame -h $ID -l logs ]
 	set ID [ fsl:exec "${localfeat}/feat_parallel ${fsfroot}.fsf -D $FD -flame3" -b 60 -N feat3c_flame -h $ID -l logs ]
 	set ID [ fsl:exec "${localfeat}/feat_parallel ${fsfroot}.fsf -D $FD -poststats 1" -b 60 -N feat4_post -h $ID -l logs ]
 	set allID "$allID -h [ fsl:exec "${localfeat}/feat_parallel ${fsfroot}.fsf -D $FD -stop" -b 1 -h $ID -N feat5_stop -l logs ]"
