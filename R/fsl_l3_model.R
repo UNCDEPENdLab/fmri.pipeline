@@ -82,55 +82,60 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   n_l3_models <- length(gpa$l3_models$models)
   n_l1_models <- length(gpa$l1_models$models)
 
+  l3_outdir <- get_output_directory(
+    l1_contrast=l1_cope_name, l1_model=l1_model,
+    l2_contrast=l2_cope_name, l2_model=l2_model,
+    l3_model=l3_model, gpa = gpa, what = "l3"
+  )
+
   # TODO: shift away from group_output_directory in favor of broader localization of outputs
-  if (isTRUE(gpa$multi_run)) {
-    n_l2_models <- length(gpa$l2_models$models)
+  # if (isTRUE(gpa$multi_run)) {
+  #   n_l2_models <- length(gpa$l2_models$models)
+  #   if (n_l1_models > 1L && n_l2_models > 1L) {
+  #     # structure as L1cope/L1model/L2cope/L2model/L3fsf
+  #     l3_outdir <- file.path(
+  #       gpa$group_output_directory, make.names(l1_cope_name), make.names(l1_model),
+  #       make.names(l2_cope_name), make.names(l2_model)
+  #     )
+  #   } else if (n_l1_models > 1L) {
+  #     # structure as L1cope/L1model/L2cope/L3fsf
+  #     l3_outdir <- file.path(
+  #       gpa$group_output_directory, make.names(l1_cope_name), make.names(l1_model),
+  #       make.names(l2_cope_name)
+  #     )
+  #   } else if (n_l2_models > 1L) {
+  #     # structure as L1cope/L2cope/L2model/L3fsf
+  #     l3_outdir <- file.path(
+  #       gpa$group_output_directory, make.names(l1_cope_name),
+  #       make.names(l2_cope_name), make.names(l2_model)
+  #     )
+  #   } else {
+  #     #structure as L1cope/L2cope/L3fsf
+  #     l3_outdir <- file.path(gpa$group_output_directory, make.names(l1_cope_name), make.names(l2_cope_name))
+  #   }
 
-    if (n_l1_models > 1L && n_l2_models > 1L) {
-      # structure as L1cope/L1model/L2cope/L2model/L3fsf
-      l3_outdir <- file.path(
-        gpa$group_output_directory, make.names(l1_cope_name), make.names(l1_model),
-        make.names(l2_cope_name), make.names(l2_model)
-      )
-    } else if (n_l1_models > 1L) {
-      # structure as L1cope/L1model/L2cope/L3fsf
-      l3_outdir <- file.path(
-        gpa$group_output_directory, make.names(l1_cope_name), make.names(l1_model),
-        make.names(l2_cope_name)
-      )
-    } else if (n_l2_models > 1L) {
-      # structure as L1cope/L2cope/L2model/L3fsf
-      l3_outdir <- file.path(
-        gpa$group_output_directory, make.names(l1_cope_name),
-        make.names(l2_cope_name), make.names(l2_model)
-      )
-    } else {
-      #structure as L1cope/L2cope/L3fsf
-      l3_outdir <- file.path(gpa$group_output_directory, make.names(l1_cope_name), make.names(l2_cope_name))
-    }
-    
-    l3_feat_dir <- file.path(
-      l3_outdir,
-      paste0(
-        "FEAT_L3-", make.names(l3_model), "_L1COPE-", make.names(l1_cope_name),
-        "_L2COPE-", make.names(l2_cope_name), ".gfeat"
-      )
-    )
-  } else {
-    l3_outdir <- file.path(gpa$group_output_directory, l1_model)
-    if (n_l1_models > 1L) {
-      # structure as L1cope/L1model/L3fsf
-      l3_outdir <- file.path(gpa$group_output_directory, make.names(l1_cope_name), make.names(l1_model))
-    } else {
-      # structure as L1cope/L3fsf
-      l3_outdir <- file.path(gpa$group_output_directory, make.names(l1_cope_name))
-    }
+  #   l3_feat_dir <- file.path(
+  #     l3_outdir,
+  #     paste0(
+  #       "FEAT_L3-", make.names(l3_model), "_L1COPE-", make.names(l1_cope_name),
+  #       "_L2COPE-", make.names(l2_cope_name), ".gfeat"
+  #     )
+  #   )
+  # } else {
+  #   l3_outdir <- file.path(gpa$group_output_directory, l1_model)
+  #   if (n_l1_models > 1L) {
+  #     # structure as L1cope/L1model/L3fsf
+  #     l3_outdir <- file.path(gpa$group_output_directory, make.names(l1_cope_name), make.names(l1_model))
+  #   } else {
+  #     # structure as L1cope/L3fsf
+  #     l3_outdir <- file.path(gpa$group_output_directory, make.names(l1_cope_name))
+  #   }
+  # }
 
-    l3_feat_dir <- file.path(
-      l3_outdir,
-      paste0("FEAT_L3-", make.names(l3_model), "_L1COPE-", make.names(l1_cope_name), ".gfeat")
-    )
-  }
+  l3_feat_dir <- file.path(
+    l3_outdir,
+    paste0("FEAT_L3-", make.names(l3_model), "_L1COPE-", make.names(l1_cope_name), ".gfeat")
+  )
 
   l3_feat_fsf <- sub(".gfeat$", ".fsf", l3_feat_dir)
 

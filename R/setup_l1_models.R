@@ -132,7 +132,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
         l1_output_dir <- get_output_directory(
           id = subj_id, session = subj_session,
-          l1_model_name = this_model, gpa = gpa, what = "l1"
+          l1_model = this_model, gpa = gpa, what = "l1"
         )
 
         if (!dir.exists(l1_output_dir)) {

@@ -45,7 +45,7 @@ fsl_l1_model <- function(
   fsf_template <- readLines(system.file("feat_lvl1_nparam_template.fsf", package = "fmri.pipeline"))
 
   fsl_l1_output_dir <- get_output_directory(
-    id = id, session = session, l1_model_name = model_name,
+    id = id, session = session, l1_model = model_name,
     gpa = gpa, glm_software = "fsl", what = "l1"
   )
 

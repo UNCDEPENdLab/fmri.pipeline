@@ -130,7 +130,7 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL) {
         feat_l2_df <- tryCatch({
           fsl_l2_model(
             l1_df = l1_df,
-            l2_model_name = this_l2_model, gpa = gpa
+            l2_model = this_l2_model, gpa = gpa
           )},
           error = function(e) {
             lg$error(

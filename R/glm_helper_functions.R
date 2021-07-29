@@ -79,10 +79,11 @@ truncate_runs <- function(s, mrfiles, mrrunnums, niftivols, drop_volumes=0) {
     first_vol <- drop_volumes #first volume to use for analysis 
 
     if (last_vol_behavior < niftivols[r]) {
-      ##more vols were acquired than presented in paradigm. Thus, truncation may be needed
-      ##check framewise displacement and truncate earlier than 12 second ITI if a big movement occurred
+      ## more vols were acquired than presented in paradigm. Thus, truncation may be needed
+      ## check framewise displacement and truncate earlier than 12 second ITI if a big movement occurred
       fd <- read.table(file.path(dirname(mrfiles[r]), "motion_info", "fd.txt"))$V1
-      badfd <- do.call(c, sapply(seq_along(fd), function(x) { if (x >= last_iti && fd[x] > 0.9) x else NULL })) #flag volumes after last_iti with high FD
+      # flag volumes after last_iti with high FD
+      badfd <- do.call(c, sapply(seq_along(fd), function(x) { if (x >= last_iti && fd[x] > 0.9) x else NULL }))
       if (length(badfd) == 0L) {
         ##no frames flagged in last volumes
         last_vol_analysis <- last_vol_behavior
@@ -483,99 +484,7 @@ get_mr_abspath <- function(mr_df, col="run_nifti") {
 
 }
 
-# consider whether we want a 'what' type argument, like subject directory, analysis directory,
-# run directory, model-specific analysis directory, etc.
 
-#' small helper function to return the location of an l1 directory based on
-#'   id, session, and run number
-#'
-#' @param id The id of a participant
-#' @param session The session number to lookup
-#' @param run_number The run number to lookup
-#' @param gpa A \code{glm_pipeline_arguments} object
-#' @param glm_software which software is being used for the analysis (since directories may vary)
-#' @param create_if_missing whether to create the directory if it does not exist
-get_output_directory <- function(id = NULL, session = NULL, run_number = NULL, l1_model_name = NULL, what="l1",
-                             gpa, glm_software = "fsl", create_if_missing = FALSE) {
-  if (checkmate::test_null(id)) {
-    stop("get_output_directory requires a specific id for lookup")
-  }
-  checkmate::assert_integerish(session, null.ok = TRUE)
-  if (is.null(session)) session <- 1
-  checkmate::assert_integerish(run_number, lower = 1, null.ok = TRUE)
-  checkmate::assert_string(l1_model_name, null.ok=TRUE)
-  checkmate::assert_class(gpa, "glm_pipeline_arguments")
-  stopifnot("run_data" %in% names(gpa))
-  checkmate::assert_data_frame(gpa$run_data)
-  checkmate::assert_logical(create_if_missing)
-  if (!is.null(l1_model_name)) checkmate::assert_subset(l1_model_name, names(gpa$l1_models$models))
-
-  lg <- lgr::get_logger("glm_pipeline/l1_setup")
-  if (is.null(run_number)) {
-    rinfo <- gpa$run_data %>% dplyr::filter(id == !!id & session == !!session)
-  } else {
-    rinfo <- gpa$run_data %>% dplyr::filter(id == !!id & session == !!session & run_number == !!run_number)
-  }
-
-  # if (nrow(rinfo) > 1L) {
-  #   print(rinfo)
-  #   lg$error("Multiple matches for a single run in get_output_directory.")
-  #   return(NULL)
-  if (nrow(rinfo) == 0L) {
-    lg$error("Unable to locate a record in gpa$run_data for id %s, session %s, run_number %s.", id, session, run_number)
-    return(NULL)
-  }
-
-  out_dir <- NULL
-  if (gpa$output_locations$feat_l1_directory == "local") {
-    if ("mr_dir" %in% names(rinfo)) {
-      lg$debug("Using mr_dir l1 directory lookup: %s", rinfo$mr_dir[1L])
-      if (is.null(l1_model_name)) {
-        lg$debug("Lookup from analysis_name: %s", gpa$analysis_name)
-        out_dir <- file.path(normalizePath(file.path(rinfo$mr_dir[1L], "..")), gpa$analysis_name)
-      } else {
-        lg$debug("Lookup from model outdir: %s", gpa$l1_models$models[[l1_model_name]]$outdir)
-        out_dir <- file.path(normalizePath(file.path(rinfo$mr_dir[1L], "..")), gpa$l1_models$models[[l1_model_name]]$outdir)
-      }
-    } else {
-      # look in parent folder of relevant run nifti and place l1 model there
-      rn <- get_mr_abspath(rinfo[1, , drop = F], "run_nifti")
-      lg$debug("Using run_nifti l1 directory lookup: %s", rn)
-
-      if (is.null(l1_model_name)) {
-        lg$debug("Lookup from analysis_name: %s", gpa$analysis_name)
-        out_dir <- file.path(
-          normalizePath(file.path(dirname(rn), "..")),
-          gpa$analysis_name
-        )
-      } else {
-        lg$debug("Lookup from model outdir: %s", gpa$l1_models$models[[l1_model_name]]$outdir)
-        out_dir <- file.path(
-          normalizePath(file.path(dirname(rn), "..")),
-          gpa$l1_models$models[[l1_model_name]]$outdir
-        )
-      }
-    }
-  } else {
-    if (what == "l1") {
-      out_dir <- glue::glue(gpa$output_locations$feat_l1_directory) # evaluate glue expression
-    } else if (what == "l2") {
-      out_dir <- glue::glue(gpa$output_locations$feat_l2_directory) # evaluate glue expression
-    } else if (what == "sub") {
-      out_dir <- glue::glue(gpa$output_locations$feat_sub_directory) # evaluate glue expression
-    } else if (what == "ses") {
-      out_dir <- glue::glue(gpa$output_locations$feat_ses_directory) # evaluate glue expression
-    }
-
-  }
-
-  if (isTRUE(create_if_missing) && !dir.exists(out_dir)) {
-    lg$debug("Create output directory: %s", out_dir)
-    dir.create(out_dir, recursive = TRUE)
-  }
-
-  return(out_dir)
-}
 
 #' small helper function to populate subject exclusions in $run_data and $subject_data
 #'

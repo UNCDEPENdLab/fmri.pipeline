@@ -2,17 +2,17 @@
 #'
 #' @param l1_df a data.frame containing all runs for a single subject and a single l1 model. This
 #'   data.frame defines the inputs for the L2 analysis (i.e., which runs to combine).
-#' @param l2_model_name a model string in gpa$l2_models containing the L2 model to setup
+#' @param l2_model a model string in gpa$l2_models containing the L2 model to setup
 #' @param gpa a \code{glm_pipeline_arguments} object containing model specification
 #' @param execute_feat a logical indicating whether to run the L2 model after creating it
 #'
 #' @importFrom dplyr mutate filter select right_join pull
 #' @author Michael Hallquist
 #' @export
-fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
+fsl_l2_model <- function(l1_df=NULL, l2_model, gpa, execute_feat=FALSE) {
   checkmate::assert_data_frame(l1_df)
   checkmate::assert_subset(c("id", "session", "l1_model"), names(l1_df))
-  checkmate::assert_string(l2_model_name) # single l2 model
+  checkmate::assert_string(l2_model) # single l2 model
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_logical(execute_feat, len=1L)
 
@@ -43,13 +43,13 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
   l1_feat_dirs <- l1_df$feat_dir
   n_l1_copes <- gpa$l1_models$n_contrasts[l1_model] # number of lvl1 copes to combine for this model
 
-  #regressor_names <- gpa$l2_models$models[[l2_model_name]]$regressors # names of regressors in design matrix for this model
+  #regressor_names <- gpa$l2_models$models[[l2_model]]$regressors # names of regressors in design matrix for this model
 
-  if (!is.null(gpa$l2_models$models[[l2_model_name]]$by_subject)) {
-    lg$info("Using per-subject l2 model specification for model: %s", l2_model_name)
+  if (!is.null(gpa$l2_models$models[[l2_model]]$by_subject)) {
+    lg$info("Using per-subject l2 model specification for model: %s", l2_model)
 
     # get subject-specific model and contrast matrices
-    ss_df <- gpa$l2_models$models[[l2_model_name]]$by_subject %>%
+    ss_df <- gpa$l2_models$models[[l2_model]]$by_subject %>%
       dplyr::filter(id == !!id & session == !!session)
 
     n_l2_copes <- ss_df$n_l2_copes
@@ -66,7 +66,7 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
     }
 
   } else {
-    n_l2_copes <- gpa$l2_models$n_contrasts[l2_model_name] # number of lvl1 copes to combine for this model
+    n_l2_copes <- gpa$l2_models$n_contrasts[l2_model] # number of lvl1 copes to combine for this model
 
     #find rows in run_data that match this subject
     dmat_rows <- gpa$run_data %>%
@@ -82,19 +82,19 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
     }
 
     # should never happen, but sanity check the model matrix against the run data
-    stopifnot(nrow(gpa$run_data) == nrow(gpa$l2_models$models[[l2_model_name]]$model_matrix))
+    stopifnot(nrow(gpa$run_data) == nrow(gpa$l2_models$models[[l2_model]]$model_matrix))
 
     # obtain rows of design for this subject
-    dmat <- gpa$l2_models$models[[l2_model_name]]$model_matrix[dmat_rows, , drop=FALSE]
+    dmat <- gpa$l2_models$models[[l2_model]]$model_matrix[dmat_rows, , drop=FALSE]
 
     # obtain contrasts for this L2 model
-    cmat <- gpa$l2_models$models[[l2_model_name]]$contrasts # l2 model contrasts
+    cmat <- gpa$l2_models$models[[l2_model]]$contrasts # l2 model contrasts
   }
 
   # tracking data frame for this model
   feat_l2_df <- data.frame(
     id = id, session = session,
-    l1_model = l1_model, l2_model = l2_model_name, n_l2_copes = n_l2_copes
+    l1_model = l1_model, l2_model = l2_model, n_l2_copes = n_l2_copes
   )
 
   # generate FSL EV syntax for these regressors
@@ -130,12 +130,12 @@ fsl_l2_model <- function(l1_df=NULL, l2_model_name, gpa, execute_feat=FALSE) {
   # TODO: make this more flexible and actually use the $output_locations$feat_l2
   fsl_l1_output_dir <- get_output_directory(
     id = id, session = session,
-    l1_model_name = l1_model, gpa = gpa, glm_software = "fsl", what = "l1"
+    l1_model = l1_model, gpa = gpa, glm_software = "fsl", what = "l1"
   )
 
   # TODO: make output location more flexible and not always relative to L1 outputs
-  l2_feat_dir <- file.path(fsl_l1_output_dir, paste0("FEAT_LVL2_", l2_model_name, ".gfeat"))
-  l2_feat_fsf <- file.path(fsl_l1_output_dir, paste0("FEAT_LVL2_", l2_model_name, ".fsf"))
+  l2_feat_dir <- file.path(fsl_l1_output_dir, paste0("FEAT_LVL2_", l2_model, ".gfeat"))
+  l2_feat_fsf <- file.path(fsl_l1_output_dir, paste0("FEAT_LVL2_", l2_model, ".fsf"))
 
   # add columns regarding whether inputs already exist and FEAT is already complete
   feat_l2_df <- feat_l2_df %>%

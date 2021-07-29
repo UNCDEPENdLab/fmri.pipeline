@@ -18,7 +18,7 @@ finalize_pipeline_configuration <- function(gpa) {
   }
 
   # new approach: use internal model names for creating output directories at subject level
-  # default to <analysis_name>/<l1_model_name>
+  # default to <analysis_name>/<l1_model>
   # add suffix if using preconvolution approach
   gpa$l1_models$models <- lapply(gpa$l1_models$models, function(mm) {
     mm$outdir <- file.path(gpa$analysis_name, paste0(mm$name, ifelse(gpa$use_preconvolve, "_preconvolve", "")))
@@ -327,11 +327,6 @@ setup_output_locations <- function(gpa, lg=NULL) {
   checkmate::assert_class(lg, "Logger")
 
   # sort out file locations
-  if (is.null(gpa$group_output_directory) || gpa$group_output_directory == "default") {
-    gpa$group_output_directory <- file.path(getwd(), "group_analyses", gpa$analysis_name)
-  }
-
-  # sort out file locations
   if (is.null(gpa$output_directory) || gpa$output_directory == "default") {
     gpa$output_directory <- file.path(getwd(), gpa$analysis_name)
   }
@@ -347,15 +342,20 @@ setup_output_locations <- function(gpa, lg=NULL) {
   # build out ability to consolidate outputs in one folder, to use specific paths for some outputs, etc.
   # if user specifies gpa$output_directory that matches gpa$analysis_name, don't at this as subfolder
 
-  feat_sub_directory <- file.path(gpa$output_directory, "feat_l1", "sub-{id}", "ses-{session}")
+  if (length(unique(gpa$session)) == 1L) {
+    feat_sub_directory <- file.path(gpa$output_directory, "feat_l1", "sub-{id}")
+  } else {
+    feat_sub_directory <- file.path(gpa$output_directory, "feat_l1", "sub-{id}", "ses-{session}")
+  }
+
   output_defaults <- list(
     # default to BIDS-style consolidated output
     consolidated = TRUE,
     feat_sub_directory = feat_sub_directory,
     feat_ses_directory = feat_sub_directory, #no difference in defaults
-    feat_l1_directory = file.path(feat_sub_directory, "{l1_model_name}"),
+    feat_l1_directory = file.path(feat_sub_directory, "{l1_model}"),
     feat_l2_directory = feat_sub_directory,
-    feat_l3_directory = file.path(gpa$output_directory, "feat_l3"),
+    feat_l3_directory = file.path(gpa$output_directory, "feat_l3", "{l1_contrast}", "{l1_model}", "{l2_contrast}"),
     scheduler_scripts = file.path(gpa$output_directory, "scheduler_scripts"),
     sqlite_db = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".sqlite")),
     object_cache = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".rds"))

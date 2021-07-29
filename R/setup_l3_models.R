@@ -67,6 +67,9 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   lg$debug("In setup_l3_models, passing the following L1 models to L3:")
   lg$debug("L1 model: %s", l1_model_names)
 
+  # refresh l2 model status in $l2_model_setup
+  gpa <- refresh_feat_status(gpa, level = 2L, lg = lg)
+
   excluded_runs <- gpa$run_data %>%
     dplyr::select(id, session, run_number, exclude_run, exclude_subject) %>%
     dplyr::filter(exclude_run == TRUE | exclude_subject == TRUE)
@@ -148,7 +151,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     dplyr::select(-l3_cope_number, -l3_cope_name)
 
   to_run <- get_feat_l3_inputs(gpa, l3_cope_input_df, lg)
-
+  
   all_l3_list <- foreach(
     model_info = iter(to_run), .inorder = FALSE,
     .packages = c("dependlab", "dplyr", "data.table"), .export = c("lg", "gpa", "fsl_l3_model")
