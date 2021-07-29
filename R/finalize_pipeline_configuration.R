@@ -358,7 +358,13 @@ setup_output_locations <- function(gpa, lg=NULL) {
     feat_l3_directory = file.path(gpa$output_directory, "feat_l3", "{l1_contrast}", "{l1_model}", "{l2_contrast}"),
     scheduler_scripts = file.path(gpa$output_directory, "scheduler_scripts"),
     sqlite_db = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".sqlite")),
-    object_cache = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".rds"))
+    object_cache = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".rds")),
+    setup_l1_log_txt = file.path(gpa$output_directory, "setup_l1_models.txt"),
+    setup_l1_log_json = file.path(gpa$output_directory, "setup_l1_models.json"),
+    setup_l2_log_txt = file.path(gpa$output_directory, "setup_l2_models.txt"),
+    setup_l2_log_json = file.path(gpa$output_directory, "setup_l2_models.json"),
+    setup_l3_log_txt = file.path(gpa$output_directory, "setup_l3_models.txt"),
+    setup_l3_log_json = file.path(gpa$output_directory, "setup_l3_models.json")
   )
 
   if (checkmate::test_string(gpa$output_locations) && gpa$output_locations[1L] == "default") {

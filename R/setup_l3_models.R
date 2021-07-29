@@ -58,6 +58,14 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   if (is.null(l1_model_names)) l1_model_names <- names(gpa$l1_models$models)
 
   lg <- lgr::get_logger("glm_pipeline/l3_setup")
+  if (isTRUE(gpa$log_txt) && !"setup_l3_log_txt" %in% names(lg$appenders)) {
+    lg$add_appender(lgr::AppenderFile$new(gpa$output_locations$setup_l3_log_txt), name = "setup_l3_log_txt")
+  }
+
+  if (isTRUE(gpa$log_json) && !"setup_l3_log_json" %in% names(lg$appenders)) {
+    lg$add_appender(lgr::AppenderJson$new(gpa$output_locations$setup_l3_log_json), name = "setup_l3_log_json")
+  }
+
   lg$debug("In setup_l3_models, setting up the following L3 models:")
   lg$debug("L3 model: %s", l3_model_names)
   if (isTRUE(gpa$multi_run)) {
@@ -122,11 +130,6 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   subj_df <- gpa$subject_data %>%
     dplyr::filter(exclude_subject==FALSE) %>%
     select(id, session)
-
-  if (isTRUE(gpa$log_txt)) {
-    # TODO: abstract the log file name to finalize_pipeline_configuration function
-    lg$add_appender(lgr::AppenderFile$new("setup_l3_models.txt"), name = "txt")
-  }
 
   # loop over and setup all requested combinations of L1, L2, and L3 models
   feat_l3_df <- list()

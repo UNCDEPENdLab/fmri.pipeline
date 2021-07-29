@@ -32,7 +32,13 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   if (is.null(l1_model_names)) { l1_model_names <- names(gpa$l1_models$models) }
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
-  if (isTRUE(gpa$log_txt)) { lg$add_appender(lgr::AppenderFile$new("setup_l1_models.txt"), name="txt") }
+  if (isTRUE(gpa$log_json) && !"setup_l1_log_json" %in% names(lg$appenders)) {
+    lg$add_appender(lgr::AppenderJson$new(gpa$output_locations$setup_l1_log_json), name = "setup_l1_log_json")
+  }
+
+  if (isTRUE(gpa$log_txt) && !"setup_l1_log_txt" %in% names(lg$appenders)) {
+    lg$add_appender(lgr::AppenderFile$new(gpa$output_locations$setup_l1_log_txt), name = "setup_l1_log_txt")
+  }
 
   # TODO: This is a mess if use the l1_model_names since we will always be overwriting what's in the l1_model_setup
   # data.frame. We need more of an append/update approach, perhaps like the sqlite setup for the overall pipeline.
@@ -56,7 +62,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
   all_subj_l1_list <- foreach(subj_df = iter(gpa$subject_data, by="row"), .inorder=FALSE, .packages=c("dependlab", "dplyr"),
-    .export=c("truncate_runs", "fsl_l1_model", "get_mr_abspath", 
+    .export=c("truncate_runs", "fsl_l1_model", "get_mr_abspath",
     "get_output_directory", "runFSLCommand", "get_feat_status", "add_custom_feat_syntax")) %dopar% {
       subj_df <- subj_df # avoid complaints about visible global binding in R CMD check
       subj_id <- subj_df$id
@@ -112,8 +118,6 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       #loop over models to output
       for (ii in seq_along(l1_model_names)) {
         this_model <- l1_model_names[ii]
-        if (isTRUE(gpa$log_json)) { lg$add_appender(lgr::AppenderJson$new(paste0(gpa$l1_setup_log[ii], ".json")), name="json") }
-        if (isTRUE(gpa$log_txt)) { lg$add_appender(lgr::AppenderFile$new(paste0(gpa$l1_setup_log[ii], ".txt")), name="txt") }
 
         # setup design matrix for any given software package
         m_events <- data.table::rbindlist(

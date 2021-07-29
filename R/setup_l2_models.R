@@ -33,6 +33,14 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL) {
   if (is.null(l1_model_names)) l1_model_names <- names(gpa$l1_models$models)
 
   lg <- lgr::get_logger("glm_pipeline/l2_setup")
+  if (isTRUE(gpa$log_txt) && !"setup_l2_log_txt" %in% names(lg$appenders)) {
+    lg$add_appender(lgr::AppenderFile$new(gpa$output_locations$setup_l2_log_txt), name = "setup_l2_log_txt")
+  }
+
+  if (isTRUE(gpa$log_json) && !"setup_l2_log_json" %in% names(lg$appenders)) {
+    lg$add_appender(lgr::AppenderJson$new(gpa$output_locations$setup_l2_log_json), name = "setup_l2_log_json")
+  }
+  
   lg$debug("In setup_l2_models, setting up the following L2 models:")
   lg$debug("L2 model: %s", l2_model_names)
   lg$debug("In setup_l2_models, passing the following L1 models to L2:")
@@ -74,11 +82,6 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL) {
     lg$warn(msg)
     warning(msg)
     return(NULL)
-  }
-
-  if (isTRUE(gpa$log_txt)) {
-    # TODO: abstract the log file name to finalize_pipeline_configuration function
-    lg$add_appender(lgr::AppenderFile$new("setup_l2_models.txt"), name = "txt")
   }
 
   if (is.null(gpa$l1_model_setup) || !inherits(gpa$l1_model_setup, "l1_setup")) {
