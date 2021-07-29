@@ -151,7 +151,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     dplyr::select(-l3_cope_number, -l3_cope_name)
 
   to_run <- get_feat_l3_inputs(gpa, l3_cope_input_df, lg)
-  
+
   all_l3_list <- foreach(
     model_info = iter(to_run), .inorder = FALSE,
     .packages = c("dependlab", "dplyr", "data.table"), .export = c("lg", "gpa", "fsl_l3_model")

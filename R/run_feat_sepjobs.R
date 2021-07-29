@@ -180,7 +180,11 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       ifelse(level == 1L, "  local odir=\"${1/.fsf/.feat}\"", "  local odir=\"${1/.fsf/.gfeat}\""),
       "  [ -f \"${odir}/.feat_fail\" ] && rm -f \"${odir}/.feat_fail\"",
       "  start_time=$( date )",
-      paste0("  ", feat_binary, " $1"),
+      "  if [ $# -eq 2 ]; then",
+      paste0("    ", feat_binary, " $1 -P $2"),
+      "  else",
+      paste0("    ", feat_binary, " $1"),
+      "  fi",
       "  exit_code=$?",
       "  end_time=$( date )",
       "  if [ $exit_code -eq 0 ]; then",
@@ -193,7 +197,11 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "}",
       sep = "\n", file = outfile, append = TRUE
     )
-    cat(paste("feat_runner", thisrun, "&"), file=outfile, sep="\n", append=TRUE)
+    if (level == 3L) {
+      cat(paste("feat_runner", thisrun, feat_cpus, "&"), file = outfile, sep = "\n", append = TRUE)
+    } else {
+      cat(paste("feat_runner", thisrun, "&"), file=outfile, sep="\n", append=TRUE)
+    }
     cat("wait\n\n", file=outfile, append=TRUE)
     if (level != 3L) {
       cat(paste(

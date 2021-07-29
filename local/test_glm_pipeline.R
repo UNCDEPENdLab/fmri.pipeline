@@ -78,7 +78,7 @@ run_df <- run_df %>% rename(subid = id) %>% mutate(id=subid)
 subject_df <- subject_df %>% rename(subid = id) %>% mutate(id=subid)
 
 gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm",
-  working_directory = "/proj/mnhallqlab/users/michael/fmri_test",
+  output_directory = "/proj/mnhallqlab/users/michael/fmri_test",
   subject_data=subject_df, run_data=run_df, trial_data=trial_df,
   tr=1.0,
   vm=c(id="subid"),
@@ -146,14 +146,14 @@ gpa <- setup_l2_models(gpa)
 load(file="gpa_tmp_9Jul2021.RData")
 gpa$l2_models$models$l2$by_subject$cope_list <- lapply(
   gpa$l2_models$models$l2$by_subject$cope_list, function(xx) {
-    xx %>% dplyr::rename(l2_cope_number=l2_cope, l2_cope_name=l2_cope_names)
+    xx %>% dplyr::rename(l2_cope_number = l2_cope, l2_cope_name = l2_cope_names)
   }
 )
 
-gpa$parallel$fsl$l3_feat_cpusperjob <- 16
-gpa$group_output_directory <- "/proj/mnhallqlab/users/michael/fmri_test/group_analyses"
 
 jobs <- run_feat_sepjobs(gpa, level=2)
+
+gpa$parallel$fsl$l3_feat_cpusperjob <- 16
 
 gpa <- setup_l3_models(gpa)
 
