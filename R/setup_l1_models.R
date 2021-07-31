@@ -47,18 +47,15 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   gpa <- refresh_feat_status(gpa, level=1L, lg=lg)
 
   #setup parallel worker pool, if requested
-  if (gpa$parallel$l1_setup_cores > 1L) {
-    lg$info("Initializing l1 setup cluster with %d cores", gpa$parallel$l1_setup_cores)
-    cl <- parallel::makeCluster(gpa$parallel$l1_setup_cores)
+  if (!is.null(gpa$parallel$l1_setup_cores) && gpa$parallel$l1_setup_cores[1L] > 1L) {
+    lg$info("Initializing l1 setup cluster with %d cores", gpa$parallel$l1_setup_cores[1L])
+    cl <- parallel::makeCluster(gpa$parallel$l1_setup_cores[1L])
     doParallel::registerDoParallel(cl)
     on.exit(try(parallel::stopCluster(cl))) #cleanup pool upon exit of this function
   } else {
     lg$info("Initializing l1 setup with serial execution")
     foreach::registerDoSEQ() #formally register a sequential 'pool' so that dopar is okay
   }
-
-  #FOR TESTING
-  #gpa$subject_data <- gpa$subject_data[1:3, ]
 
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
   all_subj_l1_list <- foreach(subj_df = iter(gpa$subject_data, by="row"), .inorder=FALSE, .packages=c("dependlab", "dplyr"),

@@ -1,0 +1,117 @@
+---
+title: "fmri.pipeline overview and design"
+author: "Michael Hallquist"
+date: "30 Jul 2021"
+output:
+  html_document:
+    code_folding: show
+    df_print: kable
+    mathjax: default
+    number_sections: yes
+    theme: spacelab
+    toc: yes
+  pdf_document:
+    code_folding: show
+    df_print: kable
+    number_sections: yes
+    toc: yes
+    toc_depth: 4
+---
+
+# Overview of pipeline setup
+
+To setup a GLM analysis for a dataset, users primarily interact with the `setup_glm_pipeline` function. Throughout the pipeline, users are expected to provide information about subject `id`, `session`, and `run_number`. At present, fmri.pipeline is intended to conduct GLM analyses for a single fMRI task, as opposed to allowing you to analyze all tasks from a given study in a single command. If you have many tasks, simply setup a GLM pipeline for each one and then run them in turn.
+
+## Key constructs in fmri.pipeline nomenclature
+
+- `id`: A character string or number that uniquely identifies a single subject in the dataset.
+- `session`: A character string or number that refers to the occasion on which the data were acquired. This is only relevant to datasets where you scan subjects in multiple sessions such as a longitudinal study. If you do not provide `session` in your input data, `fmri.pipeline` will add a session value of 1 to all subjects.
+- `run_number`: An integer referring to the repetition number of a task run for a single subject. For example, if subjects complete four runs of the same task, then the first run is 1, and the fourth run is 4.
+- `trial`: The sequential order in which task trials were presented. For example, if a run has 60 trials, `trial` should be numbered 1:60.
+
+## Input data structures to fmri.pipeline
+
+This function expects data at three levels of resolution:
+
+### `$trial_data`
+
+A data.frame of trial-varying variables including trial onset times, trial durations, and any parametric modulators that should be convolved with the HRF. This data.frame should stack data for all runs and subjects on rows (i.e., long form), using the `id`, `session`, `run_number`, and `trial` columns to uniquely identify each row. Any variables in this data.frame can be introduced as onset, duration, or value components of a given HRF-convolved regressor.
+
+*Example*:
+
+```
+id  session   run_number   trial   face_onset   decision_RT   outcome_onset
+1         1            1       1        15.99         17.12           17.42
+1         1            1       2        21.54         22.29           22.60
+...     ...          ...     ...          ...           ...             ...
+1         1            2       1        12.11         14.94           15.24
+1         1            2       2        22.76         23.51           23.82
+...     ...          ...     ...          ...           ...             ...
+2         1            1       1         9.60         12.51           12.81
+2         1            1       2        16.91         21.10           21.40
+...     ...          ...     ...          ...           ...             ...
+```
+
+### `$run_data`
+
+A data.frame containing variables that uniquely identify each run, including `id`, `session`, and `run_number`, as well as covariates such as a run-varying condition (e.g., mostly happy faces in run 1, mostly angry faces in run 2). Any covariates in this data.frame can be incorporated into level 2 (i.e,. subject-level) GLM analysis.
+
+*Example*:
+
+```
+id  session   run_number   primary_emo
+1         1            1         anger
+1         1            2           sad
+1         1            3         happy
+1         1            4       fearful
+2         1            1           sad
+2         1            2         happy
+2         1            3         anger
+2         1            4       fearful
+...     ...          ...           ...
+```
+
+### `$subject_data`
+
+A data.frame containing variables that uniquely identify each subject and occasion, as well as person/occasion characteristics that can be included in sample-level analyses of individual differences. Examples of variables that could be in `$subject_data` include mean framewise displacement for each subject (nuisance covariate), age, sex, personality variables, or external cognitive measures (e.g., digit span). Any covariate in this data.frame can be incorporated into level 3 (i.e., sample-level) GLM analysis.
+
+*Example*:
+
+```
+id  session    age  sex   impulsivity_score
+1         1   15.1    F                19.2
+1         2   17.5    F                26.7
+2         1   13.6    M                31.0
+2         2   14.8    M                29.6
+...      ...   ...  ...                 ...
+```
+
+# Overview of GLM levels used in fMRI analysis
+
+In data science terms, task fMRI data are fundamentally multilevel or 'clustered.' That is, timepoints are specific to a given run
+and task runs are nested within subject. Whereas many multilevel structures are analyzed using multilevel regression models, this is challenging in fMRI data for a couple of reasons. First, run-level data are time series data that have complex temporal characteristics (e.g., slow autocorrelation) that must be addressed by strategies like prewhitening or the inclusion of autocorrelation and moving average parameters that mitigate the risk of spurious and anticonservative statistical tests that would result from a simple ordinary least squares model. Second, we have the challenge of carrying forward parameter estimates in the run-level models for group analysis. The simple fixed-effects approach would be to include only the parameter estimates (aka 'betas') -- one per subject. What if one subject has very precise betas (small standard errors) and another has very noisy betas (large standard errors)? The approach of carrying forward betas alone does not incorporate these uncertainties, so noisy and precise betas are treated the same.
+
+Given these challenges, most fMRI software adopts the approach of separating out the estimation of activation statistics across the run, subject, and sample levels. Ideally, such an approach should propagate uncertainty estimates (usually, standard errors) from one level of the model to the next. This is analogous to meta-analyses where pooled estimates of an effect (e.g., the mean effect size for a cognitive-behavioral therapy) are weighted (inversely) by the standard error from each individual study.
+
+At present (July 2021), `fmri.pipeline` is designed with a general structure to support GLM analyses using any software, including AFNI, FSL, SPM, and R. However, the machinery is built out for FSL FEAT, which I think has some of the best features in terms of parameter estimation (e.g., Tukey tapering for prewhitening and Bayesian incorporation of lower-level standard errors in group analyses).
+
+FSL adopts the approach of analyzing each run of fMRI data in a separate GLM model. This is called a 'first-level' analysis (aka Level 1) and, fundamentally, is a time series analysis in which design regressors are convolved with a hemodynamic response function (HRF) and associations between these regressors and the BOLD are estimated for each voxel. If a subject has multiple runs of the same task, these are integrated by combining parameter estimates using a fixed-effects weighted (by standard errors) estimation approach. This yields a voxelwise estimate for each level 1 regressor (e.g., occurrence of a stimulus type) that can be carried forward for group analysis.
+
+The combination of runs for a single subject is called a 'second-level' (aka Level 2) analysis. In addition to simply averaging first-level regressors, level 2 analyses can incorporate between-run regressors that capture categorical or continuous predictors of run-to-run differences. For example, if one expects decreases in task-related activation with each additional run (task familiarity, habituation), the linear effect of run can be included as a regressor in the level 2 model. Or if a design factor varies from one run to the next (e.g., run 1 is cat pictures and run 2 is dog pictures), these can be incorporated as a dummy codes at level 2 that capture between-condition differences.
+
+The simplest and most common model at Level 2 is a simple intercept-only model in which only an intercept is included in the GLM design matrix. This model yields the weighted combination of run-level estimates for each contrast estimated at level 1. If there are no between-run predictors of interest, the intercept-only model is sufficient to prepare the data for 'third-level' (aka Level 3) analysis, which estimates effects in the overall sample.
+
+For comparison, some software packages (e.g., AFNI), concatenate all runs together and include run-specific baseline regressors to control for intensity and drift differences from one run to the next. In a concatenated approach, there are only two levels: a subject-level analysis and a sample-level analysis. Throughout fmri.pipeline, we adopt the nomenclature of a three-level perspective on fMRI data.
+
+To sum up:
+
+- Level 1 is a *run-level* analysis of the BOLD time series. The design matrix typically includes convolved regressors that represent task-related events. Parameters are estimated for each run separately.
+- Level 2 is a *subject-level* analysis that integrates Level 1 effects across all runs. Level 2 design matrices can also include regressors that capture between-run manipulations or covariates.
+- Level 3 is a *sample-level* analysis that estimates effects across all subjects. The design matrix includes between-subjects predictors (e.g., Age or trait anxiety) of task-related activation.
+
+## Distinction between two-level and three-level analyses
+
+In some designs, we may have only one run of a task.
+
+
+# Overview of GPA
