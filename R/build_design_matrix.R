@@ -541,9 +541,9 @@ build_design_matrix <- function(
     for (i in seq_along(additional_regressors)) {
       additional_regressors_currun <- data.table::fread(additional_regressors[i], data.table = FALSE)
       additional_regressors_currun$run_number <- i
-      rv = run_volumes[i]
+      rv <- run_volumes[i]
       additional_regressors_currun <- dplyr::slice(additional_regressors_currun, (drop_volumes[i]+1):rv) %>% as.data.frame()
-      additional_regressors_df <- bind_rows(additional_regressors_df, additional_regressors_currun)
+      additional_regressors_df <- dplyr::bind_rows(additional_regressors_df, additional_regressors_currun)
     }
   } else if (is.list(additional_regressors)) {
     #assuming that a list of data.frames for each run of the data
@@ -625,14 +625,6 @@ build_design_matrix <- function(
   #make sure the columns of the 2-D list are named by signal
   dimnames(dmat)[[2L]] <- names(signals_aligned)
 
-  #convert the trial-oriented dmat to a time-oriented dmat_convolved.
-  #also get an unconvolved version on the time grid for diagnostics.
-  dmat_convolved <- place_dmat_on_time_grid(dmat, convolve=TRUE, bdm_args)
-  dmat_unconvolved <- place_dmat_on_time_grid(dmat, convolve=FALSE, bdm_args)
-
-  #dmat_convolved should now be a 1-d runs list where each element is a data.frame of convolved regressors.
-  names(dmat_convolved) <- names(dmat_unconvolved) <- paste0("run_number", runs_to_output)
-
   time_offset <- tr*drop_volumes #how much time is being dropped from the beginning of the run (used to change event onsets)
   run_volumes <- run_volumes - drop_volumes #update run_volumes to reflect drops: elementwise subtraction of dropped volumes from full lengths
 
@@ -654,6 +646,17 @@ build_design_matrix <- function(
       dmat[[i, j]] <- df
     }
   }
+
+  # concatenate regressors across runs by adding timing from MR files.
+  runtiming <- cumsum(run_volumes) * tr # timing in seconds of the start of successive runs
+
+  # convert the trial-oriented dmat to a time-oriented dmat_convolved.
+  # also get an unconvolved version on the time grid for diagnostics.
+  dmat_convolved <- place_dmat_on_time_grid(dmat, convolve = TRUE, runtiming = runtiming, bdm_args)
+  dmat_unconvolved <- place_dmat_on_time_grid(dmat, convolve = FALSE, runtiming = runtiming, bdm_args)
+
+  # dmat_convolved should now be a 1-d runs list where each element is a data.frame of convolved regressors.
+  names(dmat_convolved) <- names(dmat_unconvolved) <- paste0("run_number", runs_to_output)
 
   #add additional regressors to dmat_convolved here so that they are written out as part of the write_timing_files step
   if(!is.null(additional_regressors)) {
@@ -704,7 +707,7 @@ build_design_matrix <- function(
     if ("fsl" %in% write_timing_files) {
       for (i in 1:dim(dmat)[1L]) {
         for (reg in 1:dim(dmat)[2L]) {
-          regout <- dmat[[i,reg]][,c("onset", "duration", "value"), drop=FALSE]
+          regout <- dmat[[i, reg]][, c("onset", "duration", "value"), drop=FALSE]
 
           #handle beta series outputs
           if (isTRUE(bdm_args$beta_series[reg])) {
@@ -808,11 +811,11 @@ build_design_matrix <- function(
   #compute collinearity diagnostics on the convolved signals
   collin_diag_convolved <- lapply(dmat_convolved, function(run) {
     corvals <- cor(run, use="pairwise.complete.obs")
-    vifMat <- data.frame(cbind(dummy=rnorm(nrow(run)), run)) #add dummy constant for vif
-    vifForm <- as.formula(paste("dummy ~ 1 +", paste(names(run), collapse=" + ")))
+    vif_mat <- data.frame(cbind(dummy=rnorm(nrow(run)), run)) #add dummy constant for vif
+    vif_form <- as.formula(paste("dummy ~ 1 +", paste(names(run), collapse=" + ")))
 
-    varInfl <- tryCatch(car::vif(lm(vifForm, data=vifMat)), error=function(e) { NA }) #return NA if failure
-    list(r=corvals, vif=varInfl)
+    var_infl <- tryCatch(car::vif(lm(vif_form, data=vif_mat)), error=function(e) { NA }) #return NA if failure
+    list(r=corvals, vif=var_infl)
   })
 
   # add baseline regressors to convolved design matrix, if requested
@@ -820,9 +823,6 @@ build_design_matrix <- function(
     baseline_coef_order = baseline_coef_order,
     baseline_parameterization = baseline_parameterization
   )
-
-  #concatenate regressors across runs by adding timing from MR files.
-  runtiming <- cumsum(run_volumes)*tr #timing in seconds of the start of successive runs
 
   #Define concatenatenation of all events (e.g., in an AFNI-style setup)
   #Note that we want to add the run timing from the r-1 run to timing for run r.
