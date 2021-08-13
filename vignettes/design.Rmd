@@ -20,14 +20,18 @@ output:
 
 # Overview of pipeline setup
 
-To setup a GLM analysis for a dataset, users primarily interact with the `setup_glm_pipeline` function. Throughout the pipeline, users are expected to provide information about subject `id`, `session`, and `run_number`. At present, fmri.pipeline is intended to conduct GLM analyses for a single fMRI task, as opposed to allowing you to analyze all tasks from a given study in a single command. If you have many tasks, simply setup a GLM pipeline for each one and then run them in turn.
+In `fmri.pipeline`, the primary mechanism for setting up a GLM analysis for a dataset is the `setup_glm_pipeline` function. Users are expected to provide information about subject `id`, `session`, and `run_number`. At present, fmri.pipeline is built to conduct GLM analyses for a single fMRI task, as opposed to allowing you to analyze all tasks from a given study in a single command. If you have many tasks, simply setup a GLM pipeline for each one and then run them in turn.
 
 ## Key constructs in fmri.pipeline nomenclature
 
 - `id`: A character string or number that uniquely identifies a single subject in the dataset.
 - `session`: A character string or number that refers to the occasion on which the data were acquired. This is only relevant to datasets where you scan subjects in multiple sessions such as a longitudinal study. If you do not provide `session` in your input data, `fmri.pipeline` will add a session value of 1 to all subjects.
 - `run_number`: An integer referring to the repetition number of a task run for a single subject. For example, if subjects complete four runs of the same task, then the first run is 1, and the fourth run is 4.
-- `trial`: The sequential order in which task trials were presented. For example, if a run has 60 trials, `trial` should be numbered 1:60.
+- `trial`: The sequential order in which task trials were presented, spanning across runs. For example, if each run run has 60 trials and there are 3 runs, `trial` should be numbered 1:60 in run 1, 61:120 in run 2, and 121:180 in run 3.
+- `run_trial`: At present, not fully developed because it's not especially useful as a general construct. But the idea is to have a run-specific trial number that does not depend on other runs. For example, if there are 25 trials in 2 runs, `run_trial` would be 1:25 in each run.
+- `run_nifti`: This field should be present in `$run_data` and specify the NIfTI file name for the run. Ideally, this should be a file name, but not a relative or absolute path. That said, it is up to you. If an absolute path is provided, it will be used. If a file name (e.g., `sub-102_task_processed.nii.gz`) or relative path and filename (e.g., `task_faces/sub-102_task_processed.nii.gz`) is provided, it is assumed to exist within the `mr_dir` for the run and will be combined with that path.
+- `mr_dir`: The directory containing fMRI data for either a subject or a run. This is primarily used in `$run_data` to indicate the directory where `$run_nifti` is located. If relative paths are provided for other columns such as `$l1_confound_file`, it is assumed that these are also located in `$mr_dir`.
+
 
 ## Input data structures to fmri.pipeline
 
@@ -86,6 +90,35 @@ id  session    age  sex   impulsivity_score
 ...      ...   ...  ...                 ...
 ```
 
+# Building GLM models for each level of analysis
+
+For fmri.pipeline to setup and estimate GLM models, the user first specifies what models should be fit at each level of the analysis (for background, see Overview of GLM levels below). These can be provided as model sets using the `l1_models`, `l2_models`, and `l3_models` arguments to `setup_glm_pipeline`. If the user specifies `"prompt"` as the argument for any of these levels, the pipeline will walk the user through the model setup. In general, this is the right approach since the internal structure of the model objects is a bit unintuitive. That said, you can specify the models in advance (before `setup_glm_pipeline`) or you can call `build_l1_models`, `build_l2_models`, or `build_l3_models` after `setup_glm_pipeline`.
+
+A major asset of using `fmri.pipeline` is that it handles model estimation for any combination of models across levels. The pipeline is built to fit all combination of level 1, level 2, and level 3 models for a given dataset. 
+
+For example, consider a scenario where one level 1 model includes a parametric modulator for working memory load, while another model only includes onsets for the encoding and retrieval phases of the task. Likewise, if runs vary in terms of average difficulty, one level 2 model might include the average as a continuous covariate, while another might treat average difficulty as a categorical variable (aka factor) so that nonlinearities can be examined. Finally, in the level 3 specification, one model might include nonverbal intelligence as a covariate, while another includes both age and nonverbal intelligence as covariates. In this case, `fmri.pipeline` will fit all eight model combinations (2 level 1 x 2 level 2 x 2 level 3) and provide labeled outputs for each.
+
+# Naming outputs files and folders
+
+The default file and folder structure of `fmri.pipeline` generally follows the Brain Imaging Data Structure (BIDS) specification, though somewhat loosely. That said, the user can exert considerable control over the output structure by changing the contents of the `$output_locations` list in the `gpa` object. The general idea is that the output locations can include dynamic expressions (based on the R `glue` package) that are evaluated in the appropriate context to generate the proper output file/folder. For example, this is the default expression for first-level FEAT directories (`$feat_l1_directory`):
+
+```
+"{gpa$output_directory}/feat_l1/sub-{id}/ses-{session}/{l1_model_name}"
+```
+
+Anything in curly braces is evaluated at the time of execution, allowing for the right id, session, model name, etc. to be included.
+
+TODO: Create a helper function like `gpa <- setup_output_locations(gpa)` that conducts a simple walkthrough like `build_l1_models`.
+
+Here is a description of the fields in this list:
+
+- feat_sub_directory: The location of FEAT outputs for a single subject [Is this a good idea if the user can provide anything for feat_l1?]
+- feat_ses_directory: The location of FEAT outputs for a single session (of one subject)
+
+
+
+[Use of glue etc.]
+
 # Overview of GLM levels used in fMRI analysis
 
 In data science terms, task fMRI data are fundamentally multilevel or 'clustered.' That is, timepoints are specific to a given run
@@ -111,7 +144,10 @@ To sum up:
 
 ## Distinction between two-level and three-level analyses
 
-In some designs, we may have only one run of a task.
+In some designs, we may have only one run of a task, which may include multiple conditions or blocks that are nevertheless acquired as a contiguous BOLD timeseries. In this case, there is no need for a second-level analysis that combines parameter estimates from multiple runs.
 
+Thus, in `fmri.pipeline`, if only a single run of data exists per subject, the user will build and fit level 1 and level 3 models, but there will not be any level 2 models. I suppose you could say that level 2 should be the sample-level analysis in this case, but for consistency, I have adopted a fixed nomenclature: level 1 is for runs, level 2 is for combining runs within subject, and level 3 is for sample analysis. For single-run analyses, the user simply skips the level 2 model specification step.
 
-# Overview of GPA
+For multi-run data, the user will specify level 1, level 2, and level 3 models.
+
+# Overview of GPA structure

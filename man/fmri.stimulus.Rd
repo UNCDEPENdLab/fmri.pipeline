@@ -21,7 +21,9 @@ fmri.stimulus(
   a2 = 12,
   b1 = 0.9,
   b2 = 0.9,
-  cc = 0.35
+  cc = 0.35,
+  conv_method = "r",
+  microtime_resolution = 20
 )
 }
 \arguments{
@@ -60,6 +62,13 @@ values prior to convolution, and retaining zeros will lead them to be non-zero a
 \item{b2}{The b2 parameter of the double gamma}
 
 \item{cc}{The cc parameter of the double gamma}
+
+\item{conv_method}{Method for convolving HRF with stimulus. Either "r" or "cpp". The "r" method uses an FFT-based
+internal convolution with convolve(x, y, conj=TRUE). The "cpp" method uses an internal C++ function with a
+loop-based convolution over the vectors. Unfortunately, at present, the C++ approach is noticeably slower since
+it does not use FFT to obtain the filter.}
+
+\item{microtime_resolution}{The number of bins between TRs used for calculating regressor values in continuous time}
 }
 \description{
 Extended from \code{fmri} package to allow for continuous-valued regressor,

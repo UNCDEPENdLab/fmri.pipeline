@@ -22,5 +22,8 @@ Imports:
   foreach,
   oro.nifti,
   DBI,
-  RSQLite
-
+  RSQLite,
+  Rcpp (>= 1.0.1)
+LinkingTo:
+    Rcpp,
+    RcppArmadillo
