@@ -578,7 +578,7 @@ build_design_matrix <- function(
       #mean center PPI signals -- crucial for convolution to be sensible
       ts_multipliers_currun <- as.data.frame(lapply(ts_multipliers_currun, function(x) { x - mean(x, na.rm=TRUE) } ))
       ts_multipliers_currun$run_number <- i
-      rv = run_volumes[i]
+      rv <- run_volumes[i]
 
       #message(paste0("Current run_volumes:", rv))
       if(nrow(ts_multipliers_currun) < rv) { stop("ts_multiplier regressor has fewer observations than run_volumes") }
@@ -659,7 +659,7 @@ build_design_matrix <- function(
   names(dmat_convolved) <- names(dmat_unconvolved) <- paste0("run_number", runs_to_output)
 
   #add additional regressors to dmat_convolved here so that they are written out as part of the write_timing_files step
-  if(!is.null(additional_regressors)) {
+  if (!is.null(additional_regressors)) {
     for (i in seq_along(dmat_convolved)) {
       #this is clunky, but necessary to make sure we grab the right additional signals (would need to refactor dmat_convolved to get it less clunky)
       runnum <- as.numeric(sub("run_number(\\d+)", "\\1", names(dmat_convolved)[i], perl=TRUE))
@@ -714,20 +714,22 @@ build_design_matrix <- function(
             for (k in 1:nrow(regout)) {
               #only write out a 3-column file for a non-zero event (regardless of rm_zeros)
               if (isFALSE(abs(regout[k,"value"]) < 1e-5)) {
-                fname <- paste0("run_number", runs_to_output[i], "_", dimnames(dmat)[[2L]][reg], "_b", sprintf("%03d", k), "_FSL3col.txt")
+                fname <- paste0("run", runs_to_output[i], "_", dimnames(dmat)[[2L]][reg], "_b", sprintf("%03d", k), "_FSL3col.txt")
                 write.table(regout[k,,drop=FALSE], file=file.path(output_directory, fname), sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
               }
             }
           } else {
-            if (center_values && !all(na.omit(regout[,"value"]) == 0.0)) {
+            if (center_values && !all(na.omit(regout[, "value"]) == 0.0)) {
               #remove zero-value events from the regressor
               regout <- regout[regout[,"value"] != 0, ]
 
               #now mean center values (unless there is no variation, such as a task indicator function)
-              if (sd(regout[,"value"], na.rm=TRUE) > 0) { regout[,"value"] <- regout[,"value"] - mean(regout[,"value"], na.rm=TRUE) }
+              if (sd(regout[, "value"], na.rm=TRUE) > 0) { 
+                regout[,"value"] <- regout[,"value"] - mean(regout[,"value"], na.rm=TRUE)
+              }
             }
 
-            fname <- paste0("run_number", runs_to_output[i], "_", dimnames(dmat)[[2L]][reg], "_FSL3col.txt")
+            fname <- paste0("run", runs_to_output[i], "_", dimnames(dmat)[[2L]][reg], "_FSL3col.txt")
             write.table(regout, file=file.path(output_directory, fname), sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
 
           }
@@ -784,8 +786,8 @@ build_design_matrix <- function(
           runvalues <- do.call(cbind, lapply(combmat[i,], function(reg) { reg[,"value"] }))
 
           #AFNI doesn't like us if we pass in the boxcar ourselves in the dmBLOCK format (since it creates this internally). Filter out.
-          indicatorFunc <- apply(runvalues, 2, function(col) { all(col == 1.0)} )
-          if (any(indicatorFunc)) { runvalues <- runvalues[,-1*which(indicatorFunc), drop=FALSE] }
+          indicator_func <- apply(runvalues, 2, function(col) { all(col == 1.0)} )
+          if (any(indicator_func)) { runvalues <- runvalues[,-1*which(indicator_func), drop=FALSE] }
 
           #if the indicator regressor was the only thing present, revert to the notation TIME:DURATION notation for dmBLOCK (not TIME*PARAMETER:DURATION)
           if (ncol(runvalues) == 0L) {

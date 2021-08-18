@@ -324,8 +324,11 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
     #for each event, convolve it with hrf, normalize, then sum convolved events to get full timecourse
     normedEvents <- sapply(seq_along(times), function(i) {
       #obtain unit-convolved duration-modulated regressor to define HRF prior to modulation by parametric regressor
-      stim_conv <- fmri.stimulus(n_vols=n_vols, values=1.0, times=times[i], durations=durations[i], tr=tr, demean=FALSE, center_values=FALSE, convolve = convolve, ts_multiplier=ts_multiplier,
-                                 a1=hrf_parameters["a1"], a2=hrf_parameters["a2"], b1=hrf_parameters["b1"], b2=hrf_parameters["b2"], cc=hrf_parameters["cc"])
+      stim_conv <- fmri.stimulus(
+        n_vols = n_vols, values = 1.0, times = times[i], durations = durations[i], tr = tr, demean = FALSE,
+        center_values = FALSE, convolve = convolve, ts_multiplier = ts_multiplier,
+        a1 = hrf_parameters["a1"], a2 = hrf_parameters["a2"], b1 = hrf_parameters["b1"], b2 = hrf_parameters["b2"], cc = hrf_parameters["cc"]
+      )
 
       if (normeach) {
         if (times[i] + durations[i] > (n_vols*tr - 20)) {

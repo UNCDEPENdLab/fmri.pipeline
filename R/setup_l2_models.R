@@ -40,7 +40,7 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL) {
   if (isTRUE(gpa$log_json) && !"setup_l2_log_json" %in% names(lg$appenders)) {
     lg$add_appender(lgr::AppenderJson$new(gpa$output_locations$setup_l2_log_json), name = "setup_l2_log_json")
   }
-  
+
   lg$debug("In setup_l2_models, setting up the following L2 models:")
   lg$debug("L2 model: %s", l2_model_names)
   lg$debug("In setup_l2_models, passing the following L1 models to L2:")
