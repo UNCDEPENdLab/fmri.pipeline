@@ -29,6 +29,27 @@
 #' @param tidy_args A list of arguments passed to tidy.merMod for creating the coefficient data.frame. By default,
 #'   the function only returns the fixed effects and computes confidence intervals using the Wald method.
 #' @param lmer_control An lmerControl object specifying any optimization settings to be passed to lmer()
+#' @param calculate A character vector specifying what calculations should be returned by the function. 
+#'   The options are: "parameter_estimates_reml", "parameter_estimates_ml", and "fit_statistics".
+#' @param emmeans_spec A named list of emmeans calls to be run for each model to obtain model predictions.
+#'   Any arguments that are valid for emmean can be passed through the list structure.
+#' @param return_models A boolean indicating whether to return fitted model objects, which can be used for
+#'   post hoc contrasts, visualization and statistics. Note that model objects can get very large, so be
+#'   careful with this option since it could generate a massive data object.
+#'   
+#' @details In general, restricted maximum likelihood (REML) should be used for making inferences about parameter
+#'   estimates, whereas ML should be used for model comparisons based on log-likelihood (e.g., AIC). 
+#'   If "parameter_estimates_reml" are requested in \code{calculate}, then models will
+#'   be fitted with REML. If "parameter_estimates_ml" and/or "fit_statistics" are requested, models will be
+#'   fitted with ML. Note that if both REML and ML are requested, each model is fit twice since the estimators
+#'   each have advantages and disadvantages noted above.
+#'   
+#' Example of emmeans_spec usage:
+#'   mixed_by(data, emmeans_spec=list(
+#'     em1=list(specs = ~ memory | noise_level, adjust = "sidak", weights = "cells"),
+#'     em2=list(specs = ~ memory * noise_level, weights = "equal"),
+#'     em3=list(specs = ~ memory)
+#'   ))
 #'
 #' @return A data.table object containing all coefficients for each model estimated separately by \code{split_on}
 #'
@@ -47,7 +68,9 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
                      ncores = 1L, cl = NULL, refit_on_nonconvergence = 3,
                      tidy_args = list(effects = "fixed", conf.int = TRUE),
                      lmer_control = lmerControl(optimizer = "nloptwrap"),
-                     calculate=c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics")) {
+                     calculate=c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"),
+                     return_models = FALSE, emmeans_spec = NULL) {
+  
   require(data.table) # remove for package
   require(dplyr)
   require(lme4)
@@ -81,6 +104,8 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
   checkmate::assert_integerish(ncores, lower = 1L)
   checkmate::assert_class(cl, "cluster", null.ok = TRUE)
   checkmate::assert_subset(calculate, c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"))
+  checkmate::assert_logical(return_models, len = 1L)
+  checkmate::assert_list(emmeans_spec, null.ok = TRUE)
 
   # turn off refitting if user specifies 'FALSE'
   if (is.logical(refit_on_nonconvergence) && isFALSE(refit_on_nonconvergence)) {
@@ -239,6 +264,14 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
         
         # no option to return model object at present
         # ret[, model := list(list(thism))] #not sure why a double list is needed, but a single list does not make a list-column
+        
+        if (!is.null(emmeans_spec)) {
+          emms <- lapply(emmeans_spec, function(emm) {
+            tidy(do.call(emmeans, c(emm, object=list(thism))))
+          })
+          names(emms) <- names(emmeans_spec)
+          
+        }
         
         ret[, dt := NULL] # drop original data.table for this split from data
         
