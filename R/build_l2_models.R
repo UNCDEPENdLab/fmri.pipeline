@@ -14,9 +14,7 @@
 #' @importFrom dplyr select
 #' @export
 #'
-build_l2_models <- function(gpa,
-                            variable_mapping = c(id = "id", run = "run", trial = "trial", run_trial = "trial", mr_dir = "mr_dir"),
-                            regressor_cols = NULL) {
+build_l2_models <- function(gpa, regressor_cols = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   # capture whether we are building level 2 (subject) or level 3 (sample) models
   fname <- match.call()[[1]]
@@ -37,13 +35,13 @@ build_l2_models <- function(gpa,
   lg <- lgr::get_logger(paste0("glm_pipeline/l", level, "_setup"))
 
   # allow deferred model specification upstream
-  if (model_set == "prompt") model_set <- NULL
+  if (!is.null(model_set) && model_set == "prompt") model_set <- NULL
 
   checkmate::assert_class(model_set, "hi_model_set", null.ok = TRUE)
   checkmate::assert_subset(regressor_cols, names(data)) # make sure all parametric regressor columns are in the data frame
 
   possible_cols <- names(data)
-  possible_cols <- possible_cols[!possible_cols %in% variable_mapping[c("mr_dir")]]
+  possible_cols <- possible_cols[!possible_cols %in% "mr_dir"]
   data <- data %>% dplyr::select(all_of(possible_cols))
 
   if (!is.null(regressor_cols)) { # select only columns requested by user
@@ -170,6 +168,7 @@ build_l2_models <- function(gpa,
         title = "Do you want to specify the model formula or walk through the model builder?"
       )
     }
+
     if (model_approach == 1L) {
       # formula approach
       res <- NULL
@@ -193,9 +192,13 @@ build_l2_models <- function(gpa,
         })
       }
 
-      # ensure that all variables in formula are present in the data frame
       mm$model_variables <- all.vars(model_formula)
-      checkmate::assert_subset(mm$model_variables, names(data), empty.ok = FALSE)
+
+      # if not an intercept-only model, ensure that all variables in formula are present in the data frame
+      if (!identical(model_formula, ~1)) {
+        checkmate::assert_subset(mm$model_variables, names(data), empty.ok = FALSE)
+      }
+
     } else if (model_approach == 2L) {
       # walkthrough approach (only support additive model for now)
       mm$model_variables <- get_regressors(data, regressor_cols = mm$model_variables)
