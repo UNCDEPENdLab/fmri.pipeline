@@ -178,6 +178,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
           "Use variable names in the dataset provided to this function.",
           "Note that this syntax follows standard R model syntax. See ?lm for details.",
           "Example: ~ emotion * wmload + run_number\n",
+          "For an intercept-only model, specify: ~1",
           "Available column names: \n"
         ), sep = "\n")
         cat(strwrap(paste(names(data), collapse = ", "), 70, exdent = 5), sep = "\n")
