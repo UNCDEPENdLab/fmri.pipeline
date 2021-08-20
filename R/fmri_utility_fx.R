@@ -261,15 +261,17 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
 
   if (is.null(tr) || !is.numeric(tr)) { stop("tr must be a number (in seconds)") }
 
-  #check for the possibility that the onset of an event falls after the number of good volumes in the run
-  #if so, this should be omitted from the convolution altogether
-  if (any(whichHigh <- (reg[, "onset"]/tr) >= n_vols)) {
+  # check for the possibility that the onset of an event falls after the number of good volumes in the run
+  # if so, this should be omitted from the convolution altogether
+  which_high <- (reg[, "onset"] / tr) >= n_vols
+
+  if (any(which_high, na.rm=TRUE)) {
     if (isTRUE(convolve)) {
       message("At least one event onset falls on or after last volume of run. Omitting this from model.")
     }
-    print(reg[whichHigh, ])
+    print(reg[which_high, ])
     r_orig <- reg
-    reg <- reg[!whichHigh, ] #this loses attributes, need to copy them over for code to work as expected
+    reg <- reg[!which_high, ] #this loses attributes, need to copy them over for code to work as expected
     attr(reg, "event") <- attr(r_orig, "event")
     attr(reg, "reg_name") <- attr(r_orig, "reg_name")
   }
