@@ -137,113 +137,172 @@ truncate_runs <- function(s, mrfiles, mrrunnums, niftivols, drop_volumes=0) {
 
 #' helper function for generating motion regressors from raw 6-parameter motion coregistration
 #'
-#' @param motion_params file containing 6 motion parameters
-#' @param col.names names of columns in \code{motion_params}, in order from left to right
-#' @param regressors names of regressors to generate and return to caller
+#' @param motion_params_file file containing 6 motion parameters
+#' @param col.names names of columns in \code{motion_params_file}, in order from left to right
 #' @param drop_volumes number of volumes to drop from beginning of motion params
 #' @param last_volume final volume to include from motion params (if truncated at end). If \code{NULL},
 #'   then the end of the time series is not truncated.
 #' @param rot_units The units of the rotation parameters. Default is "rad" for radians
-#' @param tra_units The units of the translation parameter. Default is "mm" for millimeters
+#' @param tra_units The units of the translation parameter. Only support "mm" right now millimeters
 #'
 #' @importFrom data.table fread
 #' @importFrom checkmate assert_file_exists assert_subset assert_integerish
 #' @keywords internal
-generate_motion_regressors <- function(motion_params = "motion.par",
+generate_motion_regressors <- function(motion_params_file = "motion.par",
                                        col.names = c("rx", "ry", "rz", "tx", "ty", "tz"),
-                                       regressors = c("rx", "ry", "rz", "tx", "ty", "tz"),
                                        demean = FALSE, drop_volumes = 0L, last_volume=NULL,
-                                       rot_units="rad", tra_units="mm", na.strings="NA") {
+                                       rot_units="rad", tra_units="mm",
+                                       na.strings="NA", lg=NULL) {
 
-  checkmate::assert_file_exists(motion_params)
-  if (is.null(col.names)) { col.names <- c("rx", "ry", "rz", "tx", "ty", "tz") } #explicit defaults in case of null
+  checkmate::assert_class(lg, "Logger")
+  checkmate::assert_file_exists(motion_params_file)
+  if (is.null(col.names)) {
+    # explicit defaults in case of null
+    lg$debug("In generate_motion_regressors, defaulting column order rx, ry, rz, tx, ty, tz")
+    col.names <- c("rx", "ry", "rz", "tx", "ty", "tz")
+  }
   checkmate::assert_subset(col.names, c("rx", "ry", "rz", "tx", "ty", "tz"))
-  checkmate::assert_logical(demean)
-  checkmate::assert_integerish(drop_volumes, lower=0)
+  checkmate::assert_logical(demean, len = 1L)
+  checkmate::assert_integerish(drop_volumes, lower = 0)
+  checkmate::assert_character(spike_volume)
+  checkmate::assert_subset(rot_units, c("rad", "deg"))
+  checkmate::assert_subset(tra_units, c("mm"))
+  checkmate::assert_character(na.strings)
 
-  # Regressors that are not motion-related can be passed in from outside (since we have a combined 
-  # l1_confound_regressors argument). These could include CSF, WM, or whatever. Subset down to just
-  # the values that can be calculated from motion params alone so that the logic below of parameter naming holds up.
-  regressors <- intersect(regressors,
-    c("FD", "rx", "ry", "rz", "tx", "ty", "tz",
-    "drx", "dry", "drz", "dtx", "dty", "dtz",
-    "qdrx", "qdry", "qdrz", "qdtx", "qdty", "qdtz")
-  )
+  # read raw motion parameters file
+  mot <- data.table::fread(motion_params_file, na.strings = na.strings)
 
-  #if none of the confound regressors is a motion parameter, then quietly return NULL
-  if (length(regressors) == 0L) { return(invisible(NULL)) }
-
-  mot <- data.table::fread(motion_params, col.names=col.names, na.strings=na.strings)
+  if (ncol(mot) != 6L) {
+    lg$error("In generate_motion_regressors, motion file %s has %d columns instead of 6!", motion_params_file, ncol(mot))
+    return(invisible(NULL))
+  } else {
+    data.table::setnames(mot, col.names)
+  }
 
   if (is.null(last_volume)) { last_volume <- nrow(mot) }
   checkmate::assert_integerish(last_volume, upper=nrow(mot))
 
+  # subset motion regressors to match drops and truncations in fmri data
   mot <- mot[(1 + drop_volumes):last_volume, ]
 
-  if ("FD" %in% regressors || any(derivcols <- grepl("^q?d{1}.*", regressors, perl=TRUE))) {
-    mot_deriv <- mot[, lapply(.SD, function(x) { c(0, diff(x)) })]
-    setnames(mot_deriv, paste0("d", names(mot))) #add delta to names
-    mot <- cbind(mot, mot_deriv)
-  }
+  mot_deriv <- mot[, lapply(.SD, function(x) { c(0, diff(x)) })]
+  data.table::setnames(mot_deriv, paste0("d", names(mot))) #add delta to names
+  mot <- cbind(mot, mot_deriv)
 
-  #quadratics always computed after derivative calculation
-  if (any(quadcols <- grepl("^q{1}.*", regressors, perl=TRUE))) {
-    mot_quad <- mot[, lapply(.SD, function(x) { x^2 })]
-    data.table::setnames(mot_quad, paste0("q", names(mot))) #add delta to names
-    mot <- cbind(mot, mot_quad)
-  }
+  mot_quad <- mot[, lapply(.SD, function(x) { x^2 })]
+  data.table::setnames(mot_quad, paste0("q", names(mot))) #add delta to names
+  mot <- cbind(mot, mot_quad)
 
-  if ("FD" %in% regressors) {
-    #need to adapt in case of degrees (this is based on radians)
-    #https://wiki.cam.ac.uk/bmuwiki/FMRI
-    if (rot_units=="rad") {
-      FD <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * sum(abs(x))) +
-        apply(mot_deriv[, c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
-    } else if (rot_units=="deg") {
-      FD <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * (pi / 180) * sum(abs(x))) +
-        apply(mot_deriv[, c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
-    } else {
-      stop("not done yet")
-    }
-    mot <- cbind(mot, FD=FD)
+  # https://wiki.cam.ac.uk/bmuwiki/FMRI
+  if (rot_units=="rad") {
+    FD <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * sum(abs(x))) +
+      apply(mot_deriv[, c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
+  } else if (rot_units=="deg") {
+    FD <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * (pi / 180) * sum(abs(x))) +
+      apply(mot_deriv[, c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
+  } else {
+    stop("unknown")
   }
+  mot <- cbind(mot, FD = FD)
 
-  mot <- mot[, ..regressors] #keep regressors of interest
+  # Demean all columns, if requested
+  # Note that this is not used internally at present to avoid surprising results when testing motion thresholds (e.g., FD)
   if (isTRUE(demean)) {
-    mot <- mot[, lapply(.SD, function(x) { x - mean(x, na.rm=TRUE) }) ] #demean all columns
+    mot <- mot[, lapply(.SD, function(x) { x - mean(x, na.rm=TRUE) }) ]
   }
 
   ##just PCA motion on the current run
   ##mregressors <- pca_motion(run_nifti[r], runlengths[r], motion_parfile="motion.par", numpcs=3, drop_volumes=drop_volumes)$motion_pcs_concat
 
-  #need to adapt this implementation -- create spike regressors based on a motion threshold
-  ## if (spikeregressors) { #incorporate spike regressors if requested (not used in conventional AROMA)
-  ##   censorfile <- file.path(dirname(run_nifti[rr]), "motion_info", "fd_0.9.mat")
-  ##   if (file.exists(censorfile) && file.info(censorfile)$size > 0) {
-  ##     censor <- read.table(censorfile, header=FALSE)
-  ##     censor <- censor[(1+drop_volumes):runlengths[rr],,drop=FALSE] #need no drop here in case there is just a single volume to censor
-  ##     #if the spikes fall outside of the rows selected above, we will obtain an all-zero column. remove these
-  ##     censor <- censor[,sapply(censor, sum) > 0,drop=FALSE]
-  ##     if (ncol(censor) == 0L) { censor <- NULL } #no volumes to censor within valid timepoints
-  ##     mregressors <- censor
-  ##   }
-  ## }
-
-  ##add CSF and WM regressors (with their derivatives)
-  ## nuisancefile <- file.path(dirname(run_nifti[rr]), "nuisance_regressors.txt")
-  ## if (file.exists(nuisancefile)) {
-  ##   nuisance <- read.table(nuisancefile, header=FALSE)
-  ##   nuisance <- nuisance[(1+drop_volumes):runlengths[rr],,drop=FALSE]
-  ##   nuisance <- as.data.frame(lapply(nuisance, function(col) { col - mean(col) })) #demean
-  ##   #cat("about to cbind with nuisance\n")
-  ##   #print(str(mregressors))
-  ##   #print(str(nuisance))
-  ##   if (!is.null(mregressors)) { mregressors <- cbind(mregressors, nuisance) #note that in R 3.3.0, cbind with NULL or c() is no problem...
-  ##   } else { mregressors <- nuisance }
-  ## }
-
   return(mot)
 }
+
+#' compute spike regressors from a data.frame or matrix of motion parameters and a set of
+#'   expressions that are evaluated against this parameter matrix.
+#' 
+#' @param mot a data.frame or matrix with volumes on rows and named motion parameters on columns
+#' @param spike_volume a character vector of expressions to evaluate against \code{mot}. Resulting
+#'   columns will be prefixed with the names of each expression. If the expressions are unnamed,
+#'   prefixes will be expr1_, expr2_, etc.
+#'
+#' @return a matrix of spike regressors (volumes on rows, spike regressors on columns)
+#' @importFrom dplyr lead lag
+#' @keywords internal
+compute_spike_regressors <- function(mot = NULL, spike_volume = NULL, lg=NULL) {
+  if (is.null(mot)) return(NULL)
+  if (is.null(spike_volume)) return(NULL)
+
+  checkmate::assert_character(spike_volume, null.ok = TRUE)
+  checkmate::assert_class(lg, "Logger")
+
+  spikes <- do.call(cbind, lapply(seq_along(spike_volume), function(ii) {
+    has_bounds <- grepl(";", spike_volume[ii], fixed = TRUE)
+    if (isTRUE(has_bounds)) {
+      esplit <- strsplit(spike_volume[ii], "\\s*;\\s*", perl = TRUE)[[1L]]
+      stopifnot(length(esplit) == 2L)
+      spike_bounds <- as.integer(eval(parse(text = paste0("c(", esplit[1], ")"))))
+      expr <- esplit[2L]
+    } else {
+      spike_bounds <- 0L # only volume where expr is TRUE
+      expr <- spike_volume[ii]
+    }
+
+    spike_vec <- tryCatch(with(mot, eval(parse(text = expr))),
+      error = function(e) {
+        lg$error(
+          "Problem evaluating spike regressors for file %s, expr: %s",
+          motion_params_file, expr
+        )
+        return(NULL)
+      }
+    )
+
+    which_spike <- which(spike_vec)
+    if (length(which_spike) == 0L) return(NULL) #don't attempt to generate spikes if no TRUE values
+
+    # will evaluate to NULL if which_spike is empty
+    spike_df <- do.call(cbind, lapply(which_spike, function(xx) {
+      vec <- rep(0, nrow(mot))
+      vec[xx] <- 1
+      return(vec)
+    }))
+
+    colnames(spike_df) <- paste0("spike_", seq_len(ncol(spike_df)))
+
+    if (!is.null(spike_df) && !identical(spike_bounds, 0L)) {
+      # apply shifts
+      shifts <- spike_bounds[spike_bounds != 0L]
+      res <- do.call(cbind, lapply(shifts, function(ss) {
+        shift_mat <- apply(spike_df, 2, function(col) {
+          if (ss < 0) {
+            dplyr::lead(col, abs(ss), default = 0)
+          } else {
+            dplyr::lag(col, ss, default = 0)
+          }
+        })
+        colnames(shift_mat) <- paste0("spike_", ifelse(ss < 0, "m", "p"), abs(ss), "_", 1:ncol(shift_mat))
+        return(shift_mat)
+      }))
+
+      spike_df <- cbind(spike_df, res)
+    }
+
+    if (is.null(names(spike_volume)[ii]) || names(spike_volume)[ii] == "") {
+      colnames(spike_df) <- paste0("expr", ii, "_", colnames(spike_df))
+    } else {
+      colnames(spike_df) <- paste0(names(spike_volume)[ii], "_", colnames(spike_df))
+    }
+    return(spike_df)
+
+  }))
+
+  # we don't want to generate any duplicate columns (linear dependency problems) 
+  # due to overlapping expressions or ranges of evaluation
+  spikes <- spikes[, !duplicated(spikes, MARGIN=2)]
+
+  return(spikes)
+}
+
 
 #' small helper function for compressing motion parameters using PCA
 #'
@@ -254,7 +313,8 @@ generate_motion_regressors <- function(motion_params = "motion.par",
 #'   among motion parameters
 #'
 #' @return A matrix of PCA-compressed motion regressors
-#' 
+#' @importFrom psych smc
+#' @keywords internal
 pca_motion <- function(motion_df, num_pcs=3L, zscore=TRUE, verbose=FALSE) {
   checkmate::assert_data_frame(motion_df)
   checkmate::assert_integerish(num_pcs, lower=1, upper=50)
@@ -266,7 +326,7 @@ pca_motion <- function(motion_df, num_pcs=3L, zscore=TRUE, verbose=FALSE) {
   cumvar <- cumsum(pc$sdev^2/sum(pc$sdev^2))
 
   if (isTRUE(verbose)) message("first", num_pcs, "motion principal components account for: ", round(cumvar[num_pcs], 3))
-  mregressors <- pc$x[,1:num_pcs] #cf Churchill et al. 2012 PLoS ONE
+  mregressors <- pc$x[, 1:num_pcs] #cf Churchill et al. 2012 PLoS ONE
   attr(mregressors, "variance.explained") <- cumvar[num_pcs]
 
   if (isTRUE(verbose)) {
@@ -288,7 +348,6 @@ generateRunMask <- function(mrfiles, outdir=getwd(), outfile="runmask") {
   runFSLCommand(paste0("fslmaths ", paste(paste0(outdir, "/tmin", seq_along(mrfiles)), collapse=" -add "), " ", outdir, "/tminsum"))#, fsldir="/usr/local/ni_tools/fsl")
   runFSLCommand(paste0("fslmaths ", outdir, "/tminsum -thr ", length(mrfiles), " -bin ", outdir, "/", outfile))#, fsldir="/usr/local/ni_tools/fsl")
   runFSLCommand(paste0("imrm ", outdir, "/tmin*"))#, fsldir="/usr/local/ni_tools/fsl") #cleanup 
-  
 }
 
 visualizeDesignMatrix <- function(d, outfile=NULL, runboundaries=NULL, events=NULL, includeBaseline=TRUE) {

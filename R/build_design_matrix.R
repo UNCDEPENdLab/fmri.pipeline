@@ -386,7 +386,7 @@ build_design_matrix <- function(
       s$value <- 1
     }
 
-    df_events <- dplyr::filter(events, event==s$event)
+    df_events <- dplyr::filter(events, event == s$event)
     df_signal <- s$value #the signal data.frame for this signal
     if (length(df_signal)==1L && is.numeric(df_signal)) { #task indicator-type regressor
       s_aligned <- df_events

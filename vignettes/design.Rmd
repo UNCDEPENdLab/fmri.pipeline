@@ -75,6 +75,46 @@ id  session   run_number   primary_emo
 ...     ...          ...           ...
 ```
 
+In general, we recommend providing paths to NIfTI, confound, and motion parameter files directly as part of `$run_data` since this requires you to
+setup and verify that these are exactly what you wish to analyze. Alternatively, you can use the approach of providing a regular expression
+for NIfTI images using `$fmri_file_regex`. See section below entitled "Providing file inputs to fmri.pipeline". If you wish to provide the file 
+inputs directly (recommended), then you can add additional columns to `$run_data`. Specifically, these fields are crucial:
+
+- `$run_nifti`: Relative or absolute path to the preprocessed NIfTI image to be analyzed for each run
+- `$motion_params_file`: Relative or absolute path to text file containing 6 motion parameters derived from motion coregistration (should be
+     volumes x regressors)
+- `$confound_input_file`: Relative or absolute path to text file containing all possible confounds that you wish to be included in l1 models.
+- `$mr_dir`: This is the directory containing run-level files. If provided, then all relative paths in `$run_nifti`, `$motion_params_file`, and
+     `$confound_input_file` are assumed to be relative to `$mr_dir`. This reduces the number of long paths in `$run_data` if data are organized
+     in subject or run folders.
+
+*Example with MRI file locations*:
+
+```
+id  session   run_number   primary_emo                                mr_dir            run_nifti  motion_params_file  confound_input_file
+1         1            1         anger  /proj/lab/studies/go_no_go/sub1/run1  preproc_run1.nii.gz          motion.par    run_confounds.txt
+1         1            2           sad  /proj/lab/studies/go_no_go/sub1/run2  preproc_run2.nii.gz          motion.par    run_confounds.txt
+1         1            3         happy  /proj/lab/studies/go_no_go/sub1/run3  preproc_run3.nii.gz          motion.par    run_confounds.txt
+1         1            4       fearful  /proj/lab/studies/go_no_go/sub1/run4  preproc_run4.nii.gz          motion.par    run_confounds.txt
+2         1            1           sad  /proj/lab/studies/go_no_go/sub2/run1  preproc_run1.nii.gz          motion.par    run_confounds.txt
+2         1            2         happy  /proj/lab/studies/go_no_go/sub2/run2  preproc_run2.nii.gz          motion.par    run_confounds.txt
+2         1            3         anger  /proj/lab/studies/go_no_go/sub2/run3  preproc_run3.nii.gz          motion.par    run_confounds.txt
+2         1            4       fearful  /proj/lab/studies/go_no_go/sub2/run4  preproc_run4.nii.gz          motion.par    run_confounds.txt
+...     ...          ...           ...
+```
+
+In this case, the path to the NIfTI for id 1, session 1, run_number 1 would be: `/proj/lab/studies/go_no_go/sub1/run1/preproc_run1.nii.gz`.
+(This combines mr_dir with run_nifti).
+
+Alternatively, you can mix and match relative and absolute paths if data structures are somewhat irregular. For example:
+
+```
+id  session   run_number   primary_emo                                mr_dir            run_nifti  motion_params_file  confound_input_file
+1         1            1         anger                                    NA            /home/michael/sub1_reprocessed.nii.gz motion.par    run_confounds.txt
+1         1            2           sad  /proj/lab/studies/go_no_go/sub1/run2  preproc_run2.nii.gz          motion.par    run_confounds.txt
+```
+
+
 ### `$subject_data`
 
 A data.frame containing variables that uniquely identify each subject and occasion, as well as person/occasion characteristics that can be included in sample-level analyses of individual differences. Examples of variables that could be in `$subject_data` include mean framewise displacement for each subject (nuisance covariate), age, sex, personality variables, or external cognitive measures (e.g., digit span). Any covariate in this data.frame can be incorporated into level 3 (i.e., sample-level) GLM analysis.
@@ -150,4 +190,63 @@ Thus, in `fmri.pipeline`, if only a single run of data exists per subject, the u
 
 For multi-run data, the user will specify level 1, level 2, and level 3 models.
 
+# fMRI confounds
+
+## Populating
+
+## Elements of gpa$confound_settings
+
+- motion_params_file: 
+
+## Motion parameters
+
+If a `$motion_params_file` is provided, then this file will be read for each subject and the 6 motion parameters will be encoded as columns of a data.frame using the following nomenclature:
+
+- `rx`: rotation in the x dimension
+- `ry`: rotation in the y dimension
+- `rz`: rotation in the z dimension
+- `tx`: translation in the x dimension
+- `ty`: translation in the y dimension
+- `tz`: translation in the z dimension
+
+From these 6 parameters, we can also derive the first-order difference (aka temporal derivative), which is the change in each parameter relative to the previous volume. These motion parameters will have the prefix 'd' to indicate that they are derivatives, such as `drx`.
+
+We can also obtain the quadratic versions of any of these parameters by squaring them. Quadratic motion parameters have the prefix 'q', such as `qdrx`, which is the square of the change in rotation in the x dimension.
+
+These considerations are elaborated in Satterthwaite et al., 2013, NeuroImage and in Ciric et al., 2017, NeuroImage. For example, when people talk about the 24-parameter motion regressors approach, they are referring to all of the above:
+
+`rx, ry, rz, tx, ty, tz, qrx, qry, qrz, qtx, qty, qtz, drx, dry, drz, dtx, dty, dtz, dqrx, dqry, dqrz, dqtx, dqty, dqtz`
+
+
+## Spike regressors
+
+One way to control for head movement artifacts in GLMs is to include regressors in the design matrix that absorb all unique variance for a volume in which the participant moved her/his head. These regressors are sometimes called 'spike regressors' because they have a value of 1 at the moment of movement and values of 0 for all other volumes. This coding scheme leads the variance attributable to that volume to be captured by the spike regressor, as opposed to substantive regressors from the task. See Siegel et al., 2014, Human Brain Mapping, for additional details.
+
+In fmri.pipeline, spike regressors can be added by specifying a `$spike_volumes` expression in `$confound_settings`. This R expression is evaluated against the motion parameters for the subject, which can include any of the 24 possible motion parameters above plus the framewise displacement (called `FD` by the pipeline). Any volume for which the `$spike_volumes` expression is TRUE will yield a spike regressor to effectively censors that timepoint from estimates of other regressors.
+
+Notably, the expression can be amended to censor volumes that precede or follow the volume for which `$spike_volumes` was TRUE. For example, when a spike occurs, if you would like to remove the previous two volumes, as well as the following volume, you can use the syntax:
+
+```
+gpa$confound_settings$spike_volumes <- "-2:1; FD > 0.9"
+```
+
+The expression preceding the semi-colon denotes which volumes around the spike should be censored. This expression uses R's vector notation, so
+you can use a range like -1:1 (-1, 0, 1) or you can use a comma-separated list to be more specific. So, the syntax `-1,2` would censor the preceding volume (-1), and two volumes in the future (2), but not the volume at which the spike occurred (0) or the following volume (1).
+
+If you do not provide a range expression, spike regressors will only be generated for volumes at which the spike occurred (0):
+
+```
+gpa$confound_settings$spike_volumes <- "FD > 0.9"
+```
+
+You can also provide multiple definitions for spikes, which will be evaluated and added to the confounds:
+
+```
+gpa$confound_settings$spike_volumes <- c(fd0p9 = "-1,0; FD > 0.9", big_translate = "tx > 2 | ty > 2 | tz > 2")
+```
+
 # Overview of GPA structure
+
+# Providing file inputs to fmri.pipeline
+
+TODO: Cover the direct `$run_data` approach versus the regex approach.
