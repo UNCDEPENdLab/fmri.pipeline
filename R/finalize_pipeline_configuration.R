@@ -189,14 +189,107 @@ finalize_pipeline_configuration <- function(gpa) {
     gpa$glm_settings$fsl$force_l3_creation <- FALSE
   }
 
+  # process confound settings
+  gpa <- finalize_confound_settings(gpa)
+
+  # populate subject exclusions
+  gpa <- calculate_subject_exclusions(gpa)
+
+  # cache gpa object to file
+  res <- tryCatch(saveRDS(gpa, file = gpa$output_locations$object_cache), error = function(e) {
+    lg$error("Could not save gpa object to file: %s", gpa$output_locations$object_cache)
+    return(NULL)
+  })
+
+  # save subject, run, and trial data to the database, too
+  lg$info("Writing run_data to sqlite db: %s", gpa$output_locations$sqlite_db)
+  DBI::dbWriteTable(conn = gpa$sqlite_con, name = "run_data", value = gpa$run_data, overwrite = TRUE)
+
+  lg$info("Writing subject_data to sqlite db: %s", gpa$output_locations$sqlite_db)
+  DBI::dbWriteTable(conn = gpa$sqlite_con, name = "subject_data", value = gpa$subject_data, overwrite = TRUE)
+
+  lg$info("Writing trial_data to sqlite db: %s", gpa$output_locations$sqlite_db)
+  DBI::dbWriteTable(conn = gpa$sqlite_con, name = "trial_data", value = gpa$trial_data, overwrite = TRUE)
+
+  lg$debug("Setting pipeline_finalized to TRUE")
+  gpa$pipeline_finalized <- TRUE
+
+  return(gpa)
+}
+
+# helper function for settings up $output_directory and $output_locations
+setup_output_locations <- function(gpa, lg=NULL) {
+  checkmate::assert_class(lg, "Logger")
+
+  # sort out file locations
+  if (is.null(gpa$output_directory) || gpa$output_directory == "default") {
+    gpa$output_directory <- file.path(getwd(), gpa$analysis_name)
+  }
+
+  if (!basename(gpa$output_directory) == gpa$analysis_name) {
+    lg$info("Appending analysis_name %s to output_directory %s", gpa$analysis_name, gpa$output_directory)
+  }
+
+  lg$info("Output directory for this analysis will be: %s", gpa$output_directory)
+
+  # see quickstart.Rmd > output settings
+
+  # build out ability to consolidate outputs in one folder, to use specific paths for some outputs, etc.
+  # if user specifies gpa$output_directory that matches gpa$analysis_name, don't at this as subfolder
+
+  if (length(unique(gpa$session)) == 1L) {
+    feat_sub_directory <- file.path("{gpa$output_directory}", "feat_l1", "sub-{id}")
+  } else {
+    feat_sub_directory <- file.path("{gpa$output_directory}", "feat_l1", "sub-{id}", "ses-{session}")
+  }
+
+  output_defaults <- list(
+    # default to BIDS-style consolidated output
+    consolidated = TRUE,
+    feat_sub_directory = feat_sub_directory,
+    feat_ses_directory = feat_sub_directory, #no difference in defaults
+    feat_l1_directory = file.path(feat_sub_directory, "{l1_model}"),
+    feat_l2_directory = feat_sub_directory,
+    feat_l3_directory = file.path(gpa$output_directory, "feat_l3", "{l1_contrast}", "{l1_model}", "{l2_contrast}"),
+    scheduler_scripts = file.path(gpa$output_directory, "scheduler_scripts"),
+    sqlite_db = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".sqlite")),
+    object_cache = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".rds")),
+    setup_l1_log_txt = file.path(gpa$output_directory, "setup_l1_models.txt"),
+    setup_l1_log_json = file.path(gpa$output_directory, "setup_l1_models.json"),
+    setup_l2_log_txt = file.path(gpa$output_directory, "setup_l2_models.txt"),
+    setup_l2_log_json = file.path(gpa$output_directory, "setup_l2_models.json"),
+    setup_l3_log_txt = file.path(gpa$output_directory, "setup_l3_models.txt"),
+    setup_l3_log_json = file.path(gpa$output_directory, "setup_l3_models.json")
+  )
+
+  if (checkmate::test_string(gpa$output_locations) && gpa$output_locations[1L] == "default") {
+    gpa$output_locations <- output_defaults
+  }
+
+  miss_fields <- setdiff(names(output_defaults), names(gpa$output_locations))
+  if (length(miss_fields) > 0L) {
+    for (mm in miss_fields) {
+      lg$info("Populating missing $output_locations field: %s with default: %s", mm, output_defaults[[mm]])
+      gpa$output_locations[[mm]] <- output_defaults[[mm]]
+    }
+  }
+
+  return(gpa)
+
+}
+
+finalize_confound_settings <- function(gpa, lg) {
+  checkmate::assert_class(lg, "Logger")
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+
   #####
   # populate confounds
   if (!is.null(gpa$confound_settings$motion_params_file)) {
     checkmate::assert_string(gpa$confound_settings$motion_params_file)
-    if ("motion_params" %in% names(gpa$run_data)) {
-      message("motion_params column already in run_data. Not using motion_params_file specification.")
+    if ("motion_params_file" %in% names(gpa$run_data)) {
+      lg$info("motion_params_file column already in run_data. Not using $confound_settings$motion_params_file specification.")
     } else {
-      gpa$run_data$motion_params <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
+      gpa$run_data$motion_params_file <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
         if (isTRUE(gpa$run_data$run_nifti_present[ii])) {
           normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$motion_params_file))
         } else {
@@ -204,13 +297,12 @@ finalize_pipeline_configuration <- function(gpa) {
         }
       })
     }
-    gpa$run_data$motion_params_present <- file.exists(get_mr_abspath(gpa$run_data, "motion_params"))
+    gpa$run_data$motion_params_present <- file.exists(get_mr_abspath(gpa$run_data, "motion_params_file"))
   } else {
-    if (!"motion_params" %in% names(gpa$run_data)) {
-      gpa$run_data$motion_params <- gpa$run_data$motion_params_present <- NA_character_
+    if (!"motion_params_file" %in% names(gpa$run_data)) {
+      gpa$run_data$motion_params_file <- gpa$run_data$motion_params_present <- NA_character_
     }
   }
-
 
   if ("confound_input_file" %in% names(gpa$run_data)) {
     lg$info("confound_input_file column already in run_data. Not using confound_input_file specification.")
@@ -241,9 +333,9 @@ finalize_pipeline_configuration <- function(gpa) {
       motion_params_file = NULL,
       motion_params_colnames = NULL,
       confound_input_file = "confounds.tsv",
-      l1_confound_regressors = NULL, # column names in motion_params and/or confound_input_file
+      l1_confound_regressors = NULL, # column names in motion_params_file and/or confound_input_file
       exclude_run = "mean(FD) > 0.5 || max(FD) > 6)",
-      spike_volume = "FD > 0.9"
+      spike_volumes = "FD > 0.9"
     )
   } else {
     checkmate::assert_string(gpa$confound_settings$exclude_run, null.ok = TRUE)
@@ -296,89 +388,4 @@ finalize_pipeline_configuration <- function(gpa) {
 
   gpa$run_data$exclude_run <- sapply(confound_info, "[[", "exclude_run")
   gpa$run_data$l1_confound_file <- sapply(confound_info, "[[", "l1_confound_file")
-
-  # populate subject exclusions
-  gpa <- calculate_subject_exclusions(gpa)
-
-  # cache gpa object to file
-  res <- tryCatch(saveRDS(gpa, file = gpa$output_locations$object_cache), error = function(e) {
-    lg$error("Could not save gpa object to file: %s", gpa$output_locations$object_cache)
-    return(NULL)
-  })
-
-  # save subject, run, and trial data to the database, too
-  lg$info("Writing run_data to sqlite db: %s", gpa$output_locations$sqlite_db)
-  DBI::dbWriteTable(conn = gpa$sqlite_con, name = "run_data", value = gpa$run_data, overwrite = TRUE)
-
-  lg$info("Writing subject_data to sqlite db: %s", gpa$output_locations$sqlite_db)
-  DBI::dbWriteTable(conn = gpa$sqlite_con, name = "subject_data", value = gpa$subject_data, overwrite = TRUE)
-
-  lg$info("Writing trial_data to sqlite db: %s", gpa$output_locations$sqlite_db)
-  DBI::dbWriteTable(conn = gpa$sqlite_con, name = "trial_data", value = gpa$trial_data, overwrite = TRUE)
-
-  lg$debug("Setting pipeline_finalized to TRUE")
-  gpa$pipeline_finalized <- TRUE
-
-  return(gpa)
-}
-
-# helper function for settings up $output_directory and $output_locations
-setup_output_locations <- function(gpa, lg=NULL) {
-  checkmate::assert_class(lg, "Logger")
-
-  # sort out file locations
-  if (is.null(gpa$output_directory) || gpa$output_directory == "default") {
-    gpa$output_directory <- file.path(getwd(), gpa$analysis_name)
-  }
-
-  if (!basename(gpa$output_directory) == gpa$analysis_name) {
-    lg$info("Appending analysis_name %s to output_directory %s", gpa$analysis_name, gpa$output_directory)
-  }
-
-  lg$info("Output directory for this analysis will be: %s", gpa$output_directory)
-
-  # see quickstart.Rmd > output settings
-
-  # build out ability to consolidate outputs in one folder, to use specific paths for some outputs, etc.
-  # if user specifies gpa$output_directory that matches gpa$analysis_name, don't at this as subfolder
-
-  if (length(unique(gpa$session)) == 1L) {
-    feat_sub_directory <- file.path(gpa$output_directory, "feat_l1", "sub-{id}")
-  } else {
-    feat_sub_directory <- file.path(gpa$output_directory, "feat_l1", "sub-{id}", "ses-{session}")
-  }
-
-  output_defaults <- list(
-    # default to BIDS-style consolidated output
-    consolidated = TRUE,
-    feat_sub_directory = feat_sub_directory,
-    feat_ses_directory = feat_sub_directory, #no difference in defaults
-    feat_l1_directory = file.path(feat_sub_directory, "{l1_model}"),
-    feat_l2_directory = feat_sub_directory,
-    feat_l3_directory = file.path(gpa$output_directory, "feat_l3", "{l1_contrast}", "{l1_model}", "{l2_contrast}"),
-    scheduler_scripts = file.path(gpa$output_directory, "scheduler_scripts"),
-    sqlite_db = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".sqlite")),
-    object_cache = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".rds")),
-    setup_l1_log_txt = file.path(gpa$output_directory, "setup_l1_models.txt"),
-    setup_l1_log_json = file.path(gpa$output_directory, "setup_l1_models.json"),
-    setup_l2_log_txt = file.path(gpa$output_directory, "setup_l2_models.txt"),
-    setup_l2_log_json = file.path(gpa$output_directory, "setup_l2_models.json"),
-    setup_l3_log_txt = file.path(gpa$output_directory, "setup_l3_models.txt"),
-    setup_l3_log_json = file.path(gpa$output_directory, "setup_l3_models.json")
-  )
-
-  if (checkmate::test_string(gpa$output_locations) && gpa$output_locations[1L] == "default") {
-    gpa$output_locations <- output_defaults
-  }
-
-  miss_fields <- setdiff(names(output_defaults), names(gpa$output_locations))
-  if (length(miss_fields) > 0L) {
-    for (mm in miss_fields) {
-      lg$info("Populating missing $output_locations field: %s with default: %s", mm, output_defaults[[mm]])
-      gpa$output_locations[[mm]] <- output_defaults[[mm]]
-    }
-  }
-
-  return(gpa)
-
 }

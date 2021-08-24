@@ -40,8 +40,8 @@ argument (which is in scans) is ignored. That is, \code{onsets} and \code{times}
 
 \item{center_values}{Whether to demean values vector before convolution}
 
-\item{rm_zeros}{Whether to remove zeros from events vector prior to convolution. Generally a good idea since we typically center
-values prior to convolution, and retaining zeros will lead them to be non-zero after mean centering.}
+\item{rm_zeros}{Whether to remove zeros from events vector prior to convolution. Generally a good idea since we typically 
+center values prior to convolution, and retaining zeros will lead them to be non-zero after mean centering.}
 
 \item{convolve}{Whether to convolve the regressor with the HRF. If FALSE, a time series of events, durations, and heights is returned.}
 

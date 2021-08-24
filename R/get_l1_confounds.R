@@ -131,7 +131,7 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
   motion_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_motion_parameters")
   if (is.null(motion_df) && isTRUE(rinfo$motion_params_present[1])) {
     lg$debug("Generating motion params for id: %s, session: %s, run_number: %s", id, session, run_number)
-    mfile <- get_mr_abspath(rinfo, "motion_params")[1]
+    mfile <- get_mr_abspath(rinfo, "motion_params_file")[1]
     lg$debug("Reading motion file: %s", mfile)
 
     # Note: Avoid demeaning columns within generate_motion_regressors so that calculated regressors do not
@@ -144,7 +144,7 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
         drop_volumes = drop_volumes, last_volume = last_volume, demean=FALSE,
         na.strings=gpa$confound_settings$na_strings
       )}, error = function(e) {
-      lg$error("Failed to read motion file: %s with error %s", rinfo$motion_params[1], as.character(e))
+      lg$error("Failed to read motion file: %s with error %s", rinfo$motion_params_file[1], as.character(e))
       return(NULL)
     })
 
@@ -250,8 +250,11 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     all_confounds[, num_cols] <- as.data.frame(apply(all_confounds[, num_cols], 2, function(x) {
       x - mean(x, na.rm = TRUE)
     }))
-
   }
+
+  # incorporate spike regressors if requested (not used in conventional AROMA)
+  spikes <- compute_spike_regressors(motion_df, spike_volumes, lg = lg)
+  if (!is.null(spikes)) all_confounds <- cbind(all_confounds, spikes)
 
   lg$debug("Writing l1 confounds to file: %s", expected_l1_confound_file)
   write.table(all_confounds, file = expected_l1_confound_file, row.names = FALSE, col.names = FALSE)

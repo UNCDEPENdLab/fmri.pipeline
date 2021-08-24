@@ -357,16 +357,22 @@ build_design_matrix <- function(
   if (!"duration" %in% names(events)) { stop("events data.frame must contain duration column with the event duration in seconds") }
 
   if (!"run_number" %in% names(events)) {
-    message("No run_number column found in events. Assuming 1 run_number and adding this column")
+    message("No run_number column found in events. Assuming run_number=1 and adding this column")
     events$run_number <- 1
   }
 
-  if (any(events$duration < 0)) {
+  if (any(is.na(events$duration))) {
+    print(subset(events, is.na(duration)))
+    stop("Invalid missing (NA) durations included in events data.frame")
+  } else if (any(events$duration < 0)) {
     print(subset(events, duration < 0))
     stop("Invalid negative durations included in events data.frame")
   }
 
-  if (any(events$onset < 0)) {
+  if (any(is.na(events$onset))) {
+    print(subset(events, is.na(onset)))
+    stop("Invalid missing (NA) onsets included in events data.frame")
+  } else if (any(events$onset < 0)) {
     print(subset(events, onset < 0))
     stop("Invalid negative onsets included in events data.frame")
   }
@@ -380,7 +386,7 @@ build_design_matrix <- function(
       s$value <- 1
     }
 
-    df_events <- dplyr::filter(events, event==s$event)
+    df_events <- dplyr::filter(events, event == s$event)
     df_signal <- s$value #the signal data.frame for this signal
     if (length(df_signal)==1L && is.numeric(df_signal)) { #task indicator-type regressor
       s_aligned <- df_events
@@ -549,13 +555,13 @@ build_design_matrix <- function(
     #assuming that a list of data.frames for each run of the data
     #all that need to do is concatenate the data frames after filtering any obs that are above run_volumes
     additional_regressors_df <- data.frame()
-    for(i in seq_along(additional_regressors)) {
+    for (i in seq_along(additional_regressors)) {
       additional_regressors_currun <- additional_regressors[[i]]
       stopifnot(is.data.frame(additional_regressors_currun))
       additional_regressors_currun$run_number <- i
       rv = run_volumes[i]
       message(paste0("Current run_volumes:", rv))
-      if(nrow(additional_regressors_currun) < rv) { stop("additional regressors have fewer observations than run_volumes") }
+      if (nrow(additional_regressors_currun) < rv) { stop("additional regressors have fewer observations than run_volumes") }
       additional_regressors_currun <- dplyr::slice(additional_regressors_currun, (drop_volumes[i]+1):rv) %>% as.data.frame()
       additional_regressors_df <- bind_rows(additional_regressors_df, additional_regressors_currun)
     }
@@ -581,7 +587,7 @@ build_design_matrix <- function(
       rv <- run_volumes[i]
 
       #message(paste0("Current run_volumes:", rv))
-      if(nrow(ts_multipliers_currun) < rv) { stop("ts_multiplier regressor has fewer observations than run_volumes") }
+      if (nrow(ts_multipliers_currun) < rv) { stop("ts_multiplier regressor has fewer observations than run_volumes") }
       ts_multipliers_currun <- dplyr::slice(ts_multipliers_currun, (drop_volumes[i]+1):rv) %>% as.data.frame()
       ts_multipliers_df <- bind_rows(ts_multipliers_df, ts_multipliers_currun)
     }
@@ -625,8 +631,11 @@ build_design_matrix <- function(
   #make sure the columns of the 2-D list are named by signal
   dimnames(dmat)[[2L]] <- names(signals_aligned)
 
-  time_offset <- tr*drop_volumes #how much time is being dropped from the beginning of the run (used to change event onsets)
-  run_volumes <- run_volumes - drop_volumes #update run_volumes to reflect drops: elementwise subtraction of dropped volumes from full lengths
+  # how much time is being dropped from the beginning of the run (used to change event onsets)
+  time_offset <- tr*drop_volumes
+  
+  # update run_volumes to reflect drops: elementwise subtraction of dropped volumes from full lengths
+  run_volumes <- run_volumes - drop_volumes
 
   if (time_offset[1L] > 0) {
     if (length(unique(time_offset)) == 1L) { to_print <- time_offset[1L]
@@ -725,7 +734,7 @@ build_design_matrix <- function(
 
               #now mean center values (unless there is no variation, such as a task indicator function)
               if (sd(regout[, "value"], na.rm=TRUE) > 0) { 
-                regout[,"value"] <- regout[,"value"] - mean(regout[,"value"], na.rm=TRUE)
+                regout[, "value"] <- regout[, "value"] - mean(regout[, "value"], na.rm=TRUE)
               }
             }
 

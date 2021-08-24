@@ -22,3 +22,4 @@ A matrix of PCA-compressed motion regressors
 \description{
 small helper function for compressing motion parameters using PCA
 }
+\keyword{internal}

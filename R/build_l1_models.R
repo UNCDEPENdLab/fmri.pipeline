@@ -34,7 +34,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
     trial_data <- gpa$trial_data
     l1_model_set <- gpa$l1_models
   } else {
-    lg$info("In build_l1_models, using trial_data passed in, rather than gpa object")
+    lg$debug("In build_l1_models, using trial_data passed in, rather than gpa object")
     use_gpa <- FALSE
   }
 
@@ -532,8 +532,12 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
 
     if (add_more == 1L) { #add
       mm <- create_new_model(signal_list)
-      if (mm$name %in% names(l1_model_set)) { warning("A model with the same name exists: ", mm$name, ". Overwriting it.") }
-      model_list[[mm$name]] <- mm #add to set
+      if (!is.null(mm)) { #NULL indicates that user canceled model setup process
+        if (mm$name %in% names(l1_model_set)) {
+          lg$warn("A model with the same name exists: ", mm$name, ". Overwriting it.")
+        }
+        model_list[[mm$name]] <- mm #add to set
+      }
     } else if (add_more == 2L) { #modify
       if (is.null(model_list)) {
         message("No models available to modify. Add at least one model first")

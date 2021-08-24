@@ -5,23 +5,21 @@
 \title{helper function for generating motion regressors from raw 6-parameter motion coregistration}
 \usage{
 generate_motion_regressors(
-  motion_params = "motion.par",
+  motion_params_file = "motion.par",
   col.names = c("rx", "ry", "rz", "tx", "ty", "tz"),
-  regressors = c("rx", "ry", "rz", "tx", "ty", "tz"),
   demean = FALSE,
   drop_volumes = 0L,
   last_volume = NULL,
   rot_units = "rad",
   tra_units = "mm",
-  na.strings = "NA"
+  na.strings = "NA",
+  lg = NULL
 )
 }
 \arguments{
-\item{motion_params}{file containing 6 motion parameters}
+\item{motion_params_file}{file containing 6 motion parameters}
 
-\item{col.names}{names of columns in \code{motion_params}, in order from left to right}
-
-\item{regressors}{names of regressors to generate and return to caller}
+\item{col.names}{names of columns in \code{motion_params_file}, in order from left to right}
 
 \item{drop_volumes}{number of volumes to drop from beginning of motion params}
 
@@ -30,7 +28,7 @@ then the end of the time series is not truncated.}
 
 \item{rot_units}{The units of the rotation parameters. Default is "rad" for radians}
 
-\item{tra_units}{The units of the translation parameter. Default is "mm" for millimeters}
+\item{tra_units}{The units of the translation parameter. Only support "mm" right now millimeters}
 }
 \description{
 helper function for generating motion regressors from raw 6-parameter motion coregistration
