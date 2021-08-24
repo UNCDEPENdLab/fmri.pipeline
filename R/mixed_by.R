@@ -179,6 +179,21 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
     }
   }
 
+  # process emmeans specification setup
+  if (!is.null(emmeans_spec)) {
+    #has the outcome and model name to lookup whether to run a given emmeans specification
+    if (is.null(names(emmeans_spec))) {
+      names(emmeans_spec) <- paste("emm", seq_along(emmeans_spec), sep="_")
+    } else {
+      empty_names <- which(names(emmeans_spec) == "")
+      names(emmeans_spec)[empty_names] <- paste("emm", empty_names, sep="_")
+    }
+    
+    emm_metadata <- rbindlist(lapply(emmeans_spec, function(ee) { data.frame(ee[c("outcome", "model_name")])})) %>%
+      mutate(emm_number = 1:n(), emm_label=names(emmeans_spec))
+  }
+  
+  
   # setup parallel compute
   if (ncores > 1L && is.null(cl)) {
     cl <- makeCluster(ncores)
@@ -239,10 +254,10 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
     data <- data[, .(dt = list(.SD)), by = split_on]
 
     # loop over outcomes and rhs formulae within each chunk to maximize compute time by chunk (reduce worker overhead)
-    message("Starting parallel processing")
+    message("Starting processing of data splits")
     mresults[[i]] <- foreach(
-      dt_split = iter(data, by = "row"), .packages = c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed"),
-      .noexport = "data", .export = "split_on", .inorder = FALSE
+      dt_split = iter(data, by = "row"), .packages = c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed", "emmeans"),
+      .noexport = "data", .inorder = FALSE
     ) %dopar% {
       split_results <- lapply(seq_len(nrow(model_set)), function(mm) {
         ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) # replace LHS
@@ -265,20 +280,33 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
         # no option to return model object at present
         # ret[, model := list(list(thism))] #not sure why a double list is needed, but a single list does not make a list-column
         
+        # process emmeans
         if (!is.null(emmeans_spec)) {
-          emms <- lapply(emmeans_spec, function(emm) {
-            tidy(do.call(emmeans, c(emm, object=list(thism))))
-          })
-          names(emms) <- names(emmeans_spec)
+          emm_torun <- emm_metadata %>% 
+            filter(outcome == !!model_set$outcome[[mm]] & model_name == !!names(model_set$rhs)[mm])
           
+          if (nrow(emm_torun) > 0L) {
+            this_emmspec <- emmeans_spec[emm_torun %>% pull(emm_number)] #subset list to relevant elements
+            emms <- lapply(seq_along(this_emmspec), function(emm_i) {
+              tidy(do.call(emmeans, c(this_emmspec[[emm_i]], object=thism))) %>%
+                dplyr::bind_cols(emm_torun[emm_i,])
+            })
+            names(emms) <- names(this_emmspec)
+            
+            #N.B. Need to double list wrap for data.table to keep list class for singleton list
+            ret[, emm := list(list(emms))] 
+          }
         }
         
         ret[, dt := NULL] # drop original data.table for this split from data
         
         return(ret)
       })
+      
+      split_results <- rbindlist(split_results, fill=TRUE)
 
-      split_results <- rbindlist(split_results)
+      #need to unnest
+      
       coef_df_reml <- NULL
       if ("parameter_estimates_reml" %in% calculate) {
         coef_df_reml <- split_results[, coef_df_reml[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
@@ -297,7 +325,13 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
         fit_df <- cbind(dt_split[, ..split_on], fit_df) # add back metadata for this split
       }
       
-      list(coef_df_reml=coef_df_reml, coef_df_ml=coef_df_ml, fit_df=fit_df) # return
+      emm_data <- NULL
+      if (!is.null(emmeans_spec)) {
+        emm_data <- subset(split_results, sapply(emm, function(x) !is.null(x)), 
+                           select=c(split_on, "outcome", "model_name", "rhs", "emm"))
+      }
+      
+      list(coef_df_reml=coef_df_reml, coef_df_ml=coef_df_ml, fit_df=fit_df, emm_data=emm_data) # return
     }
     
     rm(data) # cleanup big datasets and force memory release before next iteration
@@ -317,6 +351,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
     return(result_df)
   }
   
+  emm_data <- NULL
   coef_results_reml <- NULL
   coef_results_ml <- NULL
   fit_results <- NULL
@@ -324,15 +359,36 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
   if ("parameter_estimates_ml" %in% calculate) { coef_results_ml <- extract_df(mresults, "coef_df_ml", split_on) }
   if ("fit_statistics" %in% calculate) { fit_results <- extract_df(mresults, "fit_df", split_on) }
   
+  emmeans_list <- NULL
+  if (!is.null(emmeans_spec)) {
+    emm_data <- extract_df(mresults, "emm_data", split_on)
+    
+    emmeans_list <- lapply(seq_along(emmeans_spec), function(aa) {
+      em_sub <- subset(emm_data, outcome==emmeans_spec[[aa]]$outcome & model_name==emmeans_spec[[aa]]$model_name)
+      nn <- names(em_sub)
+      other_keys <- nn[nn != "emm"]
+      em_name <- names(emmeans_spec)[aa]
+      em_sub[, emm[[1]][[em_name]], by=other_keys]  
+    })
+    names(emmeans_list) <- names(emmeans_spec)
+  }
+  
   #helper subfunction to adjust p-values
   adjust_dt <- function(dt, padjust_by) {
     for (ff in padjust_by) {
       checkmate::assert_subset(ff, names(dt))
       cname <- paste0("padj_", padjust_method, "_", paste(ff, collapse = "_"))
       dt <- dt[, (cname) := p.adjust(p.value, method = padjust_method), by = ff]
+      if (isTRUE(all.equal(dt[["p.value"]], dt[[cname]]))) {
+        warning("p-value adjustment: ", paste(ff, collapse=", "), 
+                " yields the same result as the uncorrected p-value. Setting ",
+                cname, " to NA.")
+        dt[[cname]] <- NA_real_
+      }
     }
     return(dt)
   }
+  
   # compute adjusted p values
   if (!is.null(padjust_by)) {
     checkmate::assert_subset(padjust_method, c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr", "none"))
@@ -347,5 +403,5 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
     if (!is.null(fit_results)) { fit_results[, split := NULL] }
   }
 
-  return(list(coef_df_reml=coef_results_reml, coef_df_ml=coef_results_ml, fit_df=fit_results))
+  return(list(coef_df_reml=coef_results_reml, coef_df_ml=coef_results_ml, fit_df=fit_results, emmeans_list=emmeans_list))
 }

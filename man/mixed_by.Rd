@@ -20,7 +20,9 @@ mixed_by(
   refit_on_nonconvergence = 3,
   tidy_args = list(effects = "fixed", conf.int = TRUE),
   lmer_control = lmerControl(optimizer = "nloptwrap"),
-  calculate = c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics")
+  calculate = c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"),
+  return_models = FALSE,
+  emmeans_spec = NULL
 )
 }
 \arguments{
@@ -65,6 +67,16 @@ from one iteration are used as starting values for the next.}
 the function only returns the fixed effects and computes confidence intervals using the Wald method.}
 
 \item{lmer_control}{An lmerControl object specifying any optimization settings to be passed to lmer()}
+
+\item{calculate}{A character vector specifying what calculations should be returned by the function. 
+The options are: "parameter_estimates_reml", "parameter_estimates_ml", and "fit_statistics".}
+
+\item{return_models}{A boolean indicating whether to return fitted model objects, which can be used for
+post hoc contrasts, visualization and statistics. Note that model objects can get very large, so be
+careful with this option since it could generate a massive data object.}
+
+\item{emmeans_spec}{A named list of emmeans calls to be run for each model to obtain model predictions.
+Any arguments that are valid for emmean can be passed through the list structure.}
 }
 \value{
 A data.table object containing all coefficients for each model estimated separately by \code{split_on}
@@ -72,4 +84,19 @@ A data.table object containing all coefficients for each model estimated separat
 \description{
 Mixed by runs a set of mixed-effects models for each combination of a set of factors. Its primary use is to
   run the same model on different splits of the data.
+}
+\details{
+In general, restricted maximum likelihood (REML) should be used for making inferences about parameter
+  estimates, whereas ML should be used for model comparisons based on log-likelihood (e.g., AIC). 
+  If "parameter_estimates_reml" are requested in \code{calculate}, then models will
+  be fitted with REML. If "parameter_estimates_ml" and/or "fit_statistics" are requested, models will be
+  fitted with ML. Note that if both REML and ML are requested, each model is fit twice since the estimators
+  each have advantages and disadvantages noted above.
+  
+Example of emmeans_spec usage:
+  mixed_by(data, emmeans_spec=list(
+    em1=list(specs = ~ memory | noise_level, adjust = "sidak", weights = "cells"),
+    em2=list(specs = ~ memory * noise_level, weights = "equal"),
+    em3=list(specs = ~ memory)
+  ))
 }
