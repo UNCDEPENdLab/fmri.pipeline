@@ -6,6 +6,7 @@
 #' @importFrom stringr str_count fixed
 #' @importFrom magrittr %>%
 #' @importFrom lgr get_logger
+#' @export
 finalize_pipeline_configuration <- function(gpa) {
   lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
 
@@ -211,8 +212,8 @@ finalize_pipeline_configuration <- function(gpa) {
   lg$info("Writing trial_data to sqlite db: %s", gpa$output_locations$sqlite_db)
   DBI::dbWriteTable(conn = gpa$sqlite_con, name = "trial_data", value = gpa$trial_data, overwrite = TRUE)
 
-  lg$debug("Setting pipeline_finalized to TRUE")
-  gpa$pipeline_finalized <- TRUE
+  lg$debug("Setting finalize_complete to TRUE")
+  gpa$finalize_complete <- TRUE
 
   return(gpa)
 }

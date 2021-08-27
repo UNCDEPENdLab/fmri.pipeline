@@ -6,6 +6,7 @@
 #' @param rerun a logical indicating whether to re-run an existing directory. Default: FALSE
 #' @param wait_for a parent job that should complete before these jobs commence
 #' @return a vector of job ids for all files that were submitted to the cluster
+#' @export
 run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_for="") {
   # this version of the FSL LVL1 feat estimation creates multiple qsub scripts in a temporary directory
   # where each script has a number of feat calls that are forked, then the script waits for completion
