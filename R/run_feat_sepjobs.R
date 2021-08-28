@@ -123,6 +123,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       paste0("#SBATCH -n ", feat_cpus),
       paste0("#SBATCH --time=", feat_time),
       paste0("#SBATCH --mem-per-cpu=", feat_memgb, "G"),
+      ifelse(wait_for != "", paste0("#SBATCH --dependency=afterok:", paste(wait_for, collapse=":")), ""), # allow job dependency on upstream setup
       sched_args_to_header(gpa), # analysis-level SBATCH directives
       "",
       "",
@@ -137,7 +138,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "#!/bin/bash",
       paste0("#PBS -l nodes=1:ppn=", feat_cpus),
       paste0("#PBS -l pmem=", feat_memgb, "gb"),
-      ifelse(wait_for != "", paste0("#PBS -W depend=afterok:", wait_for), ""), # allow job dependency on upstream setup
+      ifelse(wait_for != "", paste0("#PBS -W depend=afterok:", paste(wait_for, collapse=":")), ""), # allow job dependency on upstream setup
       paste0("#PBS -l walltime=", feat_time),
       sched_args_to_header(gpa), # analysis-level PBS directives
       "",

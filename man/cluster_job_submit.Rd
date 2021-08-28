@@ -13,7 +13,9 @@ cluster_job_submit(
   env_variables = NULL,
   export_all = FALSE,
   echo = TRUE,
-  fail_on_error = FALSE
+  fail_on_error = FALSE,
+  wait_jobs = NULL,
+  wait_signal = "afterok"
 )
 }
 \arguments{
@@ -41,6 +43,10 @@ use NA as the value of the element in \code{env_variables}. See examples.}
 
 \item{fail_on_error}{Whether to stop execution of the script (TRUE), or issue a warning (FALSE) if the job 
 submission fails. Defaults to FALSE (i.e., issue a warning).}
+
+\item{wait_jobs}{a character string of jobs or process ids that should complete before this job is executed}
+
+\item{wait_signal}{on torque or slurm clusters, the signal that should indicate that parent jobs have finished.}
 }
 \value{
 A character string containing the jobid of the scheduled job.

@@ -22,6 +22,8 @@
 #' @param echo Whether to echo the job submission command to the terminal at the time it is scheduled. Default: TRUE.
 #' @param fail_on_error Whether to stop execution of the script (TRUE), or issue a warning (FALSE) if the job 
 #'      submission fails. Defaults to FALSE (i.e., issue a warning).
+#' @param wait_jobs a character string of jobs or process ids that should complete before this job is executed
+#' @param wait_signal on torque or slurm clusters, the signal that should indicate that parent jobs have finished.
 #'
 #' @return A character string containing the jobid of the scheduled job.
 #'
@@ -43,10 +45,12 @@
 #' @importFrom checkmate assert_character assert_subset
 #' @export
 cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
-                           env_variables=NULL, export_all=FALSE, echo=TRUE, fail_on_error=FALSE) {
+                           env_variables=NULL, export_all=FALSE, echo=TRUE,
+                           fail_on_error=FALSE, wait_jobs=NULL, wait_signal="afterok") {
 
   checkmate::assert_character(scheduler, max.len=1)
   checkmate::assert_subset(scheduler, c("qsub", "torque", "sbatch", "slurm", "sh"))
+  checkmate::assert_logical(export_all, max.len = 1L)
   checkmate::assert_logical(echo, max.len = 1L)
   checkmate::assert_logical(fail_on_error, max.len=1L)
 
@@ -101,12 +105,26 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     sched_args <- paste(sched_args, env_variables)
   }
 
+  if (!is.null(wait_jobs)) {
+    jcomb <- paste(wait_jobs, collapse = ":") # multiple jobs are separated by colons
+    if (scheduler == "qsub") {
+      sched_args <- paste0(sched_args, " -W depend=", wait_signal, ":", jcomb)
+    } else if (scheduler == "sbatch") {
+      sched_args <- paste0(sched_args, " --dependency=", wait_signal, ":", jcomb)
+    }
+  }
+
   stopifnot(file.exists(script))
   # use unique temp files to avoid parallel collisions in job tracking
   sub_stdout <- paste0(tempfile(), "_", tools::file_path_sans_ext(basename(script)), "_stdout") 
   sub_stderr <- paste0(tempfile(), "_", tools::file_path_sans_ext(basename(script)), "_stderr")
 
   if (scheduler == "sh") {
+    if (!is.null(wait_jobs)) {
+      message("Waiting for the following jobs to finish: ", paste(wait_jobs, collapse=","))
+      fmri.pipeline::wait_for_job(wait_jobs, sleep_interval = 60, scheduler = scheduler)
+    }
+
     # for direct execution, need to pass environment variables by prepending
     if (isTRUE(echo)) cat(paste(env_variables, scheduler, script), "\n")
     # submit the job script and return the jobid
