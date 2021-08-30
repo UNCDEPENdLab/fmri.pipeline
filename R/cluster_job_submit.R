@@ -144,9 +144,9 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     Sys.sleep(.05) #sometimes the pid file is not quite in place when file.exists executes -- add a bit of time to ensure that it reads
     jobid <- if (file.exists(sub_pid)) scan(file = sub_pid, what = "char", sep = "\n", quiet = TRUE) else ""
   } else {
-    if (isTRUE(echo)) cat(paste(scheduler, script, sched_args), "\n")
+    if (isTRUE(echo)) cat(paste(scheduler, sched_args, script), "\n")
     # submit the job script and return the jobid
-    jobres <- system2(scheduler, args=paste(script, sched_args), stdout=sub_stdout, stderr=sub_stderr)
+    jobres <- system2(scheduler, args = paste(sched_args, script), stdout = sub_stdout, stderr = sub_stderr)
     jobid <- if (file.exists(sub_stdout)) scan(file = sub_stdout, what = "char", sep = "\n", quiet = TRUE) else ""
   }
 
