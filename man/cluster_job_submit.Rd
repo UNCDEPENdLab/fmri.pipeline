@@ -15,7 +15,8 @@ cluster_job_submit(
   echo = TRUE,
   fail_on_error = FALSE,
   wait_jobs = NULL,
-  wait_signal = "afterok"
+  wait_signal = "afterok",
+  repolling_interval = 60
 )
 }
 \arguments{
@@ -41,12 +42,14 @@ use NA as the value of the element in \code{env_variables}. See examples.}
 
 \item{echo}{Whether to echo the job submission command to the terminal at the time it is scheduled. Default: TRUE.}
 
-\item{fail_on_error}{Whether to stop execution of the script (TRUE), or issue a warning (FALSE) if the job 
+\item{fail_on_error}{Whether to stop execution of the script (TRUE), or issue a warning (FALSE) if the job
 submission fails. Defaults to FALSE (i.e., issue a warning).}
 
 \item{wait_jobs}{a character string of jobs or process ids that should complete before this job is executed}
 
 \item{wait_signal}{on torque or slurm clusters, the signal that should indicate that parent jobs have finished.}
+
+\item{repolling_interval}{The number of seconds to wait before rechecking job status (used only for local scheduler)}
 }
 \value{
 A character string containing the jobid of the scheduled job.

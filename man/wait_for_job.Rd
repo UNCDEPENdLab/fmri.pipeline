@@ -6,7 +6,7 @@
 \usage{
 wait_for_job(
   job_ids,
-  sleep_interval = 30,
+  repolling_interval = 30,
   max_wait = 60 * 60 * 24,
   scheduler = "local",
   quiet = TRUE,
@@ -17,7 +17,7 @@ wait_for_job(
 \item{job_ids}{One or more job ids of existing PBS or slurm jobs, or process ids of a local process for
 \code{scheduler="sh"}.}
 
-\item{sleep_interval}{How often to recheck the job status, in seconds. Default: 30}
+\item{repolling_interval}{How often to recheck the job status, in seconds. Default: 30}
 
 \item{max_wait}{How long to wait on the job before giving up, in seconds. Default: 24 hours (86,400 seconds)}
 

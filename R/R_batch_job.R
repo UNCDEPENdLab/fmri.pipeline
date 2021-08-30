@@ -4,43 +4,51 @@ R_batch_job <- R6::R6Class("batch_job",
   private = list(
     # whether the batch and compute files have already been created
     batch_generated = FALSE,
+
+    # absolute path to batch file
     batch_file_name = NULL,
+
+    # absolute path to compute file
     compute_file_name = NULL,
 
     # field job_id the process or scheduler job id that uniquely identifies this job
     job_id = NULL,
+    get_unique_file_name = function(script_name = "") {
+      base <- tools::file_path_sans_ext(script_name)
+      ext <- tools::file_ext(script_name)
+
+      script_name <- paste0(
+        base,
+        ifelse(is.null(self$job_name), "", paste0("_", self$job_name)),
+        ".", ext
+      )
+
+      if (file.exists(normalizePath(file.path(self$batch_directory, script_name), mustWork = FALSE))) {
+        # add unique random string to script name if the file already exists
+        script_name <- sub(
+          paste0("\\.", ext, "$"),
+          paste0("_", sub("^/", "", tempfile(pattern = "", tmpdir = "")), ".", ext),
+          script_name
+        )
+      }
+
+      return(normalizePath(file.path(self$batch_directory, script_name), mustWork = FALSE))
+    },
 
     # helper to generate and return the full path to the batch script
     get_batch_file_name = function() {
-      if (!is.null(private$batch_file_name)) {
-        return(private$batch_file_name)
-      } else {
-        script_name <- "submit_batch.sh"
-        # add unique random string to script name if the file already exists
-        if (file.exists(normalizePath(file.path(self$batch_directory, script_name)))) {
-          script_name <- paste0("submit_batch_", sub("^/", "", tempfile(pattern = "", tmpdir = "")), ".sh")
-        }
-
-        private$batch_file_name <- normalizePath(file.path(self$batch_directory, script_name))
-        return(private$batch_file_name)
+      if (is.null(private$batch_file_name)) {
+        private$batch_file_name <- private$get_unique_file_name("submit_batch.sh")
       }
+      return(private$batch_file_name)
     },
 
     # helper to generate and return the full path to the compute script
     get_compute_file_name = function() {
       if (is.null(private$compute_file_name)) {
-        return(private$compute_file_name)
-      } else {
-        script_name <- "batch_run.R"
-
-        # add unique random string to script name if the file already exists
-        if (file.exists(normalizePath(file.path(self$batch_directory, script_name)))) {
-          script_name <- paste0("batch_run_", sub("^/", "", tempfile(pattern = "", tmpdir = "")), ".R")
-        }
-
-        private$compute_file_name <- normalizePath(file.path(self$batch_directory, script_name))
-        return(private$compute_file_name)
+        private$compute_file_name <- private$get_unique_file_name("batch_run.R")
       }
+      return(private$compute_file_name)
     },
 
     # write the sbatch, pbs, or local bash script
@@ -70,7 +78,6 @@ R_batch_job <- R6::R6Class("batch_job",
           "cd $SLURM_SUBMIT_DIR",
           self$batch_code
         )
-
       } else if (self$scheduler %in% c("torque", "qsub")) {
         mem_string <- NULL
         if (!is.null(self$mem_per_cpu)) {
@@ -90,10 +97,11 @@ R_batch_job <- R6::R6Class("batch_job",
           "cd $PBS_O_WORKDIR"
         )
       } else {
-        #local scheduler considerations here
+        # local scheduler considerations here
       }
 
-      syntax <- c(syntax, paste("Rscript --vanilla", private$get_compute_file_name()))
+      # syntax <- c(syntax, paste("Rscript --vanilla", private$get_compute_file_name()))
+      syntax <- c(syntax, paste("R CMD BATCH --no-save --no-restore", private$get_compute_file_name()))
 
       message("Writing batch script to: ", private$get_batch_file_name())
       writeLines(syntax, con = private$get_batch_file_name())
@@ -112,7 +120,7 @@ R_batch_job <- R6::R6Class("batch_job",
 
       if (!is.null(self$input_environment)) {
         if (!file.exists(self$input_environment)) {
-          warning(sprintf("input_environment %s did not exist at the time of script generation.", self$input_environment))
+          # warning(sprintf("input_environment %s did not exist at the time of script generation.", self$input_environment))
         }
         syntax <- c(syntax, paste0("if (file.exists('", self$input_environment, "')) load('", self$input_environment, "')"))
       }
@@ -178,13 +186,13 @@ R_batch_job <- R6::R6Class("batch_job",
 
     #' @field batch_code Shell code to be included in the batch script prior to the R code to be run. This can include
     #'    module load statements, environment variable exports, etc.
-    batch_code=NULL,
+    batch_code = NULL,
 
-    #' @field r_code The R code to be executed by the scheduler. This can be a character vector that includes multiple 
+    #' @field r_code The R code to be executed by the scheduler. This can be a character vector that includes multiple
     #'    R statements or an expression object containing the R code to be evaluated
     r_code = NULL,
 
-    #' @field r_packages The R packages to be loaded into the environment before job execution. These are loaded by 
+    #' @field r_packages The R packages to be loaded into the environment before job execution. These are loaded by
     #'    pacman::p_load, which will install any missing packages before attempting to load
     r_packages = NULL,
 
@@ -196,16 +204,19 @@ R_batch_job <- R6::R6Class("batch_job",
     #'    or #PBS headings, depending on the scheduler, and are ignored if the scheduler is "local".
     scheduler_options = NULL,
 
+    #' @field repolling_interval The number of seconds to wait between successive checks on whether parent jobs have completed.
+    #'    This is mostly relevant to the 'local' scheduler.
+    repolling_interval = 60, # seconds
+
     #' @description Create a new R_batch_job object for execution on an HPC cluster
     #' @param parent_jobs A vector of one or more job ids that are parents to this job. This can be a named vector, to
     #'    be used in conjunction with \code{depends_on_parents} to specify which parent jobs must be completed before this
     #'    job begins.
     #' @param job_name The name of this job
-    initialize = function(
-      parent_jobs = NULL, job_name=NULL, n_nodes = NULL, n_cpus = NULL,
-      cpu_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL,
-      r_code = NULL, batch_code, r_packages = NULL, scheduler = NULL, scheduler_options = NULL) {
-
+    initialize = function(batch_directory = NULL, parent_jobs = NULL, job_name = NULL, n_nodes = NULL, n_cpus = NULL,
+                          cpu_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL,
+                          batch_code = NULL, r_packages = NULL, scheduler = NULL, scheduler_options = NULL, repolling_interval = NULL) {
+      if (!is.null(batch_directory)) self$batch_directory <- batch_directory
       if (!is.null(parent_jobs)) self$parent_jobs <- parent_jobs
       if (!is.null(job_name)) self$job_name <- as.character(job_name)
       if (!is.null(n_nodes)) self$n_nodes <- as.character(n_nodes)
@@ -252,6 +263,11 @@ R_batch_job <- R6::R6Class("batch_job",
         checkmate::assert_character(scheduler_options)
         self$scheduler_options <- scheduler_options
       }
+
+      if (!is.null(repolling_interval)) {
+        checkmate::assert_number(repolling_interval, lower = 0.1, upper = 2e5)
+        self$repolling_interval <- repolling_interval
+      }
     },
 
     #' @description Helper function that generates the batch and compute files for a job
@@ -259,6 +275,8 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @details this is called by \code{$submit} when a job is submitted and is provided
     #'   here in case the user wants to generate the batch files without executing them
     generate = function() {
+      # create batch_directory, if missing
+      if (!dir.exists(self$batch_directory)) dir.create(self$batch_directory, recursive = TRUE)
       private$write_batch_file()
       private$write_compute_file()
       private$batch_generated <- TRUE
@@ -273,14 +291,14 @@ R_batch_job <- R6::R6Class("batch_job",
       # For local compute of an R job, use Rscript --vanilla to get proper job_id in return,
       # rather than job_id of shell script that called Rscript.
       # if (scheduler %in% c("local", "sh")) {
-      #  batch_script <- normalizePath(file.path(self$batch_directory, private$get_compute_file_name()))
-      #} else {
-        batch_script <- normalizePath(file.path(self$batch_directory, private$get_batch_file_name()))
-      #}
+      #  batch_script <- private$get_compute_file_name()
+      # } else {
+      batch_script <- private$get_batch_file_name()
+      # }
 
       # submit job for computation, waiting for parents if requested
       wait_jobs <- NULL
-      if (checkmate::test_logical(self$depends_on_parents, max.len=1) && isTRUE(self$depends_on_parents)) {
+      if (checkmate::test_logical(self$depends_on_parents, max.len = 1) && isTRUE(self$depends_on_parents)) {
         # wait on any/all parent jobs
         wait_jobs <- self$parent_jobs
       } else if (checkmate::test_character(self$depends_on_parents)) {
@@ -294,16 +312,34 @@ R_batch_job <- R6::R6Class("batch_job",
       }
 
       # TODO: if a job_id already exists and submit is called again, do we check job status, insist a 'forced' submission?
-      private$job_id <- fmri.pipeline::cluster_job_submit(batch_script, scheduler = self$scheduler, wait_jobs = wait_jobs)
+      private$job_id <- fmri.pipeline::cluster_job_submit(batch_script,
+        scheduler = self$scheduler,
+        wait_jobs = wait_jobs, repolling_interval = self$repolling_interval
+      )
 
-      setwd(cd)
+      if (!is.null(cd) && dir.exists(cd)) setwd(cd) # reset working directory (don't attempt if that directory is absent)
+    },
 
-      # save environment to file
-      # write R script that
-      # a) loads environment
-      # b) load packages
-      # c) evaluates expression
-      # call cluster_job_submit
+    #' @description Function to create a deep copy of a batch job
+    #' @details Note that this also resets the compute_file_name and batch_file_name fields so that the
+    #'    copied object doesn't create files that collide with the original
+    copy = function() {
+      cloned <- self$clone(deep = TRUE)
+      cloned$reset_file_names()
+      return(cloned)
+    },
+
+    #' @description helper function to reset names of compute and batch files that will be generated by this job.
+    #' @details This needs to be exposed as a public method for copied objects to be able to reset these private fields.
+    reset_file_names = function() {
+      private$batch_generated <- FALSE
+      private$batch_file_name <- NULL
+      private$compute_file_name <- NULL
+    },
+
+    #' @description Return the job id of this job (populated by job submission)
+    get_job_id = function() {
+      private$job_id
     }
   ),
 )
@@ -317,7 +353,7 @@ R_batch_sequence <- R6::R6Class("batch_sequence",
   ),
   public = list(
     #' @description create a new R_batch_sequence object
-    initialize = function(..., joblist=NULL) {
+    initialize = function(..., joblist = NULL) {
       others <- list(...)
       if (!is.null(joblist) && is.list(joblist)) {
         sapply(joblist, checkmate::assert_class, "batch_job")
@@ -325,20 +361,28 @@ R_batch_sequence <- R6::R6Class("batch_sequence",
       } else {
         private$sequence_jobs <- others
       }
-
     },
 
     #' @description submit the job sequence to the scheduler or local compute
     submit = function() {
-      for (job_i in seq_along(private$sequence_jobs)) {
-        this_job <- private$sequence_jobs[[job_i]]
+      job_list <- private$sequence_jobs
+      njobs <- length(job_list)
+      for (ii in seq_len(njobs)) {
+        this_job <- job_list[[ii]]
         this_job$submit()
-        if (job_i < length(private$sequence_jobs)) {
-          # Add parent job id to next job in sequence. If that job has $depends_on_parents == TRUE, 
-          # then it will wait until parents complete before starting.
-          private$sequence_jobs[[job_id]]$parent_jobs <- this_job$job_id
+        if (ii < njobs) {
+          dependent_children <- sapply(seq_along(job_list), function(jnum) {
+            this_job$job_name %in% job_list[[jnum]]$depends_on_parents && jnum > ii
+          })
+
+          if (any(dependent_children)) {
+            job_list[dependent_children] <- lapply(job_list[dependent_children], function(job) {
+              # Always add parent job id to any downstream jobs in sequence that depend on this job.
+              job$parent_jobs[this_job$job_name] <- this_job$get_job_id()
+              return(job)
+            })
+          }
         }
-        
       }
     }
   )

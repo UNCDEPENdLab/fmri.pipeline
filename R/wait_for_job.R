@@ -6,7 +6,7 @@
 #'
 #' @param job_ids One or more job ids of existing PBS or slurm jobs, or process ids of a local process for
 #'   \code{scheduler="sh"}.
-#' @param sleep_interval How often to recheck the job status, in seconds. Default: 30
+#' @param repolling_interval How often to recheck the job status, in seconds. Default: 30
 #' @param max_wait How long to wait on the job before giving up, in seconds. Default: 24 hours (86,400 seconds)
 #' @param scheduler What scheduler is used for job execution.
 #'   Options: c("torque", "qsub", "slurm", "sbatch", "sh", "local")
@@ -30,10 +30,11 @@
 #' }
 #'
 #' @author Michael Hallquist
+#' @importFrom dplyr full_join
 #' @export
-wait_for_job <- function(job_ids, sleep_interval=30, max_wait=60 * 60 * 24,
+wait_for_job <- function(job_ids, repolling_interval=30, max_wait=60 * 60 * 24,
                          scheduler="local", quiet=TRUE, stop_on_timeout=TRUE) {
-  checkmate::assert_number(sleep_interval, lower = 0.1, upper = 2e5)
+  checkmate::assert_number(repolling_interval, lower = 0.1, upper = 2e5)
   checkmate::assert_number(max_wait, lower = 1, upper = 1814400) #21 days
   scheduler <- tolower(scheduler) #ignore case
   checkmate::assert_subset(scheduler, c("torque", "qsub", "slurm", "sbatch", "sh", "local"))
@@ -118,7 +119,7 @@ wait_for_job <- function(job_ids, sleep_interval=30, max_wait=60 * 60 * 24,
     } else if (all(status == "complete")) {
       job_complete <- TRUE #drop out of this loop
     } else {
-      Sys.sleep(sleep_interval) #wait and repoll jobs
+      Sys.sleep(repolling_interval) #wait and repoll jobs
     }
 
   }
@@ -158,7 +159,8 @@ local_job_status <- function(job_ids=NULL, user=NULL,
     ustring <- paste("-u", paste(user, collapse=","))
   } else { ustring <- "" }
 
-  res <- suppressWarnings(system2("ps", args=paste(jstring, ustring, "-o", ps_format), stdou=TRUE)) #intern=TRUE)
+  #cat(paste("ps", jstring, ustring, "-o", ps_format), sep = "\n")
+  res <- suppressWarnings(system2("ps", args=paste(jstring, ustring, "-o", ps_format), stdout=TRUE)) #intern=TRUE)
   #header <- gregexpr("\\b", res[1], perl=T)
 
   #print(res)
@@ -171,8 +173,11 @@ local_job_status <- function(job_ids=NULL, user=NULL,
     dt <- data.table::fread(text=res)
   }
 
+  # fix difference in column naming between FreeBSD and *nux (make all like FreeBSD)
+  data.table::setnames(dt, c("S", "COMMAND"), c("STAT", "COMM"), skip_absent=TRUE)
+
   #build df that fills in missing jobs (completed/killed)
-  all_dt <- data.frame(PID=as.integer(job_ids)) %>% full_join(dt, by="PID") %>%
+  all_dt <- data.frame(PID=as.integer(job_ids)) %>% dplyr::full_join(dt, by="PID") %>%
     mutate(STAT=substr(STAT, 1, 1)) #only care about first character of state
 
   all_dt$STAT[is.na(all_dt$STAT)] <- "C" #complete

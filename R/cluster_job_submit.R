@@ -20,10 +20,11 @@
 #'      use NA as the value of the element in \code{env_variables}. See examples.
 #' @param export_all Whether to export all environment variables to the compute node at runtime. Default: FALSE
 #' @param echo Whether to echo the job submission command to the terminal at the time it is scheduled. Default: TRUE.
-#' @param fail_on_error Whether to stop execution of the script (TRUE), or issue a warning (FALSE) if the job 
+#' @param fail_on_error Whether to stop execution of the script (TRUE), or issue a warning (FALSE) if the job
 #'      submission fails. Defaults to FALSE (i.e., issue a warning).
 #' @param wait_jobs a character string of jobs or process ids that should complete before this job is executed
 #' @param wait_signal on torque or slurm clusters, the signal that should indicate that parent jobs have finished.
+#' @param repolling_interval The number of seconds to wait before rechecking job status (used only for local scheduler)
 #'
 #' @return A character string containing the jobid of the scheduled job.
 #'
@@ -45,8 +46,8 @@
 #' @importFrom checkmate assert_character assert_subset
 #' @export
 cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
-                           env_variables=NULL, export_all=FALSE, echo=TRUE,
-                           fail_on_error=FALSE, wait_jobs=NULL, wait_signal="afterok") {
+                           env_variables=NULL, export_all=FALSE, echo=TRUE, fail_on_error=FALSE, 
+                           wait_jobs=NULL, wait_signal="afterok", repolling_interval=60) {
 
   checkmate::assert_string(script)
   checkmate::assert_file_exists(script)
@@ -120,6 +121,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   # use unique temp files to avoid parallel collisions in job tracking
   sub_stdout <- paste0(tempfile(), "_", tools::file_path_sans_ext(basename(script)), "_stdout") 
   sub_stderr <- paste0(tempfile(), "_", tools::file_path_sans_ext(basename(script)), "_stderr")
+  sub_pid <- paste0(tempfile(), "_", tools::file_path_sans_ext(basename(script)), "_pid")
 
   if (scheduler == "sh") {
     # if an R script is provided, execute with Rscript --vanilla as command
@@ -129,23 +131,25 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
       bin <- "sh"
     }
 
+    # for local scheduler, we need to hold jobs manually by waiting for relevant parents to complete
     if (!is.null(wait_jobs)) {
       message("Waiting for the following jobs to finish: ", paste(wait_jobs, collapse=","))
-      fmri.pipeline::wait_for_job(wait_jobs, sleep_interval = 60, scheduler = scheduler)
+      wait_for_job(wait_jobs, repolling_interval = repolling_interval, scheduler = scheduler)
     }
 
     # for direct execution, need to pass environment variables by prepending
     if (isTRUE(echo)) cat(paste(env_variables, bin, script), "\n")
-    # submit the job script and return the jobid
-    jobres <- system(paste(env_variables, bin, script, ">", sub_stdout, "2>", sub_stderr), wait=FALSE)
-
+    # submit the job script and return the jobid by forking to background and returning PID
+    jobres <- system(paste(env_variables, bin, script, ">", sub_stdout, "2>", sub_stderr, "& echo $! >", sub_pid), wait = FALSE)
+    Sys.sleep(.05) #sometimes the pid file is not quite in place when file.exists executes -- add a bit of time to ensure that it reads
+    jobid <- if (file.exists(sub_pid)) scan(file = sub_pid, what = "char", sep = "\n", quiet = TRUE) else ""
   } else {
     if (isTRUE(echo)) cat(paste(scheduler, script, sched_args), "\n")
     # submit the job script and return the jobid
     jobres <- system2(scheduler, args=paste(script, sched_args), stdout=sub_stdout, stderr=sub_stderr)
+    jobid <- if (file.exists(sub_stdout)) scan(file = sub_stdout, what = "char", sep = "\n", quiet = TRUE) else ""
   }
 
-  jobid <- if (file.exists(sub_stdout)) scan(file = sub_stdout, what = "char", sep = "\n", quiet = TRUE) else ""
   joberr <- if (file.exists(sub_stderr)) {
     paste(scan(file = sub_stderr, what = "char", sep = "\n", quiet = TRUE), collapse = ". ")
   } else {
