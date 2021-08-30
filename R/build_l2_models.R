@@ -1,4 +1,4 @@
-#' Interactive function to build an l1 model specification for setup_glm_pipeline
+#' Interactive function to build an l2 model specification for setup_glm_pipeline
 #'
 #' @param data a data.frame containing trial-level data for one or more subjects
 #' @param model_set optional existing model_set to be modified
@@ -328,6 +328,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
   return(gpa)
 }
 
+#' Interactive function to build an l3 model specification for setup_glm_pipeline
 #' @rdname build_l3_models
 #' @name build_l3_models
 #' @export

@@ -48,6 +48,8 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
                            env_variables=NULL, export_all=FALSE, echo=TRUE,
                            fail_on_error=FALSE, wait_jobs=NULL, wait_signal="afterok") {
 
+  checkmate::assert_string(script)
+  checkmate::assert_file_exists(script)
   checkmate::assert_string(scheduler)
   checkmate::assert_subset(scheduler, c("qsub", "torque", "sbatch", "slurm", "sh", "local"))
   checkmate::assert_logical(export_all, max.len = 1L)
@@ -115,21 +117,27 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     }
   }
 
-  stopifnot(file.exists(script))
   # use unique temp files to avoid parallel collisions in job tracking
   sub_stdout <- paste0(tempfile(), "_", tools::file_path_sans_ext(basename(script)), "_stdout") 
   sub_stderr <- paste0(tempfile(), "_", tools::file_path_sans_ext(basename(script)), "_stderr")
 
   if (scheduler == "sh") {
+    # if an R script is provided, execute with Rscript --vanilla as command
+    if (grepl(".+\\.R$", script, ignore.case = TRUE)) {
+      bin <- "Rscript --vanilla"
+    } else {
+      bin <- "sh"
+    }
+
     if (!is.null(wait_jobs)) {
       message("Waiting for the following jobs to finish: ", paste(wait_jobs, collapse=","))
       fmri.pipeline::wait_for_job(wait_jobs, sleep_interval = 60, scheduler = scheduler)
     }
 
     # for direct execution, need to pass environment variables by prepending
-    if (isTRUE(echo)) cat(paste(env_variables, scheduler, script), "\n")
+    if (isTRUE(echo)) cat(paste(env_variables, bin, script), "\n")
     # submit the job script and return the jobid
-    jobres <- system(paste(env_variables, scheduler, script, ">", sub_stdout, "2>", sub_stderr), wait=FALSE)
+    jobres <- system(paste(env_variables, bin, script, ">", sub_stdout, "2>", sub_stderr), wait=FALSE)
 
   } else {
     if (isTRUE(echo)) cat(paste(scheduler, script, sched_args), "\n")

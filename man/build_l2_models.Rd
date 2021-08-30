@@ -2,7 +2,7 @@
 % Please edit documentation in R/build_l2_models.R
 \name{build_l2_models}
 \alias{build_l2_models}
-\title{Interactive function to build an l1 model specification for setup_glm_pipeline}
+\title{Interactive function to build an l2 model specification for setup_glm_pipeline}
 \usage{
 build_l2_models(gpa, regressor_cols = NULL)
 }
@@ -20,7 +20,7 @@ as possible regressors}
 a \code{hi_model_set} object containing a list of higher-level regression models
 }
 \description{
-Interactive function to build an l1 model specification for setup_glm_pipeline
+Interactive function to build an l2 model specification for setup_glm_pipeline
 }
 \author{
 Michael Hallquist

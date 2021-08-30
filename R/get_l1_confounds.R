@@ -140,7 +140,6 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
       generate_motion_regressors(
         mfile,
         col.names = gpa$confound_settings$motion_params_colnames,
-        regressors = gpa$confound_settings$all_confound_columns,
         drop_volumes = drop_volumes, last_volume = last_volume, demean=FALSE,
         na.strings=gpa$confound_settings$na_strings
       )}, error = function(e) {
