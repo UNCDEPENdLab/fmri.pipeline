@@ -91,7 +91,7 @@ wait_for_job <- function(job_ids, sleep_interval=30, max_wait=60 * 60 * 24,
   }
 
 
-  while(job_complete==FALSE) {
+  while (job_complete==FALSE) {
     status <- get_job_status()
 
     #update wait time
@@ -118,7 +118,7 @@ wait_for_job <- function(job_ids, sleep_interval=30, max_wait=60 * 60 * 24,
     } else if (all(status == "complete")) {
       job_complete <- TRUE #drop out of this loop
     } else {
-      Sys.sleep(sleep_interval)
+      Sys.sleep(sleep_interval) #wait and repoll jobs
     }
 
   }

@@ -8,7 +8,7 @@
 #'      case of conflicts, the directives passed with \code{sched_args} will take precedence.
 #' @param scheduler Which scheduler to use for job submission. Options are 'qsub', 'torque', 'sbatch', 'slurm', or 'sh'.
 #'      The terms 'qsub' and 'torque' are aliases (where 'torque' submits via the qsub command). Likewise for 'sbatch'
-#'      and 'slurm'. The scheduler 'sh' does not submit to any scheduler at all, but instead executes the command 
+#'      and 'slurm'. The scheduler 'sh' does not submit to any scheduler at all, but instead executes the command
 #'      immediately via sh.
 #' @param sched_args A character vector of arguments to be included in the scheduling command. On TORQUE, these
 #'      will typically begin with '-l' such as '-l walltime=10:00:00'.
@@ -48,25 +48,26 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
                            env_variables=NULL, export_all=FALSE, echo=TRUE,
                            fail_on_error=FALSE, wait_jobs=NULL, wait_signal="afterok") {
 
-  checkmate::assert_character(scheduler, max.len=1)
-  checkmate::assert_subset(scheduler, c("qsub", "torque", "sbatch", "slurm", "sh"))
+  checkmate::assert_string(scheduler)
+  checkmate::assert_subset(scheduler, c("qsub", "torque", "sbatch", "slurm", "sh", "local"))
   checkmate::assert_logical(export_all, max.len = 1L)
   checkmate::assert_logical(echo, max.len = 1L)
   checkmate::assert_logical(fail_on_error, max.len=1L)
 
-  if (scheduler == "torque") {
+  if (scheduler %in% c("torque", "qsub")) {
     scheduler <- "qsub" # simpler internal tracking
     if (isTRUE(export_all)) {
       sched_args <- c("-V", sched_args)
     } # directive to export all environment variables to script
-  } else if (scheduler == "slurm") {
+  } else if (scheduler %in% c("slurm", "sbatch")) {
     scheduler <- "sbatch"
     if (isTRUE(export_all)) {
       env_variables <- c(ALL = NA, env_variables)
     } # directive to export all environment variables to script
-  } else if (scheduler == "sh") {
+  } else if (scheduler %in% c("sh", "local")) {
+    scheduler <- "sh"
     if (!is.null(sched_args)) {
-      message("Omitting scheduler arguments for sh execution")
+      message("Omitting scheduler arguments for sh/local execution")
     }
     sched_args <- NULL # not relevant
   }
@@ -128,7 +129,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     # for direct execution, need to pass environment variables by prepending
     if (isTRUE(echo)) cat(paste(env_variables, scheduler, script), "\n")
     # submit the job script and return the jobid
-    jobres <- system(paste(env_variables, scheduler, script, ">", sub_stdout, "2>", sub_stderr))
+    jobres <- system(paste(env_variables, scheduler, script, ">", sub_stdout, "2>", sub_stderr), wait=FALSE)
 
   } else {
     if (isTRUE(echo)) cat(paste(scheduler, script, sched_args), "\n")

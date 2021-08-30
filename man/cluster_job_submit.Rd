@@ -24,7 +24,7 @@ case of conflicts, the directives passed with \code{sched_args} will take preced
 
 \item{scheduler}{Which scheduler to use for job submission. Options are 'qsub', 'torque', 'sbatch', 'slurm', or 'sh'.
 The terms 'qsub' and 'torque' are aliases (where 'torque' submits via the qsub command). Likewise for 'sbatch'
-and 'slurm'. The scheduler 'sh' does not submit to any scheduler at all, but instead executes the command 
+and 'slurm'. The scheduler 'sh' does not submit to any scheduler at all, but instead executes the command
 immediately via sh.}
 
 \item{sched_args}{A character vector of arguments to be included in the scheduling command. On TORQUE, these
