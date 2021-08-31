@@ -94,6 +94,9 @@ gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm",
     l1_confound_regressors = c("csf", "dcsf", "wm", "dwm"),
     exclude_run = "max(FD) > 5 | sum(FD > .5)/length(FD) > .15", #this must evaluate to a scalar per run
     exclude_subject = "n_good_runs < 4"
+  ),
+  output_locations=list(
+    feat_l1_directory="{gpa$output_directory}/id-{id}"
   )
 )
 
@@ -102,7 +105,7 @@ gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm",
 gpa <- finalize_pipeline_configuration(gpa)
 
 # cached above
-# gpa <- build_l1_models(gpa)
+gpa <- build_l1_models(gpa)
 
 # interactive model builder for level 2
 gpa <- build_l2_models(gpa)

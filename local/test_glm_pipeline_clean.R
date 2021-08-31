@@ -32,7 +32,7 @@ run_df <- run_df %>% rename(subid = id, run=run_number) %>% mutate(id=subid)
 subject_df <- subject_df %>% rename(subid = id) %>% mutate(id=subid)
 
 gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm",
-  working_directory = "/proj/mnhallqlab/users/michael/fmri_test",
+  output_directory = "/proj/mnhallqlab/users/michael/fmri_test",
   subject_data=subject_df, run_data=run_df, trial_data=trial_df,
   tr=1.0, l1_models="prompt", l2_models=NULL, l3_models=NULL,
   vm=c(id="subid", run_number="run"),

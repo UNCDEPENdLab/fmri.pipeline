@@ -140,7 +140,7 @@ R_batch_job <- R6::R6Class("batch_job",
         syntax <- c(
           syntax,
           "if (exists('child_job_ids') && inherits(child_job_ids, c('numeric', 'integer', 'character'))) {",
-          paste0("  fmri.pipeline::wait_for_jobs(child_job_ids, scheduler='", self$scheduler, "')"),
+          paste0("  fmri.pipeline::wait_for_job(child_job_ids, scheduler='", self$scheduler, "')"),
           "}"
         )
       }

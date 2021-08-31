@@ -43,7 +43,7 @@ wait_for_job <- function(job_ids, repolling_interval=30, max_wait=60 * 60 * 24,
   wait_start <- Sys.time()
 
   get_job_status <- function() { #use variables in parent environment
-    if (scheduler %in% c("torque", "qsub")) {
+    if (scheduler %in% c("slurm", "sbatch")) {
       status <- slurm_job_status(job_ids)
       state <- sapply(status$State, function(x) { switch(
         x,
