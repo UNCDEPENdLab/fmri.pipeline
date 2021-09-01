@@ -88,19 +88,26 @@ l3_model_names = "prompt", glm_software = NULL) {
   # This occurs in the case of L1 job submissions, where run_feat_sepjobs submit many jobs that need to complete before
   # L2 jobs should start. The new approach is to keep the parent job active until all children complete. This is
   # implemented by wait_for_children in R_batch_job. Here, we run the l1 model setup, the launch all feat runs in batch
-  # jobs and wait for all of these to complete before the l1_batch (parent) job completes.
+  # jobs and wait for all of these to complete before the l1_setup_batch (parent) job completes.
 
-  l1_batch <- f_batch$copy(
-    job_name = "setup_run_l1", n_cpus = gpa$parallel$l1_setup_cores,
+  # batch job for setting up l1 models
+  l1_setup_batch <- f_batch$copy(
+    job_name = "setup_l1", n_cpus = gpa$parallel$l1_setup_cores,
     cpu_time = gpa$parallel$l1_setup_time,
-    r_code = c(
-      "gpa <- setup_l1_models(gpa)", # create all FSF files for level one runs
-      "child_job_ids <- run_feat_sepjobs(gpa, level = 1L)" # execute l1 jobs
-    )
+    r_code = "gpa <- setup_l1_models(gpa)" # create all FSF files for level one runs
   )
 
-  l1_batch$depends_on_parents <- "finalize_configuration"
-  l1_batch$wait_for_children <- TRUE # need to wait for l1 feat jobs to complete before moving to l2/l3
+  l1_setup_batch$depends_on_parents <- "finalize_configuration"
+
+  # batch job for executing l1 jobs (and waiting) after setup
+  l1_execute_batch <- f_batch$copy(
+    job_name = "run_l1", n_cpus = 1,
+    cpu_time = gpa$parallel$fsl$l1_feat_time,
+    r_code = "child_job_ids <- run_feat_sepjobs(gpa, level = 1L)" # execute l1 jobs
+  )
+
+  l1_execute_batch$depends_on_parents <- "setup_l1"
+  l1_execute_batch$wait_for_children <- TRUE # need to wait for l1 feat jobs to complete before moving to l2/l3
 
   # todo
   # gpa <- verify_lv1_runs(gpa)
@@ -117,7 +124,7 @@ l3_model_names = "prompt", glm_software = NULL) {
       )
     )
 
-    l2_batch$depends_on_parents <- "setup_run_l1"
+    l2_batch$depends_on_parents <- "run_l1"
     l2_batch$wait_for_children <- TRUE # need to wait for l2 feat jobs to complete before moving to l3
   } else {
     l2_batch <- NULL
@@ -132,8 +139,8 @@ l3_model_names = "prompt", glm_software = NULL) {
     )
   )
 
-  l3_batch$depends_on_parents <- ifelse(isTRUE(gpa$multi_run), "setup_run_l2", "setup_run_l1")
+  l3_batch$depends_on_parents <- ifelse(isTRUE(gpa$multi_run), "setup_run_l2", "run_l1")
 
-  glm_batch <- R_batch_sequence$new(f_batch, l1_batch, l2_batch, l3_batch)
+  glm_batch <- R_batch_sequence$new(f_batch, l1_setup_batch, l1_execute_batch, l2_batch, l3_batch)
   glm_batch$submit()
 }

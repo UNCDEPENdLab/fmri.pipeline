@@ -86,7 +86,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                ),
                                parallel = list(
                                  # number of cores used when looping over l1 setup of design matrices and syntax for each subject
-                                 l1_setup_cores = 1L,
+                                 l1_setup_cores = 4L,
 
                                  # number of cores used  when looping over l1 model variants in push_pipeline
                                  pipeline_cores = "default"
