@@ -141,7 +141,7 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
         mfile,
         col.names = gpa$confound_settings$motion_params_colnames,
         drop_volumes = drop_volumes, last_volume = last_volume, demean=FALSE,
-        na.strings=gpa$confound_settings$na_strings
+        na.strings=gpa$confound_settings$na_strings, lg=lg
       )}, error = function(e) {
       lg$error("Failed to read motion file: %s with error %s", rinfo$motion_params_file[1], as.character(e))
       return(NULL)
