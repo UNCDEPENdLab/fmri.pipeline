@@ -985,3 +985,22 @@ lookup_nvoxels <- function(nifti) {
 
   return(nvoxels)
 }
+
+#' small helper function to parse duration syntax of days-hours:minutes:seconds
+#'   into lubridate duration object
+#'
+#' @param str string containing a duration that may include a days specification
+#' @importFrom lubridate hms
+#' @keywords internal
+dhms <- function(str) {
+  checkmate::assert_string(str)
+  if (grepl("^\\d+-", str, perl = TRUE)) {
+    split_hyphen <- strsplit(str, "-", fixed = TRUE)[[1]]
+    days <- as.numeric(split_hyphen[1])
+    period <- lubridate::hms(split_hyphen[2:length(split_hyphen)])
+    period@day <- days
+  } else {
+    period <- lubridate::hms(str)
+  }
+  return(period)
+}

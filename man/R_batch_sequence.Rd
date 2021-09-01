@@ -25,6 +25,15 @@ create a new R_batch_sequence object
 \if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$new(..., joblist = NULL)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{...}}{One or more R_batch_job objects to be run in sequence}
+
+\item{\code{joblist}}{Optional list of jobs to be used instead of ...}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-submit"></a>}}

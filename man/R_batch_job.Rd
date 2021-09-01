@@ -106,11 +106,37 @@ Create a new R_batch_job object for execution on an HPC cluster
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{batch_directory}}{The location of batch scripts to be generated}
+
 \item{\code{parent_jobs}}{A vector of one or more job ids that are parents to this job. This can be a named vector, to
 be used in conjunction with \code{depends_on_parents} to specify which parent jobs must be completed before this
 job begins.}
 
-\item{\code{job_name}}{The name of this job}
+\item{\code{job_name}}{The name of the job used in dependency specification and job scheduler naming}
+
+\item{\code{n_nodes}}{The number of compute nodes to be requested on the scheduler}
+
+\item{\code{n_cpus}}{The number of cpus to be requested on the scheduler}
+
+\item{\code{cpu_time}}{The compute time requested on the cluster dd-HH:MM:SS}
+
+\item{\code{mem_per_cpu}}{The amount of memory to be requested per cpu}
+
+\item{\code{mem_total}}{The total amount of memory to requested by the job}
+
+\item{\code{batch_id}}{The batch id (not currently used)}
+
+\item{\code{r_code}}{A character vector or expression containing R code to be executed}
+
+\item{\code{batch_code}}{A character vector of code to be included in the batch script for job scheduling}
+
+\item{\code{r_packages}}{A character vector of R packages to be loaded when compute script runs}
+
+\item{\code{scheduler}}{The scheduler to be used for this compute. Options are 'slurm', 'torque', or 'local'.}
+
+\item{\code{scheduler_options}}{A character vector of scheduler options to be added to the header of the batch script}
+
+\item{\code{repolling_interval}}{The number of seconds to wait before rechecking whether parent jobs have completed}
 }
 \if{html}{\out{</div>}}
 }
@@ -146,12 +172,35 @@ Submit job to scheduler or local compute
 \subsection{Method \code{copy()}}{
 Function to create a deep copy of a batch job
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_job$copy()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{R_batch_job$copy(
+  job_name = NULL,
+  n_nodes = NULL,
+  n_cpus = NULL,
+  cpu_time = NULL,
+  r_code = NULL
+)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{job_name}}{The name of the job used in dependency specification and job scheduler naming}
+
+\item{\code{n_nodes}}{The number of compute nodes to be requested on the scheduler}
+
+\item{\code{n_cpus}}{The number of cpus to be requested on the scheduler}
+
+\item{\code{cpu_time}}{The compute time requested on the cluster dd-HH:MM:SS}
+
+\item{\code{r_code}}{A character vector or expression containing R code to be executed}
+}
+\if{html}{\out{</div>}}
+}
 \subsection{Details}{
 Note that this also resets the compute_file_name and batch_file_name fields so that the
-   copied object doesn't create files that collide with the original
+   copied object doesn't create files that collide with the original.
+   This method also exposes a few named parameters that can be used to override the copied fields
+   with new values to avoid needing to change these one-by-one using obj$<field> <- x syntax
 }
 
 }

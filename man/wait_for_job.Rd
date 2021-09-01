@@ -6,7 +6,7 @@
 \usage{
 wait_for_job(
   job_ids,
-  repolling_interval = 30,
+  repolling_interval = 60,
   max_wait = 60 * 60 * 24,
   scheduler = "local",
   quiet = TRUE,
@@ -42,13 +42,13 @@ Note that for the \code{scheduler} argument, "torque" and "qsub" are the same;
 \examples{
 \dontrun{
 # example on qsub/torque cluster
-wait_for_job('7968857.torque01.util.production.int.aci.ics.psu.edu', scheduler="torque")
+wait_for_job("7968857.torque01.util.production.int.aci.ics.psu.edu", scheduler = "torque")
 
 # example of waiting for two jobs on slurm cluster
-wait_for_job(c('24147864', '24147876'), scheduler="slurm")
+wait_for_job(c("24147864", "24147876"), scheduler = "slurm")
 
 # example of waiting for two jobs on local machine
-wait_for_job(c('9843', '9844'), scheduler="local")
+wait_for_job(c("9843", "9844"), scheduler = "local")
 }
 
 }

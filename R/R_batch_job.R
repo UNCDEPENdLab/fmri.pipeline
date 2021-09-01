@@ -193,7 +193,7 @@ R_batch_job <- R6::R6Class("batch_job",
 
     #' @field output_environment The name of the environment to be saved at the end of the R batch execution, which can then
     #'    be loaded by subsequent jobs.
-    output_environment = "job_environment.RData",
+    output_environment = NULL,
 
     #' @field sqlite_db Not used yet, but will be used for job tracking in future
     sqlite_db = NULL,
@@ -233,7 +233,7 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param parent_jobs A vector of one or more job ids that are parents to this job. This can be a named vector, to
     #'    be used in conjunction with \code{depends_on_parents} to specify which parent jobs must be completed before this
     #'    job begins.
-    #' @param job_name The name of this job
+    #' @param job_name The name of the job used in dependency specification and job scheduler naming
     #' @param n_nodes The number of compute nodes to be requested on the scheduler
     #' @param n_cpus The number of cpus to be requested on the scheduler
     #' @param cpu_time The compute time requested on the cluster dd-HH:MM:SS
@@ -353,11 +353,29 @@ R_batch_job <- R6::R6Class("batch_job",
     },
 
     #' @description Function to create a deep copy of a batch job
+    #'
     #' @details Note that this also resets the compute_file_name and batch_file_name fields so that the
-    #'    copied object doesn't create files that collide with the original
-    copy = function() {
+    #'    copied object doesn't create files that collide with the original.
+    #'    This method also exposes a few named parameters that can be used to override the copied fields
+    #'    with new values to avoid needing to change these one-by-one using obj$<field> <- x syntax
+    #' @param job_name The name of the job used in dependency specification and job scheduler naming
+    #' @param n_nodes The number of compute nodes to be requested on the scheduler
+    #' @param n_cpus The number of cpus to be requested on the scheduler
+    #' @param cpu_time The compute time requested on the cluster dd-HH:MM:SS
+    #' @param r_code A character vector or expression containing R code to be executed
+    copy = function(job_name=NULL, n_nodes=NULL, n_cpus=NULL, cpu_time=NULL, r_code=NULL) {
       cloned <- self$clone(deep = TRUE)
       cloned$reset_file_names()
+
+      if (!is.null(job_name)) cloned$job_name <- as.character(job_name)
+      if (!is.null(n_nodes)) cloned$n_nodes <- as.character(n_nodes)
+      if (!is.null(n_cpus)) cloned$n_cpus <- as.character(n_cpus)
+      if (!is.null(cpu_time)) cloned$cpu_time <- as.character(cpu_time)
+      if (!is.null(r_code)) {
+        checkmate::assert_multi_class(r_code, c("expression", "character"))
+        cloned$r_code <- as.character(r_code)
+      }
+
       return(cloned)
     },
 
@@ -395,11 +413,14 @@ R_batch_sequence <- R6::R6Class("batch_sequence",
     initialize = function(..., joblist = NULL) {
       others <- list(...)
       if (!is.null(joblist) && is.list(joblist)) {
-        private$sequence_jobs <- joblist
+        all_jobs <- joblist
       } else {
-        private$sequence_jobs <- others
+        all_jobs <- others
       }
-      sapply(joblist, checkmate::assert_class, "batch_job")
+
+      # tolerate NULLs in inputs, which are ignored
+      private$sequence_jobs <- all_jobs[!sapply(all_jobs, is.null)]
+      sapply(private$sequence_jobs, checkmate::assert_class, "batch_job")
     },
 
     #' @description submit the job sequence to the scheduler or local compute

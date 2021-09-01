@@ -72,6 +72,9 @@ finalize_pipeline_configuration <- function(gpa) {
 
   if (is.null(gpa$parallel$slurm)) gpa$parallel$slurm <- list()
   if (is.null(gpa$parallel$torque)) gpa$parallel$torque <- list()
+  if (is.null(gpa$parallel$batch_code)) {
+
+  }
   if (gpa$scheduler == "slurm") {
     if (is.null(gpa$parallel$sched_args)) {
       gpa$parallel$sched_args <- c("-p general")
@@ -87,6 +90,18 @@ finalize_pipeline_configuration <- function(gpa) {
     }
   }
 
+  # time for finalize_pipeline_configuration in run_glm_pipeline
+  if (is.null(gpa$parallel$finalize_time)) gpa$parallel$finalize_time <- "1:30:00" # 1.5 hours
+  if (is.null(gpa$parallel$l1_setup_time)) gpa$parallel$l1_setup_time <- "1:30:00" # 1.5 hours
+  if (is.null(gpa$parallel$l2_setup_time)) gpa$parallel$l2_setup_time <- "1:30:00" # 1.5 hours
+  if (is.null(gpa$parallel$compute_environment)) {
+    lg$info("Using default R compute environment for UNC Longleaf")
+    gpa$parallel$compute_environment <- c(
+      "module use /proj/mnhallqlab/sw/modules",
+      "module load r/4.0.3_depend"
+    )
+  }
+
   # number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
   if (is.null(gpa$parallel$fsl$l2_cores)) gpa$parallel$fsl$l2_cores <- 20
   if (is.null(gpa$parallel$fsl$l1_feat_time)) gpa$parallel$fsl$l1_feat_time <- "6:00:00" # 6 hours
@@ -98,7 +113,7 @@ finalize_pipeline_configuration <- function(gpa) {
   if (is.null(gpa$parallel$fsl$l3_feat_cpusperjob)) gpa$parallel$fsl$l3_feat_cpusperjob <- 16 # cpus used to process all slices
 
   if (is.null(gpa$parallel$fsl$compute_environment)) {
-    lg$info("Using default compute environment for UNC Longleaf")
+    lg$info("Using default FSL compute environment for UNC Longleaf")
     gpa$parallel$fsl$compute_environment <- c(
       "module unload fsl", # remove any current fsl module
       "module load fsl/6.0.4" # load latest version (2021)
@@ -119,6 +134,8 @@ finalize_pipeline_configuration <- function(gpa) {
   if (is.null(gpa$center_l3_predictors)) gpa$center_l3_predictors <- TRUE
   if (is.null(gpa$bad_ids)) gpa$bad_ids <- c()
   if (is.null(gpa$scheduler)) gpa$scheduler <- "slurm" # HPC batch system
+  gpa$scheduler <- tolower(gpa$scheduler)
+  checkmate::assert_subset(gpa$scheduler, c("slurm", "sbatch", "torque", "qsub", "local", "sh"))
 
   if (is.null(gpa$zthresh)) gpa$zthresh <- 3.09 # 1-tailed p=.001 for z stat
   if (is.null(gpa$clustsize)) gpa$clustsize <- 50 # arbitrary reasonable lower bound on clusters
