@@ -117,7 +117,7 @@ l3_model_names = "prompt", glm_software = NULL) {
       )
     )
 
-    l2_batch$depends_on_parents <- "l1_batch"
+    l2_batch$depends_on_parents <- "setup_run_l1"
     l2_batch$wait_for_children <- TRUE # need to wait for l2 feat jobs to complete before moving to l3
   } else {
     l2_batch <- NULL
@@ -132,7 +132,7 @@ l3_model_names = "prompt", glm_software = NULL) {
     )
   )
 
-  l3_batch$depends_on_parents <- ifelse(isTRUE(gpa$multi_run), "l2_batch", "l1_batch")
+  l3_batch$depends_on_parents <- ifelse(isTRUE(gpa$multi_run), "setup_run_l2", "setup_run_l1")
 
   glm_batch <- R_batch_sequence$new(f_batch, l1_batch, l2_batch, l3_batch)
   glm_batch$submit()

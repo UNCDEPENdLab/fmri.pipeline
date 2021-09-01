@@ -115,7 +115,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   checkmate::assert_subset(glm_software, c("fsl", "spm", "afni"))
   checkmate::assert_integerish(n_expected_runs, lower = 1L, null.ok = TRUE)
 
-  lg <- lgr::get_logger("setup_glm_pipeline")
+  lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
 
   # setup output directory, if needed
   if (!dir.exists(output_directory)) {

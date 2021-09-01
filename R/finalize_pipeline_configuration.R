@@ -131,7 +131,7 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
   }
 
   # process confound settings
-  gpa <- finalize_confound_settings(gpa)
+  gpa <- finalize_confound_settings(gpa, lg)
 
   # populate subject exclusions
   gpa <- calculate_subject_exclusions(gpa)
@@ -159,6 +159,8 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
 }
 
 setup_parallel_settings <- function(gpa, lg = NULL) {
+  checkmate::assert_class(lg, "Logger")
+
   # ---- PARALLELISM SETUP
   # pipeline_cores: number of cores used in push_pipeline when looping over l1 model variants
   if (is.null(gpa$parallel$pipeline_cores) || gpa$parallel$pipeline_cores == "default") {
