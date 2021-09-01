@@ -252,7 +252,7 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
   }
 
   # incorporate spike regressors if requested (not used in conventional AROMA)
-  spikes <- compute_spike_regressors(motion_df, spike_volumes, lg = lg)
+  spikes <- compute_spike_regressors(motion_df, gpa$confound_settings$spike_volumes, lg = lg)
   if (!is.null(spikes)) all_confounds <- cbind(all_confounds, spikes)
 
   lg$debug("Writing l1 confounds to file: %s", expected_l1_confound_file)

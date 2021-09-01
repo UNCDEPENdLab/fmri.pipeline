@@ -164,7 +164,6 @@ generate_motion_regressors <- function(motion_params_file = "motion.par",
   checkmate::assert_subset(col.names, c("rx", "ry", "rz", "tx", "ty", "tz"))
   checkmate::assert_logical(demean, len = 1L)
   checkmate::assert_integerish(drop_volumes, lower = 0)
-  checkmate::assert_character(spike_volume)
   checkmate::assert_subset(rot_units, c("rad", "deg"))
   checkmate::assert_subset(tra_units, c("mm"))
   checkmate::assert_character(na.strings)
