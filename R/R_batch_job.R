@@ -65,7 +65,7 @@ R_batch_job <- R6::R6Class("batch_job",
         if (!is.null(self$mem_per_cpu)) {
           mem_string <- paste0("#SBATCH --mem-per-cpu=", self$mem_per_cpu)
         } else if (!is.null(self$mem_total)) {
-          mem_string <- paste0("#SBATCH --mem-per-cpu=", self$mem_total)
+          mem_string <- paste0("#SBATCH --mem=", self$mem_total)
         }
 
         job_string <- if (is.null(self$job_name)) NULL else paste("#SBATCH -J", self$job_name)
@@ -99,10 +99,12 @@ R_batch_job <- R6::R6Class("batch_job",
           ifelse(is.null(self$job_name), NULL, paste("#PBS -N", self$job_name)),
           paste("#PBS", self$scheduler_options),
           "",
-          "cd $PBS_O_WORKDIR"
+          "cd $PBS_O_WORKDIR",
+          self$batch_code
         )
       } else {
-        # local scheduler considerations here
+        # only paste in batch_code, which may contain compute environment setup statements
+        syntax <- c(syntax, self$batch_code)
       }
 
       # syntax <- c(syntax, paste("Rscript --vanilla", private$get_compute_file_name()))
@@ -140,7 +142,11 @@ R_batch_job <- R6::R6Class("batch_job",
         syntax <- c(
           syntax,
           "if (exists('child_job_ids') && inherits(child_job_ids, c('numeric', 'integer', 'character'))) {",
-          paste0("  fmri.pipeline::wait_for_job(child_job_ids, scheduler='", self$scheduler, "')"),
+          paste0(
+            "  fmri.pipeline::wait_for_job(child_job_ids, quiet=FALSE,",
+            " repolling_interval=", self$repolling_interval,
+            ", scheduler='", self$scheduler, "')"
+          ),
           "}"
         )
       }
@@ -220,16 +226,30 @@ R_batch_job <- R6::R6Class("batch_job",
 
     #' @field repolling_interval The number of seconds to wait between successive checks on whether parent jobs have completed.
     #'    This is mostly relevant to the 'local' scheduler.
-    repolling_interval = 60, # seconds
+    repolling_interval = 300, # seconds
 
     #' @description Create a new R_batch_job object for execution on an HPC cluster
+    #' @param batch_directory The location of batch scripts to be generated
     #' @param parent_jobs A vector of one or more job ids that are parents to this job. This can be a named vector, to
     #'    be used in conjunction with \code{depends_on_parents} to specify which parent jobs must be completed before this
     #'    job begins.
     #' @param job_name The name of this job
+    #' @param n_nodes The number of compute nodes to be requested on the scheduler
+    #' @param n_cpus The number of cpus to be requested on the scheduler
+    #' @param cpu_time The compute time requested on the cluster dd-HH:MM:SS
+    #' @param mem_per_cpu The amount of memory to be requested per cpu
+    #' @param mem_total The total amount of memory to requested by the job
+    #' @param batch_id The batch id (not currently used)
+    #' @param r_code A character vector or expression containing R code to be executed
+    #' @param batch_code A character vector of code to be included in the batch script for job scheduling
+    #' @param r_packages A character vector of R packages to be loaded when compute script runs
+    #' @param scheduler The scheduler to be used for this compute. Options are 'slurm', 'torque', or 'local'.
+    #' @param scheduler_options A character vector of scheduler options to be added to the header of the batch script
+    #' @param repolling_interval The number of seconds to wait before rechecking whether parent jobs have completed
     initialize = function(batch_directory = NULL, parent_jobs = NULL, job_name = NULL, n_nodes = NULL, n_cpus = NULL,
                           cpu_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL,
-                          batch_code = NULL, r_packages = NULL, scheduler = NULL, scheduler_options = NULL, repolling_interval = NULL) {
+                          batch_code = NULL, r_packages = NULL, scheduler = NULL, 
+                          scheduler_options = NULL, repolling_interval = NULL) {
       if (!is.null(batch_directory)) self$batch_directory <- batch_directory
       if (!is.null(parent_jobs)) self$parent_jobs <- parent_jobs
       if (!is.null(job_name)) self$job_name <- as.character(job_name)
@@ -302,13 +322,7 @@ R_batch_job <- R6::R6Class("batch_job",
       cd <- getwd()
       setwd(self$batch_directory)
 
-      # For local compute of an R job, use Rscript --vanilla to get proper job_id in return,
-      # rather than job_id of shell script that called Rscript.
-      # if (scheduler %in% c("local", "sh")) {
-      #  batch_script <- private$get_compute_file_name()
-      # } else {
       batch_script <- private$get_batch_file_name()
-      # }
 
       # submit job for computation, waiting for parents if requested
       wait_jobs <- NULL
@@ -325,11 +339,15 @@ R_batch_job <- R6::R6Class("batch_job",
         }
       }
 
+      message("Submitting job: ", self$job_name)
+
       # TODO: if a job_id already exists and submit is called again, do we check job status, insist a 'forced' submission?
       private$job_id <- fmri.pipeline::cluster_job_submit(batch_script,
         scheduler = self$scheduler,
         wait_jobs = wait_jobs, repolling_interval = self$repolling_interval
       )
+
+      message("Job received job id: ", private$job_id)
 
       if (!is.null(cd) && dir.exists(cd)) setwd(cd) # reset working directory (don't attempt if that directory is absent)
     },
@@ -372,14 +390,16 @@ R_batch_sequence <- R6::R6Class("batch_sequence",
   ),
   public = list(
     #' @description create a new R_batch_sequence object
+    #' @param ... One or more R_batch_job objects to be run in sequence
+    #' @param joblist Optional list of jobs to be used instead of ...
     initialize = function(..., joblist = NULL) {
       others <- list(...)
       if (!is.null(joblist) && is.list(joblist)) {
-        sapply(joblist, checkmate::assert_class, "batch_job")
         private$sequence_jobs <- joblist
       } else {
         private$sequence_jobs <- others
       }
+      sapply(joblist, checkmate::assert_class, "batch_job")
     },
 
     #' @description submit the job sequence to the scheduler or local compute
