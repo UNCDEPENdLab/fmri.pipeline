@@ -249,6 +249,7 @@ R_batch_job <- R6::R6Class("batch_job",
     initialize = function(batch_directory = NULL, parent_jobs = NULL, job_name = NULL, n_nodes = NULL, n_cpus = NULL,
                           cpu_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL,
                           batch_code = NULL, r_packages = NULL, scheduler = NULL, 
+                          input_environment = NULL, output_environment = NULL,
                           scheduler_options = NULL, repolling_interval = NULL) {
       if (!is.null(batch_directory)) self$batch_directory <- batch_directory
       if (!is.null(parent_jobs)) self$parent_jobs <- parent_jobs
@@ -292,6 +293,9 @@ R_batch_job <- R6::R6Class("batch_job",
 
       checkmate::assert_subset(scheduler, c("torque", "qsub", "slurm", "sbatch", "sh", "local"))
       if (!is.null(scheduler)) self$scheduler <- scheduler
+
+      if (!is.null(input_environment)) self$input_environment <- input_environment
+      if (!is.null(output_environment)) self$output_environment <- output_environment
 
       if (!is.null(scheduler_options)) {
         checkmate::assert_character(scheduler_options)

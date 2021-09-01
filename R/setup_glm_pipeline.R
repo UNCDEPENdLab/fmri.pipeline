@@ -115,9 +115,11 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   checkmate::assert_subset(glm_software, c("fsl", "spm", "afni"))
   checkmate::assert_integerish(n_expected_runs, lower = 1L, null.ok = TRUE)
 
+  lg <- lgr::get_logger("setup_glm_pipeline")
+
   # setup output directory, if needed
   if (!dir.exists(output_directory)) {
-    message("Setting up output directory for pipeline: ", output_directory)
+    lg$info("Setting up output directory for pipeline: ", output_directory)
     dir.create(output_directory, recursive = TRUE)
   }
 
@@ -151,7 +153,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   # create run data, if needed
   if (is.null(run_data) && isTRUE(multi_run)) {
-    message("Distilling run_data object from trial_data by finding variables that vary at run level")
+    lg$info("Distilling run_data object from trial_data by finding variables that vary at run level")
 
     variation_df <- trial_data %>%
       group_by(id, session, run_number) %>%
@@ -163,7 +165,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
       all(col == 1)
     }) == TRUE))
 
-    message("Retaining columns: ", paste(one_cols, collapse = ", "))
+    lg$info("Retaining columns: ", paste(one_cols, collapse = ", "))
 
     # at present, this will keep all subject-level covariates, too. Maybe correct later?
     run_data <- trial_data %>%
@@ -182,7 +184,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   # create subject data
   if (is.null(subject_data)) {
-    message("Distilling subject_data object from trial_data by finding variables that vary at subject level")
+    lg$info("Distilling subject_data object from trial_data by finding variables that vary at subject level")
 
     variation_df <- trial_data %>%
       group_by(id, session) %>%
@@ -260,5 +262,12 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   # gpa <- finalize_pipeline_configuration(gpa)
 
   class(gpa) <- c("list", "glm_pipeline_arguments")
+
+  # populate $output_locations
+  gpa <- setup_output_locations(gpa, lg)
+
+  # populate $parallel
+  gpa <- setup_parallel_settings(gpa, lg)
+
   return(gpa)
 }

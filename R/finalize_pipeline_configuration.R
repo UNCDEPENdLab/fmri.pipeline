@@ -3,15 +3,21 @@
 #' N.B. gpa is a shorthand abbreviation for glm_model_arguments, to save typing
 #'
 #' @param gpa A \code{glm_pipeline_arguments} object setup by \code{setup_glm_pipeline}
+#' @param refinalize A logical indicating whether to force checks and finalize steps on an object that
+#'   was previously finalized.
 #' @importFrom stringr str_count fixed
 #' @importFrom magrittr %>%
 #' @importFrom lgr get_logger
 #' @export
-finalize_pipeline_configuration <- function(gpa) {
+finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_logical(refinalize, len = 1L)
   lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
 
-  # populate $output_locations
-  gpa <- setup_output_locations(gpa, lg)
+  if (isTRUE(gpa$finalize_complete) && isFALSE(refinalize)) {
+    lg$debug("In finalize_pipeline_configuration, finalization of gpa already complete. Returning object unchanged.")
+    return(gpa)
+  }
 
   if (is.null(gpa$sqlite_con) || !DBI::dbIsValid(gpa$sqlite_con)) {
     lg$info("Opening SQLite connection to: %s", gpa$output_locations$sqlite_db)
@@ -47,89 +53,6 @@ finalize_pipeline_configuration <- function(gpa) {
     rownames(mm$contrasts)
   }) # names of level 1 copes for each model
 
-  # ---- PARALLELISM SETUP
-  # pipeline_cores: number of cores used in push_pipeline when looping over l1 model variants
-  if (is.null(gpa$parallel$pipeline_cores) || gpa$parallel$pipeline_cores == "default") {
-    # number of workers to setup at the pipeline level (i.e., over l1 model variants)
-    gpa$pipeline_cpus <- length(gpa$l1_models$models)
-  }
-
-  # l1_setup_cores defines how many cores to use when looping over subjects within setup_l1_models
-  if (is.null(gpa$parallel$l1_setup_cores) || gpa$parallel$l1_setup_cores == "default") {
-    # default to serial execution within a single l1 model variant in setup_lvl1_models
-    gpa$parallel$l1_setup_cores <- 1L
-  } else {
-    checkmate::assert_integerish(gpa$parallel$l1_setup_cores, lower = 1)
-  }
-
-  # l2_setup_cores defines how many cores to use when looping over models in setup_l2_models
-  if (is.null(gpa$parallel$l2_setup_cores) || gpa$parallel$l2_setup_cores == "default") {
-    # default to serial execution across all l1 and l2 models to be setup
-    gpa$parallel$l2_setup_cores <- 1L
-  } else {
-    checkmate::assert_integerish(gpa$parallel$l2_setup_cores, lower = 1)
-  }
-
-  if (is.null(gpa$parallel$slurm)) gpa$parallel$slurm <- list()
-  if (is.null(gpa$parallel$torque)) gpa$parallel$torque <- list()
-  if (is.null(gpa$parallel$batch_code)) {
-
-  }
-  if (gpa$scheduler == "slurm") {
-    if (is.null(gpa$parallel$sched_args)) {
-      gpa$parallel$sched_args <- c("-p general")
-      lg$info("Using default SLURM scheduler arguments: ")
-      lg$info("Argument: %s", gpa$parallel$sched_args)
-    }
-  } else if (gpa$scheduler == "torque") {
-    # gpa$parallel$sched_args <- c("-A mnh5174_c_g_sc_default", "-W group_list=mnh5174_collab")
-    if (is.null(gpa$parallel$sched_args)) {
-      gpa$parallel$sched_args <- c("-j oe", "-m n")
-      lg$info("Using default PBS scheduler arguments: ")
-      lg$info("Argument: %s", gpa$parallel$sched_args)
-    }
-  }
-
-  # time for finalize_pipeline_configuration in run_glm_pipeline
-  if (is.null(gpa$parallel$finalize_time)) gpa$parallel$finalize_time <- "1:30:00" # 1.5 hours
-  if (is.null(gpa$parallel$l1_setup_time)) gpa$parallel$l1_setup_time <- "1:30:00" # 1.5 hours
-  if (is.null(gpa$parallel$l2_setup_time)) gpa$parallel$l2_setup_time <- "1:30:00" # 1.5 hours
-  if (is.null(gpa$parallel$compute_environment)) {
-    lg$info("Using default R compute environment for UNC Longleaf")
-    gpa$parallel$compute_environment <- c(
-      "module use /proj/mnhallqlab/sw/modules",
-      "module load r/4.0.3_depend"
-    )
-  }
-
-  # number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
-  if (is.null(gpa$parallel$fsl$l2_cores)) gpa$parallel$fsl$l2_cores <- 20
-  if (is.null(gpa$parallel$fsl$l1_feat_time)) gpa$parallel$fsl$l1_feat_time <- "6:00:00" # 6 hours
-  if (is.null(gpa$parallel$fsl$l1_feat_memgb)) gpa$parallel$fsl$l1_feat_memgb <- "12" # 12 GB by default
-  if (is.null(gpa$parallel$fsl$l2_feat_time)) gpa$parallel$fsl$l2_feat_time <- "1:00:00" # 1 hour
-  if (is.null(gpa$parallel$fsl$l2_feat_memgb)) gpa$parallel$fsl$l2_feat_memgb <- "12" # 12 GB by default
-  if (is.null(gpa$parallel$fsl$l3_feat_time)) gpa$parallel$fsl$l3_feat_time <- "24:00:00" # 24 hours
-  if (is.null(gpa$parallel$fsl$l3_feat_memgb)) gpa$parallel$fsl$l3_feat_memgb <- "32" # 32 GB by default
-  if (is.null(gpa$parallel$fsl$l3_feat_cpusperjob)) gpa$parallel$fsl$l3_feat_cpusperjob <- 16 # cpus used to process all slices
-
-  if (is.null(gpa$parallel$fsl$compute_environment)) {
-    lg$info("Using default FSL compute environment for UNC Longleaf")
-    gpa$parallel$fsl$compute_environment <- c(
-      "module unload fsl", # remove any current fsl module
-      "module load fsl/6.0.4" # load latest version (2021)
-    )
-  }
-
-  # old ICS-ACI settings
-  # "source /gpfs/group/mnh5174/default/lab_resources/ni_path.bash",
-  # "module unload fsl", #make sure that the ni_path version of FSL is unloaded
-  # "#module load \"openblas/0.2.20\" >/dev/null 2>&1",
-  # "module load \"fsl/6.0.1\" >/dev/null 2>&1",
-  # "module load gsl/2.5", #for dependlab R package to work (some new dependency)
-
-  if (is.null(gpa$parallel$fsl$slurm_l1_array)) {
-
-  }
 
   if (is.null(gpa$center_l3_predictors)) gpa$center_l3_predictors <- TRUE
   if (is.null(gpa$bad_ids)) gpa$bad_ids <- c()
@@ -235,8 +158,96 @@ finalize_pipeline_configuration <- function(gpa) {
   return(gpa)
 }
 
+setup_parallel_settings <- function(gpa, lg = NULL) {
+  # ---- PARALLELISM SETUP
+  # pipeline_cores: number of cores used in push_pipeline when looping over l1 model variants
+  if (is.null(gpa$parallel$pipeline_cores) || gpa$parallel$pipeline_cores == "default") {
+    # number of workers to setup at the pipeline level (i.e., over l1 model variants)
+    gpa$pipeline_cpus <- length(gpa$l1_models$models)
+  }
+
+  # l1_setup_cores defines how many cores to use when looping over subjects within setup_l1_models
+  if (is.null(gpa$parallel$l1_setup_cores) || gpa$parallel$l1_setup_cores == "default") {
+    # default to serial execution within a single l1 model variant in setup_lvl1_models
+    gpa$parallel$l1_setup_cores <- 1L
+  } else {
+    checkmate::assert_integerish(gpa$parallel$l1_setup_cores, lower = 1)
+  }
+
+  # l2_setup_cores defines how many cores to use when looping over models in setup_l2_models
+  if (is.null(gpa$parallel$l2_setup_cores) || gpa$parallel$l2_setup_cores == "default") {
+    # default to serial execution across all l1 and l2 models to be setup
+    gpa$parallel$l2_setup_cores <- 1L
+  } else {
+    checkmate::assert_integerish(gpa$parallel$l2_setup_cores, lower = 1)
+  }
+
+  if (is.null(gpa$parallel$slurm)) gpa$parallel$slurm <- list()
+  if (is.null(gpa$parallel$torque)) gpa$parallel$torque <- list()
+  if (is.null(gpa$parallel$batch_code)) {
+
+  }
+  if (gpa$scheduler == "slurm") {
+    if (is.null(gpa$parallel$sched_args)) {
+      gpa$parallel$sched_args <- c("-p general")
+      lg$info("Using default SLURM scheduler arguments: ")
+      lg$info("Argument: %s", gpa$parallel$sched_args)
+    }
+  } else if (gpa$scheduler == "torque") {
+    # gpa$parallel$sched_args <- c("-A mnh5174_c_g_sc_default", "-W group_list=mnh5174_collab")
+    if (is.null(gpa$parallel$sched_args)) {
+      gpa$parallel$sched_args <- c("-j oe", "-m n")
+      lg$info("Using default PBS scheduler arguments: ")
+      lg$info("Argument: %s", gpa$parallel$sched_args)
+    }
+  }
+
+  # time for finalize_pipeline_configuration in run_glm_pipeline
+  if (is.null(gpa$parallel$finalize_time)) gpa$parallel$finalize_time <- "1:30:00" # 1.5 hours
+  if (is.null(gpa$parallel$l1_setup_time)) gpa$parallel$l1_setup_time <- "1:30:00" # 1.5 hours
+  if (is.null(gpa$parallel$l2_setup_time)) gpa$parallel$l2_setup_time <- "1:30:00" # 1.5 hours
+  if (is.null(gpa$parallel$compute_environment)) {
+    lg$info("Using default R compute environment for UNC Longleaf")
+    gpa$parallel$compute_environment <- c(
+      "module use /proj/mnhallqlab/sw/modules",
+      "module load r/4.0.3_depend"
+    )
+  }
+
+  # number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
+  if (is.null(gpa$parallel$fsl$l2_cores)) gpa$parallel$fsl$l2_cores <- 20
+  if (is.null(gpa$parallel$fsl$l1_feat_time)) gpa$parallel$fsl$l1_feat_time <- "6:00:00" # 6 hours
+  if (is.null(gpa$parallel$fsl$l1_feat_memgb)) gpa$parallel$fsl$l1_feat_memgb <- "12" # 12 GB by default
+  if (is.null(gpa$parallel$fsl$l2_feat_time)) gpa$parallel$fsl$l2_feat_time <- "1:00:00" # 1 hour
+  if (is.null(gpa$parallel$fsl$l2_feat_memgb)) gpa$parallel$fsl$l2_feat_memgb <- "12" # 12 GB by default
+  if (is.null(gpa$parallel$fsl$l3_feat_time)) gpa$parallel$fsl$l3_feat_time <- "24:00:00" # 24 hours
+  if (is.null(gpa$parallel$fsl$l3_feat_memgb)) gpa$parallel$fsl$l3_feat_memgb <- "32" # 32 GB by default
+  if (is.null(gpa$parallel$fsl$l3_feat_cpusperjob)) gpa$parallel$fsl$l3_feat_cpusperjob <- 16 # cpus used to process all slices
+
+  if (is.null(gpa$parallel$fsl$compute_environment)) {
+    lg$info("Using default FSL compute environment for UNC Longleaf")
+    gpa$parallel$fsl$compute_environment <- c(
+      "module unload fsl", # remove any current fsl module
+      "module load fsl/6.0.4" # load latest version (2021)
+    )
+  }
+
+  # old ICS-ACI settings
+  # "source /gpfs/group/mnh5174/default/lab_resources/ni_path.bash",
+  # "module unload fsl", #make sure that the ni_path version of FSL is unloaded
+  # "#module load \"openblas/0.2.20\" >/dev/null 2>&1",
+  # "module load \"fsl/6.0.1\" >/dev/null 2>&1",
+  # "module load gsl/2.5", #for dependlab R package to work (some new dependency)
+
+  if (is.null(gpa$parallel$fsl$slurm_l1_array)) {
+
+  }
+
+  return(gpa)
+}
+
 # helper function for settings up $output_directory and $output_locations
-setup_output_locations <- function(gpa, lg=NULL) {
+setup_output_locations <- function(gpa, lg = NULL) {
   checkmate::assert_class(lg, "Logger")
 
   # sort out file locations
@@ -265,7 +276,7 @@ setup_output_locations <- function(gpa, lg=NULL) {
     # default to BIDS-style consolidated output
     consolidated = TRUE,
     feat_sub_directory = feat_sub_directory,
-    feat_ses_directory = feat_sub_directory, #no difference in defaults
+    feat_ses_directory = feat_sub_directory, # no difference in defaults
     feat_l1_directory = file.path(feat_sub_directory, "{l1_model}"),
     feat_l2_directory = feat_sub_directory,
     feat_l3_directory = file.path(gpa$output_directory, "feat_l3", "{l1_contrast}", "{l1_model}", "{l2_contrast}"),
@@ -293,7 +304,6 @@ setup_output_locations <- function(gpa, lg=NULL) {
   }
 
   return(gpa)
-
 }
 
 finalize_confound_settings <- function(gpa, lg) {

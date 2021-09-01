@@ -10,7 +10,8 @@
 #' @param glm_software which glm software should be used for model estimation (not implemented yet)
 #' @importFrom checkmate assert_string assert_class assert_subset assert_integerish
 #' @export
-run_glm_pipeline <- function(gpa, l1_model_names = "prompt", l2_model_names = NULL, l3_model_names = NULL, glm_software = NULL) {
+run_glm_pipeline <- function(gpa, l1_model_names = "prompt", l2_model_names = "prompt", 
+l3_model_names = "prompt", glm_software = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_string(l1_model_names, null.ok = TRUE)
   checkmate::assert_string(l2_model_names, null.ok = TRUE)
@@ -21,7 +22,7 @@ run_glm_pipeline <- function(gpa, l1_model_names = "prompt", l2_model_names = NU
   choose_models <- function(gpa, model_names, level) {
     checkmate::assert_integerish(level, min=1, max=3)
     all_m_names <- names(gpa[[paste0("l", level, "_models")]]$models)
-    checkmate::assert_subset(model_names, c("prompt", all_m_names), null.ok = TRUE)
+    checkmate::assert_subset(model_names, c("prompt", all_m_names))
 
     if (is.null(model_names)) {
       # null indicates that we should run all models at this level
@@ -47,7 +48,7 @@ run_glm_pipeline <- function(gpa, l1_model_names = "prompt", l2_model_names = NU
     if (isTRUE(gpa$multi_run)) l2_model_names <- choose_models(gpa, l2_model_names, level = 2)
     l3_model_names <- choose_models(gpa, l3_model_names, level = 3)
 
-    cat("GLM models to run:\n--------------\n\n")
+    cat("\nGLM models to run:\n------------------\n\n")
     cat("Level 1: ", paste(l1_model_names, collapse = ", "), "\n")
     if (isTRUE(gpa$multi_run)) cat("Level 2: ", paste(l2_model_names, collapse = ", "), "\n")
     cat("Level 3: ", paste(l3_model_names, collapse = ", "), "\n")
@@ -66,21 +67,20 @@ run_glm_pipeline <- function(gpa, l1_model_names = "prompt", l2_model_names = NU
   # this will contain all scripts for this run and contain a snapshot of the gpa object
   # that is amended as each batch job runs and completes.
   batch_directory <- file.path(gpa$output_locations$scheduler_scripts, paste0("batch_", batch_id))
-  if (!dir.exists(batch_directory)) dir.create(batch_directory)
+  if (!dir.exists(batch_directory)) dir.create(batch_directory, recursive = TRUE)
   gpa_cache <- file.path(batch_directory, "run_pipeline_cache.RData")
   save(gpa, file=gpa_cache)
 
   if (is.null(gpa$finalize_complete) || isFALSE(gpa$finalize_complete)) {
     lg$info("finalize_pipeline_configuration has not been run on this object. We will start with this step.")
     f_batch <- R_batch_job$new(
-      job_name = "finalize_configuration", batch_directory = batch_folder, scheduler = gpa$scheduler,
+      job_name = "finalize_configuration", batch_directory = batch_directory, scheduler = gpa$scheduler,
       input_environment = gpa_cache, output_environment = gpa_cache,
       n_nodes = 1, n_cpus = 1, cpu_time = gpa$parallel$finalize_time,
       r_code = "gpa <- finalize_pipeline_configuration(gpa)", r_packages = "fmri.pipeline",
       batch_code = gpa$parallel$compute_environment
     )
 
-    #gpa <- finalize_pipeline_configuration(gpa)
   }
 
   # Note: one tricky job dependency problem occurs when a job spawns multiple child jobs.
@@ -109,7 +109,7 @@ run_glm_pipeline <- function(gpa, l1_model_names = "prompt", l2_model_names = NU
   if (isTRUE(gpa$multi_run)) {
     # setup of l2 models (should follow l1)
     l2_batch <- f_batch$copy(
-      job_name = "setup_run_l1", n_cpus = gpa$parallel$l2_setup_cores,
+      job_name = "setup_run_l2", n_cpus = gpa$parallel$l2_setup_cores,
       cpu_time = gpa$parallel$l2_setup_time,
       r_code = c(
         "gpa <- setup_l2_models(gpa)",
