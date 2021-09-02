@@ -8,6 +8,8 @@
 #' @importFrom stringr str_count fixed
 #' @importFrom magrittr %>%
 #' @importFrom lgr get_logger
+#' @importFrom DBI dbConnect dbIsValid dbWriteTable
+#' @importFrom RSQLite SQLite
 #' @export
 finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")

@@ -14,6 +14,8 @@
 #'
 #' @return a TRUE/FALSE indicating whether the record was successfully inserted
 #' @importFrom checkmate assert_integerish test_null assert_data_frame assert_string
+#' @importFrom DBI dbDataType dbConnect dbDisconnect dbIsValid dbCommit dbRollback dbBegin
+#' @importFrom glue glue_sql
 insert_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number = NULL, data = NULL,
                              table = NULL, delete_extant = TRUE, append = TRUE, overwrite = FALSE, immediate=FALSE) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")

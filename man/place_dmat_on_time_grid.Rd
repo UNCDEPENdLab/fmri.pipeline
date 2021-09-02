@@ -5,7 +5,7 @@
 \title{Function to convert dmat (runs x regressor list) to a time-oriented representation.
 This yields a list of runs where each element is data.frame of volumes x regressors}
 \usage{
-place_dmat_on_time_grid(dmat, convolve = TRUE, runtiming = NULL, bdm_args)
+place_dmat_on_time_grid(dmat, convolve = TRUE, run_timing = NULL, bdm_args)
 }
 \arguments{
 \item{dmat}{A runs x regressors 2-d list where each element is a matrix containing
@@ -13,7 +13,7 @@ onset, duration, and value for a signal}
 
 \item{convolve}{If \code{TRUE} (default), convolve the time-oriented signals with an HRF}
 
-\item{runtiming}{A vector of cumulative start times for each run in a multi-run dataset}
+\item{run_timing}{A vector of cumulative start times for each run in a multi-run dataset}
 
 \item{bdm_args}{A list of arguments passed to build_design_matrix, as well as a few fields added
 during the initial argument parsing. See build_design_matrix for details. Should contain:

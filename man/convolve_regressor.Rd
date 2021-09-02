@@ -30,8 +30,8 @@ convolve_regressor(
 
 \item{normalization}{The HRF normalization method used: "none", "durmax_1", or "evtmax_1"}
 
-\item{rm_zeros}{Whether to remove zeros from events vector prior to convolution. Generally a good idea since we typically center
-values prior to convolution, and retaining zeros will lead them to be non-zero after mean centering.}
+\item{rm_zeros}{Whether to remove zeros from events vector prior to convolution. Generally a good idea since we 
+typically center values prior to convolution, and retaining zeros will lead them to be non-zero after mean centering.}
 
 \item{center_values}{Whether to demean values vector before convolution. Default \code{TRUE}.}
 
