@@ -657,20 +657,21 @@ build_design_matrix <- function(
   }
 
   # concatenate regressors across runs by adding timing from MR files.
-  runtiming <- cumsum(run_volumes) * tr # timing in seconds of the start of successive runs
+  run_timing <- cumsum(run_volumes) * tr # timing in seconds of the start of successive runs
 
   # convert the trial-oriented dmat to a time-oriented dmat_convolved.
   # also get an unconvolved version on the time grid for diagnostics.
-  dmat_convolved <- place_dmat_on_time_grid(dmat, convolve = TRUE, runtiming = runtiming, bdm_args)
-  dmat_unconvolved <- place_dmat_on_time_grid(dmat, convolve = FALSE, runtiming = runtiming, bdm_args)
+  dmat_convolved <- place_dmat_on_time_grid(dmat, convolve = TRUE, run_timing = run_timing, bdm_args)
+  dmat_unconvolved <- place_dmat_on_time_grid(dmat, convolve = FALSE, run_timing = run_timing, bdm_args)
 
   # dmat_convolved should now be a 1-d runs list where each element is a data.frame of convolved regressors.
-  names(dmat_convolved) <- names(dmat_unconvolved) <- paste0("run_number", runs_to_output)
+  names(dmat_convolved) <- names(dmat_unconvolved) <- paste0("run", runs_to_output)
 
   #add additional regressors to dmat_convolved here so that they are written out as part of the write_timing_files step
   if (!is.null(additional_regressors)) {
     for (i in seq_along(dmat_convolved)) {
-      #this is clunky, but necessary to make sure we grab the right additional signals (would need to refactor dmat_convolved to get it less clunky)
+      # this is clunky, but necessary to make sure we grab the right additional signals 
+      # (would need to refactor dmat_convolved to get it less clunky)
       runnum <- as.numeric(sub("run_number(\\d+)", "\\1", names(dmat_convolved)[i], perl=TRUE))
       additional_regressors_currun <- additional_regressors_df %>% 
         dplyr::filter(run_number == !!runnum) %>%
@@ -697,18 +698,24 @@ build_design_matrix <- function(
       conv_concat <- list()
       lapply(seq_along(dmat_convolved), function(r) {
         lapply(seq_along(dmat_convolved[[r]]), function(v) {
-          regName <- names(dmat_convolved[[r]])[v]
-          fname <- paste0(names(dmat_convolved)[r], "_", regName, ".1D")
-          toWrite <- round(dmat_convolved[[r]][[v]], 6)
-          conv_concat[[regName]] <<- c(conv_concat[[regName]], toWrite) #add for concatenated 1D file
-          write.table(toWrite, file=file.path(output_directory, fname), sep="\n", eol="\n", quote=FALSE, col.names=FALSE, row.names=FALSE)
+          reg_name <- names(dmat_convolved[[r]])[v]
+          fname <- paste0(names(dmat_convolved)[r], "_", reg_name, ".1D")
+          to_write <- round(dmat_convolved[[r]][[v]], 6)
+          conv_concat[[reg_name]] <<- c(conv_concat[[reg_name]], to_write) #add for concatenated 1D file
+          write.table(to_write,
+            file = file.path(output_directory, fname),
+            sep = "\n", eol = "\n", quote = FALSE, col.names = FALSE, row.names = FALSE
+          )
         })
       })
 
       #write run-concatenated convolved regressors (for use in AFNI)
       lapply(seq_along(conv_concat), function(v) {
         fname <- paste0(names(conv_concat)[v], "_concat.1D")
-        write.table(conv_concat[[v]], file=file.path(output_directory, fname), sep="\n", eol="\n", quote=FALSE, col.names=FALSE, row.names=FALSE)
+        write.table(conv_concat[[v]],
+          file = file.path(output_directory, fname),
+          sep = "\n", eol = "\n", quote = FALSE, col.names = FALSE, row.names = FALSE
+        )
       })
 
     }
@@ -730,7 +737,7 @@ build_design_matrix <- function(
           } else {
             if (center_values && !all(na.omit(regout[, "value"]) == 0.0)) {
               #remove zero-value events from the regressor
-              regout <- regout[regout[,"value"] != 0, ]
+              regout <- regout[regout[, "value"] != 0, ]
 
               #now mean center values (unless there is no variation, such as a task indicator function)
               if (sd(regout[, "value"], na.rm=TRUE) > 0) { 
@@ -843,7 +850,7 @@ build_design_matrix <- function(
     thisreg <- dmat[, reg]
     concat_reg <- do.call(rbind, lapply(seq_along(thisreg), function(run) {
       timing <- thisreg[[run]]
-      timing[, "onset"] <- timing[, "onset"] + ifelse(run > 1, runtiming[run-1], 0)
+      timing[, "onset"] <- timing[, "onset"] + ifelse(run > 1, run_timing[run-1], 0)
       return(timing)
     }))
     attr(concat_reg, "event") <- attr(thisreg[[1]], "event") #propagate event alignment

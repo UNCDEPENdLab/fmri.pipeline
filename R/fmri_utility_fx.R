@@ -117,7 +117,7 @@ get_collin_events <- function(dmat) {
 #' @param dmat A runs x regressors 2-d list where each element is a matrix containing
 #'          onset, duration, and value for a signal
 #' @param convolve If \code{TRUE} (default), convolve the time-oriented signals with an HRF
-#' @param runtiming A vector of cumulative start times for each run in a multi-run dataset
+#' @param run_timing A vector of cumulative start times for each run in a multi-run dataset
 #' @param bdm_args A list of arguments passed to build_design_matrix, as well as a few fields added
 #'          during the initial argument parsing. See build_design_matrix for details. Should contain:
 #'          \itemize{
@@ -135,7 +135,7 @@ get_collin_events <- function(dmat) {
 #'
 #' @author Michael Hallquist
 #' @keywords internal
-place_dmat_on_time_grid <- function(dmat, convolve=TRUE, runtiming=NULL, bdm_args) {
+place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_args) {
 
   if (bdm_args$convolve_wi_run) {
     #create an HRF-convolved version of the list
@@ -158,15 +158,15 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, runtiming=NULL, bdm_arg
       return(df)
     })
   } else {
-    #issue with convolution of each run separately is that the normalization and mean centering are applied within-run
-    #in the case of EV, for example, this will always scale the regressor in terms of relative differences in value within run, but
-    #will fail to capture relative differences across run (e.g., if value tends to be higher in run 8 than run 1)
+    # Issue with convolution of each run separately is that the normalization and mean centering are applied within-run.
+    # In the case of EV, for example, this will always scale the regressor in terms of relative differences in value within
+    # run, but will fail to capture relative differences across run (e.g., if value tends to be higher in run 8 than run 1).
 
     dmat_sumruns <- lapply(1:dim(dmat)[2L], function(reg) {
       thisreg <- dmat[, reg]
       concattiming <- do.call(rbind, lapply(seq_along(thisreg), function(run) {
         timing <- thisreg[[run]]
-        timing[, "onset"] <- timing[, "onset"] + ifelse(run > 1, runtiming[run-1], 0)
+        timing[, "onset"] <- timing[, "onset"] + ifelse(run > 1, run_timing[run-1], 0)
         timing
       }))
 
@@ -233,8 +233,8 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, runtiming=NULL, bdm_arg
 #' @param reg A matrix containing the trial, onset, duration, and value for each event
 #' @param tr The repetition time in seconds
 #' @param normalization The HRF normalization method used: "none", "durmax_1", or "evtmax_1"
-#' @param rm_zeros Whether to remove zeros from events vector prior to convolution. Generally a good idea since we typically center
-#'          values prior to convolution, and retaining zeros will lead them to be non-zero after mean centering.
+#' @param rm_zeros Whether to remove zeros from events vector prior to convolution. Generally a good idea since we 
+#'    typically center values prior to convolution, and retaining zeros will lead them to be non-zero after mean centering.
 #' @param center_values Whether to demean values vector before convolution. Default \code{TRUE}.
 #' @param convmax_1 Whether to rescale the convolved regressor to a maximum height of 1.
 #' @param demean_convolved Whether to demean the regressor after convolution (default: \code{TRUE})
@@ -324,7 +324,7 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
   #in the case of beta_series, convolve individual effects with HRF individually
   if (normalize_hrf || beta_series) {
     #for each event, convolve it with hrf, normalize, then sum convolved events to get full timecourse
-    normedEvents <- sapply(seq_along(times), function(i) {
+    normed_events <- sapply(seq_along(times), function(i) {
       #obtain unit-convolved duration-modulated regressor to define HRF prior to modulation by parametric regressor
       stim_conv <- fmri.stimulus(
         n_vols = n_vols, values = 1.0, times = times[i], durations = durations[i], tr = tr, demean = FALSE,
@@ -367,18 +367,18 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
     })
 
     if (!beta_series) {
-      tc_conv <- apply(normedEvents, 1, sum) #sum individual HRF regressors for combined time course
+      tc_conv <- apply(normed_events, 1, sum) #sum individual HRF regressors for combined time course
     } else {
       if (convolve) {
         #first remove any constant regressors (likely just from evtmax_1 at end of run)
         #NB. This should only be applied to convolved regressors. For unconvolved, brief events are sometimes all zero because of rounding on the time grid
-        varying_cols <- apply(normedEvents, 2, function(x) { sd(x, na.rm=TRUE) > 1e-5 })
+        varying_cols <- apply(normed_events, 2, function(x) { sd(x, na.rm=TRUE) > 1e-5 })
         #if (any(sapply(varying_cols, isFALSE))) { browser() }
-        normedEvents <- normedEvents[, varying_cols]
+        normed_events <- normed_events[, varying_cols]
       }
 
       #keep beta series representation of a time x regressors matrix
-      tc_conv <- normedEvents
+      tc_conv <- normed_events
     }
   } else {
     #handle unnormalized convolution

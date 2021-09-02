@@ -71,17 +71,21 @@ l3_model_names = "prompt", glm_software = NULL) {
   gpa_cache <- file.path(batch_directory, "run_pipeline_cache.RData")
   save(gpa, file=gpa_cache)
 
+  # batch job to finalize pipeline configuration
+  f_batch <- R_batch_job$new(
+    job_name = "finalize_configuration", batch_directory = batch_directory, scheduler = gpa$scheduler,
+    input_environment = gpa_cache, output_environment = gpa_cache,
+    n_nodes = 1, n_cpus = 1, cpu_time = gpa$parallel$finalize_time,
+    mem_total = "16G",
+    r_code = "gpa <- finalize_pipeline_configuration(gpa)", r_packages = "fmri.pipeline",
+    batch_code = gpa$parallel$compute_environment
+  )
+
   if (is.null(gpa$finalize_complete) || isFALSE(gpa$finalize_complete)) {
     lg$info("finalize_pipeline_configuration has not been run on this object. We will start with this step.")
-    f_batch <- R_batch_job$new(
-      job_name = "finalize_configuration", batch_directory = batch_directory, scheduler = gpa$scheduler,
-      input_environment = gpa_cache, output_environment = gpa_cache,
-      n_nodes = 1, n_cpus = 1, cpu_time = gpa$parallel$finalize_time,
-      mem_total="16G",
-      r_code = "gpa <- finalize_pipeline_configuration(gpa)", r_packages = "fmri.pipeline",
-      batch_code = gpa$parallel$compute_environment
-    )
-
+    run_finalize <- TRUE
+  } else {
+    run_finalize <- FALSE
   }
 
   # Note: one tricky job dependency problem occurs when a job spawns multiple child jobs.
@@ -143,6 +147,10 @@ l3_model_names = "prompt", glm_software = NULL) {
 
   l3_batch$depends_on_parents <- ifelse(isTRUE(gpa$multi_run), "setup_run_l2", "run_l1")
 
-  glm_batch <- R_batch_sequence$new(f_batch, l1_setup_batch, l1_execute_batch, l2_batch, l3_batch)
+  if (isTRUE(run_finalize)) {
+    glm_batch <- R_batch_sequence$new(f_batch, l1_setup_batch, l1_execute_batch, l2_batch, l3_batch)
+  } else {
+    glm_batch <- R_batch_sequence$new(l1_setup_batch, l1_execute_batch, l2_batch, l3_batch)
+  }
   glm_batch$submit()
 }
