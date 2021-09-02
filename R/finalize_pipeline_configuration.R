@@ -162,27 +162,29 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   checkmate::assert_class(lg, "Logger")
 
   # ---- PARALLELISM SETUP
-  # pipeline_cores: number of cores used in push_pipeline when looping over l1 model variants
-  if (is.null(gpa$parallel$pipeline_cores) || gpa$parallel$pipeline_cores == "default") {
-    # number of workers to setup at the pipeline level (i.e., over l1 model variants)
-    gpa$pipeline_cpus <- length(gpa$l1_models$models)
+  specify_cores <- function(gpa, field_name, default=1L) {
+    # l1_setup_cores defines how many cores to use when looping over subjects within setup_l1_models
+    if (is.null(gpa$parallel[[field_name]]) || gpa$parallel[[field_name]] == "default") {
+      gpa$parallel[[field_name]] <- default
+    }
+
+    checkmate::assert_integerish(gpa$parallel[[field_name]], lower = 1)
+    return(gpa)
   }
 
-  # l1_setup_cores defines how many cores to use when looping over subjects within setup_l1_models
-  if (is.null(gpa$parallel$l1_setup_cores) || gpa$parallel$l1_setup_cores == "default") {
-    # default to serial execution within a single l1 model variant in setup_lvl1_models
-    gpa$parallel$l1_setup_cores <- 1L
-  } else {
-    checkmate::assert_integerish(gpa$parallel$l1_setup_cores, lower = 1)
-  }
+  # pipeline_cores: number of cores used in push_pipeline when looping over l1 model variants
+  gpa <- specify_cores(gpa, "pipeline_cores", ifelse(is.null(gpa$l1_models), 4, length(gpa$l1_models$models)))
+
+  # l1_setup_cores defines how many cores to use when looping over models in setup_l1_models
+  # default to 4 cores in setup_lvl1_models
+  gpa <- specify_cores(gpa, "l1_setup_cores", 4)
+  if (is.null(gpa$parallel$l1_setup_memgb)) gpa$parallel$fsl$l1_setup_memgb <- "16G"
 
   # l2_setup_cores defines how many cores to use when looping over models in setup_l2_models
-  if (is.null(gpa$parallel$l2_setup_cores) || gpa$parallel$l2_setup_cores == "default") {
-    # default to serial execution across all l1 and l2 models to be setup
-    gpa$parallel$l2_setup_cores <- 1L
-  } else {
-    checkmate::assert_integerish(gpa$parallel$l2_setup_cores, lower = 1)
-  }
+  gpa <- specify_cores(gpa, "l2_setup_cores", 4)
+
+  # finalize_cores defines how many cores to use when finalizing the pipeline before setting up and running models
+  gpa <- specify_cores("finalize_cores", 4)
 
   if (is.null(gpa$parallel$slurm)) gpa$parallel$slurm <- list()
   if (is.null(gpa$parallel$torque)) gpa$parallel$torque <- list()
@@ -308,6 +310,12 @@ setup_output_locations <- function(gpa, lg = NULL) {
   return(gpa)
 }
 
+#' Helper function to populate confound information for pipeline files
+#' 
+#' @param gpa a glm_pipeline_arguments object for population
+#' @param lg a Logger object for logging results of confound processing
+#' @keywords internal
+#' @importFrom parallel mclapply
 finalize_confound_settings <- function(gpa, lg) {
   checkmate::assert_class(lg, "Logger")
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
@@ -407,6 +415,15 @@ finalize_confound_settings <- function(gpa, lg) {
   # populate confounds in SQLite database and calculate run exclusions
   # TODO: allow external $exclude_run from user, add internal calculated $calc_exclude run
 
+  # confound_info <- parallel::mclapply(seq_len(nrow(gpa$run_data)), function(ii) {
+  #   # this should add rows to the SQLite data for a subject if not yet present, or just return those rows if they exist
+  #   l1_info <- get_l1_confounds(
+  #     id = gpa$run_data$id[ii], session = gpa$run_data$session[ii], run_number = gpa$run_data$run_number[ii],
+  #     gpa = gpa, drop_volumes = gpa$drop_volumes
+  #   )[c("l1_confound_file", "exclude_run")]
+  #   return(l1_info)
+  # }, mc.cores = gpa$parallel$finalize_cores)
+
   confound_info <- lapply(seq_len(nrow(gpa$run_data)), function(ii) {
     # this should add rows to the SQLite data for a subject if not yet present, or just return those rows if they exist
     l1_info <- get_l1_confounds(
@@ -418,4 +435,6 @@ finalize_confound_settings <- function(gpa, lg) {
 
   gpa$run_data$exclude_run <- sapply(confound_info, "[[", "exclude_run")
   gpa$run_data$l1_confound_file <- sapply(confound_info, "[[", "l1_confound_file")
+
+  return(gpa)
 }

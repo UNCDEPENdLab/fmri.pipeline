@@ -31,6 +31,7 @@
 #'
 #' @author Michael Hallquist
 #' @importFrom checkmate assert_class assert_character assert_data_frame
+#' @importFrom data.table is.data.table
 #' @importFrom lgr get_logger
 #' @export
 setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l1_model_names = NULL) {

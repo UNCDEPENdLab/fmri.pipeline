@@ -13,11 +13,14 @@ insert_df_sqlite(
   table = NULL,
   delete_extant = TRUE,
   append = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  immediate = FALSE
 )
 }
 \arguments{
 \item{id}{the id of the subject to whom these data belong}
+
+\item{session}{the session of these data}
 
 \item{run_number}{the run_number of these data}
 
@@ -31,7 +34,9 @@ insert_df_sqlite(
 
 \item{overwrite}{Whether to overwrite the existing table (passed through to dbWriteTable)}
 
-\item{sesssion}{the session of these data}
+\item{immediate}{Whether to open unique connection, commit transaction, then close the connection.
+This should be useful for SQLite concurrency issues in a parallel compute environment, but at present
+we are still getting errors even with the immediate approach.}
 }
 \value{
 a TRUE/FALSE indicating whether the record was successfully inserted

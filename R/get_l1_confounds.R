@@ -124,7 +124,10 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     confound_df <- confound_df[(1 + drop_volumes):last_volume, ]
 
     # cache original confounds to db
-    insert_df_sqlite(gpa, id = id, session = session, run_number = run_number, data = confound_df, table = "l1_confound_inputs")
+    insert_df_sqlite(gpa,
+      id = id, session = session, run_number = run_number,
+      data = confound_df, table = "l1_confound_inputs", immediate=TRUE
+    )
   }
 
   #read motion parameters file
@@ -148,7 +151,10 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     })
 
     # cache motion parameters to db
-    insert_df_sqlite(gpa, id=id, session=session, run_number=run_number, data=motion_df, table="l1_motion_parameters")
+    insert_df_sqlite(gpa,
+      id = id, session = session, run_number = run_number, data = motion_df,
+      table = "l1_motion_parameters", immediate=TRUE
+    )
   }
 
   # combine motion and confound files
@@ -221,10 +227,13 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
 
     # write the exclusion basis to the database
     exclude_data <- all_confounds[, intersect(gpa$confound_settings$run_exclusion_columns, names(all_confounds)), drop = FALSE]
-    insert_df_sqlite(gpa, id = id, session = session, run_number = run_number, data = exclude_data, table = "l1_exclusion_data")
+    insert_df_sqlite(gpa,
+      id = id, session = session, run_number = run_number, data = exclude_data,
+      table = "l1_exclusion_data", immediate=TRUE
+    )
     insert_df_sqlite(gpa,
       id = id, session = session, run_number = run_number,
-      data = data.frame(exclude_run = exclude_run), table = "l1_run_exclusions"
+      data = data.frame(exclude_run = exclude_run), table = "l1_run_exclusions", immediate=TRUE
     )
   }
 
@@ -259,7 +268,10 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
   write.table(all_confounds, file = expected_l1_confound_file, row.names = FALSE, col.names = FALSE)
 
   # cache final confounds to db
-  insert_df_sqlite(gpa, id = id, session = session, run_number = run_number, data = all_confounds, table = "l1_confounds")
+  insert_df_sqlite(gpa,
+    id = id, session = session, run_number = run_number,
+    data = all_confounds, table = "l1_confounds", immediate=TRUE
+  )
 
   return(list(
     l1_confound_file = expected_l1_confound_file,

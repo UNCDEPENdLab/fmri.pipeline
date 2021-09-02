@@ -10,7 +10,7 @@
 #' @param glm_software which glm software should be used for model estimation (not implemented yet)
 #' @importFrom checkmate assert_string assert_class assert_subset assert_integerish
 #' @export
-run_glm_pipeline <- function(gpa, l1_model_names = "prompt", l2_model_names = "prompt", 
+run_glm_pipeline <- function(gpa, l1_model_names = "prompt", l2_model_names = "prompt",
 l3_model_names = "prompt", glm_software = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_string(l1_model_names, null.ok = TRUE)
@@ -77,6 +77,7 @@ l3_model_names = "prompt", glm_software = NULL) {
       job_name = "finalize_configuration", batch_directory = batch_directory, scheduler = gpa$scheduler,
       input_environment = gpa_cache, output_environment = gpa_cache,
       n_nodes = 1, n_cpus = 1, cpu_time = gpa$parallel$finalize_time,
+      mem_total="16G",
       r_code = "gpa <- finalize_pipeline_configuration(gpa)", r_packages = "fmri.pipeline",
       batch_code = gpa$parallel$compute_environment
     )
@@ -96,6 +97,7 @@ l3_model_names = "prompt", glm_software = NULL) {
     cpu_time = gpa$parallel$l1_setup_time,
     r_code = "gpa <- setup_l1_models(gpa)" # create all FSF files for level one runs
   )
+  l1_setup_batch$mem_total <- "24G"
 
   l1_setup_batch$depends_on_parents <- "finalize_configuration"
 

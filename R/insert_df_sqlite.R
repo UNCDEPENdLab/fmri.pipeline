@@ -1,18 +1,21 @@
 #' helper function to insert a keyed data.frame into the sqlite storage database
 #'
 #' @param id the id of the subject to whom these data belong
-#' @param sesssion the session of these data
+#' @param session the session of these data
 #' @param run_number the run_number of these data
 #' @param data A \code{data.frame} containing the data to be inserted into the sqlite db
 #' @param table A character string of the table name to be modified
 #' @param delete_extant Whether to delete any existing records for this id + session + run_number combination
 #' @param append Whether to append records to the table (passed through to dbWriteTable)
 #' @param overwrite Whether to overwrite the existing table (passed through to dbWriteTable)
-#' 
+#' @param immediate Whether to open unique connection, commit transaction, then close the connection.
+#'   This should be useful for SQLite concurrency issues in a parallel compute environment, but at present
+#'   we are still getting errors even with the immediate approach.
+#'
 #' @return a TRUE/FALSE indicating whether the record was successfully inserted
 #' @importFrom checkmate assert_integerish test_null assert_data_frame assert_string
 insert_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number = NULL, data = NULL,
-                             table = NULL, delete_extant = TRUE, append = TRUE, overwrite = FALSE) {
+                             table = NULL, delete_extant = TRUE, append = TRUE, overwrite = FALSE, immediate=FALSE) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   if (checkmate::test_null(id)) {
     stop("insert_df_sqlite requires a specific id for keying data")
@@ -27,7 +30,12 @@ insert_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number =
   checkmate::assert_logical(overwrite, null.ok = FALSE, len = 1L)
 
   # open connection if needed
-  if (is.null(gpa$sqlite_con) || !DBI::dbIsValid(gpa$sqlite_con)) {
+  if (isTRUE(immediate)) {
+    # cf. https://blog.r-hub.io/2021/03/13/rsqlite-parallel/
+    con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
+    DBI::dbExecute(con, "PRAGMA busy_timeout = 10000") # retry write operations several times (10 s)
+    on.exit(try(DBI::dbDisconnect(con)))
+  } else if (is.null(gpa$sqlite_con) || !DBI::dbIsValid(gpa$sqlite_con)) {
     con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
     on.exit(try(DBI::dbDisconnect(con)))
   } else {

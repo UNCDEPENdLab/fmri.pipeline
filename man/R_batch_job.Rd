@@ -20,7 +20,7 @@ Description of R_batch_job R6 class
 \item{\code{job_name}}{a user-defined name for the job used for specifying job dependencies and informative job
 status queries on a job scheduler}
 
-\item{\code{wait_for_children}}{if TRUE, code will be inserted to wait for all jobs in a vector called 
+\item{\code{wait_for_children}}{if TRUE, code will be inserted to wait for all jobs in a vector called
 \code{child_job_ids} to finish before the batch exits. It's up to your code to use this variable name}
 
 \item{\code{cpu_time}}{The amount of time requested on the job scheduler, following d-hh:mm:ss format. Defaults to
@@ -98,6 +98,8 @@ Create a new R_batch_job object for execution on an HPC cluster
   batch_code = NULL,
   r_packages = NULL,
   scheduler = NULL,
+  input_environment = NULL,
+  output_environment = NULL,
   scheduler_options = NULL,
   repolling_interval = NULL
 )}\if{html}{\out{</div>}}

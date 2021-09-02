@@ -167,7 +167,7 @@ R_batch_job <- R6::R6Class("batch_job",
     #'    status queries on a job scheduler
     job_name = NULL,
 
-    #' @field wait_for_children if TRUE, code will be inserted to wait for all jobs in a vector called 
+    #' @field wait_for_children if TRUE, code will be inserted to wait for all jobs in a vector called
     #'    \code{child_job_ids} to finish before the batch exits. It's up to your code to use this variable name
     wait_for_children = FALSE,
 

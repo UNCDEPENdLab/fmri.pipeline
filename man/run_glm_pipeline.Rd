@@ -7,8 +7,8 @@
 run_glm_pipeline(
   gpa,
   l1_model_names = "prompt",
-  l2_model_names = NULL,
-  l3_model_names = NULL,
+  l2_model_names = "prompt",
+  l3_model_names = "prompt",
   glm_software = NULL
 )
 }

@@ -35,7 +35,7 @@ setup_glm_pipeline(
     confound_input_colnames = NULL, l1_confound_regressors = NULL, exclude_run =
     "mean(FD) > 0.9 | max(FD) > 0.5)", exclude_subject = NULL, spike_volumes =
     "FD > 0.9"),
-  parallel = list(l1_setup_cores = 1L, pipeline_cores = "default"),
+  parallel = list(l1_setup_cores = 4L, pipeline_cores = "default"),
   additional = list(feat_l1_args = list(z_thresh = 1.96, prob_thresh = 0.05))
 )
 }
