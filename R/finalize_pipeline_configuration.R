@@ -186,7 +186,7 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   gpa <- specify_cores(gpa, "l2_setup_cores", 4)
 
   # finalize_cores defines how many cores to use when finalizing the pipeline before setting up and running models
-  gpa <- specify_cores("finalize_cores", 4)
+  gpa <- specify_cores(gpa, "finalize_cores", 4)
 
   if (is.null(gpa$parallel$slurm)) gpa$parallel$slurm <- list()
   if (is.null(gpa$parallel$torque)) gpa$parallel$torque <- list()
