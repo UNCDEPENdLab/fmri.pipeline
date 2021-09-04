@@ -98,7 +98,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
     return(regressor_cols)
   }
 
-  ############### BUILD MODELS
+  ### -- BUILD MODELS ---
 
   summarize_models <- function(ml) {
     if (length(ml) == 0L) {
@@ -255,14 +255,22 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
       good_terms <- colnames(modelmat)[!(colnames(modelmat) %in% bad_terms)]
       good_terms <- good_terms[!good_terms == "(Intercept)"]
 
+      if (length(good_terms) == 0L) {
+        warning(
+          "No unaliased (good) terms in this model, suggesting that all covariates are constant or dependent. ",
+          "Reverting to intercept-only model."
+        )
+        good_terms <- "1"
+      }
+
       # build new model formula with only good terms
       newf <- as.formula(paste("dummy ~", paste(good_terms, collapse = " + ")))
 
       # also generate a model data.frame that expands dummy codes for terms, retaining only good variables
-      mm$model_matrix_noalias <- modelmat[, grep(":", good_terms, fixed = TRUE, value = TRUE, invert = TRUE)]
-      modeldf <- as.data.frame(mm$model_matrix_noalias)
-      modeldf$dummy <- data$dummy # copy across dummy DV for fitting
-      mm$lmfit_noalias <- lm(newf, modeldf)
+      # mm$model_matrix_noalias <- modelmat[, grep(":", good_terms, fixed = TRUE, value = TRUE, invert = TRUE)]
+      #modeldf <- as.data.frame(mm$model_matrix_noalias)
+      #modeldf$dummy <- data$dummy # copy across dummy DV for fitting
+      mm$lmfit_noalias <- lm(newf, data)
       mm$aliased_terms <- bad_terms
 
       # N.B. emmeans needs to calculate contrasts on the original design to see the factor structure
