@@ -32,7 +32,9 @@
 #' @param calculate A character vector specifying what calculations should be returned by the function. 
 #'   The options are: "parameter_estimates_reml", "parameter_estimates_ml", and "fit_statistics".
 #' @param emmeans_spec A named list of emmeans calls to be run for each model to obtain model predictions.
-#'   Any arguments that are valid for emmean can be passed through the list structure.
+#'   Any arguments that are valid for emmeans can be passed through the list structure.
+#' @param emtrends_spec A named list of emtrends calls to be run for each model to obtain model-predicted slopes.
+#'   Any arguments that are valid for emtrends can be passed through the list structure.
 #' @param return_models A boolean indicating whether to return fitted model objects, which can be used for
 #'   post hoc contrasts, visualization and statistics. Note that model objects can get very large, so be
 #'   careful with this option since it could generate a massive data object.
@@ -69,7 +71,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
                      tidy_args = list(effects = "fixed", conf.int = TRUE),
                      lmer_control = lmerControl(optimizer = "nloptwrap"),
                      calculate=c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"),
-                     return_models = FALSE, emmeans_spec = NULL) {
+                     return_models = FALSE, emmeans_spec = NULL, emtrends_spec=NULL) {
   
   require(data.table) # remove for package
   require(dplyr)
@@ -106,6 +108,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
   checkmate::assert_subset(calculate, c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"))
   checkmate::assert_logical(return_models, len = 1L)
   checkmate::assert_list(emmeans_spec, null.ok = TRUE)
+  checkmate::assert_list(emtrends_spec, null.ok = TRUE)
 
   # turn off refitting if user specifies 'FALSE'
   if (is.logical(refit_on_nonconvergence) && isFALSE(refit_on_nonconvergence)) {
@@ -191,6 +194,20 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
     
     emm_metadata <- rbindlist(lapply(emmeans_spec, function(ee) { data.frame(ee[c("outcome", "model_name")])})) %>%
       mutate(emm_number = 1:n(), emm_label=names(emmeans_spec))
+  }
+  
+  # process emtrends specification setup
+  if (!is.null(emtrends_spec)) {
+    #has the outcome and model name to lookup whether to run a given emtrends specification
+    if (is.null(names(emtrends_spec))) {
+      names(emtrends_spec) <- paste("emt", seq_along(emtrends_spec), sep="_")
+    } else {
+      empty_names <- which(names(emtrends_spec) == "")
+      names(emtrends_spec)[empty_names] <- paste("emt", empty_names, sep="_")
+    }
+    
+    emt_metadata <- rbindlist(lapply(emtrends_spec, function(ee) { data.frame(ee[c("outcome", "model_name")])})) %>%
+      mutate(emt_number = 1:n(), emt_label=names(emtrends_spec))
   }
   
   
@@ -298,6 +315,24 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
           }
         }
         
+        # process emtrends
+        if (!is.null(emtrends_spec)) {
+          emt_torun <- emt_metadata %>% 
+            filter(outcome == !!model_set$outcome[[mm]] & model_name == !!names(model_set$rhs)[mm])
+          
+          if (nrow(emt_torun) > 0L) {
+            this_emtspec <- emtrends_spec[emt_torun %>% pull(emt_number)] #subset list to relevant elements
+            emts <- lapply(seq_along(this_emtspec), function(emt_i) {
+              tidy(do.call(emtrends, c(this_emtspec[[emt_i]], object=thism))) %>%
+                dplyr::bind_cols(emt_torun[emt_i,])
+            })
+            names(emts) <- names(this_emtspec)
+            
+            #N.B. Need to double list wrap for data.table to keep list class for singleton list
+            ret[, emt := list(list(emts))] 
+          }
+        }
+        
         ret[, dt := NULL] # drop original data.table for this split from data
         
         return(ret)
@@ -331,7 +366,14 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
                            select=c(split_on, "outcome", "model_name", "rhs", "emm"))
       }
       
-      list(coef_df_reml=coef_df_reml, coef_df_ml=coef_df_ml, fit_df=fit_df, emm_data=emm_data) # return
+      emt_data <- NULL
+      if (!is.null(emtrends_spec)) {
+        emt_data <- subset(split_results, sapply(emt, function(x) !is.null(x)), 
+                           select=c(split_on, "outcome", "model_name", "rhs", "emt"))
+      }
+      
+      list(coef_df_reml=coef_df_reml, coef_df_ml=coef_df_ml, fit_df=fit_df, 
+           emm_data=emm_data, emt_data=emt_data) # return list
     }
     
     rm(data) # cleanup big datasets and force memory release before next iteration
@@ -352,6 +394,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
   }
   
   emm_data <- NULL
+  emt_data <- NULL
   coef_results_reml <- NULL
   coef_results_ml <- NULL
   fit_results <- NULL
@@ -371,6 +414,20 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
       em_sub[, emm[[1]][[em_name]], by=other_keys]  
     })
     names(emmeans_list) <- names(emmeans_spec)
+  }
+  
+  emtrends_list <- NULL
+  if (!is.null(emtrends_spec)) {
+    emt_data <- extract_df(mresults, "emt_data", split_on)
+    
+    emtrends_list <- lapply(seq_along(emtrends_spec), function(aa) {
+      em_sub <- subset(emt_data, outcome==emtrends_spec[[aa]]$outcome & model_name==emtrends_spec[[aa]]$model_name)
+      nn <- names(em_sub)
+      other_keys <- nn[nn != "emt"]
+      em_name <- names(emtrends_spec)[aa]
+      em_sub[, emt[[1]][[em_name]], by=other_keys]  
+    })
+    names(emtrends_list) <- names(emtrends_spec)
   }
   
   #helper subfunction to adjust p-values
@@ -403,5 +460,6 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
     if (!is.null(fit_results)) { fit_results[, split := NULL] }
   }
 
-  return(list(coef_df_reml=coef_results_reml, coef_df_ml=coef_results_ml, fit_df=fit_results, emmeans_list=emmeans_list))
+  return(list(coef_df_reml=coef_results_reml, coef_df_ml=coef_results_ml, fit_df=fit_results, 
+              emmeans_list=emmeans_list, emtrends_list=emtrends_list))
 }
