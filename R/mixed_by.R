@@ -21,6 +21,9 @@
 #'   can be passed as a character vector, in which case multiple corrections will be added as distinct columns.
 #' @param outcome_transform A vectorized function that will be applied to the outcome variable prior to running
 #'   the model. For example, \code{outcome_transform=function(x) { as.vector(scale(x)) } }.
+#' @param scale_predictors An optional vector of predictor names that should be z-scored (unit normalized) prior
+#'   to entering into the lmer model. Note that this scaling will be applied to the predictor regardless of which
+#'   rhs model is being run as long as that predictor is in the model.
 #' @param ncores The number of compute cores to be used in the computation. Defaults to 1.
 #' @param cl An optional external cl object (created by a variant of makeCluster) used for computation. Can
 #'   save the overhead of starting and stopping many workers in a loop context.
@@ -66,7 +69,7 @@
 #' @importFrom data.table fread setDT setkeyv
 mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on = NULL,
                      external_df = NULL, external_merge_by = NULL,
-                     padjust_by = "term", padjust_method = "BY", outcome_transform = NULL,
+                     padjust_by = "term", padjust_method = "BY", outcome_transform = NULL, scale_predictors = NULL,
                      ncores = 1L, cl = NULL, refit_on_nonconvergence = 3,
                      tidy_args = list(effects = "fixed", conf.int = TRUE),
                      lmer_control = lmerControl(optimizer = "nloptwrap"),
@@ -107,6 +110,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
   checkmate::assert_class(cl, "cluster", null.ok = TRUE)
   checkmate::assert_subset(calculate, c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"))
   checkmate::assert_logical(return_models, len = 1L)
+  checkmate::assert_character(scale_predictors, null.ok = TRUE)
   checkmate::assert_list(emmeans_spec, null.ok = TRUE)
   checkmate::assert_list(emtrends_spec, null.ok = TRUE)
 
@@ -142,12 +146,22 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
   }
 
   # worker subfunction to fit a given model to a data split
-  model_worker <- function(data, model_formula, lmer_control, outcome_transform = NULL, REML = TRUE) {
+  model_worker <- function(data, model_formula, lmer_control, outcome_transform = NULL, scale_predictors = NULL, REML = TRUE) {
     if (!is.null(outcome_transform)) { # apply transformation to outcome
       lhs <- all.vars(model_formula)[1]
       data[[lhs]] <- outcome_transform(data[[lhs]])
     }
 
+    #apply z-scoring to specified predictors
+    if (!is.null(scale_predictors)) {
+      model_terms <- all.vars(model_formula) #technically this will match the outcome, too -- hopefully the user uses outcome_transform in that case
+      if (any(model_terms %in% scale_predictors)) {
+        for (aa in intersect(scale_predictors, model_terms)) {
+          data[[aa]] <- as.vector(scale(data[[aa]]))
+        }
+      }
+    }
+    
     md <- lmerTest::lmer(model_formula, data, control = lmer_control, REML = REML, na.action=na.exclude)
 
     if (refit_on_nonconvergence > 0L) {
@@ -284,12 +298,12 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
         ret[, rhs := as.character(model_set$rhs[mm])]
         
         if ("parameter_estimates_reml" %in% calculate) {
-          thism <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform)
+          thism <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, scale_predictors, REML=TRUE)
           ret[, coef_df_reml := list(do.call(tidy, append(tidy_args, x = thism)))]
         }
         
         if (any(c("parameter_estimates_ml", "fit_statistics") %in% calculate)) {
-          thism_ml <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, REML=FALSE) #refit with ML for AIC/BIC
+          thism_ml <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, scale_predictors, REML=FALSE) #refit with ML for AIC/BIC
           ret[, fit_df := list(glance(thism_ml))]
           ret[, coef_df_ml := list(do.call(tidy, append(tidy_args, x = thism_ml)))]
         }
