@@ -100,7 +100,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
 
   ### -- BUILD MODELS ---
 
-  summarize_models <- function(ml) {
+  summarize_l2_models <- function(ml) {
     if (length(ml) == 0L) {
       return(invisible(NULL))
     }
@@ -286,7 +286,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
   model_list <- model_set$models
   add_more <- 1
   while (add_more != 4) {
-    summarize_models(model_list)
+    summarize_l2_models(model_list)
 
     add_more <- menu(c("Add model", "Modify model", "Delete model", paste("Done with", menu_desc, "model setup")),
       title = paste(sub("^(\\w{1})", "\\U\\1", menu_desc, perl = TRUE), "model setup menu")

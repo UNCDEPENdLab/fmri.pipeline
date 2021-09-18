@@ -15,6 +15,7 @@ mixed_by(
   padjust_by = "term",
   padjust_method = "BY",
   outcome_transform = NULL,
+  scale_predictors = NULL,
   ncores = 1L,
   cl = NULL,
   refit_on_nonconvergence = 3,
@@ -22,7 +23,8 @@ mixed_by(
   lmer_control = lmerControl(optimizer = "nloptwrap"),
   calculate = c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"),
   return_models = FALSE,
-  emmeans_spec = NULL
+  emmeans_spec = NULL,
+  emtrends_spec = NULL
 )
 }
 \arguments{
@@ -55,6 +57,10 @@ can be passed as a character vector, in which case multiple corrections will be 
 \item{outcome_transform}{A vectorized function that will be applied to the outcome variable prior to running
 the model. For example, \code{outcome_transform=function(x) { as.vector(scale(x)) } }.}
 
+\item{scale_predictors}{An optional vector of predictor names that should be z-scored (unit normalized) prior
+to entering into the lmer model. Note that this scaling will be applied to the predictor regardless of which
+rhs model is being run as long as that predictor is in the model.}
+
 \item{ncores}{The number of compute cores to be used in the computation. Defaults to 1.}
 
 \item{cl}{An optional external cl object (created by a variant of makeCluster) used for computation. Can
@@ -76,7 +82,10 @@ post hoc contrasts, visualization and statistics. Note that model objects can ge
 careful with this option since it could generate a massive data object.}
 
 \item{emmeans_spec}{A named list of emmeans calls to be run for each model to obtain model predictions.
-Any arguments that are valid for emmean can be passed through the list structure.}
+Any arguments that are valid for emmeans can be passed through the list structure.}
+
+\item{emtrends_spec}{A named list of emtrends calls to be run for each model to obtain model-predicted slopes.
+Any arguments that are valid for emtrends can be passed through the list structure.}
 }
 \value{
 A data.table object containing all coefficients for each model estimated separately by \code{split_on}

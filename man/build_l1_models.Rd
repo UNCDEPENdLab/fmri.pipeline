@@ -10,8 +10,10 @@ build_l1_models(
   l1_model_set = NULL,
   onset_cols = NULL,
   onset_regex = ".*(onset|time).*",
+  duration_cols = NULL,
   duration_regex = ".*duration.*",
-  value_cols = NULL
+  value_cols = NULL,
+  value_regex = NULL
 )
 }
 \arguments{
@@ -28,10 +30,16 @@ in the set of event onsets}
 \item{onset_regex}{an optional PCRE-compatible regular expression for identifying potential
 event onset columns in \code{trial_data}}
 
+\item{duration_cols}{an optional character vector of columns in \code{trial_data} that should be
+in the set of event durations}
+
 \item{duration_regex}{an optional PCRE-compatible regular expression for identifying potential
 event duration columns in \code{trial_data}}
 
 \item{value_cols}{an optional character vector of columns in \code{trial_data} that should be in the set of signal values}
+
+\item{value_regex}{an optional PCRE-compatible regular expression for identifying potential
+event value columns in \code{trial_data}}
 }
 \value{
 a \code{l1_model_set} object containing events, signals, and models, compatible with build_design_matrix
