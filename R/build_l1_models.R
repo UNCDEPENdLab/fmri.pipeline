@@ -8,20 +8,26 @@
 #'   in the set of event onsets
 #' @param onset_regex an optional PCRE-compatible regular expression for identifying potential
 #'   event onset columns in \code{trial_data}
+#' @param duration_cols an optional character vector of columns in \code{trial_data} that should be
+#'   in the set of event durations
 #' @param duration_regex an optional PCRE-compatible regular expression for identifying potential
 #'   event duration columns in \code{trial_data}
 #' @param value_cols an optional character vector of columns in \code{trial_data} that should be in the set of signal values
+#' @param value_regex an optional PCRE-compatible regular expression for identifying potential
+#'   event value columns in \code{trial_data}
 #'
 #' @details if \code{gpa} is not passed in, then we will work from trial_data and l1_model_set.
 #'
 #' @return a \code{l1_model_set} object containing events, signals, and models, compatible with build_design_matrix
 #' @author Michael Hallquist
 #' @importFrom checkmate assert_data_frame assert_class assert_subset
+#' @importFrom dplyr bind_cols select mutate
 #' @export
 #'
 build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
-                           onset_cols=NULL, onset_regex=".*(onset|time).*", 
-                           duration_regex=".*duration.*", value_cols=NULL) {
+                           onset_cols=NULL, onset_regex=".*(onset|time).*",
+                           duration_cols=NULL, duration_regex=".*duration.*", 
+                           value_cols=NULL, value_regex=NULL) {
 
   # Maybe allow glm object to be passed in that would have trial_data and variable_mapping.
   # I guess that would be like "add_l1_model"
@@ -40,131 +46,121 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
 
   checkmate::assert_data_frame(trial_data, null.ok = FALSE)
   checkmate::assert_class(l1_model_set, "l1_model_set", null.ok=TRUE)
-  checkmate::assert_subset(onset_cols, names(trial_data)) #make sure that all event columns are in the data frame
-  checkmate::assert_string(onset_regex, null.ok=TRUE)
-  checkmate::assert_string(duration_regex, null.ok=TRUE)
+  checkmate::assert_subset(onset_cols, names(trial_data)) #make sure that all onset columns are in the data frame
+  checkmate::assert_string(onset_regex, null.ok = TRUE)
+  checkmate::assert_subset(duration_cols, names(trial_data)) # make sure that all duration columns are in the data frame
+  checkmate::assert_string(duration_regex, null.ok = TRUE)
   checkmate::assert_subset(value_cols, names(trial_data)) #make sure all parametric regressor columns are in the data frame
+  checkmate::assert_string(value_regex, null.ok = TRUE)
   checkmate::assert_subset(c("id", "session", "run_number", "trial"), names(trial_data)) # required metadata in trial_data
 
   lg <- lgr::get_logger("glm_pipeline/build_l1_models")
 
   if (is.null(l1_model_set)) {
     ## initialize overall l1 design object (holds events, signals, and models)
-    l1_model_set <- list(events=NULL, signals=NULL, models=NULL)
+    l1_model_set <- list(onset_cols=NULL, events=NULL, signals=NULL, models=NULL)
     class(l1_model_set) <- c("list", "l1_model_set")
-  }
-
-  #onset manager
-  get_onsets <- function(trial_data, onset_cols=NULL, onset_regex=NULL) {
-    if (!is.null(onset_regex)) {
-      detected_onsets <- grep(onset_regex, names(trial_data), value=TRUE, perl=TRUE)
-      if (length(detected_onsets) > 0L) {
-        cat("Detected the following possible event onset columns:\n\n  ", paste(detected_onsets, collapse=", "), "\n\n")
-        res <- menu(c("Yes", "No"), title="Add these columns to possible onsets?")
-        if (res == 1) {
-          #add these to any that were manually specified/current
-          onset_cols <- unique(c(onset_cols, detected_onsets))
-        }
-      }
-    }
-
-    done_onsets <- FALSE
-    while (isFALSE(done_onsets)) {
-      cat("Current onset columns:\n\n  ", paste(onset_cols, collapse=", "), "\n\n")
-      action <- menu(c("Add/modify onset columns", "Delete onset columns", "Done with onset selection"),
-        title="Would you like to modify the event onset columns?")
-
-      if (action == 1L) { #Add/modify
-        onset_cols <- select.list(names(trial_data), multiple=TRUE, preselect=onset_cols,
-          title="Choose all columns denoting event onset times\n(Command/Control-click to select multiple)")
-      } else if (action == 2L) { #Delete
-        if (length(onset_cols) == 0L) {
-          message("No onsets yet. Please add at least one.")
-        } else {
-          which_del <- menu(onset_cols, title="Which onset column would you like to remove?")
-          if (which_del > 0) {
-            proceed <- menu(c("Proceed", "Cancel"),
-              title=paste0("Are you sure you want to delete ", onset_cols[which_del], "?"))
-            if (proceed==1) {
-              cat("  Deleting ", onset_cols[which_del], "\n")
-              onset_cols <- onset_cols[-which_del]
-            } else {
-              cat("  Not deleting ", onset_cols[which_del], "\n")
-            }
-          }
-        }
-      } else if (action == 3L) { #Done
-        done_onsets <- TRUE
-        cat("The following columns were chosen as event onset times.",
-          "These will be used as possible onset times for each regressor.\n\n", sep="\n")
-        cat("  ", paste(onset_cols, collapse=", "), "\n\n")
-      }
-    }
-    return(onset_cols)
-  }
-
-  #ask user to setup onsets, build from existing onsets, if available
-  if (!is.null(l1_model_set$events)) { onset_cols <- unique(names(l1_model_set$events), onset_cols) }
-  onset_cols <- get_onsets(trial_data, onset_cols, onset_regex)
-
-  #basal data frame for each event
-  metadata_df <- trial_data %>%
-    dplyr::select(id, session, run_number, trial)
-
-  #build a list of data frames, one per event (to be rbind'ed later)
-  event_list <- lapply(onset_cols, function(xx) {
-    metadata_df %>% bind_cols(trial_data %>%
-      select(all_of(xx)) %>%
-      setNames("onset") %>%
-      mutate(event = xx))
-  }) %>% setNames(onset_cols)
-
-
-  #populate existing events into structure
-  if (!is.null(l1_model_set$events)) {
-    extant_events <- names(l1_model_set$events)[names(l1_model_set$events) %in% names(event_list)]
-    event_list[extant_events] <- l1_model_set$events[extant_events]
+    new_l1 <- TRUE
   } else {
-    extant_events <- c()
+    new_l1 <- FALSE
   }
 
-  #handle durations
-  for (oo in onset_cols) {
-    cat("\n----\nSpecify a fixed duration value or column for the event: ", oo, "\n")
+  if (isTRUE(new_l1)) {
+    cat(
+      "Welcome to the l1 model builder. This process will walk you through setting up all level 1 fMRI models for you analyses.",
+      "This process consists of six steps: ",
+      "  1. Selection of event onset columns in trial_data. Event onsets must be in seconds relative to the scan start.",
+      "  2. Selection of event duration columns in trial_data. Event durations must be in seconds relative to the scan start.",
+      "  3. Selection of all parametric modulator (continuous) event values in trial_data.",
+      "  4. Build 'events' which consist of onset times and durations.",
+      "  5. Build 'signals', which consist of an event, an event value (amplitude), and convolution and regressor settings.",
+      "  6. Build 'models', which consist of a set of signals and GLM contrasts for signal-related regressors.",
+      sep = "\n"
+    )
 
-    if (oo %in% extant_events) {
-      cat("\nCurrent duration value summary, mean [min -- max]:",
-        round(mean(event_list[[oo]]$duration, na.rm=TRUE), 2), "[",
-        round(min(event_list[[oo]]$duration, na.rm=TRUE), 2), "--",
-        round(max(event_list[[oo]]$duration, na.rm=TRUE), 2), "]\n")
-      cat("First 6 values:", paste(head(event_list[[oo]]$duration), collapse=", "), "\n\n")
-      reselect <- menu(c("Yes", "No (keep durations)"), title="Do you want to respecify the duration?")
+    # onsets
+    l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
+      field_name = "onsets", field_desc = "onset",
+      select_cols = onset_cols, select_regex = onset_regex
+    )
 
-      if (reselect == 2) { next } #skip over this column
-    }
+    # durations
+    l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
+      field_name = "durations", field_desc = "duration",
+      select_cols = duration_cols, select_regex = duration_regex
+    )
 
-    choices <- c("Specify fixed duration", names(trial_data))
-    oval <- menu(choices=choices)
-    if (oval==0) {
-      message("Skipping out of duration?") #TODO
-    } else if (oval==1) {
-      duration <- NULL
-      while (!checkmate::test_number(duration, lower=0, upper=5000)) {
-        duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", oo, ": ")))
-      }
-      if (duration > 50) {
-        lg$warn("Duration more than 50s specified. Make sure that your durations are in seconds, not milliseconds!")
-      }
-      event_list[[oo]] <- event_list[[oo]] %>%
-        mutate(duration = duration)
-    } else {
-      event_list[[oo]] <- event_list[[oo]] %>%
-        mutate(duration = trial_data[[choices[oval]]])
-    }
+    # parametric values
+    l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
+      field_name = "values", field_desc = "parametric values",
+      select_cols = value_cols, select_regex = value_regex
+    )
+
+    # events
+    l1_model_set <- bl1_build_events(l1_model_set, trial_data)
+
+  } else {
+    cat("Modifying existing l1 model structure\n")
   }
 
-  #populate into set object
-  l1_model_set$events <- event_list
+  blm1_complete <- FALSE
+  while (isFALSE(blm1_complete)) {
+    blm1_action <- menu(c(
+      "Update event onset columns",                                     # 1
+      "Update event duration columns",                                  # 2
+      "Update parametric value columns",                                # 3
+      "Update events (each consists of an onset and duration)",         # 4
+      "Update signals (event, parametric value, regressor settings)",   # 5
+      "Update models (consisting of signals and contrasts)",            # 6
+      "Done with level 1 model building"                                # 7
+    ), title = "Level 1 model builder")
+
+    if (blm1_action == 1) {
+      # onsets
+      l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
+        field_name = "onsets", field_desc = "onset",
+        select_cols = onset_cols, select_regex = onset_regex
+      )
+    } else if (blm1_action == 2) {
+      # durations
+      l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
+        field_name = "durations", field_desc = "duration",
+        select_cols = duration_cols, select_regex = duration_regex
+      )
+    } else if (blm1_action == 3) {
+      # parametric values
+      l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
+        field_name = "values", field_desc = "parametric values",
+        select_cols = value_cols, select_regex = value_regex
+      )
+    } else if (blm1_action == 4) {
+      l1_model_set <- bl1_build_events(l1_model_set, trial_data)
+    }
+    } else if (blm1_action == 7) {
+      cat("Completing level 1 model building\n")
+      break
+    }
+  }
+  
+
+
+  # helper function to work with user to specify all columns in trial data that are onsets, durations, or values
+  # handle_onset_duration_value <- function(
+  #   l1_model_set, trial_data, onset_cols=NULL, onset_regex=NULL,
+  #   duration_cols=NULL, duration_regex=NULL, value_cols=NULL, value_regex=NULL) {
+    
+  #   if (!is.null(l1_model))
+
+  #   current_onsets <- unique(l1_model_set$onset_cols, onset_cols)
+  #   if (!is.null(l1_model_set$onset_cols)) {
+  #     cat("Current onset columns:", paste(l1_model_set, collapse = ", "))
+  #     res <- menu(c("No", "Yes"), title = "Update onset column selection?")
+  #     if (res == 2) {
+  #       new_onsets <- bl1_get_onset_cols(trial_data, onset_cols = NULL, onset_regex = NULL) {
+  #     }
+  #   }
+
+  # }
 
   ####### setup signals
   cat("\nNow, we will build up a set of signals that can be included as regressors in the level 1 model.\n")
@@ -571,4 +567,231 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
   } else {
     return(l1_model_set)
   }
+}
+
+
+#' Onset, duration, value column selection helper function
+#' @param l1_model_set an l1_model_set object containing onsets etc.
+#' @param trial_data a trial + subjects x events data.frame that contains potential onset columns
+#' @param field_name the element of \code{l1_model_set} containing columns of a certain purpose (onset, duration, value)
+#' @param field_desc the text description of the field being modified (e.g., 'parametric value')
+#' @param select_cols a character vector of current columns specified by the user to be added/included
+#' @param select_regex a PCRE-compatible regular expression for identifying columns
+#'
+#' @return a modified version of l1_model_set that has \code{field_name} updated according to user specification
+#' @importFrom glue glue
+#' @keywords internal
+bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc = NULL,
+                         select_cols = NULL, select_regex = NULL, force_selection = TRUE) {
+  # record of columns before any adjustments.
+  current_cols <- l1_model_set[[field_name]]
+
+  new_cols <- setdiff(select_cols, current_cols) # any new columns in the argument compared to the l1_model_set?
+  chosen_cols <- current_cols # start with current columns
+  if (length(new_cols) > 0L) {
+    cat(glue("Current {field_desc} columns in the l1 model structure are: {paste(current_cols, collapse = ', ')}\n"))
+    cat("The arguments to build_l1_models also included: ", paste(new_cols, collapse = ", "), "\n")
+    res <- menu(c("Yes", "No"), title = glue("Do you want to add these columns to possible {field_desc}s?"))
+    if (res == 1L) {
+      # add chosen_cols to l1 set
+      chosen_cols <- c(current_cols, new_cols) # else just keep current_cols
+    }
+  }
+
+  # handle regex detection of new columns
+  if (!is.null(select_regex)) {
+    detected_cols <- grep(select_regex, names(trial_data), value = TRUE, perl = TRUE)
+    uniq_detect <- setdiff(detected_cols, chosen_cols) # only bother the user if the regex reveals new columns
+    if (length(detected_cols) > 0L && length(uniq_detect) > 0L) {
+      cat(glue("Detected the following possible event {field_desc} columns:\n\n  "), paste(detected_cols, collapse = ", "), "\n\n")
+      res <- menu(c("Yes", "No"), title = glue("Do you want to add these columns to possible {field_desc}s?"))
+      if (res == 1) {
+        # add these to any that were manually specified/current
+        chosen_cols <- unique(c(chosen_cols, detected_cols))
+      }
+    }
+  }
+
+  done_cols <- FALSE
+  while (isFALSE(done_cols)) {
+    cat(glue("Current {field_desc} columns:\n\n  "), paste(chosen_cols, collapse = ", "), "\n\n")
+    action <- menu(c(
+      glue("Add/modify {field_desc} columns"),
+      glue("Delete {field_desc} columns"), 
+      glue("Done with {field_desc} selection")
+    ),
+    title = glue("Would you like to modify the event {field_desc} columns?")
+    )
+
+    if (action == 1L) { # Add/modify
+      chosen_cols <- select.list(names(trial_data),
+        multiple = TRUE, preselect = chosen_cols,
+        title = glue("Choose all columns denoting event {field_desc}s\n(Command/Control-click to select multiple)")
+      )
+    } else if (action == 2L) { # Delete
+      if (length(chosen_cols) == 0L && isTRUE(force_selection)) {
+        cat(glue("No {field_desc} yet. Please add at least one.\n"))
+      } else if (length(chosen_cols) == 1L && isTRUE(force_selection)) {
+        cat(glue("Cannot delete the last {field_desc}. Add others before deleting this.\n"))
+      } else {
+        which_del <- menu(chosen_cols, title = glue("Which {field_desc} column would you like to remove?"))
+        if (which_del > 0) {
+          proceed <- menu(c("Proceed", "Cancel"),
+            title = glue("Are you sure you want to delete {chosen_cols[which_del]}?")
+          )
+
+          if (proceed == 1) {
+            cat("  Deleting ", chosen_cols[which_del], "\n")
+            chosen_cols <- chosen_cols[-which_del]
+
+            # TODO: need mechanism for cascade deleting events, signals, and models that depend on this field!
+          } else {
+            cat("  Not deleting ", chosen_cols[which_del], "\n")
+          }
+        }
+      }
+    } else if (action == 3L) { # Done
+      done_cols <- TRUE
+      cat(glue("The following columns were chosen as event {field_desc}s.\n\n",
+        "These will be used as possible {field_desc}s for each regressor.\n\n"))
+      cat("  ", paste(chosen_cols, collapse = ", "), "\n\n")
+    }
+  }
+
+  l1_model_set[[field_name]] <- chosen_cols
+  return(l1_model_set)
+}
+
+#' helper function to build events consisting of onsets and durations
+#' @param l1_model_set an l1_model_set object that may have extant events in it
+#' @param trial_data the trial_data object from the \code{gpa} object
+#' @return a modified copy of l1_model_set with events added/updated
+#' @keywords interanl
+#' @importFrom dplyr select mutate
+#' @importFrom checkmate test_number
+#' @importFrom glue glue
+bl1_build_events <- function(l1_model_set, trial_data) {
+  cat("Specify all events that can be added to a GLM model. Events consist of an onset time and duration\n")
+
+  # basal data frame for each event
+  metadata_df <- trial_data %>%
+    dplyr::select(id, session, run_number, trial)
+
+  summarize_events <- function(l1_model_set) {
+    cat("Summary of events in l1 models:\n--------\n")
+    if (!is.null(l1_model_set$events)) {
+      lapply(l1_model_set$events, function(x) {
+        cat("Event name:     ", x$name, "\n")
+        cat("Event onset:    ", x$onset, "\n")
+        cat(
+          "  mean [min -- max]: ",
+          round(mean(x$data$onset, na.rm = TRUE), 2), "[",
+          round(min(x$data$onset, na.rm = TRUE), 2), "--",
+          round(max(x$data$onset, na.rm = TRUE), 2), "]\n"
+        )
+        cat("  First 6 values:", paste(head(x$data$onset), collapse = ", "), "\n\n")
+        cat("Event duration: ", x$duration, "\n")
+        cat(
+          "  mean [min -- max]: ",
+          round(mean(x$data$duration, na.rm = TRUE), 2), "[",
+          round(min(x$data$duration, na.rm = TRUE), 2), "--",
+          round(max(x$data$duration, na.rm = TRUE), 2), "]\n"
+        )
+        cat("  First 6 values:", paste(head(x$data$duration), collapse = ", "), "\n\n")
+      })
+    } else {
+      cat("No events in l1 models\n")
+    }
+  }
+
+  events_complete <- FALSE
+  while (isFALSE(events_complete)) {
+    summarize_events(l1_model_set)
+    action <- menu(c("Add event", "Delete event", "Done with event specification"))
+
+    if (action == 1L) { # add
+      ss <- list()
+
+      # ---- event name ----
+      complete <- FALSE
+      while (isFALSE(complete)) {
+        prompt <- "Enter the event name: "
+        nm <- readline(prompt)
+        if (nm != "") {
+          if (nm %in% names(l1_model_set$events)) {
+            cat("Event cannot have the same name as an existing event!\n")
+          } else {
+            ss$name <- nm
+            complete <- TRUE
+          }
+        }
+      }
+
+      # ---- event onset ----
+      complete <- FALSE
+      while (isFALSE(complete)) {
+        oo <- menu(l1_model_set$onsets, title="Choose event onset")
+        if (oo != 0) {
+          ss$onset <- l1_model_set$onsets[oo]
+          complete <- TRUE
+        }
+      }
+
+      # ---- event duration ----
+      complete <- FALSE
+      while (isFALSE(complete)) {
+        choices <- c("Specify fixed duration", l1_model_set$durations)
+        oval <- menu(choices, title = "Choose event duration")
+        if (oval == 1) {
+          duration <- NULL
+          while (!checkmate::test_number(duration, lower = 0, upper = 5000)) {
+            duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", oo, ": ")))
+          }
+          if (duration > 50) {
+            lg$warn("Duration more than 50s specified. Make sure that your durations are in seconds, not milliseconds!")
+          }
+
+          ss$duration <- duration
+          complete <- TRUE
+        } else if (oval > 1L) {
+          ss$duration <- choices[oval]
+          complete <- TRUE
+        }
+      }
+
+      if (is.numeric(ss$duration)) {
+        edata <- trial_data %>%
+          dplyr::select(!!ss$onset) %>%
+          setNames(c("onset")) %>%
+            dplyr::mutate(duration = !!ss$duration, event = !!ss$name)
+      } else {
+        browser()
+        edata <- trial_data %>%
+          dplyr::select(!!ss$onset, !!ss$duration) %>%
+          setNames(c("onset", "duration")) %>%
+          dplyr::mutate(event = !!ss$name)
+      }
+
+      ss$data <- metadata_df %>% bind_cols(edata)
+
+      l1_model_set$events[[nm]] <- ss
+    } else if (action == 2L) { # delete
+      event_names <- names(l1_model_set$events)
+      which_del <- menu(event_names, title="Which event would you like to delete?")
+      if (which_del > 0) {
+        proceed <- menu(c("Proceed", "Cancel"), title = glue("Are you sure you want to delete {event_names}?"))
+        if (proceed==1) {
+          cat(glue("  Deleting {event_names[which_del]}\n"))
+          l1_model_set$events[[which_del]] <- NULL
+        } else {
+          cat(glue("  Not deleting {event_names[which_del]}\n"))
+        }
+      }
+    } else if (action == 3L) {
+      events_complete <- TRUE
+    }
+  }
+
+  return(l1_model_set)
+
 }
