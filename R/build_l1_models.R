@@ -84,7 +84,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
       } else if (aa == 3) {
         # parametric values
         l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
-          field_name = "values", field_desc = "parametric values",
+          field_name = "values", field_desc = "parametric value",
           select_cols = value_cols, select_regex = value_regex
         )
       } else if (aa == 4) {
@@ -325,7 +325,7 @@ bl1_build_events <- function(l1_model_set, trial_data) {
         if (oval == 1) {
           duration <- NULL
           while (!checkmate::test_number(duration, lower = 0, upper = 5000)) {
-            duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", oo, ": ")))
+            duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", ss$name, ": ")))
           }
           if (duration > 50) {
             lg$warn("Duration more than 50s specified. Make sure that your durations are in seconds, not milliseconds!")
