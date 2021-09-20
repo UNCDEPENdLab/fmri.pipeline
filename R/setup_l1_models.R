@@ -119,7 +119,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         # setup design matrix for any given software package
         m_events <- data.table::rbindlist(
           lapply(gpa$l1_models$events, function(this_event) {
-            this_event %>% dplyr::filter(id == !!subj_id & session == !!subj_session)
+            this_event$data %>% dplyr::filter(id == !!subj_id & session == !!subj_session)
           })
         )
 
