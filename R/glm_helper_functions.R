@@ -1003,3 +1003,20 @@ dhms <- function(str) {
   }
   return(period)
 }
+
+
+#' helper function to refresh l3 model status and save gpa object from batch pipeline back to its cache
+#' 
+#' @param gpa a glm_pipeline_arguments object
+#' @return a refreshed version of the gpa object
+#' @keywords internal
+#' @importFrom lgr get_logger
+cleanup_glm_pipeline <- function(gpa) {
+  lg <- lgr::get_logger('glm_pipeline/cleanup_glm_pipeline')
+  gpa <- refresh_feat_status(gpa, level = 3L, lg = lg)
+  res <- tryCatch(saveRDS(gpa, file = gpa$output_locations$object_cache), error = function(e) {
+    lg$error("Could not save gpa object to file: %s", gpa$output_locations$object_cache)
+    return(NULL)
+  })
+  return(gpa)
+}

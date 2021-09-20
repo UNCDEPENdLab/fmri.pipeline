@@ -272,7 +272,7 @@ setup_output_locations <- function(gpa, lg = NULL) {
   # build out ability to consolidate outputs in one folder, to use specific paths for some outputs, etc.
   # if user specifies gpa$output_directory that matches gpa$analysis_name, don't at this as subfolder
 
-  if (length(unique(gpa$session)) == 1L) {
+  if (length(unique(gpa$run_data$session)) == 1L) {
     feat_sub_directory <- file.path("{gpa$output_directory}", "feat_l1", "sub-{id}")
   } else {
     feat_sub_directory <- file.path("{gpa$output_directory}", "feat_l1", "sub-{id}", "ses-{session}")
@@ -285,7 +285,8 @@ setup_output_locations <- function(gpa, lg = NULL) {
     feat_ses_directory = feat_sub_directory, # no difference in defaults
     feat_l1_directory = file.path(feat_sub_directory, "{l1_model}"),
     feat_l2_directory = feat_sub_directory,
-    feat_l3_directory = file.path(gpa$output_directory, "feat_l3", "{l1_contrast}", "{l1_model}", "{l2_contrast}"),
+    #feat_l3_directory = file.path(gpa$output_directory, "feat_l3", "{l1_contrast}", "{l1_model}", "{l2_contrast}"),
+    feat_l3_directory = file.path(gpa$output_directory, "feat_l3", "L1_{l1_model}", "{l1_contrast}", "{l2_model}"),
     scheduler_scripts = file.path(gpa$output_directory, "scheduler_scripts"),
     sqlite_db = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".sqlite")),
     object_cache = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".rds")),
@@ -313,7 +314,7 @@ setup_output_locations <- function(gpa, lg = NULL) {
 }
 
 #' Helper function to populate confound information for pipeline files
-#' 
+#'
 #' @param gpa a glm_pipeline_arguments object for population
 #' @param lg a Logger object for logging results of confound processing
 #' @keywords internal

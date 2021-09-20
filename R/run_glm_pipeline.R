@@ -147,10 +147,21 @@ l3_model_names = "prompt", glm_software = NULL) {
 
   l3_batch$depends_on_parents <- ifelse(isTRUE(gpa$multi_run), "setup_run_l2", "run_l1")
 
+  # cleanup step: refresh l3 feat status and copy gpa back to main directory
+  cleanup_batch <- f_batch$copy(
+    job_name = "cleanup_fsl", n_cpus = 1,
+    cpu_time = "1:00:00",
+    r_code = c(
+      "gpa <- cleanup_glm_pipeline(gpa)"
+    )
+  )
+
+  cleanup_batch$depends_on_parents <- "setup_run_l3"
+
   if (isTRUE(run_finalize)) {
-    glm_batch <- R_batch_sequence$new(f_batch, l1_setup_batch, l1_execute_batch, l2_batch, l3_batch)
+    glm_batch <- R_batch_sequence$new(f_batch, l1_setup_batch, l1_execute_batch, l2_batch, l3_batch, cleanup_batch)
   } else {
-    glm_batch <- R_batch_sequence$new(l1_setup_batch, l1_execute_batch, l2_batch, l3_batch)
+    glm_batch <- R_batch_sequence$new(l1_setup_batch, l1_execute_batch, l2_batch, l3_batch, cleanup_batch)
   }
   glm_batch$submit()
 }
