@@ -23,7 +23,8 @@
 #' @export
 setup_l1_models <- function(gpa, l1_model_names=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
-  checkmate::assert_character(l1_model_names, null.ok=TRUE)
+  checkmate::assert_character(l1_model_names, null.ok = TRUE)
+  checkmate::assert_subset(l1_model_names, names(gpa$l1_models$models))
   checkmate::assert_data_frame(gpa$subject_data)
   checkmate::assert_data_frame(gpa$run_data)
   checkmate::assert_subset(c("id", "session", "run_number", "run_nifti", "exclude_run"), names(gpa$run_data)) # required columns

@@ -4,7 +4,7 @@
 \alias{fsl_l2_model}
 \title{Estimate a level 2 (subject) model using FSL FEAT with fixed effects integration of runs}
 \usage{
-fsl_l2_model(l1_df = NULL, l2_model, gpa, execute_feat = FALSE)
+fsl_l2_model(l1_df = NULL, l2_model, gpa)
 }
 \arguments{
 \item{l1_df}{a data.frame containing all runs for a single subject and a single l1 model. This
@@ -13,8 +13,6 @@ data.frame defines the inputs for the L2 analysis (i.e., which runs to combine).
 \item{l2_model}{a model string in gpa$l2_models containing the L2 model to setup}
 
 \item{gpa}{a \code{glm_pipeline_arguments} object containing model specification}
-
-\item{execute_feat}{a logical indicating whether to run the L2 model after creating it}
 }
 \description{
 Estimate a level 2 (subject) model using FSL FEAT with fixed effects integration of runs
@@ -22,3 +20,4 @@ Estimate a level 2 (subject) model using FSL FEAT with fixed effects integration
 \author{
 Michael Hallquist
 }
+\keyword{internal}

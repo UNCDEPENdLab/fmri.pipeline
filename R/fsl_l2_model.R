@@ -4,12 +4,11 @@
 #'   data.frame defines the inputs for the L2 analysis (i.e., which runs to combine).
 #' @param l2_model a model string in gpa$l2_models containing the L2 model to setup
 #' @param gpa a \code{glm_pipeline_arguments} object containing model specification
-#' @param execute_feat a logical indicating whether to run the L2 model after creating it
 #'
 #' @importFrom dplyr mutate filter select right_join pull
 #' @author Michael Hallquist
-#' @export
-fsl_l2_model <- function(l1_df=NULL, l2_model, gpa, execute_feat=FALSE) {
+#' @keywords internal
+fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
   checkmate::assert_data_frame(l1_df)
   checkmate::assert_subset(c("id", "session", "l1_model"), names(l1_df))
   checkmate::assert_string(l2_model) # single l2 model
@@ -160,24 +159,6 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa, execute_feat=FALSE) {
   } else {
     lg$info("Skipping existing L2 FSF syntax: %s", l2_feat_fsf)
   }
-
-  # not currently supporting l2 execution here
-  # if (isTRUE(execute_feat)) {
-  #   nnodes <- min(length(all_l1_feat_fsfs), parallel::detectCores())
-  #   lg$info("Starting fork cluster with %d workers", nnodes)
-
-  #   cl_fork <- parallel::makeForkCluster(nnodes=ncpus)
-  #   runfeat <- function(fsf) {
-  #     runname <- basename(fsf)
-  #     runFSLCommand(paste("feat", fsf),
-  #       stdout = file.path(dirname(fsf), paste0("feat_stdout_", runname)),
-  #       stderr = file.path(dirname(fsf), paste0("feat_stderr_", runname))
-  #     )
-  #     system(paste0("feat_lvl2_to_afni.R --gfeat_dir ", sub(".fsf", ".gfeat", fsf, fixed=TRUE), " --no_subjstats --no_varcope --stat_outfile ", sub(".fsf", "_gfeat_stats", fsf, fixed=TRUE))) #aggregate FEAT statistics into a single file
-  #   }
-  #   parallel::clusterApply(cl_fork, allFeatRuns, runfeat)
-  #   parallel::stopCluster(cl_fork)
-  # }
 
   return(feat_l2_df)
 

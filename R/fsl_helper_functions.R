@@ -99,7 +99,6 @@ get_feat_status <- function(feat_dir, feat_fsf=NULL, lg=NULL, prefix=NULL) {
   feat_checks$feat_complete <- FALSE # default: FALSE for anything but a .feat_complete outcome
   feat_checks$feat_failed <- NA # default: NA if feat hasn't even been run
 
-
   if (dir.exists(feat_dir)) {
     if (file.exists(file.path(feat_dir, ".feat_complete"))) {
       lg$debug("Feat directory is complete: %s", feat_dir)

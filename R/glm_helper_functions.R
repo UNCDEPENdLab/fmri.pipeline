@@ -811,6 +811,10 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   dupes <- duplicated(cmat, MARGIN = 1)
   cmat <- cmat[!dupes, , drop=FALSE] # drop duplicated contrasts
 
+  # parentheses in contrast names generate problems in running through FEAT (chokes on submission)
+  # so far, this comes up only with intercept terms -- may need to do a more general substitution later
+  rownames(cmat) <- gsub("(Intercept)", "Intercept", rownames(cmat), fixed = T)
+
   # populate any updates to the contrast_list object based on new calculations
   contrast_list$diagonal <- c_diagonal
   contrast_list$cond_means <- c_cond_means
@@ -1051,3 +1055,20 @@ populate_defaults <- function(target, defaults) {
 
   return(target)
 }
+
+# little helper function to create named list from objects
+named_list <- function(...) {
+  vnames <- as.character(match.call())[-1]
+  return(setNames(list(...), vnames))
+}
+
+#' Helper function to create named data.frame from a set of objects
+#' 
+#' @details This function helps with the problem of having several vectors
+#'   in the workspace that you want to combine with data.fram
+# example:
+# 
+# named_data_frame <- function(...) {
+#   vnames <- as.character(match.call())[-1]
+#   return(setNames(data.frame(...), vnames))
+# }

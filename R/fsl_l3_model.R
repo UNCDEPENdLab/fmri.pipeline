@@ -49,11 +49,8 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   l1_cope_name <- l3_df$l1_cope_name[1L]
   l2_cope_name <- l3_df$l2_cope_name[1L]
 
-  # tracking data frame for this model
-  feat_l3_df <- data.frame(
-     id = id, session = session,
-     l1_model=l1_model, l3_model = l3_model, l2_model = l2_model
-  )
+  # tracking data frame for this model (column names should follow variable names)
+  feat_l3_df <- data.frame(id, session, l1_model, l1_cope_name, l2_model, l2_cope_name, l3_model)
 
   # we need to regenerate the l3 model for the inputs provided
   # l3_df should contain FEAT copes that have been vetted in setup_l3_models.R to exist and be complete
@@ -79,8 +76,8 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   # FSL usually reads this from the .feat directories itself, but for batch processing, better to insert into the FSF ourselves
   # Need to put this just after the high pass filter cutoff line for Feat to digest it happily
 
-  n_l3_models <- length(gpa$l3_models$models)
-  n_l1_models <- length(gpa$l1_models$models)
+  #n_l3_models <- length(gpa$l3_models$models)
+  #n_l1_models <- length(gpa$l1_models$models)
 
   l3_outdir <- get_output_directory(
     l1_contrast=l1_cope_name, l1_model=l1_model,
@@ -124,24 +121,5 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
     lg$info("Skipping existing L3 FSF syntax: %s", l3_feat_fsf)
   }
 
-  # not currently supporting l3 execution here
-  # if (isTRUE(execute_feat)) {
-  #   nnodes <- min(length(all_l1_feat_fsfs), parallel::detectCores())
-  #   lg$info("Starting fork cluster with %d workers", nnodes)
-
-  #   cl_fork <- parallel::makeForkCluster(nnodes=ncpus)
-  #   runfeat <- function(fsf) {
-  #     runname <- basename(fsf)
-  #     runFSLCommand(paste("feat", fsf),
-  #       stdout = file.path(dirname(fsf), paste0("feat_stdout_", runname)),
-  #       stderr = file.path(dirname(fsf), paste0("feat_stderr_", runname))
-  #     )
-  #     system(paste0("feat_lvl2_to_afni.R --gfeat_dir ", sub(".fsf", ".gfeat", fsf, fixed=TRUE), " --no_subjstats --no_varcope --stat_outfile ", sub(".fsf", "_gfeat_stats", fsf, fixed=TRUE))) #aggregate FEAT statistics into a single file
-  #   }
-  #   parallel::clusterApply(cl_fork, allFeatRuns, runfeat)
-  #   parallel::stopCluster(cl_fork)
-  # }
-
   return(feat_l3_df)
-
 }

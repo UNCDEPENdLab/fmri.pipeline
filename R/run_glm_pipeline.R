@@ -13,53 +13,15 @@
 run_glm_pipeline <- function(gpa, l1_model_names = "prompt", l2_model_names = "prompt",
 l3_model_names = "prompt", glm_software = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
-  checkmate::assert_string(l1_model_names, null.ok = TRUE)
-  checkmate::assert_string(l2_model_names, null.ok = TRUE)
-  checkmate::assert_string(l3_model_names, null.ok = TRUE)
+  checkmate::assert_character(l1_model_names, null.ok = TRUE)
+  checkmate::assert_character(l2_model_names, null.ok = TRUE)
+  checkmate::assert_character(l3_model_names, null.ok = TRUE)
 
   lg <- lgr::get_logger("glm_pipeline/run_glm_pipeline")
 
-  choose_models <- function(gpa, model_names, level) {
-    checkmate::assert_integerish(level, min=1, max=3)
-    all_m_names <- names(gpa[[paste0("l", level, "_models")]]$models)
-    checkmate::assert_subset(model_names, c("prompt", all_m_names))
+  model_list <- choose_glm_models(gpa, l1_model_names, l2_model_names, l3_model_names, lg)
+  if (is.null(model_list)) { return(invisible(NULL)) } # user canceled
 
-    if (is.null(model_names)) {
-      # null indicates that we should run all models at this level
-      chosen_models <- all_m_names
-    } else if (model_names[1] == "prompt") {
-      chosen_models <- select.list(all_m_names,
-        multiple = TRUE,
-        title = paste("Choose all level", level, "models to include in this pipeline run: ")
-      )
-      if (identical(chosen_models, character(0))) {
-        lg$info(paste("No level", level, "models were selected."))
-        chosen_models <- NULL
-      }
-    } else {
-      chosen_models <- model_names # user-specified set
-    }
-    return(chosen_models)
-  }
-
-  models_specified <- FALSE
-  while (isFALSE(models_specified)) {
-    l1_model_names <- choose_models(gpa, l1_model_names, level = 1)
-    if (isTRUE(gpa$multi_run)) l2_model_names <- choose_models(gpa, l2_model_names, level = 2)
-    l3_model_names <- choose_models(gpa, l3_model_names, level = 3)
-
-    cat("\nGLM models to run:\n------------------\n\n")
-    cat("Level 1: ", paste(l1_model_names, collapse = ", "), "\n")
-    if (isTRUE(gpa$multi_run)) cat("Level 2: ", paste(l2_model_names, collapse = ", "), "\n")
-    cat("Level 3: ", paste(l3_model_names, collapse = ", "), "\n")
-
-    respecify <- menu(c("Yes (run)", "No (re-choose models)"),
-      title = "Do you want to continue (this submits the models for execution)?"
-    )
-    if (respecify == 1L) models_specified <- TRUE
-  }
-
-  lg <- lgr::get_logger("glm_pipeline/run_glm_pipeline")
   batch_id <- uuid::UUIDgenerate()
   if (is.null(gpa$batch_run)) gpa$batch_run <- list()
 
@@ -95,31 +57,38 @@ l3_model_names = "prompt", glm_software = NULL) {
   # implemented by wait_for_children in R_batch_job. Here, we run the l1 model setup, the launch all feat runs in batch
   # jobs and wait for all of these to complete before the l1_setup_batch (parent) job completes.
 
-  # batch job for setting up l1 models
-  l1_setup_batch <- f_batch$copy(
-    job_name = "setup_l1", n_cpus = gpa$parallel$l1_setup_cores,
-    cpu_time = gpa$parallel$l1_setup_time,
-    r_code = "gpa <- setup_l1_models(gpa)" # create all FSF files for level one runs
-  )
-  l1_setup_batch$mem_total <- "24G"
+  l1_setup_batch <- NULL
+  l1_execute_batch <- NULL
+  if (!is.null(model_list$l1_model_names)) {
+    # batch job for setting up l1 models -- calls setup_l1_models to create relevant FSFs
+      l1_setup_batch <- f_batch$copy(
+        job_name = "setup_l1", n_cpus = gpa$parallel$l1_setup_cores,
+        cpu_time = gpa$parallel$l1_setup_time,
+        r_code = sprintf("gpa <- setup_l1_models(gpa, l1_model_names=%s)", model_list$l1_model_names)
+      )
+      l1_setup_batch$mem_total <- "24G"
 
-  l1_setup_batch$depends_on_parents <- "finalize_configuration"
+      l1_setup_batch$depends_on_parents <- "finalize_configuration"
 
-  # batch job for executing l1 jobs (and waiting) after setup
-  l1_execute_batch <- f_batch$copy(
-    job_name = "run_l1", n_cpus = 1,
-    cpu_time = gpa$parallel$fsl$l1_feat_time,
-    r_code = "child_job_ids <- run_feat_sepjobs(gpa, level = 1L)" # execute l1 jobs
-  )
+      # batch job for executing l1 jobs (and waiting) after setup
+      l1_execute_batch <- f_batch$copy(
+        job_name = "run_l1", n_cpus = 1,
+        cpu_time = gpa$parallel$fsl$l1_feat_time,
+        r_code = "child_job_ids <- run_feat_sepjobs(gpa, level = 1L)" # execute l1 jobs
+      )
 
-  l1_execute_batch$depends_on_parents <- "setup_l1"
-  l1_execute_batch$wait_for_children <- TRUE # need to wait for l1 feat jobs to complete before moving to l2/l3
+      l1_execute_batch$depends_on_parents <- "setup_l1"
+      l1_execute_batch$wait_for_children <- TRUE # need to wait for l1 feat jobs to complete before moving to l2/l3
+  }
 
+  
   # todo
   # gpa <- verify_lv1_runs(gpa)
 
-  # only run level 2 if this is a multi-run dataset
-  if (isTRUE(gpa$multi_run)) {
+  l2_batch <- NULL
+
+  # only run level 2 if this is a multi-run dataset and user requests l2 model estimation
+  if (isTRUE(gpa$multi_run) && !is.null(model_list$l2_model_names)) {
     # setup of l2 models (should follow l1)
     l2_batch <- f_batch$copy(
       job_name = "setup_run_l2", n_cpus = gpa$parallel$l2_setup_cores,
@@ -132,25 +101,25 @@ l3_model_names = "prompt", glm_software = NULL) {
 
     l2_batch$depends_on_parents <- "run_l1"
     l2_batch$wait_for_children <- TRUE # need to wait for l2 feat jobs to complete before moving to l3
-  } else {
-    l2_batch <- NULL
   }
 
-  l3_batch <- f_batch$copy(
-    job_name = "setup_run_l3", n_cpus = gpa$parallel$l2_setup_cores,
-    cpu_time = gpa$parallel$l2_setup_time,
-    r_code = c(
-      "gpa <- setup_l3_models(gpa)",
-      "jobs <- run_feat_sepjobs(gpa, level = 3L)"
+  if (!is.null(model_list$l3_model_names)) {
+    l3_batch <- f_batch$copy(
+      job_name = "setup_run_l3", n_cpus = gpa$parallel$l2_setup_cores,
+      cpu_time = gpa$parallel$l2_setup_time,
+      r_code = c(
+        "gpa <- setup_l3_models(gpa)",
+        "jobs <- run_feat_sepjobs(gpa, level = 3L)"
+      )
     )
-  )
 
-  l3_batch$depends_on_parents <- ifelse(isTRUE(gpa$multi_run), "setup_run_l2", "run_l1")
+    l3_batch$depends_on_parents <- ifelse(isTRUE(gpa$multi_run), "setup_run_l2", "run_l1")
+  }
 
   # cleanup step: refresh l3 feat status and copy gpa back to main directory
   cleanup_batch <- f_batch$copy(
     job_name = "cleanup_fsl", n_cpus = 1,
-    cpu_time = "1:00:00",
+    cpu_time = "30:00", # 30 minutes should be plenty
     r_code = c(
       "gpa <- cleanup_glm_pipeline(gpa)"
     )
@@ -164,4 +133,123 @@ l3_model_names = "prompt", glm_software = NULL) {
     glm_batch <- R_batch_sequence$new(l1_setup_batch, l1_execute_batch, l2_batch, l3_batch, cleanup_batch)
   }
   glm_batch$submit()
+}
+
+#' helper function to guide user through process of choosing which models to run in GLM pipeline
+#'
+#' @param l1_model_names a character vector of level 1 model names
+#' @param l2_model_names a character vector of level 2 model names
+#' @param l3_model_names a character vector of level 3 model names
+#' 
+#' @return a named list containing all models that were selected along with additional information
+#'   about whether to rerun existing models
+#' @keywords internal
+choose_glm_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, l3_model_names=NULL, lg=NULL) {
+  checkmate::assert_class(lg, "Logger")
+
+  if (is.null(l1_model_names)) {
+    lg$debug("l1_model_names was NULL. Defaulting to running all l1 models")
+    l1_model_names <- "all"
+  }
+
+  if (is.null(l2_model_names)) {
+    lg$debug("l2_model_names was NULL. Defaulting to running all l2 models")
+    l2_model_names <- "all"
+  }
+
+  if (is.null(l3_model_names)) {
+    lg$debug("l3_model_names was NULL. Defaulting to running all l3 models")
+    l3_model_names <- "all"
+  }
+
+  m_list <- named_list(l1_model_names, l2_model_names, l3_model_names)
+
+  for (nn in names(m_list)) {
+    # enforce that all, none, and prompt must be singleton arguments
+    if (any(m_list[[nn]] %in% c("all", "none", "prompt")) && length(m_list[[nn]]) > 1L) {
+      msg <- sprintf(
+        "Argument %s has value 'all', 'none', or 'prompt'. These must be passed alone, not with other model names.", 
+        m_list[[nn]]
+      )
+      lg$error(msg)
+      stop(msg)
+    }
+  }
+
+  choose_models <- function(gpa, model_names, level) {
+    checkmate::assert_integerish(level, min=1, max=3)
+    all_m_names <- names(gpa[[paste0("l", level, "_models")]]$models)
+    checkmate::assert_subset(model_names, c("prompt", "all", "none", all_m_names))
+
+    if (is.null(model_names)) {
+      chosen_models <- NULL # happens when user de-selects all models at one level
+    } else if (model_names[1L] == "all") {
+      chosen_models <- all_m_names
+    } else if (model_names[1L] == "none") {
+      chosen_models <- NULL
+    } else if (model_names[1L] == "prompt") {
+      cat("\n")
+      chosen_models <- select.list(all_m_names,
+        multiple = TRUE,
+        title = paste("Choose all level", level, "models to include in this pipeline run: ")
+      )
+      if (identical(chosen_models, character(0))) {
+        lg$info(paste("No level", level, "models were selected."))
+        chosen_models <- NULL
+      }
+    } else {
+      chosen_models <- model_names # user-specified set
+    }
+    return(chosen_models)
+  }
+
+  m_string <- function(str) { if (is.null(str)) "none" else str }
+
+  models_specified <- FALSE
+  while (isFALSE(models_specified)) {
+    l1_model_names <- choose_models(gpa, l1_model_names, level = 1)
+    if (isTRUE(gpa$multi_run)) l2_model_names <- choose_models(gpa, l2_model_names, level = 2)
+    l3_model_names <- choose_models(gpa, l3_model_names, level = 3)
+
+    cat("\nGLM models to run:\n------------------\n\n")
+    cat("Level 1: ", paste(m_string(l1_model_names), collapse = ", "), "\n")
+    if (isTRUE(gpa$multi_run)) cat("Level 2: ", paste(m_string(l2_model_names), collapse = ", "), "\n")
+    cat("Level 3: ", paste(m_string(l3_model_names), collapse = ", "), "\n")
+    cat("\n------------------\n\n")
+
+    if (isTRUE(gpa$multi_run)) {
+      menu_options <- c(
+        "Yes (run)", "No, respecify level 1 models",
+        "No, respecify level 2 models", "No, respecify level 3 models", "Cancel"
+      )
+    } else {
+      menu_options <- c(
+        "Yes (run)", "No, respecify level 1 models",
+        "No, respecify level 3 models", "Cancel"
+      )
+    }
+
+    cat("\n")
+    respecify <- menu(menu_options, title = "Do you want to continue (this submits the models for execution)?")
+    if (respecify == 0L) {
+      respecify <- "Cancel"
+    } else {
+      respecify <- menu_options[respecify]
+    }
+
+    if (respecify == "Yes (run)") {
+      models_specified <- TRUE
+    } else if (respecify == "No, respecify level 1 models") {
+      l1_model_names <- "prompt"
+    } else if (respecify == "No, respecify level 2 models") {
+      l2_model_names <- "prompt"
+    } else if (respecify == "No, respecify level 3 models") {
+      l3_model_names <- "prompt"
+    } else if (respecify == "Cancel") {
+      return(invisible(NULL))
+    }
+  }
+
+  return(named_list(l1_model_names, l2_model_names, l3_model_names))
+
 }
