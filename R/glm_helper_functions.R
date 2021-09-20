@@ -1009,14 +1009,45 @@ dhms <- function(str) {
 #' 
 #' @param gpa a glm_pipeline_arguments object
 #' @return a refreshed version of the gpa object
-#' @keywords internal
 #' @importFrom lgr get_logger
+#' @export
 cleanup_glm_pipeline <- function(gpa) {
   lg <- lgr::get_logger('glm_pipeline/cleanup_glm_pipeline')
+  gpa <- refresh_feat_status(gpa, level = 1L, lg = lg)
+  gpa <- refresh_feat_status(gpa, level = 2L, lg = lg)
   gpa <- refresh_feat_status(gpa, level = 3L, lg = lg)
   res <- tryCatch(saveRDS(gpa, file = gpa$output_locations$object_cache), error = function(e) {
     lg$error("Could not save gpa object to file: %s", gpa$output_locations$object_cache)
     return(NULL)
   })
+
+  # replace copied L1 niftis with symlinks to the corresponding file
+  if (isTRUE(gpa$fsl$replace_l1_nifti_symlink)) {
+    feat_files <- file.path(
+      gpa$l1_model_setup$fsl$feat_dir,
+      "filtered_func_data.nii.gz"
+    )
+    feat_files <- feat_files[file.exists(feat_files)]
+    input_files <- gpa$l1_model_setup$fsl$run_nifti[file.exists(feat_files)]
+    for (ff in seq_along(feat_files)) {
+      unlink(feat_files[ff])
+      file.symlink(input_files[ff], feat_files[ff])
+    }
+  }
+
   return(gpa)
+}
+
+#' helper function to copy any missing fields in target
+#' @param target a named list to be populated by defaults if fields are missing
+#' @param defaults a named list containing default values
+populate_defaults <- function(target, defaults) {
+  miss_fields <- setdiff(names(defaults), names(target))
+  if (length(miss_fields) > 0L) {
+    for (mm in miss_fields) {
+      target[[mm]] <- defaults[[mm]]
+    }
+  }
+
+  return(target)
 }

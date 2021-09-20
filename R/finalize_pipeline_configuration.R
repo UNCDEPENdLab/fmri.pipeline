@@ -117,20 +117,14 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
     )
   }
 
-  if (is.null(gpa$glm_settings$fsl$force_l1_creation)) {
-    # whether to overwrite existing level 1 setup files (e.g., .fsf)
-    gpa$glm_settings$fsl$force_l1_creation <- FALSE
-  }
+  fsl_defaults <- list(
+    force_l1_creation = FALSE, # whether to overwrite existing level 1 setup files (e.g., .fsf)
+    force_l2_creation = FALSE, # whether to overwrite existing level 2 setup files (e.g., .fsf)
+    force_l3_creation = FALSE, # whether to overwrite existing level 3 setup files (e.g., .fsf)
+    replace_l1_nifti_symlink = TRUE # whether to replace filtered_func_data with symlink to the (same) input data
+  )
 
-  if (is.null(gpa$glm_settings$fsl$force_l2_creation)) {
-    # whether to overwrite existing level 2 setup files (e.g., .fsf)
-    gpa$glm_settings$fsl$force_l2_creation <- FALSE
-  }
-
-  if (is.null(gpa$glm_settings$fsl$force_l3_creation)) {
-    # whether to overwrite existing level 3 setup files (e.g., .fsf)
-    gpa$glm_settings$fsl$force_l3_creation <- FALSE
-  }
+  gpa$glm_settings$fsl <- populate_defaults(gpa$glm_settings$fsl, fsl_defaults)
 
   # process confound settings
   gpa <- finalize_confound_settings(gpa, lg)

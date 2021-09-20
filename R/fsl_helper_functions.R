@@ -95,7 +95,7 @@ get_feat_status <- function(feat_dir, feat_fsf=NULL, lg=NULL, prefix=NULL) {
   feat_checks$feat_dir_exists <- dir.exists(feat_dir)
   feat_checks$feat_execution_start <- as.POSIXct(NA)
   feat_checks$feat_execution_end <- as.POSIXct(NA)
-  feat_checks$feat_execution_min <- as.POSIXct(NA)
+  feat_checks$feat_execution_min <- NA_real_
   feat_checks$feat_complete <- FALSE # default: FALSE for anything but a .feat_complete outcome
   feat_checks$feat_failed <- NA # default: NA if feat hasn't even been run
 

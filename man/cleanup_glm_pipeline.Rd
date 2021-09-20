@@ -15,4 +15,3 @@ a refreshed version of the gpa object
 \description{
 helper function to refresh l3 model status and save gpa object from batch pipeline back to its cache
 }
-\keyword{internal}
