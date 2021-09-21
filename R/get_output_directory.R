@@ -37,7 +37,7 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
   # helper subfunction to select rows where all conditions in filter_list match
   subset_run_data <- function(run_data, filter_list) {
     res <- sapply(seq_along(filter_list), function(xx) {
-      run_data[[names(filter_list)[xx] ]] == filter_list[[xx]]
+      run_data[[ names(filter_list)[xx] ]] == filter_list[[xx]]
     })
     all_match <- which(apply(res, 1, all))
     rinfo <- run_data %>% dplyr::slice(all_match)

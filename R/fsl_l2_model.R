@@ -13,7 +13,6 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
   checkmate::assert_subset(c("id", "session", "l1_model"), names(l1_df))
   checkmate::assert_string(l2_model) # single l2 model
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
-  checkmate::assert_logical(execute_feat, len=1L)
 
   lg <- lgr::get_logger("glm_pipeline/l2_setup")
 

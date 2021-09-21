@@ -6,7 +6,7 @@
 #'
 #' @importFrom dplyr mutate filter select right_join pull
 #' @author Michael Hallquist
-#' @export
+#' @keywords internal
 fsl_l3_model <- function(l3_df=NULL, gpa) {
   checkmate::assert_data_frame(l3_df)
   checkmate::assert_subset(c("id", "session", "l3_model"), names(l3_df))
@@ -50,7 +50,7 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   l2_cope_name <- l3_df$l2_cope_name[1L]
 
   # tracking data frame for this model (column names should follow variable names)
-  feat_l3_df <- data.frame(id, session, l1_model, l1_cope_name, l2_model, l2_cope_name, l3_model)
+  feat_l3_df <- data.frame(l1_model, l1_cope_name, l2_model, l2_cope_name, l3_model)
 
   # we need to regenerate the l3 model for the inputs provided
   # l3_df should contain FEAT copes that have been vetted in setup_l3_models.R to exist and be complete

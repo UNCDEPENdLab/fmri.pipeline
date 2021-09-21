@@ -639,11 +639,11 @@ sched_args_to_header <- function(gpa) {
 
 #' helper function to generate a contrast matrix from an lm() object
 #'   and a set of user-specified contrasts using emmeans
-#' 
+#'
 #' @param mobj a model object created by build_l<X>_models
 #' @param lmfit an optional lm() object used for emmeans calculations. If provided, this object
 #'   will be used instead of mobj$lmfit (the parent lm on the overall dataset).
-#' 
+#'
 #' @return a modified copy of the model object \code{mobj} with $contrast_list and $contrasts
 #'   fully populated 
 #' @keywords internal
@@ -902,10 +902,11 @@ respecify_l2_models_by_subject <- function(mobj, data) {
 #'
 #' @details The function adds the $by_subject field, which contains the design matrices and contrasts
 #'   for each subject and session in \code{data} based on the available data for that session. For example, if
-#'   a subject is missing a few runs (or these are dropped from analysis), then some contrasts may change or drop out of the model.
+#'   a subject is missing a few runs (or these are dropped from analysis), then some contrasts may change or drop out
+#'   of the model.
 #'
-#' The $by_subject field is a keyed data.table object containing list elements for the cope_list (mapping cope numbers to contrast names),
-#'   the contrasts, and the design matrix for each session.
+#' The $by_subject field is a keyed data.table object containing list elements for the cope_list (mapping cope numbers
+#'   to contrast names), the contrasts, and the design matrix for each session.
 #'
 #' @keywords internal
 #' @importFrom checkmate assert_data_frame assert_multi_class assert_subset
@@ -1016,7 +1017,7 @@ dhms <- function(str) {
 #' @importFrom lgr get_logger
 #' @export
 cleanup_glm_pipeline <- function(gpa) {
-  lg <- lgr::get_logger('glm_pipeline/cleanup_glm_pipeline')
+  lg <- lgr::get_logger("glm_pipeline/cleanup_glm_pipeline")
   gpa <- refresh_feat_status(gpa, level = 1L, lg = lg)
   gpa <- refresh_feat_status(gpa, level = 2L, lg = lg)
   gpa <- refresh_feat_status(gpa, level = 3L, lg = lg)

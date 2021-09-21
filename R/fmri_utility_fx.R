@@ -227,7 +227,8 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
 #'
 #' It extends \code{fmri.stimulus} by allowing for two normalization approaches (building on AFNI dmUBLOCK):
 #'   1) "evtmax_1": pre-convolution HRF max=1.0 normalization of each stimulus regardless of duration: identical to dmUBLOCK(1)
-#'   2) "durmax_1": pre-convolution HRF max=1.0 normalization for long events (15+ sec) -- height of HRF is modulated by duration of event: identical to dmUBLOCK(0)
+#'   2) "durmax_1": pre-convolution HRF max=1.0 normalization for long events (15+ sec) -- height of HRF is modulated by duration
+#'        of event: identical to dmUBLOCK(0)
 #'
 #' @param n_vols The number of volumes (scans) to be output in the convolved regressor
 #' @param reg A matrix containing the trial, onset, duration, and value for each event
@@ -301,7 +302,7 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
   } else { stop("unrecognized normalization: ", normalization) }
 
   #cleanup NAs and zeros in the regressor before proceeding with placing it onto the time grid
-  cleaned <- cleanup_regressor(reg[,"onset"], reg[,"duration"], reg[,"value"], rm_zeros = rm_zeros)
+  cleaned <- cleanup_regressor(reg[,"onset"], reg[, "duration"], reg[, "value"], rm_zeros = rm_zeros)
   times <- cleaned$times; durations <- cleaned$durations; values <- cleaned$values
 
   if (length(times) == 0L) {
@@ -311,17 +312,18 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
     return(ret)
   }
 
-  #handle mean centering of parametric values prior to convolution
-  #this is useful when one wishes to dissociate variance due to parametric modulation versus stimulus occurrence
-  #don't demean a constant regressor such as an event regressor (all values = 1)
+  # Handle mean centering of parametric values prior to convolution
+  # This is useful when one wishes to dissociate variance due to parametric modulation versus stimulus occurrence
+  # Don't demean a constant regressor such as an event regressor (all values = 1)
   if (!all(is.na(values)) && center_values && sd(values, na.rm=TRUE) > 1e-5) {
     values <- values - mean(values, na.rm=TRUE)
   }
 
-  #split regressor into separate events prior to convolution
-  #in the case of evtmax_1 normalization, normalize the HRF for the event to max height of 1 prior to multiplying against the event value/height
-  #in the case of durmax_1 normalization, normalize the HRF to a height of 1 for long events (~15s)
-  #in the case of beta_series, convolve individual effects with HRF individually
+  # Split regressor into separate events prior to convolution
+  # In the case of evtmax_1 normalization, normalize the HRF for the event to max height of 1 prior
+  #   to multiplying against the event value/height.
+  # In the case of durmax_1 normalization, normalize the HRF to a height of 1 for long events (~15s).
+  # In the case of beta_series, convolve individual effects with HRF individually.
   if (normalize_hrf || beta_series) {
     #for each event, convolve it with hrf, normalize, then sum convolved events to get full timecourse
     normed_events <- sapply(seq_along(times), function(i) {
@@ -382,7 +384,7 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
     }
   } else {
     #handle unnormalized convolution
-    tc_conv <- fmri.stimulus(n_vols=n_vols, values=values, times=times, durations=durations, tr=tr, demean=FALSE, 
+    tc_conv <- fmri.stimulus(n_vols=n_vols, values=values, times=times, durations=durations, tr=tr, demean=FALSE,
       center_values=FALSE, convolve = convolve, ts_multiplier = ts_multiplier,
       a1=hrf_parameters["a1"], a2=hrf_parameters["a2"], b1=hrf_parameters["b1"], b2=hrf_parameters["b2"], cc=hrf_parameters["cc"])
   }
@@ -493,7 +495,7 @@ fmri.stimulus <- function(n_vols=1, onsets=c(1), durations=c(1), values=c(1), ti
 
   #handle mean centering of parametric values prior to convolution
   #this is useful when one wishes to dissociate variance due to parametric modulation versus stimulus occurrence
-  if (!all(is.na(values)) && center_values && !all(abs(values - 1.0) < 1e-5)) {
+  if (!all(is.na(values)) && isTRUE(center_values) && !all(abs(values - 1.0) < 1e-5)) {
     values <- values - mean(values, na.rm=TRUE)
   }
 

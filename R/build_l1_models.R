@@ -58,12 +58,18 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
 
   if (is.null(l1_model_set)) {
     ## initialize overall l1 design object (holds events, signals, and models)
-    l1_model_set <- list(onset_cols=NULL, events=NULL, signals=NULL, models=NULL)
+    l1_model_set <- list(onsets=NULL, durations=NULL, values=NULL, wi_factors=NULL, events=NULL, signals=NULL, models=NULL)
     class(l1_model_set) <- c("list", "l1_model_set")
     new_l1 <- TRUE
   } else {
     new_l1 <- FALSE
   }
+
+  int_vars <- sapply(trial_data, checkmate::test_integerish)
+  char_vars <- sapply(trial_data, checkmate::test_character)
+  fac_vars <- sapply(trial_data, checkmate::test_factor)
+  possible_factors <- names(which(int_vars | char_vars | fac_vars))
+  possible_factors <- setdiff(possible_factors, c("id", "session", "run_number", "trial"))
 
   # relies on scope of parent function for onset_cols etc.
   take_l1_actions <- function(l1_model_set, actions) {
@@ -88,12 +94,19 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
           select_cols = value_cols, select_regex = value_regex
         )
       } else if (aa == 4) {
+        # within-subject factors
+        l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
+          field_name = "wi_factors", field_desc = "within-subject factor",
+          limit_cols = possible_factors
+        )
+      } else if (aa == 5) {
         # events
         l1_model_set <- bl1_build_events(l1_model_set, trial_data)
-      } else if (aa == 5) {
+      } else if (aa == 6) {
         # signals
         l1_model_set <- bl1_build_signals(l1_model_set, trial_data)
-      } else if (aa == 6) {
+      } else if (aa == 7) {
+        # models
         l1_model_set <- bl1_build_models(l1_model_set)
       }
     }
@@ -123,18 +136,19 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
   blm1_complete <- FALSE
   while (isFALSE(blm1_complete)) {
     blm1_action <- menu(c(
-      "Update event onset columns",                                     # 1
-      "Update event duration columns",                                  # 2
-      "Update parametric value columns",                                # 3
-      "Update events (each consists of an onset and duration)",         # 4
-      "Update signals (event, parametric value, regressor settings)",   # 5
-      "Update models (consisting of signals and contrasts)",            # 6
-      "Done with level 1 model building"                                # 7
+      "Update event onset columns",                                             # 1
+      "Update event duration columns",                                          # 2
+      "Update parametric value columns",                                        # 3
+      "Update within-subject factor columns",                                   # 4
+      "Update events (each consists of an onset and duration)",                 # 5
+      "Update signals (event, factor, parametric value, regressor settings)",   # 6
+      "Update models (consisting of signals and contrasts)",                    # 7
+      "Done with level 1 model building"                                        # 8
     ), title = "Level 1 model builder")
 
-    if (blm1_action < 7) {
+    if (blm1_action < 8) {
       l1_model_set <- take_l1_actions(l1_model_set, blm1_action)
-    } else if (blm1_action == 7) {
+    } else if (blm1_action == 8) {
       cat("Completing level 1 model building\n")
       blm1_complete <- TRUE
       break
@@ -161,14 +175,24 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
 #' @importFrom glue glue
 #' @keywords internal
 bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc = NULL,
-                         select_cols = NULL, select_regex = NULL, force_selection = TRUE) {
+                         select_cols = NULL, select_regex = NULL, limit_cols=NULL, force_selection = TRUE, alpha_sort = TRUE) {
   # record of columns before any adjustments.
   current_cols <- l1_model_set[[field_name]]
+
+  # never allow id, session, or run_number as columns
+  all_cols <- names(trial_data)
+  if (!is.null(limit_cols)) {
+    possible_cols <- limit_cols
+  } else {
+    possible_cols <- setdiff(all_cols, c("id", "session", "run_number"))
+  }
+
+  if (isTRUE(alpha_sort)) possible_cols <- sort(possible_cols)
 
   new_cols <- setdiff(select_cols, current_cols) # any new columns in the argument compared to the l1_model_set?
   chosen_cols <- current_cols # start with current columns
   if (length(new_cols) > 0L) {
-    cat(glue("Current {field_desc} columns in the l1 model structure are: {paste(current_cols, collapse = ', ')}\n"))
+    cat(glue("Current {field_desc} columns in the l1 model structure are: {paste(current_cols, collapse = ', ')}\n\n"))
     cat("The arguments to build_l1_models also included: ", paste(new_cols, collapse = ", "), "\n")
     res <- menu(c("Yes", "No"), title = glue("Do you want to add these columns to possible {field_desc}s?"))
     if (res == 1L) {
@@ -179,7 +203,7 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
 
   # handle regex detection of new columns
   if (!is.null(select_regex)) {
-    detected_cols <- grep(select_regex, names(trial_data), value = TRUE, perl = TRUE)
+    detected_cols <- grep(select_regex, possible_cols, value = TRUE, perl = TRUE)
     uniq_detect <- setdiff(detected_cols, chosen_cols) # only bother the user if the regex reveals new columns
     if (length(detected_cols) > 0L && length(uniq_detect) > 0L) {
       cat(glue("Detected the following possible event {field_desc} columns:\n\n  "), 
@@ -197,14 +221,14 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
     cat(glue("Current {field_desc} columns:\n\n  "), paste(chosen_cols, collapse = ", "), "\n\n")
     action <- menu(c(
       glue("Add/modify {field_desc} columns"),
-      glue("Delete {field_desc} columns"), 
+      glue("Delete {field_desc} columns"),
       glue("Done with {field_desc} selection")
     ),
     title = glue("Would you like to modify the event {field_desc} columns?")
     )
 
     if (action == 1L) { # Add/modify
-      chosen_cols <- select.list(names(trial_data),
+      chosen_cols <- select.list(possible_cols,
         multiple = TRUE, preselect = chosen_cols,
         title = glue("Choose all columns denoting event {field_desc}s\n(Command/Control-click to select multiple)")
       )
@@ -399,6 +423,7 @@ summarize_l1_signals <- function(sl) {
     cat("  HRF Normalization:", this$normalization, "\n")
     cat("  Add signal derivative:", as.character(this$add_deriv), "\n")
     cat("  Demean convolved signal:", as.character(this$demean_convolved), "\n")
+    cat("  Within-subject factor:", as.character(this$wi_factor), "\n")
     cat("  Generate beta series:", as.character(this$beta_series), "\n")
     cat(
       "  Multiply convolved regressor against time series:",
@@ -429,7 +454,7 @@ summarize_l1_models <- function(ml) {
 #' helper function to build level 1 signals
 #' @param l1_model_set An \code{l1_model_set} object whose signals should be created or modified
 #' @param trial_data A data.frame containing trial-level signal information
-#' 
+#'
 #' @return a modified version of \code{l1_model_set} with updated \code{$signals}
 #' @keywords internal
 bl1_build_signals <- function(l1_model_set, trial_data) {
@@ -517,6 +542,22 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
         res <- menu(names(l1_model_set$events), title = "With which event is this signal aligned?")
         if (res > 0) {
           ss$event <- names(l1_model_set$events)[res]
+        }
+      }
+
+      ### ---- within-subject factor ----
+      if (isTRUE(modify)) {
+        cat("Current within-subject factor:", ifelse(is.null(ss$wi_factor), "none", ss$wi_factor), "\n")
+        res <- menu(c("No", "Yes"), title = "Change within-subject factor?")
+        if (res == 2) {
+          ss$wi_factor <- NULL
+        } # clear out factor so that it is respecified
+      }
+
+      while (is.null(ss$wi_factor)) {
+        res <- menu(c("No", names(l1_model_set$wi_factors)), title = "Is this signal modulated by a within-subject factor?")
+        if (res > 1) {
+          ss$wi_factor <- names(l1_model_set$wi_factors)[res - 1]
         }
       }
 
@@ -740,7 +781,10 @@ bl1_build_models <- function(l1_model_set) {
     #look up what the regressors will be for this.
     if (is.null(mm$regressors)) {
       mm$regressors <- unlist(lapply(mm$signals, function(nn) {
-        if (isTRUE(signal_list[[nn]]$add_deriv)) {
+        if (!is.null(signal_list[[nn]]$wi_factor)) {
+          # build out a design matrix to figure out the columns
+          # need build_design_matrix to share a lookup function for getting regressor columns
+        } else if (isTRUE(signal_list[[nn]]$add_deriv)) {
           return(c(nn, paste0("d_", nn))) # regressor and temporal derivative
         } else if (isTRUE(signal_list[[nn]]$beta_series)) {
           if (is.data.frame(signal_list[[nn]]$value)) {
