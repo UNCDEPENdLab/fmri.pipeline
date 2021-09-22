@@ -189,11 +189,20 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
 
   if (isTRUE(alpha_sort)) possible_cols <- sort(possible_cols)
 
+  # helper function for printing current selections in case of NULL
+  c_string <- function(vec, null_val="none") {
+    if (is.null(vec)) {
+      null_val
+    } else {
+      paste(vec, collapse = ", ")
+    }
+  }
+
   new_cols <- setdiff(select_cols, current_cols) # any new columns in the argument compared to the l1_model_set?
   chosen_cols <- current_cols # start with current columns
   if (length(new_cols) > 0L) {
-    cat(glue("Current {field_desc} columns in the l1 model structure are: {paste(current_cols, collapse = ', ')}\n\n"))
-    cat("The arguments to build_l1_models also included: ", paste(new_cols, collapse = ", "), "\n")
+    cat(glue("Current {field_desc} columns in the l1 model structure are: {c_string(current_cols)}\n\n"))
+    cat(glue("The arguments to build_l1_models also included: {c_string(new_cols)}\n"))
     res <- menu(c("Yes", "No"), title = glue("Do you want to add these columns to possible {field_desc}s?"))
     if (res == 1L) {
       # add chosen_cols to l1 set
@@ -206,8 +215,7 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
     detected_cols <- grep(select_regex, possible_cols, value = TRUE, perl = TRUE)
     uniq_detect <- setdiff(detected_cols, chosen_cols) # only bother the user if the regex reveals new columns
     if (length(detected_cols) > 0L && length(uniq_detect) > 0L) {
-      cat(glue("Detected the following possible event {field_desc} columns:\n\n  "), 
-      paste(detected_cols, collapse = ", "), "\n\n")
+      cat(glue("\n\n---\nDetected the following possible event {field_desc} columns:\n\n  {c_string(detected_cols)}\n\n"))
       res <- menu(c("Yes", "No"), title = glue("Do you want to add these columns to possible {field_desc}s?"))
       if (res == 1) {
         # add these to any that were manually specified/current
@@ -218,7 +226,8 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
 
   done_cols <- FALSE
   while (isFALSE(done_cols)) {
-    cat(glue("Current {field_desc} columns:\n\n  "), paste(chosen_cols, collapse = ", "), "\n\n")
+
+    cat(glue("\n\n---\nCurrent {field_desc} columns: {c_string(chosen_cols)}\n\n"))
     action <- menu(c(
       glue("Add/modify {field_desc} columns"),
       glue("Delete {field_desc} columns"),
@@ -258,7 +267,7 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
       done_cols <- TRUE
       cat(glue("The following columns were chosen as event {field_desc}s.\n\n",
         "These will be used as possible {field_desc}s for each regressor.\n\n"))
-      cat("  ", paste(chosen_cols, collapse = ", "), "\n\n")
+      cat(glue("  {c_string(chosen_cols)}\n\n"))
     }
   }
 
@@ -531,7 +540,7 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
 
       ### ---- event alignment ----
       if (isTRUE(modify)) {
-        cat("Current signal alignment:", ss$event, "\n")
+        cat("Current signal alignment:", ifelse(is.null(ss$event), "none", ss$event), "\n")
         res <- menu(c("No", "Yes"), title = "Change signal alignment?")
         if (res == 2) {
           ss$event <- NULL
@@ -546,20 +555,24 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
       }
 
       ### ---- within-subject factor ----
-      if (isTRUE(modify)) {
-        cat("Current within-subject factor:", ifelse(is.null(ss$wi_factor), "none", ss$wi_factor), "\n")
-        res <- menu(c("No", "Yes"), title = "Change within-subject factor?")
-        if (res == 2) {
-          ss$wi_factor <- NULL
-        } # clear out factor so that it is respecified
+      if (!is.null(l1_model_set$wi_factors)) { # only ask about this if there are some wi_factors
+        if (isTRUE(modify)) {
+          cat("Current within-subject factor:", ifelse(is.null(ss$wi_factor), "none", ss$wi_factor), "\n")
+          res <- menu(c("No", "Yes"), title = "Change within-subject factor?")
+          if (res == 2) {
+            ss$wi_factor <- NULL
+          } # clear out factor so that it is respecified
+        }
+
+        while (is.null(ss$wi_factor)) {
+          res <- menu(c("No", names(l1_model_set$wi_factors)), title = "Is this signal modulated by a within-subject factor?")
+          if (res > 1) {
+            ss$wi_factor <- names(l1_model_set$wi_factors)[res - 1]
+          }
+        }
+
       }
 
-      while (is.null(ss$wi_factor)) {
-        res <- menu(c("No", names(l1_model_set$wi_factors)), title = "Is this signal modulated by a within-subject factor?")
-        if (res > 1) {
-          ss$wi_factor <- names(l1_model_set$wi_factors)[res - 1]
-        }
-      }
 
       ### ---- value of regressor ----
       if (isTRUE(modify)) {
