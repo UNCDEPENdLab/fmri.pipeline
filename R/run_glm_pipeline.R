@@ -64,7 +64,7 @@ l3_model_names = "prompt", glm_software = NULL) {
       l1_setup_batch <- f_batch$copy(
         job_name = "setup_l1", n_cpus = gpa$parallel$l1_setup_cores,
         cpu_time = gpa$parallel$l1_setup_time,
-        r_code = sprintf("gpa <- setup_l1_models(gpa, l1_model_names=%s)", model_list$l1_model_names)
+        r_code = sprintf("gpa <- setup_l1_models(gpa, l1_model_names=%s)", dput(model_list$l1_model_names))
       )
       l1_setup_batch$mem_total <- "24G"
 
@@ -81,7 +81,7 @@ l3_model_names = "prompt", glm_software = NULL) {
       l1_execute_batch$wait_for_children <- TRUE # need to wait for l1 feat jobs to complete before moving to l2/l3
   }
 
-  
+
   # todo
   # gpa <- verify_lv1_runs(gpa)
 
