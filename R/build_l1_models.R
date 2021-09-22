@@ -127,7 +127,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
       sep = "\n"
     )
 
-    l1_model_set <- take_l1_actions(l1_model_set, 1:6) # run user through each step in sequence
+    l1_model_set <- take_l1_actions(l1_model_set, 1:7) # run user through each step in sequence
   } else {
     cat("Modifying existing l1 model structure\n")
   }
