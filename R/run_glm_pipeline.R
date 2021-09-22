@@ -65,8 +65,7 @@ l3_model_names = "prompt", glm_software = NULL) {
         job_name = "setup_l1", n_cpus = gpa$parallel$l1_setup_cores,
         cpu_time = gpa$parallel$l1_setup_time,
         r_code = sprintf(
-          "gpa <- setup_l1_models(gpa, l1_model_names=%s)",
-          paste(capture.output(dput(model_list$l1_model_names)), collapse = "")
+          "gpa <- setup_l1_models(gpa, l1_model_names=%s)", paste(deparse(model_list$l1_model_name), collapse = "")
         )
       )
       l1_setup_batch$mem_total <- "24G"
