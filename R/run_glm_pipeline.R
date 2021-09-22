@@ -72,8 +72,6 @@ l3_model_names = "prompt", glm_software = NULL) {
 
       l1_setup_batch$depends_on_parents <- "finalize_configuration"
 
-      browser()
-
       # batch job for executing l1 jobs (and waiting) after setup
       l1_execute_batch <- f_batch$copy(
         job_name = "run_l1", n_cpus = 1,
