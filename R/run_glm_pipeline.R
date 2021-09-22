@@ -64,11 +64,16 @@ l3_model_names = "prompt", glm_software = NULL) {
       l1_setup_batch <- f_batch$copy(
         job_name = "setup_l1", n_cpus = gpa$parallel$l1_setup_cores,
         cpu_time = gpa$parallel$l1_setup_time,
-        r_code = sprintf("gpa <- setup_l1_models(gpa, l1_model_names=%s)", capture.output(dput(model_list$l1_model_names)))
+        r_code = sprintf(
+          "gpa <- setup_l1_models(gpa, l1_model_names=%s)",
+          paste(capture.output(dput(model_list$l1_model_names)), collapse = "")
+        )
       )
       l1_setup_batch$mem_total <- "24G"
 
       l1_setup_batch$depends_on_parents <- "finalize_configuration"
+
+      browser()
 
       # batch job for executing l1 jobs (and waiting) after setup
       l1_execute_batch <- f_batch$copy(
