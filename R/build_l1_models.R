@@ -73,7 +73,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
 
   # relies on scope of parent function for onset_cols etc.
   take_l1_actions <- function(l1_model_set, actions) {
-    checkmate::assert_integerish(actions, lower = 1, upper = 6)
+    checkmate::assert_integerish(actions, lower = 1, upper = 7)
     for (aa in actions) {
       if (aa == 1) {
         # onsets
