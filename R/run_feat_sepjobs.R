@@ -35,10 +35,10 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       feat_queue <- gpa$l1_model_setup$fsl
     }
 
-    feat_time <- gpa$parallel$fsl$l1_feat_time
-    feat_memgb <- gpa$parallel$fsl$l1_feat_memgb
-    feat_cpus <- 8 # TODO: populate parallel settings for l1
-    runsperproc <- 2 # number of feat calls per processor
+    feat_time   <- gpa$parallel$fsl$l1_feat_time
+    feat_memgb  <- gpa$parallel$fsl$l1_feat_memgb
+    feat_cpus   <- gpa$parallel$fsl$l1_feat_cpus_per_job # number of cpus per scheduled job
+    runsperproc <- gpa$parallel$fsl$l1_feat_runs_per_cpu # number of feat calls per processor
   } else if (level == 2) {
     if (!checkmate::test_class(gpa$l2_model_setup, "l2_setup")) {
       lg$error("In run_feat_sepjobs, did not find an l2_setup object in gpa$l2_model_setup.")
