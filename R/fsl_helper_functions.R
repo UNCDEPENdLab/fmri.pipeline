@@ -215,13 +215,20 @@ refresh_feat_status <- function(gpa, level = 1L, lg = NULL) {
 
   if ("fsl" %in% gpa$glm_software && setup_name %in% names(gpa)) {
     if (is.null(lg)) lg <- lgr::get_logger()
-    lg$info("Found existing %s field. Refreshing status of L%d feat execution and outputs.", setup_name, level)
-    refresh <- gpa[[setup_name]]$fsl %>%
-      dplyr::select(feat_dir, feat_fsf) %>%
-      purrr::pmap_dfr(get_feat_status, lg = lg)
+    orig <- gpa[[setup_name]]$fsl
+    if (is.null(orig) || (is.data.frame(orig) && nrow(orig) == 0L)) {
+      lg$warn("Could not find populated $fsl object in gpa$%s$fsl", setup_name)
+    } else if (!"feat_fsf" %in% names(orig)) {
+      lg$warn("No $feat_fsf field in gpa$%s$fsl", setup_name)
+    } else {
+      lg$info("Found existing %s field. Refreshing status of L%d feat execution and outputs.", setup_name, level)
+      refresh <- gpa[[setup_name]]$fsl %>%
+        dplyr::select(feat_dir, feat_fsf) %>%
+        purrr::pmap_dfr(get_feat_status, lg = lg)
 
-    # copy back relevant columns into data structure
-    gpa[[setup_name]]$fsl[, names(refresh)] <- refresh
+      # copy back relevant columns into data structure
+      gpa[[setup_name]]$fsl[, names(refresh)] <- refresh
+    }
   }
 
   return(gpa)

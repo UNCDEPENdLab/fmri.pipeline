@@ -103,7 +103,7 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
   }
 
   #glue returns empty strings when some variables are NULL
-  if (nchar(out_dir) == 0L) {
+  if (identical(glue("{}"), out_dir) || nchar(out_dir) == 0L) {
     lg$error("Unable to sort out %s output directory", what)
     return(NULL)
   } else {

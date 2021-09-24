@@ -50,7 +50,11 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   l2_cope_name <- l3_df$l2_cope_name[1L]
 
   # tracking data frame for this model (column names should follow variable names)
-  feat_l3_df <- data.frame(l1_model, l1_cope_name, l2_model, l2_cope_name, l3_model)
+  if (isTRUE(gpa$multi_run)) {
+    feat_l3_df <- data.frame(l1_model, l1_cope_name, l2_model, l2_cope_name, l3_model)
+  } else {
+    feat_l3_df <- data.frame(l1_model, l1_cope_name, l3_model)
+  }
 
   # we need to regenerate the l3 model for the inputs provided
   # l3_df should contain FEAT copes that have been vetted in setup_l3_models.R to exist and be complete
