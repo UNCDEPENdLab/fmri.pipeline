@@ -119,8 +119,14 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
 
   fsl_defaults <- list(
     force_l1_creation = FALSE, # whether to overwrite existing level 1 setup files (e.g., .fsf)
+    failed_l1_folder_action = "delete", # whether to 'delete', 'archive', or 'skip' failed folders before running feat l1 fsf jobs
+    incomplete_l1_folder_action = "delete", # whether to 'delete', 'archive', or 'skip' incomplete folders before running feat l1 fsf jobs
     force_l2_creation = FALSE, # whether to overwrite existing level 2 setup files (e.g., .fsf)
+    failed_l2_folder_action = "delete", # whether to 'delete', 'archive', or 'skip' failed folders before running feat l1 fsf jobs
+    incomplete_l2_folder_action = "delete", # whether to 'delete', 'archive', or 'skip' incomplete folders before running feat l1 fsf jobs
     force_l3_creation = FALSE, # whether to overwrite existing level 3 setup files (e.g., .fsf)
+    failed_l3_folder_action = "delete", # whether to 'delete', 'archive', or 'skip' failed folders before running feat l1 fsf jobs
+    incomplete_l3_folder_action = "archive", # whether to 'delete', 'archive', or 'skip' incomplete folders before running feat l1 fsf jobs
     replace_l1_nifti_symlink = TRUE # whether to replace filtered_func_data with symlink to the (same) input data
   )
 

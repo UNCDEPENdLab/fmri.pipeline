@@ -6,6 +6,7 @@
 #' @param rerun a logical indicating whether to re-run an existing directory. Default: FALSE
 #' @param wait_for a parent job that should complete before these jobs commence
 #' @return a vector of job ids for all files that were submitted to the cluster
+#' @importFrom glue glue
 #' @export
 run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_for="") {
   # this version of the FSL LVL1 feat estimation creates multiple qsub scripts in a temporary directory
@@ -74,11 +75,15 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     feat_memgb <- ceiling(as.numeric(gpa$parallel$fsl$l3_feat_memgb) / as.numeric(gpa$parallel$fsl$l3_feat_cpusperjob))
     feat_cpus <- gpa$parallel$fsl$l3_feat_cpusperjob
     runsperproc <- 1 # number of feat calls per processor
-
   }
 
-  fsf_files <- feat_queue$feat_fsf
-  dir_expect <- feat_queue$feat_dir
+  fail_action <- gpa$glm_settings$fsl[[glue("failed_l{level}_folder_action")]]
+  incomplete_action <- gpa$glm_settings$fsl[[glue("incomplete_l{level}_folder_action")]]
+  if (is.null(fail_action)) fail_action <- "delete" #should be populated in finalize step, but just in case
+  if (is.null(incomplete_action)) incomplete_action <- "delete"
+
+  feat_job_df <- feat_queue %>%
+    dplyr::select(feat_fsf, feat_dir, feat_complete, feat_failed, to_run)
 
   # location of scheduler scripts
   feat_output_directory <- file.path(gpa$output_locations$scheduler_scripts, paste0("feat_l", level))
@@ -86,26 +91,47 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   # TODO: probably use a jobs | wc -l approach to throttling jobs within a submission
   # and we need to make this more flexible
 
-  # figure out which fsf files have already been run
-  # dir_expect <- gsub("\\.fsf$", ".feat", fsf_files, perl=TRUE)
-
-  to_run <- c()
-  # TODO: use $feat_complete and $feat_failed fields that are now standard to inform what gets run
-
-  for (f in seq_along(fsf_files)) {
-    if (dir.exists(dir_expect[f])) {
-      if (rerun) {
-        cmd <- paste0("rm -rf \"", dir_expect[f], "\"")
-        lg$info("Removing old directory: %s", cmd)
-        system(cmd)
-        to_run <- c(to_run, fsf_files[f]) #add to queue
-      } else {
-        lg$info("Skipping existing directory: %s", dir_expect[f])
+  handle_delete_archive_keep <- function(df, action="delete", type="failed") {
+    if (nrow(df) > 0L) {
+      if (action == "delete") {
+        for (ff in df$feat_dir) {
+          if (dir.exists(ff)) {
+            cmd <- glue("rm -rf \"{ff}\"")
+            lg$info("Removing %s l%d directory: %s", type, level, cmd)
+            system(cmd)
+          }
+        }
+      } else if (action == "archive") {
+        for (ff in df$feat_dir) {
+          if (dir.exists(ff)) {
+            new_dir <- sub("(.*)(\\.g?feat)$", paste0("\\1-", format(Sys.time(), "%F-%H%M%S"), "\\2"), ff, perl = TRUE)
+            cmd <- glue("mv \"{ff}\" \"{new_dir}\"")
+            lg$info("Archiving %s l%d directory: %s", type, level, cmd)
+            system(cmd)
+          }
+        }
+      } else { # "keep"
+        lg$info("Keeping %s l%d directory: %s", type, level, df$feat_dir)
       }
-    } else {
-      to_run <- c(to_run, fsf_files[f])
     }
   }
+
+  feat_failed <- feat_job_df %>% dplyr::filter(feat_failed == TRUE)
+  feat_incomplete <- feat_job_df %>% dplyr::filter(feat_complete == FALSE)
+
+  # if a directory is both failed and incomplete, it will be deleted under the failed set
+  handle_delete_archive_keep(feat_failed, action=fail_action, type="failed")
+  handle_delete_archive_keep(feat_incomplete, action=incomplete_action, type="incomplete")
+
+  if (isTRUE(rerun)) {
+    lg$info("rerun = TRUE in run_feat_sepjobs. All fsfs will be marked for job execution.")
+    feat_job_df$to_run <- TRUE
+  }
+
+  # TODO: keep this as a data.frame and return an amended lXX_model_setup to the caller that includes the job id and batch script
+  to_run <- feat_job_df %>%
+    dplyr::filter(to_run == TRUE) %>%
+    dplyr::pull(feat_fsf)
 
   if (length(to_run) == 0L) {
     lg$warn("No Feat level %d .fsf files to execute.", level)
