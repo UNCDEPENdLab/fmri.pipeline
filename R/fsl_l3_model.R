@@ -4,7 +4,7 @@
 #'   that identify the model.
 #' @param gpa a \code{glm_pipeline_arguments} object containing model specification
 #'
-#' @importFrom dplyr mutate filter select right_join pull
+#' @importFrom dplyr mutate filter select left_join pull
 #' @author Michael Hallquist
 #' @keywords internal
 fsl_l3_model <- function(l3_df=NULL, gpa) {
@@ -63,7 +63,7 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
     dplyr::select(id, session) %>%
     left_join(gpa$l3_models$models[[l3_model]]$model_data, by = c("id", "session"))
 
-  mobj <- respecify_l3_model(gpa$l3_models$models[[l3_model]], to_model)
+  mobj <- respecify_l3_model(gpa$l3_models$models[[l3_model]], data=to_model)
 
   # generate FSL EV syntax for these regressors
   ev_syntax <- generate_fsf_ev_syntax(inputs = l3_df$cope_file, dmat = mobj$model_matrix)

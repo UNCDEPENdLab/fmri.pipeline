@@ -21,13 +21,13 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
   if (fname == "build_l2_models") {
     menu_desc <- "second-level (subject)"
     data <- gpa$run_data # L2
-    metadata <- gpa$run_data %>% dplyr::select(id, session, run_number)
+    id_cols <- c("id", "session", "run_number")
     model_set <- gpa$l2_models
     level <- 2L #model level inside model object
   } else {
     menu_desc <- "third-level (sample)"
     data <- gpa$subject_data # L3
-    metadata <- gpa$subject_data %>% dplyr::select(id, session)
+    id_cols <- c("id", "session")
     model_set <- gpa$l3_models
     level <- 3L
   }
@@ -122,24 +122,24 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
   create_new_model <- function(data, to_modify = NULL) {
     checkmate::assert_class(to_modify, "hi_model_spec", null.ok = TRUE)
     if (is.null(to_modify)) {
-      mm <- list(level = level)
-      class(mm) <- c("list", "hi_model_spec")
+      mobj <- list(level = level)
+      class(mobj) <- c("list", "hi_model_spec")
       modify <- FALSE
     } else {
-      mm <- to_modify
+      mobj <- to_modify
       modify <- TRUE
     }
 
     ### ------ model name ------
     if (isTRUE(modify)) {
-      cat("Current model name:", mm$name, "\n")
+      cat("Current model name:", mobj$name, "\n")
       res <- menu(c("No", "Yes"), title = "Change model name?")
       if (res == 2) {
-        mm$name <- NULL
+        mobj$name <- NULL
       } # clear out so that it is respecified
     }
 
-    while (is.null(mm$name) || mm$name == "") {
+    while (is.null(mobj$name) || mobj$name == "") {
       res <- trimws(readline("Enter the model name: "))
       if (res != "") {
         res <- make.names(res)
@@ -147,17 +147,17 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
           cat("\nModel name:", res, "already exists. Names must be unique.\n")
           cat("Current models:", paste(names(model_list), collapse = ", "), "\n")
         } else {
-          mm$name <- res
+          mobj$name <- res
         }
       }
     }
 
     if (isTRUE(modify)) {
-      cat("Current model regressors:", paste(names(mm$model_variables), collapse = ", "), "\n")
+      cat("Current model regressors:", paste(names(mobj$model_variables), collapse = ", "), "\n")
       res <- menu(c("No", "Yes"), title = "Respecify model regressors (and contrasts)?")
       if (res == 2) { # clear out so that it is respecified
         cat("Okay, resetting model regressors and contrasts\n")
-        mm$model_variables <- mm$contrasts <- NULL
+        mobj$model_variables <- mobj$contrasts <- NULL
       }
     }
 
@@ -193,21 +193,21 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
         })
       }
 
-      mm$model_variables <- all.vars(model_formula)
+      mobj$model_variables <- all.vars(model_formula)
 
       # if not an intercept-only model, ensure that all variables in formula are present in the data frame
       if (!identical(model_formula, ~1)) {
-        checkmate::assert_subset(mm$model_variables, names(data), empty.ok = FALSE)
+        checkmate::assert_subset(mobj$model_variables, names(data), empty.ok = FALSE)
       }
 
     } else if (model_approach == 2L) {
       # walkthrough approach (only support additive model for now)
-      mm$model_variables <- get_regressors(data, regressor_cols = mm$model_variables)
-      model_formula <- as.formula(paste("~", paste(mm$model_variables, collapse = " + ")))
+      mobj$model_variables <- get_regressors(data, regressor_cols = mobj$model_variables)
+      model_formula <- as.formula(paste("~", paste(mobj$model_variables, collapse = " + ")))
     }
 
     # convert integer-like variables to integer
-    for (vv in mm$model_variables) {
+    for (vv in mobj$model_variables) {
       # convert integer-like numbers to integers for possible conversion below
       if (is.numeric(data[[vv]]) && checkmate::test_integerish(data[[vv]])) {
         data[[vv]] <- as.integer(data[[vv]])
@@ -232,55 +232,15 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
 
     # need to build a model LM-style
     cat("Summary of variables included in model:\n")
-    print(summary(data[, mm$model_variables]))
+    print(summary(data[, mobj$model_variables]))
 
-    modelmat <- model.matrix(model_formula, data)
-    data$dummy <- rnorm(nrow(data))
-    ffit <- update.formula(model_formula, "dummy ~ .") # add LHS
-    mm$lmfit <- lm(ffit, data)
-    mm$regressors <- colnames(modelmat) # actual regressors after expanding categorical variables
-    mm$model_matrix <- modelmat
-    stopifnot(nrow(data) == nrow(metadata)) # sanity check
-    mm$metadata <- metadata # for merging model matrix against identifying columns
-    mm$model_data <- data #keep track of data used for fitting model for refitting it at l3 in case of missing data
-
-    # handle coefficient aliasing
-    al <- alias(mm$lmfit)
-    if (!is.null(al$Complete)) {
-      cat("Problems with aliased (redundant) terms in model.\n\n")
-      bad_terms <- rownames(al$Complete)
-      cat(paste(bad_terms, collapse = ", "), "\n\n")
-
-      # find unaliased (good) terms in the model
-      good_terms <- colnames(modelmat)[!(colnames(modelmat) %in% bad_terms)]
-      good_terms <- good_terms[!good_terms == "(Intercept)"]
-
-      if (length(good_terms) == 0L) {
-        warning(
-          "No unaliased (good) terms in this model, suggesting that all covariates are constant or dependent. ",
-          "Reverting to intercept-only model."
-        )
-        good_terms <- "1"
-      }
-
-      # build new model formula with only good terms
-      newf <- as.formula(paste("dummy ~", paste(good_terms, collapse = " + ")))
-
-      # also generate a model data.frame that expands dummy codes for terms, retaining only good variables
-      # mm$model_matrix_noalias <- modelmat[, grep(":", good_terms, fixed = TRUE, value = TRUE, invert = TRUE)]
-      #modeldf <- as.data.frame(mm$model_matrix_noalias)
-      #modeldf$dummy <- data$dummy # copy across dummy DV for fitting
-      mm$lmfit_noalias <- lm(newf, data)
-      mm$aliased_terms <- bad_terms
-
-      # N.B. emmeans needs to calculate contrasts on the original design to see the factor structure
-      # So, we also need to drop out columns from the emmeans linfct
-    }
+    # fit linear model and populate model object
+    mobj <- mobj_fit_lm(mobj, model_formula, data, id_cols)
 
     # walk through contrast generation for this model
-    mm <- specify_contrasts(mm)
+    mobj <- specify_contrasts(mobj)
 
-    return(mm)
+    return(mobj)
   }
 
   model_list <- model_set$models
@@ -293,11 +253,11 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
     )
 
     if (add_more == 1L) { # add
-      mm <- create_new_model(data)
-      if (mm$name %in% names(model_set)) {
-        warning("An model with the same name exists: ", mm$name, ". Overwriting it.")
+      mobj <- create_new_model(data)
+      if (mobj$name %in% names(model_set)) {
+        warning("An model with the same name exists: ", mobj$name, ". Overwriting it.")
       }
-      model_list[[mm$name]] <- mm # add to set
+      model_list[[mobj$name]] <- mobj # add to set
     } else if (add_more == 2L) { # modify
       if (is.null(model_list)) {
         message("No models available to modify. Add at least one model first")
@@ -325,7 +285,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
   }
 
   model_set$models <- model_list
-  model_set$n_contrasts <- sapply(model_list, function(mm) { ncol(mm$contrasts) })
+  model_set$n_contrasts <- sapply(model_list, function(mobj) { ncol(mobj$contrasts) })
 
   if (fname == "build_l2_models") {
     gpa$l2_models <- model_set

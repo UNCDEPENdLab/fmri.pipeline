@@ -911,19 +911,124 @@ respecify_l2_models_by_subject <- function(mobj, data) {
 #' @keywords internal
 #' @importFrom checkmate assert_data_frame assert_multi_class assert_subset
 #' @importFrom data.table data.table
+
+mobj_refit_lm <- function(mobj, new_data) {
+
+}
+
+#' internal helper function to setup a linear model for a given l1, l2, or l3 model
+#' 
+#' @param mobj a model object to be populated or modified
+#' @param model_formula a formula of the model to be fit
+#' @param data a data.frame containing all columns used in model fitting
+#' @param id_cols a character vector of column names in \code{data} that identify the observations
+#'   and can be used for merging the model against related datasets
+#' @return a model object containing the fitted model
+#' @keywords internal
+mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL) {
+  # verify that we have an object of known structure
+  checkmate::assert_multi_class(mobj, c("l1_model_spec", "hi_model_spec"), null.ok=TRUE)
+  if (is.null(mobj)) {
+    mobj <- list()
+    class(mobj) <- c("list", "hi_model_spec")
+  } else {
+    # if mobj is passed in, but other elements are NULL, we are refitting a model to a new/updated dataset
+    if (is.null(model_formula)) {
+      model_formula <- mobj$model_formula
+    }
+
+    if (is.null(id_cols)) {
+      id_cols <- names(mobj$metadata)
+    }
+  }
+
+  checkmate::assert_formula(model_formula)
+  checkmate::assert_data_frame(data)
+  checkmate::assert_subset(id_cols, names(data))
+
+  # verify that there is a dummy DV for lm fitting
+  if (!"dummy" %in% names(data)) {
+    data$dummy <- rnorm(nrow(data))
+  }
+
+  model_formula <- update.formula(model_formula, "dummy ~ .") # add LHS
+
+  # use model formula from parent object
+  # model_formula <- terms(mobj$lmfit)
+  model_vars <- all.vars(model_formula)
+
+  checkmate::assert_subset(model_vars, names(data)) # verify that all predictors are present
+
+  # look for missingness on any predictor variable
+  # https://stackoverflow.com/questions/64287986/create-variable-that-captures-if-there-are-missing-fields-in-4-string-variables
+  data <- data %>%
+    dplyr::select(!!model_vars, !!id_cols) %>% # just keep model-relevant variables
+    mutate(any_miss = rowSums(is.na(select(., any_of(!!model_vars)))) > 0)
+
+  miss_data <- data %>%
+    dplyr::filter(any_miss == TRUE) %>%
+    dplyr::select(-any_miss)
+
+  # retain non-missing data
+  data <- data %>%
+    dplyr::filter(any_miss == FALSE) %>%
+    dplyr::select(-any_miss)
+
+  if (nrow(miss_data) > 0L) {
+    lg$warn("Model data contain missing values for one or more covariates.")
+    lg$warn("These observations will be dropped from model outputs!")
+    lg$warn("%s", capture.output(print(miss_data)))
+  }
+
+  # fit model and populate model information
+  mobj$lmfit <- lm(model_formula, data)
+  mobj$model_formula <- model_formula
+  mobj$model_matrix <- model.matrix(mobj$lmfit)
+  mobj$regressors <- colnames(mobj$model_matrix) # actual regressors after expanding categorical variables
+  mobj$metadata <- data %>% dplyr::select(!!id_cols) # for merging model matrix against identifying columns
+  mobj$model_data <- data %>% dplyr::select(!!model_vars) #keep track of data used for fitting model for refitting in case of missing data
+
+  # handle coefficient aliasing
+  al <- alias(mobj$lmfit)
+  if (!is.null(al$Complete)) {
+    cat("Problems with aliased (redundant) terms in model.\n\n")
+    bad_terms <- rownames(al$Complete)
+    cat(paste(bad_terms, collapse = ", "), "\n\n")
+
+    # find unaliased (good) terms in the model
+    good_terms <- colnames(modelmat)[!(colnames(modelmat) %in% bad_terms)]
+    good_terms <- good_terms[!good_terms == "(Intercept)"]
+
+    if (length(good_terms) == 0L) {
+      warning(
+        "No unaliased (good) terms in this model, suggesting that all covariates are constant or dependent. ",
+        "Reverting to intercept-only model."
+      )
+      good_terms <- "1"
+    }
+
+    # build new model formula with only good terms
+    newf <- as.formula(paste("dummy ~", paste(good_terms, collapse = " + ")))
+
+    # also generate a model data.frame that expands dummy codes for terms, retaining only good variables
+    # mobj$model_matrix_noalias <- modelmat[, grep(":", good_terms, fixed = TRUE, value = TRUE, invert = TRUE)]
+    # modeldf <- as.data.frame(mobj$model_matrix_noalias)
+    # modeldf$dummy <- data$dummy # copy across dummy DV for fitting
+    mobj$lmfit_noalias <- lm(newf, data)
+    mobj$aliased_terms <- bad_terms
+
+    # N.B. emmeans needs to calculate contrasts on the original design to see the factor structure
+    # So, we also need to drop out columns from the emmeans linfct
+  }
+
+}
+
 respecify_l3_model <- function(mobj, data) {
-  checkmate::assert_multi_class(mobj, c("l1_model_spec", "hi_model_spec")) # verify that we have an object of known structure
+  checkmate::assert_class(mobj, "hi_model_spec") # verify that we have an object of known structure
   checkmate::assert_data_frame(data)
   checkmate::assert_subset(c("id", "session"), names(data))
 
-  # use model formula from parent object
-  model_formula <- terms(mobj$lmfit)
-
-  mobj$lmfit <- lm(model_formula, data = data)
-  mobj$regressors <- colnames(mobj$model_matrix)
-  mobj$model_matrix <- model.matrix(mobj$lmfit)
-  mobj$metadata <- data %>% dplyr::select(id, session)
-  mobj$model_data <- data
+  mobj <- mobj_fit_lm(mobj, data=data)
 
   mobj <- get_contrasts_from_spec(mobj, mobj$lmfit)
 
@@ -1009,6 +1114,27 @@ dhms <- function(str) {
   return(period)
 }
 
+#' convert a number of hours to a days, hours, minutes, seconds format
+#' 
+#' @importFrom lubridate day hour minute second seconds_to_period dhours
+#' @keywords internal
+hours_to_dhms <- function(hours, frac=FALSE) {
+  checkmate::assert_number(hours, lower = 0)
+  dur <- lubridate::dhours(hours)
+  period <- seconds_to_period(dur)
+
+  if (isTRUE(frac)) {
+    str <- sprintf("%02d:%02d:%.03f", hour(period), minute(period), second(period))
+  } else {
+    str <- sprintf("%02d:%02d:%02d", hour(period), minute(period), round(second(period)))
+  }
+
+  if (day(period) > 0) {
+    str <- paste0(sprintf("%d-", day(period)), str)
+  }
+
+  return(str)
+}
 
 #' helper function to refresh l3 model status and save gpa object from batch pipeline back to its cache
 #' 
