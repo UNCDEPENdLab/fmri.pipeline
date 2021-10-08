@@ -163,6 +163,15 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
   }
 }
 
+# helper function for printing current selections in case of NULL
+c_string <- function(vec, null_val="none") {
+  if (is.null(vec)) {
+    null_val
+  } else {
+    paste(vec, collapse = ", ")
+  }
+}
+
 #' Onset, duration, value column selection helper function
 #' @param l1_model_set an l1_model_set object containing onsets etc.
 #' @param trial_data a trial + subjects x events data.frame that contains potential onset columns
@@ -188,15 +197,6 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
   }
 
   if (isTRUE(alpha_sort)) possible_cols <- sort(possible_cols)
-
-  # helper function for printing current selections in case of NULL
-  c_string <- function(vec, null_val="none") {
-    if (is.null(vec)) {
-      null_val
-    } else {
-      paste(vec, collapse = ", ")
-    }
-  }
 
   new_cols <- setdiff(select_cols, current_cols) # any new columns in the argument compared to the l1_model_set?
   chosen_cols <- current_cols # start with current columns
@@ -423,7 +423,7 @@ summarize_l1_signals <- function(sl) {
       cat("  Regressor value (constant): ", this$value[1L], "\n")
     } else {
       cat(
-        "  Parametric value, mean [min -- max]:",
+        "  Parametric value:", this$parametric_modulator, ", mean [min -- max]:",
         round(mean(this$value$value, na.rm = TRUE), 2), "[",
         round(min(this$value$value, na.rm = TRUE), 2), "--",
         round(max(this$value$value, na.rm = TRUE), 2), "]\n"
@@ -540,7 +540,7 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
 
       ### ---- event alignment ----
       if (isTRUE(modify)) {
-        cat("Current signal alignment:", ifelse(is.null(ss$event), "none", ss$event), "\n")
+        cat(glue("Current signal alignment: {c_string(ss$event)}"), sep = "\n")
         res <- menu(c("No", "Yes"), title = "Change signal alignment?")
         if (res == 2) {
           ss$event <- NULL
@@ -557,22 +557,25 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
       ### ---- within-subject factor ----
       if (!is.null(l1_model_set$wi_factors)) { # only ask about this if there are some wi_factors
         if (isTRUE(modify)) {
-          cat("Current within-subject factor:", ifelse(is.null(ss$wi_factor), "none", ss$wi_factor), "\n")
+          cat(glue("Current within-subject factor: {c_string(ss$wi_factor)}"), sep = "\n")
           res <- menu(c("No", "Yes"), title = "Change within-subject factor?")
           if (res == 2) {
-            ss$wi_factor <- NULL
-          } # clear out factor so that it is respecified
+            ss$wi_factor <- NULL # clear out factor so that it is respecified
+            query_wi <- TRUE
+          } else {
+            query_wi <- FALSE
+          }
+        } else {
+          query_wi <- TRUE
         }
 
-        while (is.null(ss$wi_factor)) {
-          res <- menu(c("No", names(l1_model_set$wi_factors)), title = "Is this signal modulated by a within-subject factor?")
+        if (isTRUE(query_wi)) {
+          res <- menu(c("No", l1_model_set$wi_factors), title = "Is this signal modulated by a within-subject factor?")
           if (res > 1) {
-            ss$wi_factor <- names(l1_model_set$wi_factors)[res - 1]
+            ss$wi_factor <- l1_model_set$wi_factors[res - 1]
           }
         }
-
       }
-
 
       ### ---- value of regressor ----
       if (isTRUE(modify)) {
@@ -581,6 +584,7 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
           ifelse(length(ss$value) == 1L && is.numeric(ss$value[1L]),
             ss$value[1L],
             paste0(
+              ss$parametric_modulator, ", ",
               round(mean(ss$value$value, na.rm = TRUE), 2), " [",
               round(min(ss$value$value, na.rm = TRUE), 2), "--",
               round(max(ss$value$value, na.rm = TRUE), 2), "]\n"
@@ -617,7 +621,8 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
               metadata_df <- trial_data %>%
                 dplyr::select(id, session, run_number, trial)
 
-              ss$value <- metadata_df %>% dplyr::bind_cols(value = trial_data[[ l1_model_set$values[val] ]])
+              ss$value <- metadata_df %>% dplyr::bind_cols(value = trial_data[[l1_model_set$values[val]]])
+              ss$parametric_modulator <- l1_model_set$values[val] # keep column name
             }
           }
         }
