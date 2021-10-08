@@ -58,7 +58,8 @@ Default: \code{c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35)}.}
 \description{
 It extends \code{fmri.stimulus} by allowing for two normalization approaches (building on AFNI dmUBLOCK):
   1) "evtmax_1": pre-convolution HRF max=1.0 normalization of each stimulus regardless of duration: identical to dmUBLOCK(1)
-  2) "durmax_1": pre-convolution HRF max=1.0 normalization for long events (15+ sec) -- height of HRF is modulated by duration of event: identical to dmUBLOCK(0)
+  2) "durmax_1": pre-convolution HRF max=1.0 normalization for long events (15+ sec) -- height of HRF is modulated by duration
+       of event: identical to dmUBLOCK(0)
 }
 \author{
 Michael Hallquist

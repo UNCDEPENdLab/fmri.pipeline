@@ -42,7 +42,7 @@ convolution. This is usually a good idea to remove collinearity between parametr
 regressors. The default is \code{TRUE}.}
 
 \item{hrf_parameters}{A named vector of HRF parameters passed to \code{fmri.stimulus} internally.
-          The parameters are a1, a2, b1, b2, cc. Equation is (x/d1)^a1 * exp(-(x - d1)/b1) - c * (x/d2)^a2 * exp(-(x - d2)/b2).7
+          The parameters are a1, a2, b1, b2, cc. Equation is (x/d1)^a1 * exp(-(x - d1)/b1) - c * (x/d2)^a2 * exp(-(x - d2)/b2).
           Defaults and descriptions are:
             a1 = 6. Controls the time delay to the peak of the positive response
             a2 = 12. Controls the time delay to the (negative) peak of the undershoot

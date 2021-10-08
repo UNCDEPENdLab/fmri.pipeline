@@ -11,7 +11,9 @@ bl1_get_cols(
   field_desc = NULL,
   select_cols = NULL,
   select_regex = NULL,
-  force_selection = TRUE
+  limit_cols = NULL,
+  force_selection = TRUE,
+  alpha_sort = TRUE
 )
 }
 \arguments{

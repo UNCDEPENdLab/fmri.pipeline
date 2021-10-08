@@ -18,3 +18,4 @@ Estimate a level 2 (subject) model using FSL FEAT with fixed effects integration
 \author{
 Michael Hallquist
 }
+\keyword{internal}

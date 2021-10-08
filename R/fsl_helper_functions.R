@@ -222,7 +222,7 @@ refresh_feat_status <- function(gpa, level = 1L, lg = NULL) {
       lg$warn("No $feat_fsf field in gpa$%s$fsl", setup_name)
     } else {
       lg$info("Found existing %s field. Refreshing status of L%d feat execution and outputs.", setup_name, level)
-      refresh <- gpa[[setup_name]]$fsl %>%
+      refresh <- orig %>%
         dplyr::select(feat_dir, feat_fsf) %>%
         purrr::pmap_dfr(get_feat_status, lg = lg)
 
