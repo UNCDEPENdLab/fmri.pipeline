@@ -86,6 +86,11 @@
 
 
 load("/proj/mnhallqlab/users/michael/split_df_rs.RData")
+
+# due to weird file naming issues in generation (per Alex), some splits are empty. Drop these up front.
+has_zero <- sapply(split_df_rs, nrow) == 0
+split_df_rs <- split_df_rs[!has_zero]
+
 library(doFuture)
 library(doRNG)
 library(foreach)
@@ -99,12 +104,14 @@ split_df_rs <- lapply(split_df_rs, function(xx) {
   xx
 })
 
+chunk_size <- 10
+
 #https://tdhock.github.io/blog/2019/future-batchtools/
 future::plan(
   future.batchtools::batchtools_slurm,
   template = "slurm-simple",
   resources = list(
-    walltime = 40*60*10, # 40 minutes (specified in seconds), 10 chunks
+    walltime = 40*60*chunk_size, # 40 minutes (specified in seconds), 10 chunks
     memory = 8000, # 8 GB
     ncpus = 4,
     chunks.as.arrayjobs = FALSE
@@ -116,8 +123,12 @@ future::plan(
 
 res <- foreach(
   df = iter(split_df_rs), .packages=c("brms", "tidybayes", "emmeans", "glue", "dplyr", "ggdist", "data.table"),
-  .options.future = list(chunk.size = 10)) %dorng% {
+  .options.future = list(chunk.size = chunk_size)) %dorng% {
 
+  metadata <- df %>%
+    slice(1) %>%
+    dplyr::select(.filename, Time, Freq, rhs)
+  
   br_model <- brm(
     rt_csv_sc.trend | se(std.error, sigma = FALSE) ~ 1 + Pow_fac * rew_om + (1 + Pow_fac + rew_om + Pow_fac:rew_om | Sensor),
     df,
@@ -186,6 +197,7 @@ res <- foreach(
   int_contrast_by_sensor <- hypothesis(br_model, "Pow_facHi:rew_omReward = 0", group = "Sensor", scope = "coef")$hypothesis
 
   return(list(
+    metadata = metadata,
     posterior_summaries = posterior_summaries,
     condition_means = as.data.frame(condition_means),
     by_reward_diffs = as.data.frame(by_reward_diffs),
