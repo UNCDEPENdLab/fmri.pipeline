@@ -50,7 +50,7 @@ runFSLCommand <- function(args, fsldir=NULL, stdout=NULL, stderr=NULL) {
   
   #Sys.setenv(LD_LIBRARY_PATH="/gpfs/group/mnh5174/default/sw/openblas/lib")
   Sys.setenv(FSLDIR=fsldir) #export to R environment
-  fslsetup=paste0("FSLDIR=", fsldir, "; PATH=${FSLDIR}/bin:${PATH}; . ${FSLDIR}/etc/fslconf/fsl.sh; LD_LIBRARY_PATH=/gpfs/group/mnh5174/default/sw/openblas/lib ${FSLDIR}/bin/")
+  fslsetup=paste0("FSLDIR=", fsldir, "; PATH=${FSLDIR}/bin:${PATH}; . ${FSLDIR}/etc/fslconf/fsl.sh; ${FSLDIR}/bin/")
   fslcmd=paste0(fslsetup, args)
   if (!is.null(stdout)) { fslcmd=paste(fslcmd, ">", stdout) }
   if (!is.null(stderr)) { fslcmd=paste(fslcmd, "2>", stderr) }
