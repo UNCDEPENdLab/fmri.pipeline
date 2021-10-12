@@ -372,8 +372,9 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
       tc_conv <- apply(normed_events, 1, sum) #sum individual HRF regressors for combined time course
     } else {
       if (convolve) {
-        #first remove any constant regressors (likely just from evtmax_1 at end of run)
-        #NB. This should only be applied to convolved regressors. For unconvolved, brief events are sometimes all zero because of rounding on the time grid
+        # First remove any constant regressors (likely just from evtmax_1 at end of run)
+        # NB. This should only be applied to convolved regressors. For unconvolved, brief events are sometimes all zero because 
+        # of rounding on the time grid
         varying_cols <- apply(normed_events, 2, function(x) { sd(x, na.rm=TRUE) > 1e-5 })
         #if (any(sapply(varying_cols, isFALSE))) { browser() }
         normed_events <- normed_events[, varying_cols]
