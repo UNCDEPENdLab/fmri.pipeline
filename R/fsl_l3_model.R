@@ -63,6 +63,7 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
     dplyr::select(id, session) %>%
     left_join(gpa$l3_models$models[[l3_model]]$model_data, by = c("id", "session"))
 
+  # handle model respecification based on available data (e.g., if some subjects failed to run)
   mobj <- respecify_l3_model(gpa$l3_models$models[[l3_model]], data=to_model)
 
   # generate FSL EV syntax for these regressors

@@ -55,7 +55,7 @@ specify_contrasts <- function(mobj = NULL) {
 
     # if we are working from a model specification in lm(), ask about factor means and pairwise comparisons
     if (is.null(mobj$lmfit)) {
-      lg$warn("No $lmfit object present in mobj within specify_contrasts.")
+      lg$debug("No $lmfit object present in mobj within specify_contrasts.")
     } else {
       term_labels <- attr(terms(mobj$lmfit), "term.labels") # names of regressors
       int_terms <- attr(terms(mobj$lmfit), "order") # interactions in model

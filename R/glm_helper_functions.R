@@ -1025,17 +1025,40 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL) {
 
 }
 
+
+#OLD version
 respecify_l3_model <- function(mobj, data) {
-  checkmate::assert_class(mobj, "hi_model_spec") # verify that we have an object of known structure
+  checkmate::assert_multi_class(mobj, c("l1_model_spec", "hi_model_spec")) # verify that we have an object of known structure
   checkmate::assert_data_frame(data)
   checkmate::assert_subset(c("id", "session"), names(data))
 
-  mobj <- mobj_fit_lm(mobj, data=data)
+  # use model formula from parent object
+  model_formula <- terms(mobj$lmfit)
+
+  mobj$lmfit <- lm(model_formula, data = data)
+  mobj$regressors <- colnames(mobj$model_matrix)
+  mobj$model_matrix <- model.matrix(mobj$lmfit)
+  mobj$metadata <- data %>% dplyr::select(id, session)
+  mobj$model_data <- data
 
   mobj <- get_contrasts_from_spec(mobj, mobj$lmfit)
 
   return(mobj)
 }
+
+
+# new version, but depends on mobj being specified under new approach
+# respecify_l3_model <- function(mobj, data) {
+#   checkmate::assert_class(mobj, "hi_model_spec") # verify that we have an object of known structure
+#   checkmate::assert_data_frame(data)
+#   checkmate::assert_subset(c("id", "session"), names(data))
+
+#   mobj <- mobj_fit_lm(mobj=mobj, data=data)
+
+#   mobj <- get_contrasts_from_spec(mobj, mobj$lmfit)
+
+#   return(mobj)
+# }
 
 #' Helper function to obtain the number of volumes in a 4D nifti file
 #' 
