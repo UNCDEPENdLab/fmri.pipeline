@@ -76,8 +76,16 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   lg$debug("In setup_l3_models, passing the following L1 models to L3:")
   lg$debug("L1 model: %s", l1_model_names)
 
-  # refresh l2 model status in $l2_model_setup
-  gpa <- refresh_feat_status(gpa, level = 2L, lg = lg)
+  # handle refresh of feat status for lower-level models
+  # For multi-run data, L2 inputs must be complete for entry into L3
+  # For single-run data, L1 inputs must be complete for entry into L3
+  if (isTRUE(gpa$multi_run)) {
+    # refresh l2 model status in $l2_model_setup
+    gpa <- refresh_feat_status(gpa, level = 2L, lg = lg)
+  } else {
+    # refresh l1 model status in $l1_model_setup
+    gpa <- refresh_feat_status(gpa, level = 1L, lg = lg)
+  }
 
   excluded_runs <- gpa$run_data %>%
     dplyr::select(id, session, run_number, exclude_run, exclude_subject) %>%
@@ -155,6 +163,11 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     dplyr::select(-l3_cope_number, -l3_cope_name)
 
   to_run <- get_feat_l3_inputs(gpa, l3_cope_input_df, lg)
+
+  if (length(to_run) == 0L) {
+    lg$warn("No feat l3 inputs returned from get_feat_l3_inputs. Is it possible no lower-level analyses are complete?")
+    return(gpa)
+  }
 
   all_l3_list <- foreach(
     model_info = iter(to_run), .inorder = FALSE,
@@ -341,7 +354,7 @@ get_feat_l3_inputs <- function(gpa, l3_cope_config, lg=NULL) {
       dplyr::filter(feat_complete == TRUE)
 
     feat_inputs <- feat_inputs %>%
-      dplyr::left_join(l3_cope_config, by = c("id", "session", "l1_model"))
+      dplyr::inner_join(l3_cope_config, by = c("id", "session", "l1_model"))
 
     feat_inputs <- feat_inputs %>%
       dplyr::mutate(cope_file = file.path(
