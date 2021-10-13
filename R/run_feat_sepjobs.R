@@ -223,6 +223,11 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "  echo $start_time > \"${status_file}\"",
       "  echo $end_time >> \"${status_file}\"",
       "}",
+      "function feat_killed() {",
+      "  kill_time=$( date )",
+      "  echo $kill_time > \"${odir}/.feat_fail\"",
+      "}",
+      "trap feat_killed SIGTERM",
       sep = "\n", file = outfile, append = TRUE
     )
     if (level == 3L) {
