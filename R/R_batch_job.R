@@ -148,7 +148,7 @@ R_batch_job <- R6::R6Class("batch_job",
             ", scheduler='", self$scheduler, "')"
           ),
           "} else {",
-          "  stop('Attempt to wait for child jobs failed due to non-existent or improper child_job_ids variable.')",
+          "  warning('Attempt to wait for child jobs failed due to non-existent or improper child_job_ids variable.')",
           "}"
         )
       }
