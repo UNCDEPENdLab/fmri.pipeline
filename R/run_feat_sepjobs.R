@@ -59,8 +59,8 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     runsperproc <- 2 # number of feat calls per processor
   } else if (level == 3) {
     if (!checkmate::test_class(gpa$l3_model_setup, "l3_setup")) {
-      lg$error("In run_feat_sepjobs, did not find an l3_setup object in gpa$l3_model_setup.")
-      lg$error("Make sure to run setup_l2_models before running run_feat_sepjobs")
+      lg$error("In run_feat_sepjobs, did not find an gpa$l3_model_setup object.")
+      lg$error("Make sure to run setup_l3_models before running run_feat_sepjobs")
       return(NULL)
     }
 

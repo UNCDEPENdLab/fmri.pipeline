@@ -98,7 +98,7 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
 
     # update wait time
     wait_total <- difftime(Sys.time(), wait_start, units = "sec")
-    
+
     # Debugging
     # cat("Wait so far: ", wait_total, "\n")
 
@@ -128,6 +128,9 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
       }
     } else if (all(status == "complete")) {
       job_complete <- TRUE # drop out of this loop
+      if (isFALSE(quiet)) {
+        cat("All jobs have finished.\n")
+      }
     } else {
       Sys.sleep(repolling_interval) # wait and repoll jobs
     }
