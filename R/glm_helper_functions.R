@@ -576,7 +576,7 @@ calculate_subject_exclusions <- function(gpa) {
 
   n_good_runs_df <- gpa$run_data %>%
     dplyr::group_by(id, session) %>%
-    dplyr::mutate(n_good_runs = sum(isFALSE(exclude_run))) %>% # sum of non-excluded runs
+    dplyr::summarise(n_good_runs = sum(exclude_run == FALSE)) %>% # sum of non-excluded runs
     dplyr::ungroup() %>%
     dplyr::select(id, session, n_good_runs)
 
