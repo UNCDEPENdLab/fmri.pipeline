@@ -231,11 +231,13 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
     }
 
     # need to build a model LM-style
-    cat("Summary of variables included in model:\n")
-    print(summary(data[, mobj$model_variables]))
+    if (length(mobj$model_variables) > 0L) {
+      cat("Summary of variables included in model:\n")
+      print(summary(data[, mobj$model_variables]))
+    }
 
     # fit linear model and populate model object
-    mobj <- mobj_fit_lm(mobj, model_formula, data, id_cols)
+    mobj <- mobj_fit_lm(mobj, model_formula, data, id_cols, lg=lg)
 
     # walk through contrast generation for this model
     mobj <- specify_contrasts(mobj)

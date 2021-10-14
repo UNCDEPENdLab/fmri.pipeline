@@ -927,7 +927,8 @@ mobj_refit_lm <- function(mobj, new_data) {
 #'   and can be used for merging the model against related datasets
 #' @return a model object containing the fitted model
 #' @keywords internal
-mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL) {
+mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NULL) {
+  if (is.null(lg)) { lg <- lgr::get_logger() }
   # verify that we have an object of known structure
   checkmate::assert_multi_class(mobj, c("l1_model_spec", "hi_model_spec"), null.ok=TRUE)
   if (is.null(mobj)) {
@@ -1022,6 +1023,8 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL) {
     # N.B. emmeans needs to calculate contrasts on the original design to see the factor structure
     # So, we also need to drop out columns from the emmeans linfct
   }
+
+  return(mobj)
 
 }
 
