@@ -46,8 +46,8 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   l1_model <- l3_df$l1_model[1L]
   l2_model <- l3_df$l2_model[1L]
   l3_model <- l3_df$l3_model[1L]
-  l1_cope_name <- l3_df$l1_cope_name[1L]
-  l2_cope_name <- l3_df$l2_cope_name[1L]
+  l1_cope_name <- l1_contrast <- l3_df$l1_cope_name[1L] #use the double assign for synonyms used in glue() output expression
+  l2_cope_name <- l2_contrast <- l3_df$l2_cope_name[1L]
 
   # tracking data frame for this model (column names should follow variable names)
   if (isTRUE(gpa$multi_run)) {
@@ -85,12 +85,12 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
     l3_model=l3_model, gpa = gpa, what = "l3"
   )
 
-  l3_feat_dir <- file.path(
+  l3_feat_fsf <- file.path(
     l3_outdir,
-    paste0("FEAT_L3-", make.names(l3_model), "_L1COPE-", make.names(l1_cope_name), ".gfeat")
+    glue::glue(gpa$output_locations$feat_l3_fsf) # evaluate glue expression
   )
 
-  l3_feat_fsf <- sub(".gfeat$", ".fsf", l3_feat_dir)
+  l3_feat_dir <- sub(".fsf$", ".gfeat", l3_feat_fsf)
 
   if (!dir.exists(l3_outdir)) {
     lg$debug("Creating L3 output directory: %s", l3_outdir)

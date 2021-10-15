@@ -34,6 +34,11 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
 
+  # create local synonyms for these in case they are used the glue() expression.
+  l1_cope_name <- l1_contrast
+  l2_cope_name <- l2_contrast
+  l3_cope_name <- l3_contrast
+
   # helper subfunction to select rows where all conditions in filter_list match
   subset_run_data <- function(run_data, filter_list) {
     res <- sapply(seq_along(filter_list), function(xx) {
