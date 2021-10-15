@@ -111,11 +111,12 @@ l3_model_names = "prompt", glm_software = NULL) {
       cpu_time = gpa$parallel$l2_setup_time,
       r_code = c(
         "gpa <- setup_l3_models(gpa)",
-        "jobs <- run_feat_sepjobs(gpa, level = 3L)"
+        "child_job_ids <- run_feat_sepjobs(gpa, level = 3L)"
       )
     )
 
     l3_batch$depends_on_parents <- ifelse(isTRUE(gpa$multi_run), "setup_run_l2", "run_l1")
+    l3_batch$wait_for_children <- TRUE # need to wait for l3 feat jobs to complete before moving to cleanup
   }
 
   # cleanup step: refresh l3 feat status and copy gpa back to main directory

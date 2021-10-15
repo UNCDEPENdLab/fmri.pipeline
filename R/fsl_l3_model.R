@@ -58,13 +58,8 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
 
   # we need to regenerate the l3 model for the inputs provided
   # l3_df should contain FEAT copes that have been vetted in setup_l3_models.R to exist and be complete
-  # merge input data against data used to fit the l3 model at the time of initial specification
-  to_model <- l3_df %>%
-    dplyr::select(id, session) %>%
-    left_join(gpa$l3_models$models[[l3_model]]$model_data, by = c("id", "session"))
-
   # handle model respecification based on available data (e.g., if some subjects failed to run)
-  mobj <- respecify_l3_model(gpa$l3_models$models[[l3_model]], data=to_model)
+  mobj <- respecify_l3_model(gpa$l3_models$models[[l3_model]], new_data=l3_df)
 
   # generate FSL EV syntax for these regressors
   ev_syntax <- generate_fsf_ev_syntax(inputs = l3_df$cope_file, dmat = mobj$model_matrix)
