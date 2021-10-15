@@ -216,20 +216,20 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     fsl = rbindlist(lapply(all_l3_list, "[[", "fsl"))
   )
 
+  class(all_subj_l3_combined) <- c("list", "l3_setup")
+
+  # append l3 setup to gpa
+  gpa$l3_model_setup <- all_subj_l3_combined
+
   # the expressions for l3 output locations should not generate any duplicate fsfs
   dupe_fsfs <- duplicated(gpa$l3_model_setup$fsl$feat_fsf)
-  if (any(dupe_fsfs, na.rm=TRUE)) {
+  if (any(dupe_fsfs, na.rm = TRUE)) {
     lg$warn("There are duplicate fsfs in gpa$l3_model_setup$fsl.")
     lg$warn("This suggests a problem with gpa$output_locations$feat_l3_fsf and gpa$output_locations$feat_l3_directory settings.")
     lg$warn("gpa$output_locations$feat_l3_fsf: %s", gpa$output_locations$feat_l3_fsf)
     lg$warn("gpa$output_locations$feat_l3_directory: %s", gpa$output_locations$feat_l3_directory)
     lg$debug("%s", capture.output(print(gpa$l3_model_setup$fsl[dupe_fsfs, ])))
   }
-
-  class(all_subj_l3_combined) <- c("list", "l3_setup")
-
-  # append l3 setup to gpa
-  gpa$l3_model_setup <- all_subj_l3_combined
 
   return(gpa)
 }
