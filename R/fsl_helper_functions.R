@@ -233,3 +233,149 @@ refresh_feat_status <- function(gpa, level = 1L, lg = NULL) {
 
   return(gpa)
 }
+
+#' internal helper function to look up core stats outputs from a .feat folder
+#' @param feat_dir a .feat folder containing the outputs of an FSL analysis
+#' @return a list containing sorted vectors of each stat output
+#' @keywords internal
+#' @importFrom glue glue
+#' @importFrom checkmate assert_directory_exists assert_file_exists
+get_feat_dir_files <- function(feat_dir) {
+  checkmate::assert_directory_exists(feat_dir)
+  stats_dir <- file.path(feat_dir, "stats")
+  checkmate::assert_directory_exists(stats_dir)
+
+  # inside the stats directory we will have pes, copes, varcopes, and zstats
+  z_files <- list.files(path = stats_dir, pattern = "zstat[0-9]+\\.nii.*", full.names = TRUE)
+  z_nums <- as.numeric(sub(".*zstat(\\d+)\\.nii.*$", "\\1", z_files, perl = TRUE))
+  z_files <- z_files[order(z_nums)] # need to sort stat files numerically for labeling to work appropriately
+
+  t_files <- file.path(dirname(z_files), sub("zstat", "tstat", basename(z_files), fixed = TRUE))
+  cope_files <- file.path(dirname(z_files), sub("zstat", "cope", basename(z_files), fixed = TRUE))
+  varcope_files <- file.path(dirname(z_files), sub("zstat", "varcope", basename(z_files), fixed = TRUE))
+  checkmate::assert_file_exists(t_files)
+  checkmate::assert_file_exists(cope_files)
+  checkmate::assert_file_exists(varcope_files)
+
+  #thresh files live in parent folder
+  z_thresh_files <- file.path(feat_dir, sub("zstat", "thresh_zstat", basename(z_files), fixed = TRUE))
+  rendered_z_thresh_files <- file.path(feat_dir, sub("zstat", "rendered_thresh_zstat", basename(z_files), fixed = TRUE))
+
+  # parameter estimate (PE) images
+  pe_files <- list.files(path = stats_dir, pattern = "^pe[0-9]+\\.nii.*", full.names = TRUE)
+  pe_nums <- as.numeric(sub(".*pe(\\d+)\\.nii.*$", "\\1", pe_files, perl=TRUE))
+  pe_files <- pe_files[order(pe_nums)]
+
+  aux_files <- sapply(c("sigmasquareds", "threshac1", "res4d"), function(x) {
+    ff <- list.files(path = stats_dir, pattern = glue("^{x}\\.nii.*"), full.names = TRUE)
+    if (length(ff) > 0L) return(ff) else return(character(0))
+  })
+
+  design_files <- sapply(
+    c(
+      "design.con", "design_cov.png", "design_cov.ppm", "design.frf",
+      "design.fsf", "design.mat", "design.min", "design.png", "design.ppm",
+      "design.grp", "design.lcon", "design.lev"
+    ), function(x) {
+      ff <- file.path(feat_dir, x)
+      if (file.exists(ff)) return(ff) else return(character(0))
+    }
+  )
+
+  return(named_list(
+    pe_files, cope_files, varcope_files, z_files, z_thresh_files,
+    rendered_z_thresh_files, t_files, aux_files, design_files
+  ))
+
+}
+
+gfeat_stats_to_brik <- function(gfeat_dir) {
+  checkmate::assert_directory_exists(gfeat_dir)
+  gfeat_dir <- normalizePath(gfeat_dir) # convert to absolute path
+
+  cope_dirs <- copedirs <- grep("/cope[0-9]+\\.feat",
+    list.dirs(path = gfeatdir, full.names = TRUE, recursive = FALSE),
+    value = TRUE, perl = TRUE
+  )
+
+  # sort copes in numeric order to match ascending expectation
+  cope_nums <- as.numeric(sub(".*/cope(\\d+).feat", "\\1", cope_dirs, perl = TRUE))
+  cope_dirs <- copedirs[order(cope_nums)]
+
+  for (d in seq_along(cope_dirs)) {
+    ## run the L1 -> AFNI conversion for each separate cope
+    cat("Processing: ", cope_dirs[d], "\n\n")
+
+    l1_img <- feat_stats_to_brik(cope_dirs[d], what = c("cope_files", "z_files"))
+    # if .feat folders are used as the input to a .gfeat analysis, then the lower level
+    # contrast name will be placed in design.lev
+    if (isTRUE(file.exists(l1_img$feat_info$design_file["design.lev"]))) {
+      lower_name <- readLines(l1_img$feat_info$design_file["design.lev"])
+      if (nchar(lower_name) == 0L) lower_name <- NULL
+    }
+    #l2_name <- 
+  }
+}
+
+feat_stats_to_brik <- function(feat_dir, out_filename="feat_stats", what=c("cope_files", "z_files", "varcope_files")) {
+  checkmate::assert_directory_exists(feat_dir)
+  feat_dir <- normalizePath(feat_dir) # convert to absolute path
+
+  feat_info <- get_feat_dir_files(feat_dir)
+  checkmate::assert_subset(what, names(feat_info))
+
+  # interleave images
+  to_stitch <- feat_info[what]
+  lens <- sapply(to_stitch, length)
+  if (length(unique(lens)) != 1L) {
+    print(to_stitch)
+    stop("unable to sort out how to interleave feat statistics")
+  }
+
+  # fancy shortcut for interleaving: https://coolbutuseless.github.io/2019/01/29/interleaving-vectors-and-matrices-part-1/
+  stat_order <- do.call(rbind, to_stitch)
+  attributes(stat_order) <- NULL
+  names(stat_order) <- sub(".*/(.*)\\.nii(\\.gz)*$", "\\1", stat_order, perl=TRUE)
+  z_briks <- which(grepl("zstat", names(stat_order))) - 1 # subtract 1 because AFNI uses 0-based indexing
+
+  # get contrast names
+  con_names <- feat_get_contrast_names(feat_info)
+  stat_numbers <- as.numeric(sub(".*(\\d+)$", "\\1", names(stat_order), perl = TRUE))
+  stat_names <- names(stat_order)
+  brik_names <- sapply(seq_along(stat_numbers), function(x) {
+    # these four correspond to contrasts and should get labeled
+    if (grepl("(zstat|tstat|cope|varcope)", stat_names[x])) {
+      return(paste(con_names[stat_numbers[x]], stat_names[x], sep = "_"))
+    } else {
+      return(stat_names[x]) # don't label with contrast
+    }
+  })
+
+  # concatenate stat images
+  tcatcall <- paste("3dTcat -overwrite -prefix", out_filename, paste(stat_order, collapse = " "))
+  runAFNICommand(tcatcall)
+
+  # label images
+  refitcall <- paste0(
+    "3drefit -fbuc ", paste("-substatpar", z_briks, "fizt", collapse = " "),
+    " -relabel_all_str '", paste(brik_names, collapse=" "), "' ", out_filename, "+tlrc"
+  )
+  runAFNICommand(refitcall)
+
+  afni_out <- file.path(feat_dir, paste0(out_filename, "+tlrc"))
+  return(list(afni_img = afni_out, feat_info = feat_info, brik_names = brik_names, con_names = con_names))
+}
+
+feat_get_contrast_names <- function(feat_info) {
+  checkmate::assert_list(feat_info)
+  con_file <- feat_info$design_files["design.con"]
+  if (file.exists(con_file)) {
+    # design.con contains names of contrasts
+    dcon <- readLines(con_file)
+    con_names <- sub("/ContrastName\\d+\\s+([\\w_.]+).*", "\\1", grep("/ContrastName", dcon, value = TRUE), perl = TRUE)
+    con_names <- gsub("\\s", "_", con_names, perl = TRUE) # replace spaces with underscores to make labels accurate in AFNI
+  } else {
+    con_names <- NULL
+  }
+  return(con_names)
+}
