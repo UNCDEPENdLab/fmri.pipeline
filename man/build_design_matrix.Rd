@@ -216,24 +216,31 @@ Most commonly, a fixed value is useful for modeling a 'taskness' regressor, whic
 at a given moment in time. In conventional task-reated fMRI, this task indicator representation is then convolved with the HRF to model expected BOLD
 activity due to the occurrence of an event. Alternatively, \code{value} can be a data.frame containing \code{$run_number}, \code{$trial}, and \code{$value}
 columns that specify the height of the regressor at each trial. This specification is more useful for a parametric regressor, as in model-based fMRI.
+
+Optionally, one or more within-subject factor columns can be included in the value data.frame and noted in the 
+\code{wi_factors} element of the signal. In this case, regressors for each level of the wi_factors will be generated as
+separate regressors.
+
 Here is an example:
 
 \preformatted{
   signals <- list(
-    pe=list(event="outcome", normalization="none", convmax_1=TRUE,
+    pe=list(event="outcome", normalization="none", convmax_1=TRUE, wi_factors="trustee",
     value=data.frame(
       run_number=rep(1,5),
       trial=1:5,
-      value=c(0, 10.2, -11.1, 6, 2.4, 1.5)
+      value=c(10.2, -11.1, 6, 2.4, 1.5),
+      trustee=c("Good", "Good", "Bad", "Bad", "Neutral")
     )
   )
 }
 
-Here, the parametrically varying prediction error signal will be aligned at the "outcome" event, have a duration copied from the
-\code{$duration} column of \code{events}, and will have parametrically varying heights (e.g., 10.2 at trial 2) prior to convolution.
-Note that the value \code{data.frame} need not have an entry for every trial in the run. For example, if a given signal is only relevant
-or only occurs for some "outcome" events, the trial column might be something like \code{c(2, 6, 10)}, indicating that the parametric
-modulator is only modeled at those trials. This is achieved by joining \code{events} with the relevant signal using \code{trial} as a key.
+Here, the parametrically varying prediction error signal will be aligned at the "outcome" event, have a duration copied 
+from the \code{$duration} column of \code{events}, and will have parametrically varying heights (e.g., 10.2 at trial 1)
+prior to convolution. Note that the value \code{data.frame} need not have an entry for every trial in the run. For example,
+if a given signal is only relevant or only occurs for some "outcome" events, the trial column might be something like
+\code{c(2, 6, 10)}, indicating that the parametric modulator is only modeled at those trials. This is achieved by joining
+\code{events} with the relevant signal using \code{trial} as a key.
 
 The \code{$normalization} element handles the normalization of the HRF for each regressor. This can be:
 \enumerate{

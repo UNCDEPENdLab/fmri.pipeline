@@ -4,7 +4,7 @@
 \alias{mobj_fit_lm}
 \title{internal helper function to setup a linear model for a given l1, l2, or l3 model}
 \usage{
-mobj_fit_lm(mobj = NULL, model_formula = NULL, data, id_cols = NULL)
+mobj_fit_lm(mobj = NULL, model_formula = NULL, data, id_cols = NULL, lg = NULL)
 }
 \arguments{
 \item{mobj}{a model object to be populated or modified}
