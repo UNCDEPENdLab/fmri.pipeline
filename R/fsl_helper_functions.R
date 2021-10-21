@@ -382,16 +382,39 @@ gfeat_stats_to_brik <- function(gfeat_dir, cope_names = NULL, level=NULL) {
 #' @param gpa a glm_pipeline_arguments object having a populated l3_model_setup field. The L3 analyses should also
 #'   be complete (i.e., after run_glm_pipeline).
 #' @param feat_l3_combined_filename a glue expression for the path and filename prefix
-#' @param feat_l3_combiend_briknames a glue expression for naming the subbriks in the AFNI output
+#' @param feat_l3_combined_briknames a glue expression for naming the subbriks in the AFNI output
+#' @param template_brain an optional filename for the MNI template that should be used as an underlay in AFNI. This
+#'   image will be symbolically linked into each directory created by \code{combine_feat_l3_to_afni}.
+#' @details To specify the folder and filename structure for the combined feat analyses, use a \code{glue} expression
+#'   that indicates how outputs should be structured. In particular, variables in gpa$l3_model_setup$fsl can be used for
+#'   dynamically naming of afni outputs.
+#'   
+#' \describe{
+#'   \item{l1_model}{the name of the level 1 model}
+#'   \item{l2_model}{the name of the level 2 model}
+#'   \item{l3_model}{the name of the level 3 model}
+#'   \item{l1_cope_name}{the level 1 contrast name}
+#'   \item{l2_cope_name}{the level 2 contrast name}
+#'   \item{l3_cope_name}{the level 3 contrast name}
+#' }
+#' 
+#' @examples
+#' \dontrun{
+#'   feat_l3_combined_filename <- "{gpa$output_directory}/afni_combined/L1m-{l1_model}/l1c-{l1_cope_name}/L3m-{l3_model}_stats"
+#'   feat_l3_combined_briknames = "l2c-{l2_cope_name}_l3c-{l3_cope_name}"
+#'   template_brain <- "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_brain.nii"
+#'  combine_feat_l3_to_afni(gpa, feat_l3_combined_filename, feat_l3_combined_briknames, template_brain)
+#' }
+#'
 #' @export 
 #' @importFrom tidyr unnest pivot_longer
 #' @importFrom glue glue_data
-combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3_combined_briknames=NULL) {
+combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3_combined_briknames=NULL, template_brain=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
-
-  #odir <- gpa$output_locations$feat_l3_combined_directory
-  #if (is.null(odir)) return(NULL)
-  #if (!dir.exists(odir)) dir.create(odir)
+  if (!is.null(template_brain)) {
+    checkmate::assert_file_exists(template_brain)
+    template_ext <- sub(".*(\\.nii(\\.gz)*)", "\\1", template_brain, perl=TRUE)
+  }
 
   if (is.null(feat_l3_combined_filename)) {
     feat_l3_combined_filename <- gpa$output_locations$feat_l3_combined_filename
@@ -401,35 +424,20 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
     feat_l3_combined_briknames <- gpa$output_locations$feat_l3_combined_briknames
   }
 
+  checkmate::assert_string(feat_l3_combined_filename)
+  checkmate::assert_string(feat_l3_combined_briknames)
+
   # run the gfeat -> afni conversion for each cope*.feat directory in the corresponding l3 .gfeat folder
   # l3_stats <- lapply(gpa$l3_model_setup$fsl$feat_dir, gfeat_stats_to_brik, level = 3)
-  l3_stats <- lapply(file.path(gpa$l3_model_setup$fsl$feat_dir, "cope1.feat"), get_feat_dir_files)
 
-  # Note: in the current implementation of l3 analysis, the cope1.feat folder in the l3 .gfeat folder always corresponds 
-  # to the single lower-level cope that was fed forward for group analysis. This relates to the 'Inputs are lower-level 
+  # Get a list of information about each cope1.feat directory in the .gfeat folder.
+  # Note: in the current implementation of l3 analysis, the cope1.feat folder in the l3 .gfeat folder always corresponds
+  # to the single lower-level cope that was fed forward for group analysis. This relates to the 'Inputs are lower-level
   # FEAT directories' (many .feat folders in .gfeat) versus 'Inputs are 3D cope images from FEAT directores' (one .feat folder).
+  l3_stats <- lapply(file.path(gpa$l3_model_setup$fsl$feat_dir, "cope1.feat"), get_feat_dir_files)
 
   if (isTRUE(gpa$multi_run)) {
     meta_df <- gpa$l3_model_setup$fsl %>% dplyr::select(l1_model, l1_cope_name, l2_model, l2_cope_name, l3_model, feat_dir)
-    # expand_df <- lapply(seq_len(nrow(meta_df)), function(rr) {
-    #   if (is.null(l3_stats[[rr]]$lower_img_list$cope1.feat$afni_img)) {
-    #     # lower-level cope directory is incomplete or failed. return all nas in this case
-    #     afni_df <- data.frame(
-    #       feat_dir = l3_stats[[rr]]$gfeat_dir, afni_stats = NA_character_,
-    #       l3_cope_number = NA_integer_, l3_cope_name = NA_character_
-    #     )
-    #   } else {
-    #     contrast_names <- l3_stats[[rr]]$lower_img_list$cope1.feat$contrast_names
-
-    #     afni_df <- data.frame(
-    #       feat_dir = l3_stats[[rr]]$gfeat_dir, afni_stats = l3_stats[[rr]]$lower_img_list$cope1.feat$afni_img,
-    #       l3_cope_number = seq_along(contrast_names), l3_cope_name = contrast_names
-    #     )
-    #   }
-
-    #   # l3_stats[[rr]]$ lower_img_list$cope1.feat$feat_info
-    #   meta_df[rr, , drop = FALSE] %>% left_join(afni_df, by = "feat_dir")
-    # }) %>% rbindlist()
   } else {
     meta_df <- gpa$l3_model_setup$fsl %>% dplyr::select(l1_model, l1_cope_name, l3_model, feat_dir)
   }
@@ -439,6 +447,7 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
   meta_df <- meta_df %>% unnest(cope_df, keep_empty = FALSE) %>% # expand so that multiple rows of copes in cope_df are added
     dplyr::rename(l3_cope_name=contrast_name, l3_cope_number=cope_number)
 
+  # use glue_data to evaluate the glue file and brik expressions for every row of the data.frame
   meta_df <- meta_df %>%
     mutate(afni_out=glue_data(., !!feat_l3_combined_filename), afni_briks=glue_data(., !!feat_l3_combined_briknames))
 
@@ -448,7 +457,10 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
     ss <- ss %>% pivot_longer(cols = c(cope, z), names_to = "image_type", values_to = "nii_file") # varcope, [leave out for now]
     afni_out <- sub("(\\+tlrc)*$", "+tlrc", ss$afni_out[1]) # force +tlrc extension
     afni_dir <- dirname(afni_out)
-    if (!dir.exists(afni_dir)) dir.create(afni_dir, recursive = TRUE)
+    if (!dir.exists(afni_dir)) {
+      dir.create(afni_dir, recursive = TRUE)
+      if (!is.null(template_brain)) file.symlink(template_brain, file.path(afni_dir, paste0("template_brain", template_ext)))
+    }
     tcatcall <- paste("3dTcat -overwrite -prefix", afni_out, paste(ss$nii_file, collapse = " "))
     runAFNICommand(tcatcall)
 

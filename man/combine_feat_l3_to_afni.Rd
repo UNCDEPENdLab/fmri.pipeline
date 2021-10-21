@@ -7,7 +7,8 @@
 combine_feat_l3_to_afni(
   gpa,
   feat_l3_combined_filename = NULL,
-  feat_l3_combined_briknames = NULL
+  feat_l3_combined_briknames = NULL,
+  template_brain = NULL
 )
 }
 \arguments{
@@ -16,8 +17,34 @@ be complete (i.e., after run_glm_pipeline).}
 
 \item{feat_l3_combined_filename}{a glue expression for the path and filename prefix}
 
-\item{feat_l3_combiend_briknames}{a glue expression for naming the subbriks in the AFNI output}
+\item{feat_l3_combined_briknames}{a glue expression for naming the subbriks in the AFNI output}
+
+\item{template_brain}{an optional filename for the MNI template that should be used as an underlay in AFNI. This
+image will be symbolically linked into each directory created by \code{combine_feat_l3_to_afni}.}
 }
 \description{
 Function to combine Feat L3 analyses into AFNI BRIK+HEAD files according to user-specified combinations
+}
+\details{
+To specify the folder and filename structure for the combined feat analyses, use a \code{glue} expression
+  that indicates how outputs should be structured. In particular, variables in gpa$l3_model_setup$fsl can be used for
+  dynamically naming of afni outputs.
+  
+\describe{
+  \item{l1_model}{the name of the level 1 model}
+  \item{l2_model}{the name of the level 2 model}
+  \item{l3_model}{the name of the level 3 model}
+  \item{l1_cope_name}{the level 1 contrast name}
+  \item{l2_cope_name}{the level 2 contrast name}
+  \item{l3_cope_name}{the level 3 contrast name}
+}
+}
+\examples{
+\dontrun{
+  feat_l3_combined_filename <- "{gpa$output_directory}/afni_combined/L1m-{l1_model}/l1c-{l1_cope_name}/L3m-{l3_model}_stats"
+  feat_l3_combined_briknames = "l2c-{l2_cope_name}_l3c-{l3_cope_name}"
+  template_brain <- "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_brain.nii"
+ combine_feat_l3_to_afni(gpa, feat_l3_combined_filename, feat_l3_combined_briknames, template_brain)
+}
+
 }
