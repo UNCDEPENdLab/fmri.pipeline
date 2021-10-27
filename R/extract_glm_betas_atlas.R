@@ -202,22 +202,34 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   }
 
   if (level == 1L) {
-    cope_wise <- to_extract %>%
+    stat_results <- to_extract %>%
       left_join(get_l1_cope_df(gpa, extract), by = c("id", "session", "l1_model"))
+
+    for (ww in what) {
+      # calculate the expected image location for this contrast and subject based on row values in stat_results data.frame
+      stat_results <- stat_results %>%
+        mutate("{ww}" := glue_data(., "{feat_dir}/stats/{ww}{l1_cope_number}.nii.gz"))
+    }
   } else if (level == 2L) {
-    cope_wise <- to_extract %>%
+    stat_results <- to_extract %>%
       left_join(get_l2_cope_df(gpa, extract), by = c("id", "session", "l2_model")) %>%
       left_join(get_l1_cope_df(gpa, extract), by = c("id", "session", "l1_model"))
+    
+    for (ww in what) {
+      # calculate the expected image location for this contrast and subject based on row values in stat_results data.frame
+      stat_results <- stat_results %>%
+        mutate("{ww}" := glue_data(., "{feat_dir}/cope{l1_cope_number}.feat/stats/{ww}{l2_cope_number}.nii.gz"))
+    }
   } else if (level == 3L) {
     browser()
-    cope_wise <- to_extract %>%
+    stat_results <- to_extract %>%
       left_join(get_l3_cope_df(gpa, extract), by = c("id", "session", "l3_model")) %>%
       left_join(get_l2_cope_df(gpa, extract), by = c("id", "session", "l2_model")) %>%
       left_join(get_l1_cope_df(gpa, extract), by = c("id", "session", "l1_model"))
   }
 
-  cope_wise <- cope_wise %>%
-    dplyr::select(id, session, feat_dir, matches("l[1-3]_model"), matches("l[1-3]_cope_number"), matches("l[1-3]_cope_name"))
+  stat_results <- stat_results %>%
+    dplyr::select(id, session, feat_dir, matches("l[1-3]_model"), matches("l[1-3]_cope_number"), matches("l[1-3]_cope_name"), all_of(what))
 
   mask_img <- oro.nifti::readNIfTI(mask_file, reorient = FALSE)
   if (mask_img@dim_[1L] == 4) {
@@ -241,14 +253,6 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     select(vnum, mask_value, everything())
 
   # extract each statistic requested
-  stat_results <- cope_wise
-
-  for (ww in what) {
-    # calculate the expected image location for this contrast and subject based on row values in cope_wise data.frame
-    stat_results <- stat_results %>%
-      mutate("{ww}" := glue_data(., "{feat_dir}/cope{l1_cope_number}.feat/stats/{ww}{l2_cope_number}.nii.gz"))
-  }
-
   stat_results <- stat_results %>%
     pivot_longer(cols = all_of(what), names_to = "statistic", values_to = "img") %>%
     mutate(img_exists = file.exists(img))
