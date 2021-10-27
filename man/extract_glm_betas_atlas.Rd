@@ -5,24 +5,43 @@
 \title{Function to extract subject-level coefficients from an FSL group analysis}
 \usage{
 extract_glm_betas_atlas(
-  config_file,
-  atlas_files,
-  run_model_index = 1,
-  extract_z = FALSE,
-  extract_beta_series = FALSE,
-  ncpus = 1,
+  gpa,
+  mask_files,
+  what = c("cope", "varcope", "zstat"),
+  out_dir = getwd(),
+  extract_l1 = "all",
+  extract_l2 = "all",
+  extract_l3 = "all",
+  ncores = NULL,
   aggregate = TRUE,
   aggFUN = mean
 )
 }
 \arguments{
-\item{atlas_files}{vector of filenames for NIfTI-based atlases. The function will loop over each and extract coefficients}
+\item{gpa}{a \code{glm_pipeline_arguments} object for which results of GLM analyses are already available}
 
-\item{extract_z}{extract lower-level z-statistics if TRUE, or copes (betas) if FALSE}
+\item{mask_files}{vector of filenames for NIfTI-based atlases. The function will loop over each and extract coefficients from
+each unique value in each mask.}
 
-\item{extract_beta_series}{whether to extract coefficients from parallel beta series analyses that have already been run (very slow)}
+\item{what}{which statistics to extract from each parcel. Default is cope (aka 'beta'), varcope, and zstat.}
 
-\item{aggregate}{whether to take the average (or other central tendency measure) of voxels within a given mask value}
+\item{out_dir}{the directory to which statistics are written as .csv.gz files.}
+
+\item{extract_l1}{a character vector of l1 models from which to extract run-level (level 1) statistics. If "none",
+l1 statistic extraction will be skipped. If "all", then all l1 models will be extracted.}
+
+\item{extract_l2}{a character vector of l2 models from which to extract subject-level (level 2) statistics. If "none",
+l2 statistic extraction will be skipped. If "all", then all l2 models will be extracted (you will still be prompted
+for which l1 models you want to extract from each l2 model).}
+
+\item{extract_l3}{a character vector of l3 models from which to extract group-level (level 3) statistics. If "none",
+l3 statistic extraction will be skipped. If "all", then all l3 models will be extracted (you will still be prompted
+for which l1 and l2 models you want to extract from each l3 model).#'}
+
+\item{aggregate}{whether to take the average (or other central tendency measure) of voxels within a given mask value. This
+only pertains to integer-valued masks, not continuous ones.}
+
+\item{aggFUN}{the function used to aggregate statistics for voxels within a given mask value. Default is mean.}
 }
 \description{
 Function to extract subject-level coefficients from an FSL group analysis
