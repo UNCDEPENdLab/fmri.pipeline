@@ -179,40 +179,13 @@ choose_glm_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, l3_
     }
   }
 
-  choose_models <- function(gpa, model_names, level) {
-    checkmate::assert_integerish(level, min=1, max=3)
-    all_m_names <- names(gpa[[paste0("l", level, "_models")]]$models)
-    checkmate::assert_subset(model_names, c("prompt", "all", "none", all_m_names))
-
-    if (is.null(model_names)) {
-      chosen_models <- NULL # happens when user de-selects all models at one level
-    } else if (model_names[1L] == "all") {
-      chosen_models <- all_m_names
-    } else if (model_names[1L] == "none") {
-      chosen_models <- NULL
-    } else if (model_names[1L] == "prompt") {
-      cat("\n")
-      chosen_models <- select.list(all_m_names,
-        multiple = TRUE,
-        title = paste("Choose all level", level, "models to include in this pipeline run: ")
-      )
-      if (identical(chosen_models, character(0))) {
-        lg$info(paste("No level", level, "models were selected."))
-        chosen_models <- NULL
-      }
-    } else {
-      chosen_models <- model_names # user-specified set
-    }
-    return(chosen_models)
-  }
-
   m_string <- function(str) { if (is.null(str)) "none" else str }
 
   models_specified <- FALSE
   while (isFALSE(models_specified)) {
-    l1_model_names <- choose_models(gpa, l1_model_names, level = 1)
-    if (isTRUE(gpa$multi_run)) l2_model_names <- choose_models(gpa, l2_model_names, level = 2)
-    l3_model_names <- choose_models(gpa, l3_model_names, level = 3)
+    l1_model_names <- choose_glm_models(gpa, l1_model_names, level = 1)
+    if (isTRUE(gpa$multi_run)) l2_model_names <- choose_glm_models(gpa, l2_model_names, level = 2)
+    l3_model_names <- choose_glm_models(gpa, l3_model_names, level = 3)
 
     cat("\nGLM models to run:\n------------------\n\n")
     cat("Level 1: ", paste(m_string(l1_model_names), collapse = ", "), "\n")

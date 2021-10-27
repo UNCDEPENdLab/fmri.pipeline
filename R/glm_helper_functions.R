@@ -619,7 +619,7 @@ slurm_job_array <- function(job_name = "slurm_array") {
 #' helper function to convert the $sched_args field to a vector
 #'  of directives that can be included dynamically in the header of
 #'  PBS or SBATCH scripts.
-#' 
+#'
 #' @param gpa a \code{glm_pipeline_arguments} object containing the
 #'   $parallel$sched_args field
 #'
@@ -1233,3 +1233,73 @@ named_list <- function(...) {
 #   vnames <- as.character(match.call())[-1]
 #   return(setNames(data.frame(...), vnames))
 # }
+
+
+enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_integerish(level, lower=1L, upper=3L)
+  checkmate::assert_class(lg, "Logger")
+
+  obj_name <- glue("l{level}_model_setup")
+  expect_class <- glue("l{level}_setup")
+  obj <- gpa[[obj_name]]
+
+  if (is.null(obj) || !inherits(obj, expect_class)) {
+    msg <- sprintf("No l%d_model_setup found in the glm pipeline object.", level)
+    lg$error(msg)
+    stop(msg)
+  } else {
+    if ("fsl" %in% gpa$glm_software) {
+      nmiss <- sum(obj$fsl$feat_complete == FALSE)
+      nruns <- nrow(obj$fsl)
+      if (nmiss == nruns) {
+        msg <- sprintf("All feat runs in %s$fsl are incomplete.", obj_name)
+        lg$error(msg)
+        stop(msg)
+      } else if (nmiss > 0) {
+        lg$warn(
+          "There are %d missing runs in %s$fsl. Using complete %d runs.",
+          nmiss, obj_name, nruns - nmiss
+        )
+      }
+    }
+  }
+
+  return(invisible(NULL))
+}
+
+
+#' helper function to ask user to choose models at a given level for further processing
+#' @param gpa a \code{glm_pipeline_arguments} with models specified at a given level
+#' @param model_names a user-specified string of models to process/use
+#' @param level the level of GLM analysis to be specified (1, 2, or 3)
+#' @return a character vector of user-specified model names at this level
+#' @keywords internal
+choose_glm_models <- function(gpa, model_names, level, lg=NULL) {
+  checkmate::assert_integerish(level, min = 1, max = 3)
+  all_m_names <- names(gpa[[paste0("l", level, "_models")]]$models)
+  checkmate::assert_subset(model_names, c("prompt", "all", "none", all_m_names))
+  if (is.null(lg)) lg <- lgr::get_logger("")
+  checkmate::assert_class(lg, "Logger")
+
+  if (is.null(model_names)) {
+    chosen_models <- NULL # happens when user de-selects all models at one level
+  } else if (model_names[1L] == "all") {
+    chosen_models <- all_m_names
+  } else if (model_names[1L] == "none") {
+    chosen_models <- NULL
+  } else if (model_names[1L] == "prompt") {
+    cat("\n")
+    chosen_models <- select.list(all_m_names,
+      multiple = TRUE,
+      title = paste("Choose all level", level, "models to include: ")
+    )
+    if (identical(chosen_models, character(0))) {
+      lg$info(paste("No level", level, "models were selected."))
+      chosen_models <- NULL
+    }
+  } else {
+    chosen_models <- model_names # user-specified set
+  }
+  return(chosen_models)
+}

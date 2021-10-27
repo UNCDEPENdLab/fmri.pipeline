@@ -99,27 +99,14 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     )
   }
 
-  if (is.null(gpa$l1_model_setup) || !inherits(gpa$l1_model_setup, "l1_setup")) {
-    lg$error("No l1_model_setup found in the glm pipeline object.")
-    lg$error("You must run setup_l1_models before running setup_l3_models.")
-    stop(
-      "No l1_model_setup found in the glm pipeline object.",
-      "You must run setup_l1_models before running setup_l3_models."
-    )
-  }
+  # make sure l1 models have already been generated
+  enforce_l1_complete(gpa, level = 1L, lg)
 
   if (isTRUE(gpa$multi_run)) {
     lg$info("In setup_l3_models, using a multi-run 3-level setup with runs (l1), subjects (l2), sample (l3)")
 
     # in multi-run setup, an l2_model_setup must be present
-    if (is.null(gpa$l2_model_setup) || !inherits(gpa$l2_model_setup, "l2_setup")) {
-      lg$error("No l2_model_setup found in the glm pipeline object.")
-      lg$error("You must run setup_l2_models before running setup_l3_models.")
-      stop(
-        "No l2_model_setup found in the glm pipeline object.",
-        "You must run setup_l2_models before running setup_l3_models."
-      )
-    }
+    enforce_l2_complete(gpa, level = 2L, lg)
 
   } else {
     lg$info("In setup_l3_models, using a single run 2-level setup with subjects (l1), sample (l3)")
@@ -237,7 +224,12 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
 
 ############
 # helper function to get a cope data.frame for all level 1 models
-get_l1_cope_df <- function(gpa, model_set, subj_df) {
+get_l1_cope_df <- function(gpa, model_set, subj_df=NULL) {
+  if (is.null(subj_df)) {
+    subj_df <- gpa$subject_data %>%
+      dplyr::filter(exclude_subject == FALSE) %>%
+      dplyr::select(id, session)
+  }
   checkmate::assert_data_frame(model_set)
   dt <- data.table::rbindlist(
     lapply(unique(model_set$l1_model), function(mm) {
@@ -256,8 +248,14 @@ get_l1_cope_df <- function(gpa, model_set, subj_df) {
 
 # helper function to get a cope data.frame for all level 3 models
 # handles the per-subject cope numbering problem
-get_l2_cope_df <- function(gpa, model_set, subj_df) {
+get_l2_cope_df <- function(gpa, model_set, subj_df=NULL) {
+  if (is.null(subj_df)) {
+    subj_df <- gpa$subject_data %>%
+      dplyr::filter(exclude_subject == FALSE) %>%
+      dplyr::select(id, session)
+  }
   checkmate::assert_data_frame(model_set)
+
   data.table::rbindlist(
     lapply(unique(model_set$l2_model), function(mm) {
       if (!is.null(gpa$l2_models$models[[mm]]$by_subject)) {
@@ -279,7 +277,12 @@ get_l2_cope_df <- function(gpa, model_set, subj_df) {
 }
 
 # helper function to get a cope data.frame for all level 3 models
-get_l3_cope_df <- function(gpa, model_set, subj_df) {
+get_l3_cope_df <- function(gpa, model_set, subj_df=NULL) {
+  if (is.null(subj_df)) {
+    subj_df <- gpa$subject_data %>%
+      dplyr::filter(exclude_subject == FALSE) %>%
+      dplyr::select(id, session)
+  }
   checkmate::assert_data_frame(model_set)
   dt <- data.table::rbindlist(
     lapply(unique(model_set$l3_model), function(mm) {
@@ -305,7 +308,12 @@ get_l3_cope_df <- function(gpa, model_set, subj_df) {
 #   setkey(X[, c(k = 1, .SD)], k)[Y[, c(k = 1, .SD)], allow.cartesian = TRUE][, k := NULL]
 # }
 
-get_fsl_l3_model_df <- function(gpa, model_df, subj_df) {
+get_fsl_l3_model_df <- function(gpa, model_df, subj_df=NULL) {
+  if (is.null(subj_df)) {
+    subj_df <- gpa$subject_data %>%
+      dplyr::filter(exclude_subject == FALSE) %>%
+      dplyr::select(id, session)
+  }
   model_df$model_id <- seq_len(nrow(model_df))
 
   l1_df <- get_l1_cope_df(gpa, model_df, subj_df)

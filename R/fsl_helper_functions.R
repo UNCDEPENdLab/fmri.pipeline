@@ -246,6 +246,7 @@ get_feat_dir_files <- function(feat_dir) {
   stats_dir <- file.path(feat_dir, "stats")
   if (!checkmate::test_directory_exists(stats_dir)) return(NULL)
   
+
   # inside the stats directory we will have pes, copes, varcopes, and zstats
   z_files <- list.files(path = stats_dir, pattern = "zstat[0-9]+\\.nii.*", full.names = TRUE)
   z_nums <- as.numeric(sub(".*zstat(\\d+)\\.nii.*$", "\\1", z_files, perl = TRUE))

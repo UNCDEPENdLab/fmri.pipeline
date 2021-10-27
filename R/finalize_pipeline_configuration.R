@@ -299,7 +299,7 @@ setup_output_locations <- function(gpa, lg = NULL) {
       file.path("{gpa$output_directory}", "feat_l3", "L1m_{l1_model}", "L3m-{l3_model}")
     ),
     feat_l3_fsf = "FEAT_l1c-{l1_contrast}.fsf",
-    feat_l3_combined_filename = ifelse(isTRUE(gpa$multi_run),
+    feat_l3_combined_filename = ifelse(isTRUE(gpa$multi_run), # settings for combining FEAT L3 models into a smaller set of AFNI files for visualization
       file.path("{gpa$output_directory}", "feat_l3_combined", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L2m-{l2_model}_L3m-{l3_model}_stats"),
       file.path("{gpa$output_directory}", "feat_l3_combined", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}_stats")
     ),
