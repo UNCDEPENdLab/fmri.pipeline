@@ -26,7 +26,7 @@
 #' @importFrom data.table fwrite rbindlist
 #' @importFrom glue glue_data
 #' @export
-extract_glm_betas_atlas <- function(gpa, mask_files, what=c("cope", "varcope", "zstat"), out_dir=getwd(),
+extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope", "zstat"), out_dir=getwd(),
   extract_l1="all", extract_l2="all", extract_l3="all",
   ncores=NULL, aggregate=TRUE, aggFUN=mean, return_data=TRUE, write_data=TRUE) {
 
