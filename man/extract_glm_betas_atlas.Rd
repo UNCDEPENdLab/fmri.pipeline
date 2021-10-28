@@ -14,7 +14,9 @@ extract_glm_betas_atlas(
   extract_l3 = "all",
   ncores = NULL,
   aggregate = TRUE,
-  aggFUN = mean
+  aggFUN = mean,
+  return_data = TRUE,
+  write_data = TRUE
 )
 }
 \arguments{
@@ -36,12 +38,16 @@ for which l1 models you want to extract from each l2 model).}
 
 \item{extract_l3}{a character vector of l3 models from which to extract group-level (level 3) statistics. If "none",
 l3 statistic extraction will be skipped. If "all", then all l3 models will be extracted (you will still be prompted
-for which l1 and l2 models you want to extract from each l3 model).#'}
+for which l1 and l2 models you want to extract from each l3 model).}
 
 \item{aggregate}{whether to take the average (or other central tendency measure) of voxels within a given mask value. This
 only pertains to integer-valued masks, not continuous ones.}
 
 \item{aggFUN}{the function used to aggregate statistics for voxels within a given mask value. Default is mean.}
+
+\item{return_data}{if TRUE, then extracted statistics will be returned as a list of data.frames with elements l1, l2, and l3.}
+
+\item{write_data}{if TRUE, then extracted statistics will be written as .csv.gz files to \code{out_dir}.}
 }
 \description{
 Function to extract subject-level coefficients from an FSL group analysis

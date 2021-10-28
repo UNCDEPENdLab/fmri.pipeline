@@ -12,10 +12,12 @@
 #'   for which l1 models you want to extract from each l2 model).
 #' @param extract_l3 a character vector of l3 models from which to extract group-level (level 3) statistics. If "none",
 #'   l3 statistic extraction will be skipped. If "all", then all l3 models will be extracted (you will still be prompted
-#'   for which l1 and l2 models you want to extract from each l3 model).#' 
+#'   for which l1 and l2 models you want to extract from each l3 model).
 #' @param aggregate whether to take the average (or other central tendency measure) of voxels within a given mask value. This
 #'   only pertains to integer-valued masks, not continuous ones.
 #' @param aggFUN the function used to aggregate statistics for voxels within a given mask value. Default is mean.
+#' @param return_data if TRUE, then extracted statistics will be returned as a list of data.frames with elements l1, l2, and l3.
+#' @param write_data if TRUE, then extracted statistics will be written as .csv.gz files to \code{out_dir}.
 #' 
 #' @importFrom checkmate test_integerish assert_class assert_data_frame assert_character assert_logical
 #' @importFrom parallel makeCluster
@@ -26,15 +28,20 @@
 #' @export
 extract_glm_betas_atlas <- function(gpa, mask_files, what=c("cope", "varcope", "zstat"), out_dir=getwd(),
   extract_l1="all", extract_l2="all", extract_l3="all",
-  ncores=NULL, aggregate=TRUE, aggFUN=mean) {
+  ncores=NULL, aggregate=TRUE, aggFUN=mean, return_data=TRUE, write_data=TRUE) {
 
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_data_frame(gpa$subject_data)
   checkmate::assert_character(mask_files)
   checkmate::assert_file_exists(mask_files)
-  checkmate::assert_logical(extract_l1)
-  checkmate::assert_logical(extract_l2)
-  checkmate::assert_logical(extract_l3)
+  checkmate::assert_string(extract_l1)
+  checkmate::assert_string(extract_l2)
+  checkmate::assert_string(extract_l3)
+  checkmate::assert_logical(return_data, len = 1L)
+  checkmate::assert_logical(write_data, len = 1L)
+  if (isFALSE(return_data) && isFALSE(write_data)) {
+    stop("Nothing will happen if both write_data and return_data are FALSE! Set at least one to TRUE to proceed.")
+  }
 
   l3_expression <- "{out_dir}/L1m-{l1_model}/{mask_name}_{statistic}_l3.csv.gz"
   l2_expression <- "{out_dir}/L1m-{l1_model}/{mask_name}_{statistic}_l2.csv.gz"
@@ -71,61 +78,81 @@ extract_glm_betas_atlas <- function(gpa, mask_files, what=c("cope", "varcope", "
   for (aa in mask_files) {
     lg$info("Extracting statistics from mask: %s", aa)
 
-    if (isTRUE(extract_l3)) {
+    if (extract_l3 != "none") {
       lg$info("Extracting group-level statistics for model combinations:")
       lg$info("%s", capture.output(print(extract_model_spec$l3)))
       l3_list[[aa]] <- extract_fsl_betas(gpa,
         extract = extract_model_spec$l3, level = 3L, what = what,
-        aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, lg=lg
+        aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores=ncores, lg=lg
       )
     }
 
-    if (isTRUE(extract_l2)) {
+    if (extract_l2 != "none") {
       lg$info("Extracting subject-level statistics for model combinations:")
       lg$info("%s", capture.output(print(extract_model_spec$l2)))
       l2_list[[aa]] <- extract_fsl_betas(gpa,
         extract = extract_model_spec$l2, level = 2L, what = what,
-        aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, lg=lg
+        aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores=ncores, lg=lg
       )
     }
 
-    if (isTRUE(extract_l1)) {
+    if (extract_l1 != "none") {
       lg$info("Extracting run-level statistics for model combinations:")
       lg$info("%s", capture.output(print(extract_model_spec$l1)))
       l1_list[[aa]] <- extract_fsl_betas(gpa,
         extract = extract_model_spec$l1, level = 1L, what = what,
-        aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, lg=lg
+        aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores=ncores, lg=lg
       )
     }
   }
 
+  # helper function to write out data.frames to csv files for each element in a list (split by key factors like contrast)
+  write_list <- function(data_split) {
+    for (ff in seq_along(data_split)) {
+      out_file <- names(data_split)[ff]
+      if (!dir.exists(dirname(out_file))) dir.create(dirname(out_file), recursive=TRUE)
+      data.table::fwrite(data_split[[ff]], file=names(data_split)[ff])
+    }
+    return(names(data_split))
+  }
+
   # sort out files based on glue expressions
-  if (isTRUE(extract_l3)) {
+  if (extract_l3 != "none") {
     l3_list <- rbindlist(l3_list)
-    l3_split <- l3_list %>%
-      mutate(out_file = glue_data(., !!l3_expression)) %>%
-      split(by = "out_file", keep.by = FALSE)
-    for (ff in seq_along(l3_split)) data.table::fwrite(l3_split[[ff]], file = names(l3_split)[ff])
+    if (isTRUE(write_data)) {
+      l3_split <- l3_list %>%
+        mutate(out_file = glue_data(., !!l3_expression)) %>%
+        split(by = "out_file", keep.by = FALSE) %>%
+        write_list()
+    }
   }
 
-  if (isTRUE(extract_l2)) {
+  if (extract_l2 != "none") {
     l2_list <- rbindlist(l2_list)
-    l2_split <- l2_list %>%
-      mutate(out_file = glue_data(., !!l2_expression)) %>%
-      split(by = "out_file", keep.by = FALSE)
-    for (ff in seq_along(l2_split)) data.table::fwrite(l2_split[[ff]], file = names(l2_split)[ff])
+    if (isTRUE(write_data)) {
+      l2_split <- l2_list %>%
+        mutate(out_file = glue_data(., !!l2_expression)) %>%
+        split(by = "out_file", keep.by = FALSE) %>%
+        write_list()
+    }
   }
   
-  if (isTRUE(extract_l1)) {
+  if (extract_l1 != "none") {
     l1_list <- rbindlist(l1_list)
-    l1_split <- l1_list %>%
-      mutate(out_file = glue_data(., !!l1_expression)) %>%
-      split(by = "out_file", keep.by = FALSE)
-    for (ff in seq_along(l1_split)) data.table::fwrite(l1_split[[ff]], file=names(l1_split)[ff])
+    if (isTRUE(write_data)) {
+      l1_split <- l1_list %>%
+        mutate(out_file = glue_data(., !!l1_expression)) %>%
+        split(by = "out_file", keep.by = FALSE) %>%
+        write_list()
+    }
   }
 
-  return(list(l1 = l1_list, l2 = l2_list, l3 = l3_list))
-  
+  if (isTRUE(return_data)) {
+    return(list(l1 = l1_list, l2 = l2_list, l3 = l3_list))
+  } else {
+    return(invisible(NULL))
+  }
+
   # if (ncpus > 1L) {
   #   cl <- makeCluster(ncpus, type="FORK")
   #   registerDoParallel(cl)
@@ -133,7 +160,6 @@ extract_glm_betas_atlas <- function(gpa, mask_files, what=c("cope", "varcope", "
   # } else {
   #   registerDoSEQ()
   # }
-
 
 }
 
@@ -145,14 +171,22 @@ extract_glm_betas_atlas <- function(gpa, mask_files, what=c("cope", "varcope", "
 #' @param aggFUN the function to use for aggregating voxels within a parcel
 #' @param mask_file a nifti image containing integer values for each parcel from which we should extract statistics
 #' @keywords internal
-#' @importFrom oro.nifti readNIfTI
+#' @importFrom oro.nifti readNIfTI translateCoordinate
 #' @importFrom checkmate assert_class assert_integerish assert_subset assert_logical assert_file_exists
-extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "zstat"), aggregate = TRUE, aggFUN = mean, mask_file = NULL, lg=NULL) {
+#' @importFrom dplyr group_by summarize ungroup left_join bind_cols filter
+#' @importFrom tidyr pivot_longer unnest
+#' @importFrom glue glue_data
+#' @importFrom tidyselect all_of
+#' @importFrom parallel mclapply
+extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "zstat"), 
+  aggregate = TRUE, aggFUN = mean, mask_file = NULL, ncores=1L, lg=NULL) {
+
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_integerish(level, lower = 1, upper = 3, len = 1)
   checkmate::assert_subset(what, c("cope", "varcope", "zstat", "tstat"))
   checkmate::assert_logical(aggregate, len = 1)
   checkmate::assert_file_exists(mask_file)
+  checkmate::assert_integerish(ncores, lower=1)
   checkmate::assert_class(lg, "Logger")
 
   if (is.null(extract)) {
@@ -176,8 +210,9 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     coef_df <- mask$coordinates %>% bind_cols(value = coef_vec)
     if (isTRUE(is_int_mask) && isTRUE(aggregate)) {
       coef_df <- coef_df %>%
-        group_by(mask_value) %>%
-        summarize(mask_name = mask_name[1], x=mean(x), y=mean(y), z=mean(z), value = aggFUN(value)) %>% # get center of gravity for parcels
+        group_by(mask_value) %>%        
+        # get center of gravity and aggregate coefficient per parcel
+        dplyr::summarize(mask_name = mask_name[1], x=mean(x), y=mean(y), z=mean(z), value = aggFUN(value)) %>%
         ungroup()
     }
 
@@ -214,7 +249,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     stat_results <- to_extract %>%
       left_join(get_l2_cope_df(gpa, extract), by = c("id", "session", "l2_model")) %>%
       left_join(get_l1_cope_df(gpa, extract), by = c("id", "session", "l1_model"))
-    
+
     for (ww in what) {
       # calculate the expected image location for this contrast and subject based on row values in stat_results data.frame
       stat_results <- stat_results %>%
@@ -260,13 +295,14 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   miss_imgs <- stat_results %>% dplyr::filter(img_exists == FALSE)
   if (nrow(miss_imgs) > 0L) {
     lg$warn("Missing expected images in extract_fsl_betas. These will be omitted in outputs.")
-    lg$warn("Image: %s", miss_imgs$img)
+    lg$warn("  Missing image: %s", miss_imgs$img)
   }
 
   stat_results <- stat_results %>%
       dplyr::filter(img_exists == TRUE)
 
-  stat_results$img_stats <- lapply(stat_results$img, function(img) {
+  # The slow part of beta extraction is the reading of images and calculation of summaries. Use mclapply to help
+  stat_results$img_stats <- mclapply(stat_results$img, function(img) {
     tryCatch(
       get_img_stats(img,
         mask = list(indices = m_indices, coordinates = m_coordinates, dim = dim(mask_img)),
@@ -277,7 +313,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
         return(NULL)
       }
     )
-  })
+  }, mc.cores = ncores)
 
   # unnest statistics for each image
   stat_expand <- stat_results %>%
@@ -372,7 +408,9 @@ build_beta_extraction <- function(gpa, extract_l1="prompt", extract_l2="prompt",
   }
 
   if (extract_l1 != "none") {
-    cat("\n------\nNext, choose models from which you want to extract run-level (level 1) statistics.\n")
+    if (extract_l1 == "prompt") {
+      cat("\n------\nNext, choose models from which you want to extract run-level (level 1) statistics.\n")
+    }
     l1 <- expand.grid(l1_model = choose_glm_models(gpa, extract_l1, level = 1L, lg = lg))
   }
 

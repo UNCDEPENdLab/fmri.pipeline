@@ -12,6 +12,7 @@ extract_fsl_betas(
   aggregate = TRUE,
   aggFUN = mean,
   mask_file = NULL,
+  ncores = 1L,
   lg = NULL
 )
 }
