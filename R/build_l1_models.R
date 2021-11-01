@@ -554,9 +554,6 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
         }
       }
 
-      ### ---- within-subject factor modulation ----
-      ss <- bl1_specify_wi_factors(ss, l1_model_set, trial_data, modify)
-
       ### ---- value of regressor ----
       if (isTRUE(modify)) {
         cat(
@@ -583,13 +580,18 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
         title = "What should be the value of regressor (pre-convolution)?"
         )
 
+        metadata_df <- trial_data %>%
+          dplyr::select(id, session, run_number, trial)
+
+
         if (regtype == 1) {
-          ss$value <- 1.0
+          ss$value <- metadata_df %>% mutate(value = 1.0)
         } else if (regtype == 2) {
-          ss$value <- NULL
-          while (!test_number(ss$value)) {
-            ss$value <- as.numeric(readline("Enter the regressor value/height (pre-convolution): "))
+          val <- NULL
+          while (!test_number(val)) {
+            val <- as.numeric(readline("Enter the regressor value/height (pre-convolution): "))
           }
+          ss$value <- metadata_df %>% mutate(value = !!val)          
         } else if (regtype == 3) {
           val <- 0L
           while (val == 0L) {
@@ -598,8 +600,6 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
               # TODO: have build_design matrix support a simple value vector, which requires
               # same number of rows as metadata (avoid redundancy)
               # basal data frame for each event
-              metadata_df <- trial_data %>%
-                dplyr::select(id, session, run_number, trial)
 
               ss$value <- metadata_df %>% dplyr::bind_cols(value = trial_data[[l1_model_set$values[val]]])
               ss$parametric_modulator <- l1_model_set$values[val] # keep column name
@@ -607,6 +607,9 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
           }
         }
       }
+
+      ### ---- within-subject factor modulation ----
+      ss <- bl1_specify_wi_factors(ss, l1_model_set, trial_data, modify)
 
       ### ------ hrf normalization ------
       if (isTRUE(modify)) {
@@ -906,6 +909,15 @@ bl1_specify_wi_factors <- function(ss, l1_model_set, trial_data, modify) {
 
   ss$wi_model <- lm(ffit, wi_df)
 
+  if (!checkmate::test_data_frame(ss$value)) {
+    stop("Signal value element is not a data.frame. Within-subject factors only setup to use data.frames right now")
+  } else if (nrow(ss$value) != nrow(trial_data)) {
+    stop("Bizarre situation where signal value data.frame has different number of rows than trial_data.")
+  } else {
+    # tack on the within-subject factors into value data.frame so that build_design_matrix can sort things out
+    ss$value <- ss$value %>% bind_cols(trial_data %>% dplyr::select(all_of(wi_vars)))
+  }
+  
   return(ss)
 }
 
