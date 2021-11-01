@@ -666,18 +666,19 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   checkmate::assert_list(spec)
   checkmate::assert_list(contrast_list)
 
+  if (is.null(lmfit)) {
+    c_colnames <- spec$regressors
+  } else {
+    c_colnames <- names(coef(lmfit)) # prefer model-specific regressors (if they vary by subject)
+  }
+
   ### add diagonal contrasts
   c_diagonal <- contrast_list$diagonal
   if (isTRUE(spec$diagonal) && is.null(c_diagonal)) {
-    if (is.null(lmfit)) {
-      cnames <- spec$regressors
-    } else {
-      cnames <- names(coef(lmfit)) # prefer model-specific regressors (if they vary by subject)
-    }
 
-    diag_mat <- diag(length(cnames))
-    rownames(diag_mat) <- paste0("EV_", cnames) # simple contrast naming for each individual regressor
-    colnames(diag_mat) <- cnames # always have columns named by regressor
+    diag_mat <- diag(length(c_colnames))
+    rownames(diag_mat) <- paste0("EV_", c_colnames) # simple contrast naming for each individual regressor
+    colnames(diag_mat) <- c_colnames # always have columns named by regressor
 
     c_diagonal <- diag_mat
   }
@@ -704,6 +705,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
       # add contrasts to matrix
       c_cond_means <- rbind(c_cond_means, econ)
     }
+    colnames(c_cond_means) <- c_colnames
   }
 
   ### add cell means for all factors, if requested
@@ -713,7 +715,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     ee <- emmeans(lmfit, as.formula(paste("~", paste(spec$cat_vars, collapse = "*"))), weights = spec$weights)
     # pp <- pairs(ee)
     edata <- summary(ee)
-    
+
     econ <- ee@linfct
     enames <- apply(edata[, spec$cat_vars, drop = FALSE], 1, function(x) { paste(names(x), x, sep=".", collapse = "_") })
 
@@ -726,6 +728,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
 
     rownames(econ) <- enames
     c_cell_means <- rbind(c_cell_means, econ)
+    colnames(c_cell_means) <- c_colnames
   }
 
   ### add overall response mean
@@ -734,6 +737,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     ee <- emmeans(lmfit, ~1, weights = spec$weights)
     econ <- ee@linfct
     rownames(econ) <- "overall"
+    colnames(econ) <- c_colnames
     c_overall <- econ
   }
 
@@ -760,6 +764,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
       # add pairwise differences for this factor to the pairwise matrix
       c_pairwise_diffs <- rbind(c_pairwise_diffs, econ)
     }
+    colnames(c_pairwise_diffs) <- c_colnames
   }
 
   ### add per-cell model-predicted simple slopes
@@ -787,9 +792,13 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
         c_simple_slopes <- rbind(c_simple_slopes, econ)
       }
     }
+    colnames(c_simple_slopes) <- c_colnames
   }
 
   c_custom <- contrast_list$custom
+
+  # walk through all within-subject factor contrasts and return as a single matrix
+  c_within <- get_wi_contrast_matrix(mobj, c_colnames)
 
   #combine each element
   cmat_full <- rbind(
@@ -799,6 +808,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     c_overall,
     c_pairwise_diffs,
     c_simple_slopes,
+    c_within,
     c_custom
   )
 
@@ -816,7 +826,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
 
   # parentheses in contrast names generate problems in running through FEAT (chokes on submission)
   # so far, this comes up only with intercept terms -- may need to do a more general substitution later
-  rownames(cmat) <- gsub("(Intercept)", "Intercept", rownames(cmat), fixed = T)
+  if (!is.null(cmat)) { rownames(cmat) <- gsub("(Intercept)", "Intercept", rownames(cmat), fixed = T) }
 
   # populate any updates to the contrast_list object based on new calculations
   contrast_list$diagonal <- c_diagonal
@@ -833,24 +843,44 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   return(mobj)
 }
 
+get_wi_contrast_matrix <- function(mobj, c_colnames) {
+  # this function is only intended to crawl over within-subject contrasts of an l1 model
+  if (!checkmate::test_class(mobj, "l1_model_spec") || is.null(mobj$wi_models)) {
+    return(invisible(NULL)) # quietly return NULL if we don't have an l1 model
+  }
+
+  # get contrast matrix for each wi_model
+  clist <- lapply(mobj$wi_models, "[[", "contrasts")
+
+  cnames <- do.call(c, lapply(clist, rownames))
+  cmat <- matrix(0, nrow = length(cnames), ncol = length(c_colnames), dimnames = list(cnames, c_colnames))
+  
+  # fill in relevant rows and columns in combined matrix for each wi model contrast matrix
+  for (cc in clist) {
+    cmat[rownames(cc), colnames(cc)] <- cc
+  }
+  
+  return(cmat)
+}
+
 # get_run_lmfits <- function() {
 
 # }
 
 #' Helper function to run the requested GLM model for each subject+session separately
-#' 
+#'
 #' @param mobj an \code{l1_model_spec} or \code{hi_model_spec} object containing the GLM model to run
 #' @param data The run-level data frame containing data for all ids and sessions. This will be split into individual chunks
-#' 
+#'
 #' @return a modified copy of \code{mobj} where the $by_subject field has been added
-#' 
+#'
 #' @details The function adds the $by_subject field, which contains the design matrices and contrasts
 #'   for each subject and session in \code{data} based on the available data for that session. For example, if
 #'   a subject is missing a few runs (or these are dropped from analysis), then some contrasts may change or drop out of the model.
-#' 
+#'
 #' The $by_subject field is a keyed data.table object containing list elements for the cope_list (mapping cope numbers to contrast names),
 #'   the contrasts, and the design matrix for each session.
-#' 
+#'
 #' @keywords internal
 #' @importFrom checkmate assert_data_frame assert_multi_class assert_subset
 #' @importFrom data.table data.table

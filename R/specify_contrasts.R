@@ -28,6 +28,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL) {
     res <- menu(c("No", "Yes"), title = "Do you want to modify model contrasts?")
     if (res == 2L) {
       prompt_contrasts <- TRUE
+      mobj$contrast_list <- list() # clear prior contrasts that were calculated from the specification
     }
   }
 
@@ -45,6 +46,9 @@ specify_contrasts <- function(mobj = NULL, signals = NULL) {
   # handle diagonal contrasts
   if (inherits(mobj, "l1_wi_spec")) {
     include_diagonal <- FALSE # for within-subject factor, no need to re-ask about diagonal contrasts for a given factor
+    cat("\n\n---------\n")
+    cat(glue("The signal {mobj$signal_name} is modulated by the following within-subject factors: {c_string(mobj$wi_factors)}.\n", .trim=FALSE))
+    cat(glue("  Please specify contrasts for this signal based on this model: {deparse(mobj$wi_formula, width.cutoff=500)}.\n\n", .trim=FALSE))
   } else {
     include_diagonal <- menu(c("Yes", "No"), title = "Do you want to include diagonal contrasts for each regressor?")
     include_diagonal <- ifelse(include_diagonal == 1L, TRUE, FALSE)
@@ -69,12 +73,22 @@ specify_contrasts <- function(mobj = NULL, signals = NULL) {
       if (any(wi_factors)) {
         #setup models for each wi factor
         for (ss in names(wi_factors)[wi_factors]) {
-          wi_obj <- list(level = 1L, lmfit = signals[[ss]]$wi_model)
+          wi_obj <- list(
+            level = 1L, lmfit = signals[[ss]]$wi_model, signal_name = ss,
+            wi_factors = signals[[ss]]$wi_factors, wi_formula = signals[[ss]]$wi_formula
+          )
           class(wi_obj) <- c("list", "l1_wi_spec")
-          browser()
           mobj$wi_models[[ss]] <- specify_contrasts(wi_obj)
         }
       }
+    }
+  }
+
+  format_prompt <- function(vars, signal_name=NULL) {
+    if (is.null(signal_name)) {
+      return(vars)
+    } else {
+      return(paste(vars, "modulation of", signal_name))
     }
   }
 
@@ -114,13 +128,22 @@ specify_contrasts <- function(mobj = NULL, signals = NULL) {
 
     # handle model-predicted means for each level of each factor
     for (vv in seq_along(cat_vars)) {
-      ii <- menu(c("Yes", "No"), title = paste0("Do you want to include model-predicted means for ", cat_vars[vv], "?"))
+      title_str <- paste0(
+        "Do you want to include model-predicted means for ",
+        ifelse(inherits(mobj, "l1_wi_spec"), paste(cat_vars[vv], "modulation of", mobj$signal_name), cat_vars[vv]), "?"
+      )
+
+      ii <- menu(c("Yes", "No"), title = title_str)
       ii <- ifelse(ii == 1L, TRUE, FALSE)
       if (isTRUE(ii)) {
         cond_means <- c(cond_means, cat_vars[vv])
       }
 
-      ii <- menu(c("Yes", "No"), title = paste0("Do you want to include pairwise differences for ", cat_vars[vv], "?"))
+      title_str <- paste0(
+        "Do you want to include pairwise differences for ",
+        ifelse(inherits(mobj, "l1_wi_spec"), paste(cat_vars[vv], "modulation of", mobj$signal_name), cat_vars[vv]), "?"
+      )
+      ii <- menu(c("Yes", "No"), title = title_str)
       ii <- ifelse(ii == 1L, TRUE, FALSE)
       if (isTRUE(ii)) {
         pairwise_diffs <- c(pairwise_diffs, cat_vars[vv])
@@ -129,14 +152,19 @@ specify_contrasts <- function(mobj = NULL, signals = NULL) {
 
     # handle model-predicted means for each cell of a factorial design
     if (length(cat_vars) > 1L) {
-      ii <- menu(c("Yes", "No"), title = paste0(
-        "Do you want to include model-predicted cell means across the factors ",
-        paste(cat_vars, collapse = ", "), "?"
-      ))
+      title_str <- glue(
+        ifelse(inherits(mobj, "l1_wi_spec"), "For {mobj$signal_name}, do ", "Do "),
+        "you want to include model-predicted cell means across the factors: {c_string(cat_vars)}?"
+      )
+      ii <- menu(c("Yes", "No"), title = title_str)
       cell_means <- ifelse(ii == 1L, TRUE, FALSE)
     }
 
-    ii <- menu(c("Yes", "No"), title = "Do you want to include the overall average response?")
+    title_str <- glue(
+      "Do you want to include the overall average response",
+      ifelse(inherits(mobj, "l1_wi_spec"), " across the levels of {c_string(cat_vars)}?", "?")
+    )
+    ii <- menu(c("Yes", "No"), title = title_str)
     overall_response <- ifelse(ii == 1L, TRUE, FALSE)
 
     # Handle model-predicted slopes across levels of the factors.
@@ -178,7 +206,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL) {
   cmat <- mobj$contrasts
 
   # N.B. For now, hand off full model matrix and contrasts to fMRI fitting function (e.g., feat) and
-  # let it handled the rank degeneracy. We may need to come back here and drop bad contrasts and use
+  # let it handle the rank degeneracy. We may need to come back here and drop bad contrasts and use
   # the reduced model matrix in the output. The challenge is that the contrasts calculated by emmeans
   # may be wrong for any column involving aliasing
   if (!is.null(mobj$aliased_terms)) {
@@ -201,6 +229,11 @@ specify_contrasts <- function(mobj = NULL, signals = NULL) {
     # Not used at present
     cmat_reduce <- cmat[, !colnames(cmat) %in% mobj$aliased_terms]
     # write.csv(cmat_reduce, file = "cmat_test_reduce.csv")
+  }
+
+  # for a within-subject factor model, no need to request contrast editor since this should be handled at overall model level
+  if (inherits(mobj, "l1_wi_spec")) {
+    return(mobj)
   }
 
   # syntax of contrast
@@ -245,6 +278,8 @@ specify_contrasts <- function(mobj = NULL, signals = NULL) {
         if (length(cvec) != ncol(cmat_base)) {
           lg$warn("Number of elements in entered contrast does not match number of columns in design. Not adding contrast.")
           cvec <- NULL # do not add
+        } else {
+          names(cvec) <- colnames(cmat_base)
         }
       }
 

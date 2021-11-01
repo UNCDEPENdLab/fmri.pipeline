@@ -283,7 +283,7 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
 #' @importFrom dplyr select mutate
 #' @importFrom checkmate test_number
 #' @importFrom glue glue
-bl1_build_events <- function(l1_model_set, trial_data) {
+bl1_build_events <- function(l1_model_set, trial_data, lg=NULL) {
   cat("Specify all events that can be added to a GLM model. Events consist of an onset time and duration\n")
 
   # basal data frame for each event
@@ -384,7 +384,7 @@ bl1_build_events <- function(l1_model_set, trial_data) {
           dplyr::mutate(event = !!ss$name)
       }
 
-      ss$data <- metadata_df %>% bind_cols(edata)
+      ss$data <- metadata_df %>% dplyr::bind_cols(edata)
 
       l1_model_set$events[[nm]] <- ss
     } else if (action == 2L) { # delete
@@ -432,7 +432,7 @@ summarize_l1_signals <- function(sl) {
     cat("  HRF Normalization:", this$normalization, "\n")
     cat("  Add signal derivative:", as.character(this$add_deriv), "\n")
     cat("  Demean convolved signal:", as.character(this$demean_convolved), "\n")
-    cat("  Within-subject factor:", as.character(this$wi_factor), "\n")
+    cat("  Within-subject factor:", c_string(this$wi_factors), "\n")
     cat("  Generate beta series:", as.character(this$beta_series), "\n")
     cat(
       "  Multiply convolved regressor against time series:",
@@ -554,28 +554,8 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
         }
       }
 
-      ### ---- within-subject factor ----
-      if (!is.null(l1_model_set$wi_factors)) { # only ask about this if there are some wi_factors
-        if (isTRUE(modify)) {
-          cat(glue("Current within-subject factor: {c_string(ss$wi_factor)}"), sep = "\n")
-          res <- menu(c("No", "Yes"), title = "Change within-subject factor?")
-          if (res == 2) {
-            ss$wi_factor <- NULL # clear out factor so that it is respecified
-            query_wi <- TRUE
-          } else {
-            query_wi <- FALSE
-          }
-        } else {
-          query_wi <- TRUE
-        }
-
-        if (isTRUE(query_wi)) {
-          res <- menu(c("No", l1_model_set$wi_factors), title = "Is this signal modulated by a within-subject factor?")
-          if (res > 1) {
-            ss$wi_factor <- l1_model_set$wi_factors[res - 1]
-          }
-        }
-      }
+      ### ---- within-subject factor modulation ----
+      ss <- bl1_specify_wi_factors(ss, l1_model_set, trial_data, modify)
 
       ### ---- value of regressor ----
       if (isTRUE(modify)) {
@@ -736,29 +716,28 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
   return(l1_model_set)
 }
 
+############### BUILD MODELS FROM SIGNALS AND EVENTS
 bl1_build_models <- function(l1_model_set) {
-
-  ############### BUILD MODELS FROM SIGNALS AND EVENTS
 
   create_new_model <- function(signal_list, to_modify=NULL) {
     checkmate::assert_class(to_modify, "l1_model_spec", null.ok=TRUE)
     if (is.null(to_modify)) {
-      mm <- list(level = 1L) #first-level model
-      class(mm) <- c("list", "l1_model_spec")
+      mobj <- list(level = 1L) #first-level model
+      class(mobj) <- c("list", "l1_model_spec")
       modify <- FALSE
     } else {
-      mm <- to_modify
+      mobj <- to_modify
       modify <- TRUE
     }
 
     ### ------ model name ------
     if (isTRUE(modify)) {
-      cat("Current model name:", mm$name, "\n")
+      cat("Current model name:", mobj$name, "\n")
       res <- menu(c("No", "Yes"), title="Change model name?")
-      if (res == 2) { mm$name <- NULL } #clear out so that it is respecified
+      if (res == 2) { mobj$name <- NULL } #clear out so that it is respecified
     }
 
-    while (is.null(mm$name) || mm$name == "") {
+    while (is.null(mobj$name) || mobj$name == "") {
       res <- trimws(readline("Enter the model name: "))
       if (res != "") {
         res <- make.names(res)
@@ -766,25 +745,25 @@ bl1_build_models <- function(l1_model_set) {
           cat("\nModel name:", res, "already exists. Names must be unique.\n")
           cat("Current models:", paste(names(model_list), collapse=", "), "\n")
         } else {
-          mm$name <- res
+          mobj$name <- res
         }
       }
     }
 
     if (isTRUE(modify)) {
-      cat("Current model signals:", paste(names(mm$signals), collapse=", "), "\n")
+      cat("Current model signals:", paste(names(mobj$signals), collapse=", "), "\n")
       res <- menu(c("No", "Yes"), title="Change model signals (and contrasts)?")
       if (res == 2) { #clear out so that it is respecified
-        mm$signals <- mm$regressors <- mm$contrasts <- mm$contrast_spec <- NULL
+        mobj$signals <- mobj$regressors <- mobj$contrasts <- mobj$contrast_spec <- NULL
       }
     }
 
-    #signals
+    # signals
     summarize_l1_signals(signal_list) #print summary
 
-    while (is.null(mm$signals)) {
-      signals <- select.list(names(signal_list), multiple=TRUE, preselect=mm$signals,
-        title="Choose all signals to include in this model\n(Command/Control-click to select multiple)")
+    while (is.null(mobj$signals)) {
+      signals <- select.list(names(signal_list), multiple = TRUE, preselect = mobj$signals,
+        title = "Choose all signals to include in this model\n(Command/Control-click to select multiple)")
 
       if (length(signals) == 0L) {
         proceed <- menu(c("Yes", "No"), title="Nothing entered. Do you want to cancel model setup?")
@@ -792,39 +771,23 @@ bl1_build_models <- function(l1_model_set) {
           return(invisible(NULL)) #return nothing from function
         }
       } else {
-        mm$signals <- signals
+        mobj$signals <- signals
       }
     }
 
     #look up what the regressors will be for this.
-    if (is.null(mm$regressors)) {
-      mm$regressors <- unlist(lapply(mm$signals, function(nn) {
-        if (!is.null(signal_list[[nn]]$wi_factor)) {
-          # build out a design matrix to figure out the columns
-          # need build_design_matrix to share a lookup function for getting regressor columns
-        } else if (isTRUE(signal_list[[nn]]$add_deriv)) {
-          return(c(nn, paste0("d_", nn))) # regressor and temporal derivative
-        } else if (isTRUE(signal_list[[nn]]$beta_series)) {
-          if (is.data.frame(signal_list[[nn]]$value)) {
-            #TODO: this approach is imperfect if there are jumps in trials for a subject
-            #this assumes that all subjects have all trials
-            trials <- sort(unique(signal_list[[nn]]$value$trial)) #vector of trials for parametric signal
-          } else {
-            #trials will be in corresponding event in case value is a scalar
-            trials <- sort(unique(event_list[[ signal_list[[nn]]$event ]]$trial))
-          }
+    mobj$regressors_list <- sapply(signal_list[mobj$signals], get_regressors_from_signal)
+    mobj$regressors <- unlist(mobj$regressors_list)
 
-          return(paste(nn, sprintf("%03d", trials), sep="_t")) # signal_t001 etc.
-        } else {
-          return(nn) #just the signal name itself (no deriv, no bs)
-        }
-      }))
-    }
+    # NOTE: at level 1, we always essentially have an additive model and rely on the user for contrast specification. Usually, this will
+    # just be a diagonal matrix. The only major exception I can think of is the within-subject factor situation where the columns of the design
+    # matrix depend on each other and need to be modeled as such. So, in this case, we basically want to populate part of the contrast matrix with
+    # contrasts for each wi-factor-modulated signal.
 
     #contrast editor
-    mm <- specify_contrasts(mm)
+    mobj <- specify_contrasts(mobj, signal_list)
 
-    return(mm)
+    return(mobj)
   }
 
   model_list <- l1_model_set$models
@@ -865,10 +828,111 @@ bl1_build_models <- function(l1_model_set) {
         }
       }
     }
-
   }
 
   l1_model_set$models <- model_list
   l1_model_set$n_contrasts <- sapply(model_list, function(mm) { ncol(mm$contrasts) })
   return(l1_model_set)
+}
+
+# helper function to specify within-subject factor modulation for a given signal
+bl1_specify_wi_factors <- function(ss, l1_model_set, trial_data, modify) {
+  if (is.null(l1_model_set$wi_factors)) {
+    return(ss) # nothing to do
+  }
+
+  if (isTRUE(modify)) {
+    cat(glue("Current within-subject factor: {c_string(ss$wi_factors)}"), sep = "\n")
+    res <- menu(c("No", "Yes"), title = "Change within-subject factor?")
+    if (res == 2L) {
+      ss$wi_factors <- NULL # clear out factor so that it is respecified
+      query_wi <- TRUE
+    } else {
+      query_wi <- FALSE
+    }
+  } else {
+    query_wi <- TRUE
+  }
+
+  if (isFALSE(query_wi)) {
+    return(ss) # nothing to do with specifying/changing within-subject factors
+  }
+
+  res <- menu(c("No", "Yes"), title = "Is this signal modulated by one or more within-subject factors?")
+  if (res == 1L) {
+    ss$wi_formula <- ss$wi_factors <- ss$wi_model <- NULL # clear out within-subject specifications
+    return(ss)
+  }
+
+  # if we arrive here, the user has asked us to specify a within-subject factor
+  cat(glue("Available within-subject factors: {c_string(l1_model_set$wi_factors)}\n"))
+
+  wi_formula <- NULL
+  while (is.null(wi_formula)) {
+    cat(c(
+      "\nSpecify the right-hand side of the within-subject model you wish to fit for the factors that modulate this signal.",
+      "For example, a one-factor model might look like: ~ trustee",
+      "And a two-factor additive model might look like: ~ trustee + share",
+      "Note that this syntax follows standard R model syntax. See ?lm for details."
+    ), sep = "\n")
+
+    wi_formula <- trimws(readline("Enter the model formula: "))
+
+    # always trim any LHS specification
+    wi_formula <- sub("^[^~]*", "", wi_formula, perl = TRUE)
+    wi_formula <- tryCatch(as.formula(wi_formula), error = function(e) {
+      print(e)
+      cat("Problem converting your syntax to formula. Try again\n")
+      return(NULL)
+    })
+
+    wi_vars <- all.vars(wi_formula)
+    invalid_vars <- setdiff(wi_vars, l1_model_set$wi_factors)
+    if (length(invalid_vars) > 0L) {
+      cat(glue("Invalid within-subject factors specified: {c_string(invalid_vars)}. Please try again.\n"))
+      wi_formula <- NULL
+    }
+  }
+
+  # drop intercept from within-subject model to make contrasts more paradigmatic for L1 (i.e., avoid use of grand intercept)
+  ss$wi_formula <- update.formula(wi_formula, ~ . - 1)
+  ss$wi_factors <- wi_vars
+
+  # fit dummy model to populate a set of dummy coefficients, then save those to the object
+  wi_df <- trial_data %>%
+    dplyr::select(all_of(wi_vars)) %>%
+    mutate(dummy = rnorm(n()))
+  ffit <- update.formula(ss$wi_formula, "dummy ~ .")
+
+  ss$wi_model <- lm(ffit, wi_df)
+
+  return(ss)
+}
+
+# helper function to figure out expected regressor columns for a given signal based on whether
+# the signal has within-subject factors, is a beta series signal, and/or includes a temporal derivative
+get_regressors_from_signal <- function(sig) {
+  # in terms of design, always add derivative columns en bloc after the corresponding non-derivative columns
+  if (!is.null(sig$wi_factors)) {
+    # use the lmfit object in the signal to determine the columns that will be included
+    cols <- names(coef(sig$wi_model))
+  } else if (isTRUE(sig$beta_series)) {
+    if (is.data.frame(sig$value)) {
+      # TODO: this approach is imperfect if there are jumps in trials for a subject
+      # this assumes that all subjects have all trials
+      trials <- sort(unique(sig$value$trial)) # vector of trials for parametric signal
+    } else {
+      # trials will be in corresponding event in case value is a scalar
+      trials <- sort(unique(event_list[[sig$event]]$trial))
+    }
+
+    cols <- paste(sig$name, sprintf("%03d", trials), sep = "_t") # signal_t001 etc.
+  } else {
+    cols <- sig$name # nothing special
+  }
+
+  if (isTRUE(sig$add_deriv)) {
+    cols <- c(cols, paste0("d_", cols)) # add temporal derivative for each column
+  }
+  return(cols)
 }
