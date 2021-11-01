@@ -699,7 +699,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
       }
 
       # add contrast names to matrix
-      rownames(econ) <- enames
+      rownames(econ) <- paste(vv, enames, sep=".")
 
       # add contrasts to matrix
       c_cond_means <- rbind(c_cond_means, econ)
@@ -713,8 +713,9 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     ee <- emmeans(lmfit, as.formula(paste("~", paste(spec$cat_vars, collapse = "*"))), weights = spec$weights)
     # pp <- pairs(ee)
     edata <- summary(ee)
+    
     econ <- ee@linfct
-    enames <- apply(edata[, spec$cat_vars, drop = FALSE], 1, paste, collapse = ".")
+    enames <- apply(edata[, spec$cat_vars, drop = FALSE], 1, function(x) { paste(names(x), x, sep=".", collapse = "_") })
 
     # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
     which_na <- is.na(edata$emmean)
@@ -744,7 +745,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
       pp <- pairs(ee)
       edata <- summary(pp)
       econ <- pp@linfct
-      enames <- make.names(sub("\\s+-\\s+", "_M_", edata$contrast, perl = TRUE)) # names of contrasts
+      enames <- paste(vv, make.names(sub("\\s+-\\s+", "_M_", edata$contrast, perl = TRUE)), sep=".") # names of contrasts
 
       # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
       which_na <- is.na(edata$estimate)
