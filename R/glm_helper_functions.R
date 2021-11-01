@@ -651,7 +651,7 @@ sched_args_to_header <- function(gpa) {
 #' @keywords internal
 #' @importFrom emmeans emmeans emtrends
 get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
-  checkmate::assert_multi_class(mobj, c("l1_model_spec", "hi_model_spec")) # verify that we have an object of known structure
+  checkmate::assert_multi_class(mobj, c("l1_model_spec", "l1_wi_spec", "hi_model_spec")) # verify that we have an object of known structure
   if (is.null(lmfit)) {
     lmfit <- mobj$lmfit # use parent lmfit
   } else {
