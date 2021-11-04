@@ -59,79 +59,107 @@ runFSLCommand <- function(args, fsldir=NULL, stdout=NULL, stderr=NULL) {
   return(retcode)
 }
 
-truncate_runs <- function(s, mrfiles, mrrunnums, niftivols, drop_volumes=0) {
-  ##Identify the last valid volume acquired in a given run.
-  ##Subjects often exhibit head movement after run ends (MATLAB closes), but scan hasn't stopped
-  ##This occurs because the MB raw transfer of the prior run is occurring, but does not finish before the current run
-  ##Thus, truncate mr files to be 12 seconds after final feedback presentation, which is how the paradigm timing files are setup
-  ##note that all of this would need to be reworked if TR were not 1.0 (i.e., 1 second = 1 volume)
+#' Identify the last valid volume acquired in a given run.
+#' Subjects often exhibit head movement after run ends (MATLAB closes), but scan hasn't stopped
+#' This occurs because the MB raw transfer of the prior run is occurring, but does not finish before the current run
+#' Thus, truncate mr files to be 12 seconds after final feedback presentation, which is how the paradigm timing files are setup
+#' note that all of this would need to be reworked if TR were not 1.0 (i.e., 1 second = 1 volume)
+#' 
+#' @keywords internal
+#' @importFrom dplyr filter
+truncate_runs <- function(mr_df, subj_outdir=NULL, lg=NULL) {
+  checkmate::assert_data_frame(mr_df)
+  if (!is.null(subj_outdir) && !checkmate::assert_directory_exists(subj_outdir)) {
+    lg$warn("In truncate_runs, cannot locate intended output directory: %s", subj_outdir)
+    subj_outdir <- NULL # fall back to location of run_nifti
+  }
+  checkmate::assert_class(lg, "Logger")
+ 
+  mr_df <- do.call(rbind, lapply(seq_len(nrow(mr_df)), function(r) {
+    # if no truncation, default to using all volumes
+    this_run <- mr_df %>% dplyr::slice(r)
+    run_length <- this_run$run_volumes
+    last_volume <- run_length # default to all volumes (no tail truncation)
 
-  require(dplyr)
+    if (!is.null(gpa$confound_settings$truncate_run)) {
+      truncation_data <- read_df_sqlite(
+        gpa = gpa, id = this_run$id, session = this_run$session,
+        run_number = this_run$run_number, table = "l1_truncation_data"
+      )
 
-  mrdf <- do.call(rbind, lapply(seq_along(mrfiles), function(r) {
-    #iti_durations <- s$runs[[ mrrunnums[r] ]]$orig_data_frame$iti_ideal #for clockfit objects
-    #last_iti <- s$runs[[ mrrunnums[r] ]]$iti_onset[length(s$runs[[ mrrunnums[r] ]]$iti_onset)]
-
-    iti_durations <- s %>% dplyr::filter(run == mrrunnums[r]) %>% dplyr::pull(iti_ideal) #for outputs from parse_sceptic_outputs (2018+)
-    last_iti <- s %>% dplyr::filter(run == mrrunnums[r]) %>% dplyr::pull(iti_onset) %>% tail(n=1)
-
-    last_vol_behavior <- floor(last_iti + iti_durations[length(iti_durations)]) #use floor to select last vol in the iti window
-    first_vol <- drop_volumes #first volume to use for analysis 
-
-    if (last_vol_behavior < niftivols[r]) {
-      ## more vols were acquired than presented in paradigm. Thus, truncation may be needed
-      ## check framewise displacement and truncate earlier than 12 second ITI if a big movement occurred
-      fd <- read.table(file.path(dirname(mrfiles[r]), "motion_info", "fd.txt"))$V1
-      # flag volumes after last_iti with high FD
-      badfd <- do.call(c, sapply(seq_along(fd), function(x) { if (x >= last_iti && fd[x] > 0.9) x else NULL }))
-      if (length(badfd) == 0L) {
-        ##no frames flagged in last volumes
-        last_vol_analysis <- last_vol_behavior
-      } else {
-        ##use either the last volume of the task or the volume before the earliest bad movement 
-        last_vol_analysis <- min(last_vol_behavior, (min(badfd) - 1))
-      }
-
-      #length of truncated file
-      trunc_length <- last_vol_analysis - first_vol
-
-      #generate filename for truncated volume
-      if (first_vol > 0) {
-        truncfile <- sub("(^.*/[a-z]+_clock[0-9](?:_5)*)\\.nii\\.gz$",
-          paste0("\\1_drop", drop_volumes, "_trunc", last_vol_analysis, ".nii.gz"), mrfiles[r],
-          perl = TRUE
+      if (is.null(truncation_data)) {
+        lg$warn(
+          "Unable to find l1_truncation data in SQLite database for id: %s, session: %d, run_number: %d. Defaulting to no truncation.",
+          this_run$id, this_run$session, this_run$run_number
         )
       } else {
-        truncfile <- sub("(^.*/[a-z]+_clock[0-9](?:_5)*)\\.nii\\.gz$",
-          paste0("\\1_trunc", last_vol_analysis, ".nii.gz"), mrfiles[r],
-          perl = TRUE
+        # add last onset and offset to truncation_data for calculating expression
+        truncation_data <- truncation_data %>% bind_cols(this_run %>% dplyr::select(last_onset, last_offset))
+        last_volume <- tryCatch(with(truncation_data, eval(parse(text = gpa$confound_settings$truncate_run))),
+          error = function(e) {
+            lg$error(
+              "Problem evaluating truncation for subject: %s, session: %s, run_number: %s, expr: %s",
+              this_run$id, this_run$session, this_run$run_number,
+              gpa$confound_settings$truncate_run
+            )
+            lg$error("Defaulting to last volume (no truncation).")
+            return(run_length)
+          }
         )
-      }
-      
-      if (!file.exists(truncfile)) { runFSLCommand(paste("fslroi", mrfiles[r], truncfile, first_vol, trunc_length)) } #create truncated volume
-      run_nifti <- truncfile
-    } else {
-      last_vol_analysis <- niftivols[r]
-      if (drop_volumes > 0) {
-        trunc_length <- niftivols[r] - drop_volumes
-        truncfile <- sub("(^.*/[a-z]+_clock[0-9](?:_5)*)\\.nii\\.gz$",
-          paste0("\\1_drop", drop_volumes, ".nii.gz"), mrfiles[r],
-          perl = TRUE
-        )
-        if (!file.exists(truncfile)) { # create truncated volume
-          runFSLCommand(paste("fslroi", mrfiles[r], truncfile, first_vol, trunc_length))
-        } 
-        run_nifti <- truncfile
-      } else {
-        run_nifti <- mrfiles[r] #just use original file  
-      }
 
+        if (checkmate::test_number(last_volume)) {
+          # I guess nothing to do here, right? -- the expression returns a number of the last good volume         
+        } else if (checkmate::test_logical(last_volume)) {
+          # if we have a vector of logicals (more common, probably), find the volume before the first TRUE occurs
+          last_volume <- min(which(last_volume == TRUE)) - 1
+        }
+
+        if (last_volume >= mr_df$run_volumes[r]) {
+          lg$warn(
+            "truncate_run expression evaluated to %d, but run length is %d. Will use %d",
+            last_volume, run_length, run_length
+          )
+          last_volume <- run_length
+        } else if (last_volume < 1) {
+          lg$warn("truncate_run expression evaluated to %d, which is awfully low! Falling back to %d", last_volume, this_run$run_volumes)
+          last_volume <- run_length
+        }
+
+      }
     }
-    #cat(paste0(paste(mrfiles[r], niftivols[r], floor(last_iti), trunc_length, sep="\t"), "\n"), file="trunclog", append=TRUE)
-    return(data.frame(last_vol_analysis, run_nifti, stringsAsFactors=FALSE))
+
+    # first volume to use for analysis
+    first_volume <- this_run$drop_volumes
+
+    # length of truncated file
+    trunc_length <- last_volume - first_volume
+
+    this_run$last_volume <- last_volume # N.B. This is always in terms of the original time series, not with drop_volumes applied
+    this_run$run_length <- trunc_length
+    this_run$volumes_dropped <- run_length - last_volume
+
+    # see whether truncation is needed/specified
+    if (trunc_length < run_length) {
+      # put truncated file in subject output directory, if provided
+      fname <- glue("sub-{id}_ses-{session}_run-{run_number}_drop-{drop_volumes}_trunc-{volumes_dropped}", .envir = this_run)
+      if (!is.null(subj_outdir)) {
+        trunc_file <- file.path(subj_outdir, fname)
+      } else {
+        trunc_file <- file.path(dirname(this_run$run_nifti), fname) # same directory as original run nifti
+      }
+    }
+
+    if (!file.exists(trunc_file)) {
+      lg$debug("Creating truncated file: %s", trunc_file)
+      runFSLCommand(paste("fslroi", this_run$run_nifti, trunc_file, first_volume, trunc_length)) # create truncated volume
+    }
+    
+    this_run$run_nifti <- trunc_file
+
+    return(this_run)
   }))
 
-  mrdf
+  mr_df
 
 }
 
@@ -336,16 +364,16 @@ pca_motion <- function(motion_df, num_pcs=3L, zscore=TRUE, verbose=FALSE) {
   return(as.data.frame(mregressors))
 }
 
-generateRunMask <- function(mrfiles, outdir=getwd(), outfile="runmask") {
+generateRunMask <- function(mr_files, outdir=getwd(), outfile="runmask") {
   if (file.exists(file.path(outdir, paste0(outfile, ".nii.gz")))) { return(invisible(NULL)) }
-  ##generate mask of mrfiles where temporal min is > 0 for all runs
-  for (f in seq_along(mrfiles)) {
-    runFSLCommand(paste0("fslmaths ", mrfiles[f], " -Tmin -bin ", outdir, "/tmin", f))#, fsldir="/usr/local/ni_tools/fsl")
+  ##generate mask of mr_files where temporal min is > 0 for all runs
+  for (f in seq_along(mr_files)) {
+    runFSLCommand(paste0("fslmaths ", mr_files[f], " -Tmin -bin ", outdir, "/tmin", f))#, fsldir="/usr/local/ni_tools/fsl")
   }
 
   ##sum mins together over runs and threshold at number of runs
-  runFSLCommand(paste0("fslmaths ", paste(paste0(outdir, "/tmin", seq_along(mrfiles)), collapse=" -add "), " ", outdir, "/tminsum"))#, fsldir="/usr/local/ni_tools/fsl")
-  runFSLCommand(paste0("fslmaths ", outdir, "/tminsum -thr ", length(mrfiles), " -bin ", outdir, "/", outfile))#, fsldir="/usr/local/ni_tools/fsl")
+  runFSLCommand(paste0("fslmaths ", paste(paste0(outdir, "/tmin", seq_along(mr_files)), collapse=" -add "), " ", outdir, "/tminsum"))#, fsldir="/usr/local/ni_tools/fsl")
+  runFSLCommand(paste0("fslmaths ", outdir, "/tminsum -thr ", length(mr_files), " -bin ", outdir, "/", outfile))#, fsldir="/usr/local/ni_tools/fsl")
   runFSLCommand(paste0("imrm ", outdir, "/tmin*"))#, fsldir="/usr/local/ni_tools/fsl") #cleanup 
 }
 
@@ -859,7 +887,7 @@ get_wi_contrast_matrix <- function(mobj, c_colnames) {
   for (cc in clist) {
     cmat[rownames(cc), colnames(cc)] <- cc
   }
-  
+
   return(cmat)
 }
 
@@ -1238,6 +1266,7 @@ cleanup_glm_pipeline <- function(gpa) {
 #' @param target a named list to be populated by defaults if fields are missing
 #' @param defaults a named list containing default values
 populate_defaults <- function(target, defaults) {
+  if (is.null(target)) target <- list()
   miss_fields <- setdiff(names(defaults), names(target))
   if (length(miss_fields) > 0L) {
     for (mm in miss_fields) {

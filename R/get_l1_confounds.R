@@ -64,6 +64,10 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     }
   }
 
+  # default empty data.frames for exclusion and truncation (in case of NULL exclude or truncate criteria)
+  exclude_data <- data.frame()
+  truncation_data <- data.frame()
+
   # determine whether we should be returning information about run exclusions
   # and whether this information has already been calculated
   generate_run_exclusion <- FALSE
@@ -82,14 +86,27 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     }
   }
 
+   # Determine whether we should be returning information about run truncation
+   # and whether this information has already been calculated.
+   # Note that truncation has to be calculated alongside timing events (downstream in setup_l1_models)
+   generate_run_truncation <- FALSE
+   if (!is.null(gpa$confound_settings$truncate_run)) {
+     truncation_data <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_truncation_data")
+     if (is.null(truncation_data)) {
+       lg$debug("No record of run truncation data exists in database: %s.", gpa$output_locations$sqlite_db)
+       generate_run_truncation <- TRUE
+     }
+   }
+
+
   # If both run exclusion and l1 confounds exist, just use the precalculated information
-  if (!(generate_l1_confounds || generate_run_exclusion)) {
+  if (!(generate_l1_confounds || generate_run_exclusion || generate_run_truncation)) {
     if (!is.na(expected_l1_confound_file)) lg$debug("Returning extant file: %s in get_l1_confounds", expected_l1_confound_file)
 
     return(list(
       l1_confound_file = expected_l1_confound_file, 
       l1_confounds_df = data.table::fread(expected_l1_confound_file, data.table = FALSE),
-      exclude_run = exclude_run, exclude_data = exclude_data
+      exclude_run = exclude_run, exclude_data = exclude_data, truncation_data = truncation_data
     ))
   }
 
@@ -99,7 +116,7 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     lg$debug("Generating l1 confounds for id: %s, session: %s, run_number: %s", id, session, run_number)
     cfile <- get_mr_abspath(rinfo, "confound_input_file")[1]
     lg$debug("Reading confound file: %s", cfile)
-    confound_df <- tryCatch(data.table::fread(cfile, data.table=FALSE, na.strings=gpa$confound_settings$na_strings), 
+    confound_df <- tryCatch(data.table::fread(cfile, data.table=FALSE, na.strings=gpa$confound_settings$na_strings),
     error = function(e) {
       lg$error("Failed to read confound file: %s with error %s", cfile, as.character(e))
       return(NULL)
@@ -185,6 +202,10 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     }
   }
 
+  # volume and time columns to confounds
+  all_confounds <- all_confounds %>%
+    mutate(volume = 1:n(), time = (volume - 1) * gpa$tr)
+
   # handle NA values in confounds -> convert to 0
   has_na <- sapply(all_confounds, anyNA)
   if (any(has_na)) {
@@ -194,6 +215,16 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
       x[is.na(x)] <- 0
       return(x)
     }))
+  }
+
+  # retain columns used in calculating run truncation
+  if (isTRUE(generate_run_truncation) && !is.null(gpa$confound_settings$truncate_run)) {
+    truncation_data <- all_confounds[, intersect(gpa$confound_settings$run_truncation_columns, names(all_confounds)), drop = FALSE]
+
+    insert_df_sqlite(gpa,
+      id = id, session = session, run_number = run_number, data = truncation_data,
+      table = "l1_truncation_data", immediate = TRUE
+    )
   }
 
   # calculate whether to retain or exclude this run
@@ -276,6 +307,6 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
   return(list(
     l1_confound_file = expected_l1_confound_file,
     l1_confounds_df = all_confounds,
-    exclude_run = exclude_run, exclude_data = exclude_data
+    exclude_run = exclude_run, exclude_data = exclude_data, truncation_data = truncation_data
   ))
 }

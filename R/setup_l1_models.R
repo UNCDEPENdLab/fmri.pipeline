@@ -99,30 +99,50 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       ## create truncated run files to end analysis 12s after last ITI (or big head movement)
       ## also handle removal of N volumes from the beginning of each run due to steady state magnetization
 
-      #mrdf <- truncate_runs(b, run_nifti, mr_run_nums, run_volumes, drop_volumes=drop_volumes)
-      mrdf <- data.frame(
+      #mr_df <- truncate_runs(b, run_nifti, mr_run_nums, run_volumes, drop_volumes=drop_volumes)
+      mr_df <- data.frame(
         id = subj_id, session=subj_session,
         run_nifti = run_nifti, run_number = mr_run_nums,
         last_volume = run_volumes, drop_volumes = gpa$drop_volumes, exclude_run = exclude_run
       )
 
-      run_nifti <- mrdf$run_nifti
-      run_volumes <- mrdf$last_volume
+      run_nifti <- mr_df$run_nifti
+      run_volumes <- mr_df$last_volume
+
+
+      # get all events that pertain to this participant
+      m_events <- data.table::rbindlist(
+        lapply(gpa$l1_models$events, function(this_event) {
+          this_event$data %>% dplyr::filter(id == !!subj_id & session == !!subj_session)
+        })
+      )
+
+      last_events <- m_events %>% dplyr::filter(run_number %in% !!rdata$run_number) %>%
+        group_by(run_number) %>%
+        summarise(last_onset = max(onset, na.rm = TRUE), last_offset = max(onset + duration, na.rm = TRUE))
+
+      last_onset <- last_events$last_onset
+      last_offset <- last_events$last_offset
+
+      mr_df <- data.frame(
+        id = subj_id, session = subj_session, run_number = mr_run_nums, run_nifti, run_volumes = run_volumes,
+        last_onset, last_offset, drop_volumes = gpa$drop_volumes, exclude_run
+      )
+
+      # lookup subject directory for placing truncated files
+      subj_output_directory <- get_output_directory(id = subj_id, session = subj_session, gpa = gpa, create_if_missing = FALSE, what = "sub")
+
+      mr_df <- truncate_runs(mr_df, subj_output_directory, lg)
 
       # Tracking list containing data.frames for each software, where we expect one row per run-level model (FSL)
       # or subject-level model (AFNI). The structure varies because FSL estimates per-run GLMs, while AFNI concatenates.
-      l1_file_setup <- list(fsl = list(), spm = list(), afni = list(), metadata = mrdf)
+      l1_file_setup <- list(fsl = list(), spm = list(), afni = list(), metadata = mr_df)
 
       #loop over models to output
       for (ii in seq_along(l1_model_names)) {
         this_model <- l1_model_names[ii]
 
         # setup design matrix for any given software package
-        m_events <- data.table::rbindlist(
-          lapply(gpa$l1_models$events, function(this_event) {
-            this_event$data %>% dplyr::filter(id == !!subj_id & session == !!subj_session)
-          })
-        )
 
         m_signals <- lapply(gpa$l1_models$signals[gpa$l1_models$models[[this_model]]$signals], function(this_signal) {
           # filter down to this id if the signal is a data.frame
@@ -167,7 +187,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
           if (is.null(d_obj)) { next } #skip to next iteration on error
 
-          save(d_obj, bdm_args, mrdf, mr_run_nums, subj_mr_dir, run_nifti, run_volumes,
+          save(d_obj, bdm_args, mr_df, mr_run_nums, subj_mr_dir, run_nifti, run_volumes,
             subj_id, subj_session, this_model, file = bdm_out_file
           )
         }

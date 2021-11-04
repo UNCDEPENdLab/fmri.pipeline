@@ -72,7 +72,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                run_number_regex = ".*run-*([0-9]+).*", drop_volumes = 0L,
                                l1_models = "prompt", l2_models = "prompt", l3_models = "prompt",
                                glm_software = "fsl", n_expected_runs = 1L,
-                               use_preconvolve = TRUE, truncate_runs = FALSE,
+                               use_preconvolve = TRUE,
                                glm_settings = "default",
                                confound_settings = list(
                                  motion_params_file = "motion.par", # assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
@@ -81,6 +81,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                  confound_input_colnames = NULL, # names of confound columns -- if null, we will attempt to find a header row
                                  l1_confound_regressors = NULL, # column names in motion_params_file and/or confound_input_file
                                  exclude_run = "mean(FD) > 0.9 | max(FD) > 0.5)",
+                                 truncate_run = NULL, # "FD > 1 & volume > last_onset"
                                  exclude_subject = NULL,
                                  spike_volumes = "FD > 0.9"
                                ),
@@ -108,9 +109,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   checkmate::assert_integerish(drop_volumes)
   checkmate::assert_character(glm_software)
   checkmate::assert_logical(use_preconvolve, null.ok = FALSE)
-  checkmate::assert_logical(truncate_runs, null.ok = FALSE)
-
-
+  
   glm_software <- tolower(glm_software)
   checkmate::assert_subset(glm_software, c("fsl", "spm", "afni"))
   checkmate::assert_integerish(n_expected_runs, lower = 1L, null.ok = TRUE)
@@ -236,7 +235,6 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     bad_ids = bad_ids,
     tr = tr,
     multi_run = multi_run, # 2- or 3-level analysis
-    truncate_runs = truncate_runs,
     glm_settings = glm_settings,
     confound_settings = confound_settings,
     n_expected_runs = n_expected_runs,

@@ -386,33 +386,40 @@ finalize_confound_settings <- function(gpa, lg) {
   }
 
   # validate confound settings
+  confound_defaults <- list(
+    motion_params_file = NULL,
+    motion_params_colnames = NULL,
+    confound_input_file = "confounds.tsv",
+    l1_confound_regressors = NULL, # column names in motion_params_file and/or confound_input_file
+    exclude_run = "mean(FD) > 0.5 || max(FD) > 6)",
+    truncate_run = NULL, # example: FD > 1 & time > last_onset
+    spike_volumes = "FD > 0.9",
+    na_strings = getOption("datatable.na.strings", "NA") # default na.strings argument for data.table::fread calls
+  )
+
   if (is.null(gpa$confound_settings)) {
     lg$info("Using default settings for confounds and exclusions")
     lg$info("Look for confounds in confounds.tsv")
     lg$info("Exclude run if mean(FD) > 0.5 or max(FD) > 6")
-    gpa$confound_settings <- list(
-      motion_params_file = NULL,
-      motion_params_colnames = NULL,
-      confound_input_file = "confounds.tsv",
-      l1_confound_regressors = NULL, # column names in motion_params_file and/or confound_input_file
-      exclude_run = "mean(FD) > 0.5 || max(FD) > 6)",
-      spike_volumes = "FD > 0.9"
-    )
   } else {
     checkmate::assert_string(gpa$confound_settings$exclude_run, null.ok = TRUE)
     checkmate::assert_string(gpa$confound_settings$exclude_subject, null.ok = TRUE)
   }
 
-  # default na.strings argument for data.table::fread calls to motion parameters and confounds
-  if (is.null(gpa$confound_settings$na_strings)) {
-    gpa$confound_settings$na_strings <- getOption("datatable.na.strings", "NA")
-  }
+  gpa$confound_settings <- populate_defaults(gpa$confound_settings, confound_defaults)
 
   # figure out all confound columns that will be used in the pipeline
   gpa$confound_settings$run_exclusion_columns <- if (is.null(gpa$confound_settings$exclude_run)) {
     NULL
   } else {
     all.vars(as.formula(paste("~", gpa$confound_settings$exclude_run)))
+  }
+
+  # figure out all confound columns that will be used in the pipeline
+  gpa$confound_settings$run_truncation_columns <- if (is.null(gpa$confound_settings$truncate_run)) {
+    NULL
+  } else {
+    all.vars(as.formula(paste("~", gpa$confound_settings$truncate_run)))
   }
 
   # TODO: Should this become 'id_exclusion_columns' and should we support session versus subject exclusion
@@ -426,6 +433,7 @@ finalize_confound_settings <- function(gpa, lg) {
   gpa$confound_settings$all_confound_columns <- unique(c(
     gpa$confound_settings$l1_confound_regressors,
     gpa$confound_settings$run_exclusion_columns,
+    gpa$confound_settings$run_truncation_columns,
     gpa$confound_settings$subject_exclusion_columns
   ))
 
