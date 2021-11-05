@@ -4,7 +4,7 @@
 \alias{bl1_build_events}
 \title{helper function to build events consisting of onsets and durations}
 \usage{
-bl1_build_events(l1_model_set, trial_data)
+bl1_build_events(l1_model_set, trial_data, lg = NULL)
 }
 \arguments{
 \item{l1_model_set}{an l1_model_set object that may have extant events in it}

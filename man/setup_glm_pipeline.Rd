@@ -28,13 +28,12 @@ setup_glm_pipeline(
   glm_software = "fsl",
   n_expected_runs = 1L,
   use_preconvolve = TRUE,
-  truncate_runs = FALSE,
   glm_settings = "default",
   confound_settings = list(motion_params_file = "motion.par", motion_params_colnames =
     c("rx", "ry", "rz", "tx", "ty", "tz"), confound_input_file = NULL,
     confound_input_colnames = NULL, l1_confound_regressors = NULL, exclude_run =
-    "mean(FD) > 0.9 | max(FD) > 0.5)", exclude_subject = NULL, spike_volumes =
-    "FD > 0.9"),
+    "mean(FD) > 0.9 | max(FD) > 0.5)", truncate_run = NULL, exclude_subject = NULL,
+    spike_volumes = "FD > 0.9"),
   parallel = list(l1_setup_cores = 4L, pipeline_cores = "default"),
   additional = list(feat_l1_args = list(z_thresh = 1.96, prob_thresh = 0.05))
 )
