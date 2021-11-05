@@ -96,20 +96,6 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
       lg$debug("Volumes in run_nifti: %s", paste(run_volumes, collapse=", "))
 
-      ## create truncated run files to end analysis 12s after last ITI (or big head movement)
-      ## also handle removal of N volumes from the beginning of each run due to steady state magnetization
-
-      #mr_df <- truncate_runs(b, run_nifti, mr_run_nums, run_volumes, drop_volumes=drop_volumes)
-      mr_df <- data.frame(
-        id = subj_id, session=subj_session,
-        run_nifti = run_nifti, run_number = mr_run_nums,
-        last_volume = run_volumes, drop_volumes = gpa$drop_volumes, exclude_run = exclude_run
-      )
-
-      run_nifti <- mr_df$run_nifti
-      run_volumes <- mr_df$last_volume
-
-
       # get all events that pertain to this participant
       m_events <- data.table::rbindlist(
         lapply(gpa$l1_models$events, function(this_event) {
@@ -124,13 +110,14 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       last_onset <- last_events$last_onset
       last_offset <- last_events$last_offset
 
+      # lookup subject directory for placing truncated files
+      subj_output_directory <- get_output_directory(id = subj_id, session = subj_session, gpa = gpa, create_if_missing = FALSE, what = "sub")
+
+      # initialize mr data frame with untruncated inputs
       mr_df <- data.frame(
         id = subj_id, session = subj_session, run_number = mr_run_nums, run_nifti, run_volumes = run_volumes,
         last_onset, last_offset, drop_volumes = gpa$drop_volumes, exclude_run
       )
-
-      # lookup subject directory for placing truncated files
-      subj_output_directory <- get_output_directory(id = subj_id, session = subj_session, gpa = gpa, create_if_missing = FALSE, what = "sub")
 
       mr_df <- truncate_runs(mr_df, subj_output_directory, lg)
 

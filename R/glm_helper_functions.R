@@ -74,7 +74,7 @@ truncate_runs <- function(mr_df, subj_outdir=NULL, lg=NULL) {
     subj_outdir <- NULL # fall back to location of run_nifti
   }
   checkmate::assert_class(lg, "Logger")
- 
+
   mr_df <- do.call(rbind, lapply(seq_len(nrow(mr_df)), function(r) {
     # if no truncation, default to using all volumes
     this_run <- mr_df %>% dplyr::slice(r)
@@ -153,7 +153,7 @@ truncate_runs <- function(mr_df, subj_outdir=NULL, lg=NULL) {
       lg$debug("Creating truncated file: %s", trunc_file)
       runFSLCommand(paste("fslroi", this_run$run_nifti, trunc_file, first_volume, trunc_length)) # create truncated volume
     }
-    
+
     this_run$run_nifti <- trunc_file
 
     return(this_run)

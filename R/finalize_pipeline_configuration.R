@@ -408,27 +408,28 @@ finalize_confound_settings <- function(gpa, lg) {
 
   gpa$confound_settings <- populate_defaults(gpa$confound_settings, confound_defaults)
 
-  # figure out all confound columns that will be used in the pipeline
-  gpa$confound_settings$run_exclusion_columns <- if (is.null(gpa$confound_settings$exclude_run)) {
-    NULL
-  } else {
-    all.vars(as.formula(paste("~", gpa$confound_settings$exclude_run)))
+  rhs_to_vars <- function(str) {
+    if (is.null(str)) {
+      NULL # return NULL if input is NULL
+    } else if (checkmate::test_string(str)) {
+      if (!grepl("^\\s*~", str)) str <- paste("~", str)
+      all.vars(as.formula(paste("~", str)))
+    } else if (checkmate::test_formula(str)) {
+      all.vars(str)
+    } else {
+      stop("rhs_to_vars input is not a string or formula")
+    }
   }
 
   # figure out all confound columns that will be used in the pipeline
-  gpa$confound_settings$run_truncation_columns <- if (is.null(gpa$confound_settings$truncate_run)) {
-    NULL
-  } else {
-    all.vars(as.formula(paste("~", gpa$confound_settings$truncate_run)))
-  }
+  gpa$confound_settings$run_exclusion_columns <- rhs_to_vars(gpa$confound_settings$exclude_run)
+
+  # figure out all confound columns that will be used in the pipeline
+  gpa$confound_settings$run_truncation_columns <- rhs_to_vars(gpa$confound_settings$truncate_run)
 
   # TODO: Should this become 'id_exclusion_columns' and should we support session versus subject exclusion
   # (E.g., in longitudinal analysis)
-  gpa$confound_settings$subject_exclusion_columns <- if (is.null(gpa$confound_settings$exclude_subject)) {
-    NULL
-  } else {
-    all.vars(as.formula(paste("~", gpa$confound_settings$exclude_subject)))
-  }
+  gpa$confound_settings$subject_exclusion_columns <- rhs_to_vars(gpa$confound_settings$exclude_subject)
 
   gpa$confound_settings$all_confound_columns <- unique(c(
     gpa$confound_settings$l1_confound_regressors,
