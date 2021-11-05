@@ -115,13 +115,14 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
       # initialize mr data frame with untruncated inputs
       mr_df <- data.frame(
-        id = subj_id, session = subj_session, run_number = mr_run_nums, run_nifti, run_volumes = run_volumes,
-        last_onset, last_offset, drop_volumes = gpa$drop_volumes, exclude_run
+        id = subj_id, session = subj_session, run_number = mr_run_nums, run_nifti, l1_confound_file = l1_confound_files, 
+        run_volumes = run_volumes, last_onset, last_offset, drop_volumes = gpa$drop_volumes, exclude_run, row.names=NULL
       )
 
       mr_df <- truncate_runs(mr_df, subj_output_directory, lg)
 
       # Tracking list containing data.frames for each software, where we expect one row per run-level model (FSL)
+
       # or subject-level model (AFNI). The structure varies because FSL estimates per-run GLMs, while AFNI concatenates.
       l1_file_setup <- list(fsl = list(), spm = list(), afni = list(), metadata = mr_df)
 
@@ -174,7 +175,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
           if (is.null(d_obj)) { next } #skip to next iteration on error
 
-          save(d_obj, bdm_args, mr_df, mr_run_nums, subj_mr_dir, run_nifti, run_volumes,
+          save(d_obj, bdm_args, mr_df, mr_run_nums, subj_mr_dir, run_nifti, run_volumes, l1_confound_files,
             subj_id, subj_session, this_model, file = bdm_out_file
           )
         }

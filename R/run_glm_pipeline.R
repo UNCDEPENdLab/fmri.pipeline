@@ -19,7 +19,7 @@ l3_model_names = "prompt", glm_software = NULL) {
 
   lg <- lgr::get_logger("glm_pipeline/run_glm_pipeline")
 
-  model_list <- choose_glm_models(gpa, l1_model_names, l2_model_names, l3_model_names, lg)
+  model_list <- choose_glm_set(gpa, l1_model_names, l2_model_names, l3_model_names, lg)
   if (is.null(model_list)) { return(invisible(NULL)) } # user canceled
 
   batch_id <- uuid::UUIDgenerate()
@@ -147,7 +147,7 @@ l3_model_names = "prompt", glm_software = NULL) {
 #' @return a named list containing all models that were selected along with additional information
 #'   about whether to rerun existing models
 #' @keywords internal
-choose_glm_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, l3_model_names=NULL, lg=NULL) {
+choose_glm_set <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, l3_model_names=NULL, lg=NULL) {
   checkmate::assert_class(lg, "Logger")
 
   if (is.null(l1_model_names)) {

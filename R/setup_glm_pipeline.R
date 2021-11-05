@@ -116,6 +116,11 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
 
+  if (!basename(output_directory) == analysis_name) {
+    lg$info("Appending analysis_name %s to output_directory %s", analysis_name, output_directory)
+    output_directory <- file.path(output_directory, analysis_name)
+  }
+
   # setup output directory, if needed
   if (!dir.exists(output_directory)) {
     lg$info("Setting up output directory for pipeline: ", output_directory)

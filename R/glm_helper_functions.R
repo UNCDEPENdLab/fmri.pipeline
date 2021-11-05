@@ -59,108 +59,17 @@ runFSLCommand <- function(args, fsldir=NULL, stdout=NULL, stderr=NULL) {
   return(retcode)
 }
 
-#' Identify the last valid volume acquired in a given run.
-#' Subjects often exhibit head movement after run ends (MATLAB closes), but scan hasn't stopped
-#' This occurs because the MB raw transfer of the prior run is occurring, but does not finish before the current run
-#' Thus, truncate mr files to be 12 seconds after final feedback presentation, which is how the paradigm timing files are setup
-#' note that all of this would need to be reworked if TR were not 1.0 (i.e., 1 second = 1 volume)
-#' 
+
+#' internal function for getting a file extension that may include a compressed ending
+#' this is adapted from neurobase::file_imgext, but extended for other file types
 #' @keywords internal
-#' @importFrom dplyr filter
-truncate_runs <- function(mr_df, subj_outdir=NULL, lg=NULL) {
-  checkmate::assert_data_frame(mr_df)
-  if (!is.null(subj_outdir) && !checkmate::assert_directory_exists(subj_outdir)) {
-    lg$warn("In truncate_runs, cannot locate intended output directory: %s", subj_outdir)
-    subj_outdir <- NULL # fall back to location of run_nifti
-  }
-  checkmate::assert_class(lg, "Logger")
-
-  mr_df <- do.call(rbind, lapply(seq_len(nrow(mr_df)), function(r) {
-    # if no truncation, default to using all volumes
-    this_run <- mr_df %>% dplyr::slice(r)
-    run_length <- this_run$run_volumes
-    last_volume <- run_length # default to all volumes (no tail truncation)
-
-    if (!is.null(gpa$confound_settings$truncate_run)) {
-      truncation_data <- read_df_sqlite(
-        gpa = gpa, id = this_run$id, session = this_run$session,
-        run_number = this_run$run_number, table = "l1_truncation_data"
-      )
-
-      if (is.null(truncation_data)) {
-        lg$warn(
-          "Unable to find l1_truncation data in SQLite database for id: %s, session: %d, run_number: %d. Defaulting to no truncation.",
-          this_run$id, this_run$session, this_run$run_number
-        )
-      } else {
-        # add last onset and offset to truncation_data for calculating expression
-        truncation_data <- truncation_data %>% bind_cols(this_run %>% dplyr::select(last_onset, last_offset))
-        last_volume <- tryCatch(with(truncation_data, eval(parse(text = gpa$confound_settings$truncate_run))),
-          error = function(e) {
-            lg$error(
-              "Problem evaluating truncation for subject: %s, session: %s, run_number: %s, expr: %s",
-              this_run$id, this_run$session, this_run$run_number,
-              gpa$confound_settings$truncate_run
-            )
-            lg$error("Defaulting to last volume (no truncation).")
-            return(run_length)
-          }
-        )
-
-        if (checkmate::test_number(last_volume)) {
-          # I guess nothing to do here, right? -- the expression returns a number of the last good volume         
-        } else if (checkmate::test_logical(last_volume)) {
-          # if we have a vector of logicals (more common, probably), find the volume before the first TRUE occurs
-          last_volume <- min(which(last_volume == TRUE)) - 1
-        }
-
-        if (last_volume >= mr_df$run_volumes[r]) {
-          lg$warn(
-            "truncate_run expression evaluated to %d, but run length is %d. Will use %d",
-            last_volume, run_length, run_length
-          )
-          last_volume <- run_length
-        } else if (last_volume < 1) {
-          lg$warn("truncate_run expression evaluated to %d, which is awfully low! Falling back to %d", last_volume, this_run$run_volumes)
-          last_volume <- run_length
-        }
-
-      }
-    }
-
-    # first volume to use for analysis
-    first_volume <- this_run$drop_volumes
-
-    # length of truncated file
-    trunc_length <- last_volume - first_volume
-
-    this_run$last_volume <- last_volume # N.B. This is always in terms of the original time series, not with drop_volumes applied
-    this_run$run_length <- trunc_length
-    this_run$volumes_dropped <- run_length - last_volume
-
-    # see whether truncation is needed/specified
-    if (trunc_length < run_length) {
-      # put truncated file in subject output directory, if provided
-      fname <- glue("sub-{id}_ses-{session}_run-{run_number}_drop-{drop_volumes}_trunc-{volumes_dropped}", .envir = this_run)
-      if (!is.null(subj_outdir)) {
-        trunc_file <- file.path(subj_outdir, fname)
-      } else {
-        trunc_file <- file.path(dirname(this_run$run_nifti), fname) # same directory as original run nifti
-      }
-    }
-
-    if (!file.exists(trunc_file)) {
-      lg$debug("Creating truncated file: %s", trunc_file)
-      runFSLCommand(paste("fslroi", this_run$run_nifti, trunc_file, first_volume, trunc_length)) # create truncated volume
-    }
-
-    this_run$run_nifti <- trunc_file
-
-    return(this_run)
-  }))
-
-  mr_df
-
+file_ext <- function(file, withdot = TRUE) {
+  file <- tolower(file)
+  matches <- grepl("^.*\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", file)
+  ext <- rep(NA, length=length(file)) # return NA for inputs that can't be parsed
+  ext[matches] <- sub("^(.*)\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", "\\2\\3", file[matches])
+  if (isTRUE(withdot)) ext[matches] <- paste0(".", ext[matches])
+  return(ext)
 }
 
 #' helper function for generating motion regressors from raw 6-parameter motion coregistration

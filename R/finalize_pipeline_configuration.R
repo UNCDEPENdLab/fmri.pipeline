@@ -268,11 +268,6 @@ setup_output_locations <- function(gpa, lg = NULL) {
     gpa$output_directory <- file.path(getwd(), gpa$analysis_name)
   }
 
-  if (!basename(gpa$output_directory) == gpa$analysis_name) {
-    lg$info("Appending analysis_name %s to output_directory %s", gpa$analysis_name, gpa$output_directory)
-    gpa$output_directory <- file.path(gpa$output_directory, gpa$analysis_name)
-  }
-
   lg$info("Output directory for this analysis will be: %s", gpa$output_directory)
 
   # see quickstart.Rmd > output settings

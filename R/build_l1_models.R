@@ -99,6 +99,8 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
           field_name = "wi_factors", field_desc = "within-subject factor",
           limit_cols = possible_factors
         )
+
+        # TODO: Need to convert integers to factors
       } else if (aa == 5) {
         # events
         l1_model_set <- bl1_build_events(l1_model_set, trial_data)
