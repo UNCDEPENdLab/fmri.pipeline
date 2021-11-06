@@ -312,7 +312,7 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL) {
           round(min(x$data$duration, na.rm = TRUE), 2), "--",
           round(max(x$data$duration, na.rm = TRUE), 2), "]\n"
         )
-        cat("    First 6 values:", paste(head(x$data$duration), collapse = ", "), "\n\n")
+        cat("    First 6 values:", paste(round(head(x$data$duration), 2), collapse = ", "), "\n\n")
       })
     } else {
       cat("No events in l1 models\n")
@@ -556,22 +556,93 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
         }
       }
 
+      ### ---- trial subsetting ----
+      if (isTRUE(modify)) {
+        cat(glue("Current trial subset: {c_string(ss$trial_subset)}"), sep = "\n")
+        res <- menu(c("No", "Yes"), title = "Change trial subset?")
+        if (res == 2) {
+          ss$trial_subset <- ss$trial_expression <- NULL
+        } # clear out subset so that it is respecified
+      }
+
+      trial_set <- NULL
+      while (is.null(ss$trial_subset)) {
+        res <- menu(c("No", "Yes"), title = "Only model this signal for specific trials?")
+        if (res == 1L) {
+          ss$trial_subset <- FALSE
+        } else if (res == 2L) {
+          while (is.null(ss$trial_expression)) {
+            cat("Specify an R-based expression that will be evaluated against trial_data and return TRUE/FALSE for each row.\n\n")
+            cat("For example, you might want to separate out trials on which reaction times were implausibly fast (e.g., less than 100 ms).\n")
+            cat("  In this case, if the column in trial_data is called rt and it's in seconds, you would type: rt < .1\n")
+            cat("  A compound expression can be used, too, like: rt < .5 & accurate == FALSE\n\n")
+            ss_expression <- readline("Enter the trial subsetting expression: ")
+            trial_set <- tryCatch(with(trial_data, eval(parse(text = ss_expression))),
+              error = function(e) {
+                lg$error("Problem evaluating trial subsetting expression: %s. Error: %s", ss_expression, as.character(e))
+                return(NULL)
+              }
+            )
+            if (is.null(trial_set)) {
+              cat("Problem with your subsetting expression. Please try again.\n")
+            } else {
+              ss$trial_expression <- ss_expression
+              ss$trial_subset <- TRUE
+            }
+          }
+        }
+      }
+
+      # if user has a cached trial expression, need to evaluate the trial set before getting value df
+      if (isTRUE(ss$trial_subset) && is.null(trial_set)) {
+        trial_set <- with(trial_data, eval(parse(text = ss$trial_expression)))
+      } else {
+        # default: keep all trials. This is a local variable that is calculated every time this function is called (e.g., modification)
+        trial_set <- rep(TRUE, nrow(trial_data))
+      }
+
+      get_value_df <- function(signal, trial_data, trial_set = NULL) {
+        value_df <- trial_data %>%
+          dplyr::select(id, session, run_number, trial)
+
+        if (!is.null(trial_set)) {
+          stopifnot(length(trial_set) == nrow(trial_data))
+          checkmate::assert_logical(trial_set)
+          value_df <- value_df[trial_set, , drop = FALSE]
+        }
+
+        if (signal$value_type %in% c("unit", "number")) {
+          value_df$value <- signal$value_fixed
+        } else if (signal$value_type == "parametric") {
+          value_df$value <- trial_data[[signal$parametric_modulator]][trial_set]
+        } else {
+          stop("Failing to populate value column")
+        }
+        return(value_df)
+      }
+
       ### ---- value of regressor ----
       if (isTRUE(modify)) {
+        # repopulate value data.frame in case subset has changed
+        ss$value <- get_value_df(ss, trial_data, trial_set)
+
         cat(
           "Current signal value:",
           ifelse(length(ss$value) == 1L && is.numeric(ss$value[1L]),
             ss$value[1L],
             paste0(
-              ss$parametric_modulator, ", ",
+              ifelse(is.null(ss$parametric_modulator), "", paste0(ss$parametric_modulator, ", ")),
               round(mean(ss$value$value, na.rm = TRUE), 2), " [",
-              round(min(ss$value$value, na.rm = TRUE), 2), "--",
+              round(min(ss$value$value, na.rm = TRUE), 2), " -- ",
               round(max(ss$value$value, na.rm = TRUE), 2), "]\n"
             )
           ), "\n"
         )
         res <- menu(c("No", "Yes"), title = "Change signal value?")
-        if (res == 2) ss$value <- NULL   # clear out event so that it is respecified
+        if (res == 2) {
+          # clear out event so that it is respecified
+          ss$value <- ss$value_fixed <- ss$value_type <- ss$parametric_modulator <- NULL
+        }
       }
 
       while (is.null(ss$value) || ss$value == 0) {
@@ -582,19 +653,17 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
         title = "What should be the value of regressor (pre-convolution)?"
         )
 
-        metadata_df <- trial_data %>%
-          dplyr::select(id, session, run_number, trial)
-
-
-        if (regtype == 1) {
-          ss$value <- metadata_df %>% mutate(value = 1.0)
-        } else if (regtype == 2) {
+        if (regtype == 1L) {
+          ss$value_type <- "unit"
+          ss$value_fixed <- 1.0
+        } else if (regtype == 2L) {
           val <- NULL
           while (!test_number(val)) {
             val <- as.numeric(readline("Enter the regressor value/height (pre-convolution): "))
           }
-          ss$value <- metadata_df %>% mutate(value = !!val)          
-        } else if (regtype == 3) {
+          ss$value_type <- "number"
+          ss$value_fixed <- val
+        } else if (regtype == 3L) {
           val <- 0L
           while (val == 0L) {
             val <- menu(l1_model_set$values, c("Which value should be used for this signal?"))
@@ -603,11 +672,14 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
               # same number of rows as metadata (avoid redundancy)
               # basal data frame for each event
 
-              ss$value <- metadata_df %>% dplyr::bind_cols(value = trial_data[[l1_model_set$values[val]]])
               ss$parametric_modulator <- l1_model_set$values[val] # keep column name
+              ss$value_type <- "parametric"
             }
           }
         }
+
+        # populate value data frame for this signal
+        ss$value <- get_value_df(ss, trial_data, trial_set)
       }
 
       ### ---- within-subject factor modulation ----
