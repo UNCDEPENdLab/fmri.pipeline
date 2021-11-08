@@ -468,7 +468,7 @@ get_mr_abspath <- function(mr_df, col="run_nifti") {
     } else {
       this_dir <- mr_df$mr_dir[ii]
       if (is.na(this_dir)) {
-        wd <- NULL # defaults to getwd()
+        wd <- getwd() # defaults to getwd()
       } else {
         wd <- this_dir
       }

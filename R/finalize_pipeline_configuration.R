@@ -338,48 +338,6 @@ finalize_confound_settings <- function(gpa, lg) {
   checkmate::assert_class(lg, "Logger")
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
 
-  #####
-  # populate confounds
-  if (!is.null(gpa$confound_settings$motion_params_file)) {
-    checkmate::assert_string(gpa$confound_settings$motion_params_file)
-    if ("motion_params_file" %in% names(gpa$run_data)) {
-      lg$info("motion_params_file column already in run_data. Not using $confound_settings$motion_params_file specification.")
-    } else {
-      gpa$run_data$motion_params_file <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
-        if (isTRUE(gpa$run_data$run_nifti_present[ii])) {
-          normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$motion_params_file))
-        } else {
-          NA_character_
-        }
-      })
-    }
-    gpa$run_data$motion_params_present <- file.exists(get_mr_abspath(gpa$run_data, "motion_params_file"))
-  } else {
-    if (!"motion_params_file" %in% names(gpa$run_data)) {
-      gpa$run_data$motion_params_file <- gpa$run_data$motion_params_present <- NA_character_
-    }
-  }
-
-  if ("confound_input_file" %in% names(gpa$run_data)) {
-    lg$info("confound_input_file column already in run_data. Not using confound_input_file specification.")
-  } else if (!is.null(gpa$confound_settings$confound_input_file)) {
-    checkmate::assert_string(gpa$confound_settings$confound_input_file)
-    gpa$run_data$confound_input_file <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
-      if (isTRUE(gpa$run_data$run_nifti_present[ii])) {
-        normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$confound_input_file))
-      } else {
-        NA_character_
-      }
-    })
-  }
-
-  # determine whether confound input files are present
-  gpa$run_data$confound_input_file_present <- if ("confound_input_file" %in% names(gpa$run_data)) {
-    file.exists(get_mr_abspath(gpa$run_data, "confound_input_file"))
-  } else {
-    NA_character_
-  }
-
   # validate confound settings
   confound_defaults <- list(
     motion_params_file = NULL,
@@ -402,6 +360,50 @@ finalize_confound_settings <- function(gpa, lg) {
   }
 
   gpa$confound_settings <- populate_defaults(gpa$confound_settings, confound_defaults)
+
+  #####
+  # populate confounds
+  if ("motion_params_file" %in% names(gpa$run_data)) {
+    lg$info("motion_params_file column already in run_data. Not using motion_params_file confounds specification.")
+  } else if (!is.null(gpa$confound_settings$motion_params_file)) {
+    checkmate::assert_string(gpa$confound_settings$motion_params_file)
+    gpa$run_data$motion_params_file <- gpa$confound_settings$motion_params_file # this gets expanded by get_mr_abspath in get_l1_confounds
+    # gpa$run_data$motion_params_file <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
+    #     if (isTRUE(gpa$run_data$run_nifti_present[ii])) {
+    #       normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$motion_params_file))
+    #     } else {
+    #       NA_character_
+    #     }
+    #   })
+  }
+
+  if (!"motion_params_file" %in% names(gpa$run_data)) {
+    gpa$run_data$motion_params_file <- gpa$run_data$motion_params_present <- NA_character_
+  } else {
+    gpa$run_data$motion_params_present <- file.exists(get_mr_abspath(gpa$run_data, "motion_params_file"))
+  }
+
+  if ("confound_input_file" %in% names(gpa$run_data)) {
+    lg$info("confound_input_file column already in run_data. Not using confound_input_file confounds specification.")
+  } else if (!is.null(gpa$confound_settings$confound_input_file)) {
+    checkmate::assert_string(gpa$confound_settings$confound_input_file)
+    gpa$run_data$confound_input_file <- gpa$confound_settings$confound_input_file # this gets expanded by get_mr_abspath in get_l1_confounds
+
+    # gpa$run_data$confound_input_file <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
+    #   if (isTRUE(gpa$run_data$run_nifti_present[ii])) {
+    #     normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$confound_input_file))
+    #   } else {
+    #     NA_character_
+    #   }
+    # })
+  }
+
+  # determine whether confound input files are present
+  if (!"confound_input_file" %in% names(gpa$run_data)) {
+    gpa$run_data$confound_input_file <- gpa$run_data$confound_input_file_present <- NA_character_
+  } else {
+    gpa$run_data$confound_input_file_present <- file.exists(get_mr_abspath(gpa$run_data, "confound_input_file"))
+  }
 
   rhs_to_vars <- function(str) {
     if (is.null(str)) {
@@ -435,7 +437,6 @@ finalize_confound_settings <- function(gpa, lg) {
 
   # handle lookup and creation of all confound files
 
-
   # numeric row number of each input to aid in tracking
   gpa$run_data$input_number <- seq_len(nrow(gpa$run_data))
 
@@ -455,7 +456,7 @@ finalize_confound_settings <- function(gpa, lg) {
     # this should add rows to the SQLite data for a subject if not yet present, or just return those rows if they exist
     l1_info <- get_l1_confounds(
       id = gpa$run_data$id[ii], session = gpa$run_data$session[ii], run_number = gpa$run_data$run_number[ii],
-      gpa = gpa, drop_volumes = gpa$drop_volumes
+      gpa = gpa, drop_volumes = 0L, # N.B. dropped volumes are handled downstream in truncate_runs, which requires knowledge of events
     )[c("l1_confound_file", "exclude_run")]
     return(l1_info)
   })

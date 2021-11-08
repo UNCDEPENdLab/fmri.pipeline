@@ -1,20 +1,27 @@
 #' helper function to lookup a keyed data.frame from the sqlite storage database
 #'
+#' @param gpa A \code{glm_pipeline_arguments} object used to lookup location of SQLite database for this analysis
+#' @param db_file An optional string specifying the SQLite database from which to read
 #' @param id the id of the subject to whom these data belong
-#' @param sesssion the session of these data
+#' @param session the session of these data
 #' @param run_number the run_number of these data
-#' @param data A \code{data.frame} containing the data to be inserted into the sqlite db
-#' @param table A character string of the table name to be modified
-#' @param delete_extant Whether to delete any existing records for this id + session + run_number combination
-#' @param append Whether to append records to the table (passed through to dbWriteTable)
-#' @param overwrite Whether to overwrite the existing table (passed through to dbWriteTable)
+#' @param table A character string of the table name from which to read
+#' @param drop_keys whether to drop identifying metatdata columns from data before returning the object
 #'
-#' @return a TRUE/FALSE indicating whether the record was successfully inserted
+#' @return a data.frame containing the requested data. Will return NULL if not found
 #' @importFrom checkmate assert_integerish test_null assert_data_frame assert_string
 #' @importFrom glue glue_sql
 #' @importFrom DBI dbConnect dbDisconnect dbGetQuery dbExistsTable
-read_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number = NULL, table = NULL, drop_keys=TRUE) {
-  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, run_number = NULL, table = NULL, drop_keys=TRUE) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments", null.ok = TRUE)
+  if (is.null(gpa)) {
+    checkmate::assert_string(db_file)
+    checkmate::assert_file_exists(db_file)
+    extant_con <- NULL
+  } else {
+    db_file <- gpa$output_locations$sqlite_db
+    extant_con <- gpa$sqlite_con
+  }
   if (checkmate::test_null(id)) stop("read_df_sqlite requires a specific id for lookup")
   checkmate::assert_integerish(session, lower = 1, null.ok = TRUE)
   if (is.null(session)) session <- 1
@@ -23,19 +30,20 @@ read_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number = N
   checkmate::assert_logical(drop_keys, len = 1L)
 
   # open connection if needed
-  if (is.null(gpa$sqlite_con) || !DBI::dbIsValid(gpa$sqlite_con)) {
-    con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
+  if (is.null(extant_con) || !DBI::dbIsValid(extant_con)) {
+    con <- DBI::dbConnect(RSQLite::SQLite(), db_file)
     on.exit(try(DBI::dbDisconnect(con)))
   } else {
-    con <- gpa$sqlite_con # recycle connection
+    con <- extant_con # recycle connection
   }
 
   # if table does not exist, then query is invalid (just return NULL)
   if (!DBI::dbExistsTable(con, table)) {
+    warning(sprintf("Cannot find SQLite table %s in file %s.", table, db_file))
     return(NULL)
   }
 
-  # delete any existing record
+  # lookup any existing record
   query <- glue::glue_sql(
     "SELECT * FROM {`table`}",
     "WHERE id = {id} AND session = {session}",
