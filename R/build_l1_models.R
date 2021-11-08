@@ -31,7 +31,8 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
 
   # Maybe allow glm object to be passed in that would have trial_data and variable_mapping.
   # I guess that would be like "add_l1_model"
-  lg <- lgr::get_logger("glm_pipeline/l1_setup")
+  lg <- lgr::get_logger("glm_pipeline/build_l1_models")
+
 
   checkmate::assert_class(gpa, "glm_pipeline_arguments", null.ok = TRUE)
   if (!is.null(gpa)) {
@@ -53,8 +54,6 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
   checkmate::assert_subset(value_cols, names(trial_data)) #make sure all parametric regressor columns are in the data frame
   checkmate::assert_string(value_regex, null.ok = TRUE)
   checkmate::assert_subset(c("id", "session", "run_number", "trial"), names(trial_data)) # required metadata in trial_data
-
-  lg <- lgr::get_logger("glm_pipeline/build_l1_models")
 
   if (is.null(l1_model_set)) {
     ## initialize overall l1 design object (holds events, signals, and models)
@@ -106,10 +105,10 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
         l1_model_set <- bl1_build_events(l1_model_set, trial_data)
       } else if (aa == 6) {
         # signals
-        l1_model_set <- bl1_build_signals(l1_model_set, trial_data)
+        l1_model_set <- bl1_build_signals(l1_model_set, trial_data, lg)
       } else if (aa == 7) {
         # models
-        l1_model_set <- bl1_build_models(l1_model_set)
+        l1_model_set <- bl1_build_models(l1_model_set, lg)
       }
     }
 
@@ -421,14 +420,26 @@ summarize_l1_signals <- function(sl) {
     cat("--------\nSignal ", ii, "\n\n")
     cat("  Name:", this$name, "\n")
     cat("  Event alignment:", this$event, "\n")
-    if (length(this$value) == 1L && is.numeric(this$value[1L])) {
-      cat("  Regressor value (constant): ", this$value[1L], "\n")
+    if (isFALSE(this$trial_subset)) {
+      cat("  Trial subset: FALSE", "\n")
+    } else if (isTRUE(this$trial_subset)) {
+      cat(glue("  Trial subset: {this$trial_subset_expression}"), "\n")
+      cat(
+        glue("  Proportion of trials included: overall = {round(this$trial_subset_statistics['overall'], 2)}"),
+        glue(
+          "    By id: mean = {round(this$trial_subset_statistics['mean'], 2)}, ", "sd = {round(this$trial_subset_statistics['sd'], 2)}, ",
+          "min = {round(this$trial_subset_statistics['min'], 2)}, ", "max = {round(this$trial_subset_statistics['max'], 2)}"
+        ), sep="\n"
+      )
+    }
+    if (this$value_type %in% c("unit", "number")) {
+      cat("  Regressor value (constant): ", this$value_fixed[1L], "\n")
     } else {
       cat(
-        "  Parametric value:", this$parametric_modulator, ", mean [min -- max]:",
-        round(mean(this$value$value, na.rm = TRUE), 2), "[",
-        round(min(this$value$value, na.rm = TRUE), 2), "--",
-        round(max(this$value$value, na.rm = TRUE), 2), "]\n"
+        "  Parametric value: ", this$parametric_modulator, ", mean [min -- max]: ",
+        round(mean(this$value$value, na.rm = TRUE), 2), " [ ",
+        round(min(this$value$value, na.rm = TRUE), 2), " -- ",
+        round(max(this$value$value, na.rm = TRUE), 2), " ] \n", sep=""
       )
     }
     cat("  HRF Normalization:", this$normalization, "\n")
@@ -468,8 +479,10 @@ summarize_l1_models <- function(ml) {
 #'
 #' @return a modified version of \code{l1_model_set} with updated \code{$signals}
 #' @keywords internal
-bl1_build_signals <- function(l1_model_set, trial_data) {
+bl1_build_signals <- function(l1_model_set, trial_data, lg=NULL) {
   cat("\nNow, we will build up a set of signals that can be included as regressors in the level 1 model.\n")
+
+  checkmate::assert_class(lg, "Logger")
 
   signal_list <- l1_model_set$signals
   add_more <- 1
@@ -561,7 +574,7 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
         cat(glue("Current trial subset: {c_string(ss$trial_subset)}"), sep = "\n")
         res <- menu(c("No", "Yes"), title = "Change trial subset?")
         if (res == 2) {
-          ss$trial_subset <- ss$trial_expression <- NULL
+          ss$trial_subset <- ss$trial_subset_expression <- ss$trial_subset_statistics <- NULL
         } # clear out subset so that it is respecified
       }
 
@@ -571,7 +584,7 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
         if (res == 1L) {
           ss$trial_subset <- FALSE
         } else if (res == 2L) {
-          while (is.null(ss$trial_expression)) {
+          while (is.null(ss$trial_subset_expression)) {
             cat("Specify an R-based expression that will be evaluated against trial_data and return TRUE/FALSE for each row.\n\n")
             cat("For example, you might want to separate out trials on which reaction times were implausibly fast (e.g., less than 100 ms).\n")
             cat("  In this case, if the column in trial_data is called rt and it's in seconds, you would type: rt < .1\n")
@@ -584,9 +597,11 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
               }
             )
             if (is.null(trial_set)) {
-              cat("Problem with your subsetting expression. Please try again.\n")
+              cat("\nProblem with your subsetting expression. Please try again.\n")
+            } else if (sum(trial_set) == 0) {
+              cat("\nExpression would retain zero trials! Please try again.\n\n")
             } else {
-              ss$trial_expression <- ss_expression
+              ss$trial_subset_expression <- ss_expression
               ss$trial_subset <- TRUE
             }
           }
@@ -594,12 +609,30 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
       }
 
       # if user has a cached trial expression, need to evaluate the trial set before getting value df
-      if (isTRUE(ss$trial_subset) && is.null(trial_set)) {
-        trial_set <- with(trial_data, eval(parse(text = ss$trial_expression)))
+      if (isTRUE(ss$trial_subset)) {
+        # calculate trial set from cached expression
+        if (is.null(trial_set)) trial_set <- with(trial_data, eval(parse(text = ss$trial_subset_expression)))
       } else {
-        # default: keep all trials. This is a local variable that is calculated every time this function is called (e.g., modification)
+        # when FALSE: keep all trials. This is a local variable that is calculated every time this function is called (e.g., modification)
         trial_set <- rep(TRUE, nrow(trial_data))
       }
+
+      get_trial_subset_stats <- function(trial_data, trial_set) {
+        overall <- sum(trial_set == TRUE) / length(trial_set)
+        tmp <- trial_data %>% bind_cols(trial_set=trial_set)
+        by_id <- tmp %>%
+          dplyr::group_by(id) %>%
+          dplyr::summarise(pct_true = sum(trial_set == TRUE) / n()) %>%
+          ungroup() %>%
+          summarise(
+            mean = mean(pct_true, na.rm = T), sd = sd(pct_true, na.rm=T),
+            min = min(pct_true, na.rm = T), max = max(pct_true, na.rm = T)
+          ) %>%
+          mutate(overall = overall) %>% unlist()
+        return(by_id)
+      }
+
+      ss$trial_subset_statistics <- get_trial_subset_stats(trial_data, trial_set)
 
       get_value_df <- function(signal, trial_data, trial_set = NULL) {
         value_df <- trial_data %>%
@@ -794,7 +827,8 @@ bl1_build_signals <- function(l1_model_set, trial_data) {
 }
 
 ############### BUILD MODELS FROM SIGNALS AND EVENTS
-bl1_build_models <- function(l1_model_set) {
+bl1_build_models <- function(l1_model_set, lg=NULL) {
+  checkmate::assert_class(lg, "Logger")
 
   create_new_model <- function(signal_list, to_modify=NULL) {
     checkmate::assert_class(to_modify, "l1_model_spec", null.ok=TRUE)
