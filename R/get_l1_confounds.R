@@ -23,14 +23,14 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   # If a single-row data.frame is passed in, use that, and update its fields. The latter is our default in finalize_pipeline_configuration
   if (!is.null(run_df)) {
     checkmate::assert_data_frame(run_df)
-    return_run_df <- TRUE 
+    return_run_df <- TRUE
     id <- run_df$id
     session <- run_df$session
     run_number <- run_df$run_number
   } else {
     return_run_df <- FALSE
     # lookup run information
-    run_df <- gpa$run_data %>% 
+    run_df <- gpa$run_data %>%
       dplyr::filter(id == !!id & session == !!session & run_number == !!run_number)
   }
 
@@ -122,11 +122,17 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   if (!(generate_l1_confounds || generate_run_exclusion || generate_run_truncation)) {
     if (!is.na(expected_l1_confound_file)) lg$debug("Returning extant file: %s in get_l1_confounds", expected_l1_confound_file)
 
-    return(list(
-      l1_confound_file = expected_l1_confound_file,
-      l1_confounds_df = data.table::fread(expected_l1_confound_file, data.table = FALSE),
-      exclude_run = exclude_run, exclude_data = exclude_data, truncation_data = truncation_data
-    ))
+    run_df$exclude_run <- exclude_run
+    run_df$l1_confound_file <- expected_l1_confound_file
+    if (isTRUE(return_run_df)) {
+      return(run_df)
+    } else {
+      return(list(
+        l1_confound_file = expected_l1_confound_file,
+        l1_confounds_df = data.table::fread(expected_l1_confound_file, data.table = FALSE),
+        exclude_run = exclude_run, exclude_data = exclude_data, truncation_data = truncation_data
+      ))
+    }
   }
 
   # read external confounds file (contains all volumes)

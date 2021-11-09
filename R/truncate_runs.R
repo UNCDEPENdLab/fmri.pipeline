@@ -83,7 +83,7 @@ truncate_runs <- function(mr_df, subj_outdir=NULL, lg=NULL) {
     this_run$last_volume <- last_volume
 
     # length of truncated file
-    final_volumes <- last_volume - first_volume + 1
+    final_volumes <- last_volume - this_run$first_volume + 1
 
     # update run_volumes to reflect any drops and truncation
     this_run$run_volumes <- final_volumes

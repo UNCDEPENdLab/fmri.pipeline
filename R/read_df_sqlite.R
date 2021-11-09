@@ -7,12 +7,14 @@
 #' @param run_number the run_number of these data
 #' @param table A character string of the table name from which to read
 #' @param drop_keys whether to drop identifying metatdata columns from data before returning the object
+#' @param quiet a logical indicating whether to issue a warning if the table is not found
 #'
 #' @return a data.frame containing the requested data. Will return NULL if not found
 #' @importFrom checkmate assert_integerish test_null assert_data_frame assert_string
 #' @importFrom glue glue_sql
 #' @importFrom DBI dbConnect dbDisconnect dbGetQuery dbExistsTable
-read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, run_number = NULL, table = NULL, drop_keys=TRUE) {
+#' @keywords internal
+read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, run_number = NULL, table = NULL, drop_keys=TRUE, quiet=TRUE) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments", null.ok = TRUE)
   if (is.null(gpa)) {
     checkmate::assert_string(db_file)
@@ -39,7 +41,7 @@ read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, 
 
   # if table does not exist, then query is invalid (just return NULL)
   if (!DBI::dbExistsTable(con, table)) {
-    warning(sprintf("Cannot find SQLite table %s in file %s.", table, db_file))
+    if (isFALSE(quiet)) warning(sprintf("Cannot find SQLite table %s in file %s.", table, db_file))
     return(NULL)
   }
 
@@ -52,7 +54,7 @@ read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, 
   )
 
   data <- tryCatch(DBI::dbGetQuery(con, query), error = function(e) {
-    message("Failed to obtain records for query: ", query)
+    if (isFALSE(quiet)) warning("Failed to obtain records for query: ", query)
     return(data.frame())
   })
 
