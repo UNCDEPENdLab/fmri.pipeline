@@ -549,9 +549,29 @@ calculate_subject_exclusions <- function(gpa) {
   return(gpa)
 }
 
-slurm_job_array <- function(job_name = "slurm_array") {
+#' Internal function to add last_onset and last_offset columns to gpa$run_data based on events in l1_models
+#' @param gpa a \code{glm_pipeline_arguments} object containing valid $run_data and $l1_models objects
+#' @details The last_onset and last_offset columns are calculated for each run based on the timing of all
+#'   events in the $l1_models$events list. These are then used to facilitate run truncation if the user
+#'   requests truncation after a final onset or offset.
+#' @return a modified copy of gpa with $run_data populated with last_offset and last_onset columns (times in seconds)
+#' @keywords internal
+populate_last_events <- function(gpa) {
+  # get all events as a long data.frame
+  m_events <- data.table::rbindlist(lapply(gpa$l1_models$events, function(this_event) this_event$data))
 
+  last_events <- m_events %>%
+    group_by(id, session, run_number) %>%
+    summarise(last_onset = max(onset, na.rm = TRUE), last_offset = max(onset + duration, na.rm = TRUE), .groups="drop")
+
+  gpa$run_data <- gpa$run_data %>%
+    dplyr::left_join(last_events, by=c("id", "session", "run_number"))
+
+  return(gpa)
 }
+
+# slurm_job_array <- function(job_name = "slurm_array") {
+# }
 
 #' helper function to convert the $sched_args field to a vector
 #'  of directives that can be included dynamically in the header of

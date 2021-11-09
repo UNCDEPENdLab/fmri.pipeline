@@ -90,13 +90,13 @@ lookup_nifti_inputs <- function(gpa, add_run_volumes = TRUE, add_nvoxels = TRUE)
   # add number of volumes for each run
   if (isTRUE(add_run_volumes)) {
     lg$info("Lookup up number of volumes from NIfTI headers")
-    gpa$run_data$run_volumes <- sapply(run_nifti, lookup_run_volumes)
+    gpa$run_data$run_volumes <- sapply(run_nifti, lookup_run_volumes, USE.NAMES=FALSE)
   }
 
   # add number of voxels for each run (used in FSL FEAT)
   if (isTRUE(add_nvoxels)) {
     lg$info("Lookup up number of voxels (x * y * z * t) from NIfTI headers")
-    gpa$run_data$nvoxels <- sapply(run_nifti, lookup_nvoxels)
+    gpa$run_data$nvoxels <- sapply(run_nifti, lookup_nvoxels, USE.NAMES=FALSE)
   }
 
   return(gpa)

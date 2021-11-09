@@ -22,7 +22,7 @@ truncate_runs <- function(mr_df, subj_outdir=NULL, lg=NULL) {
     run_volumes <- this_run$run_volumes
     this_run$orig_volumes <- run_volumes # always keep record of original length
     last_volume <- run_volumes # default to all volumes (no tail truncation)
-    has_cfile <- checkmate::test_file_exists(this_run$l1_confound_file)
+    # has_cfile <- checkmate::test_file_exists(this_run$l1_confound_file)
 
     if (!is.null(gpa$confound_settings$truncate_run)) {
       truncation_data <- read_df_sqlite(
@@ -77,7 +77,10 @@ truncate_runs <- function(mr_df, subj_outdir=NULL, lg=NULL) {
     }
 
     # first volume to use for analysis
-    first_volume <- this_run$drop_volumes + 1
+    this_run$first_volume <- this_run$drop_volumes + 1
+
+    # last volume to use for analysis
+    this_run$last_volume <- last_volume
 
     # length of truncated file
     final_volumes <- last_volume - first_volume + 1
@@ -91,20 +94,21 @@ truncate_runs <- function(mr_df, subj_outdir=NULL, lg=NULL) {
     # see whether truncation is needed/specified
     if (final_volumes < run_volumes) {
       # put truncated file in subject output directory, if provided
-      if (has_cfile) {
-        conext <- file_ext(this_run$l1_confound_file)
-        cname <- glue_data("sub-{id}_ses-{session}_run-{run_number}_drop-{drop_volumes}_trunc-{truncate_volumes}_confounds{conext}", .x = this_run)
-        c_odir <- ifelse(is.null(subj_outdir), dirname(this_run$l1_confound_file), subj_outdir)
-        trunc_confounds <- file.path(c_odir, cname)
-        if (!checkmate::test_file_exists(trunc_confounds)) {
-          cdata <- data.table::fread(this_run$l1_confound_file, na.strings = gpa$confound_settings$na_strings, data.table = FALSE, header = FALSE)
-          cdata <- cdata[first_volume:last_volume, , drop = FALSE]
-          lg$debug("Creating truncated confounds file: %s", trunc_confounds)
-          data.table::fwrite(cdata, file = trunc_confounds, row.names = FALSE, col.names = FALSE)
-        }
-        this_run$l1_confound_file <- trunc_confounds
-      }
+      # if (has_cfile) {
+      #   conext <- file_ext(this_run$l1_confound_file)
+      #   cname <- glue_data("sub-{id}_ses-{session}_run-{run_number}_drop-{drop_volumes}_trunc-{truncate_volumes}_confounds{conext}", .x = this_run)
+      #   c_odir <- ifelse(is.null(subj_outdir), dirname(this_run$l1_confound_file), subj_outdir)
+      #   trunc_confounds <- file.path(c_odir, cname)
+      #   if (!checkmate::test_file_exists(trunc_confounds)) {
+      #     cdata <- data.table::fread(this_run$l1_confound_file, na.strings = gpa$confound_settings$na_strings, data.table = FALSE, header = FALSE)
+      #     cdata <- cdata[first_volume:last_volume, , drop = FALSE]
+      #     lg$debug("Creating truncated confounds file: %s", trunc_confounds)
+      #     data.table::fwrite(cdata, file = trunc_confounds, row.names = FALSE, col.names = FALSE)
+      #   }
+      #   this_run$l1_confound_file <- trunc_confounds
+      # }
 
+      this_run$run_nifti <- get_mr_abspath(this_run, "run_nifti")
       imgext <- file_ext(this_run$run_nifti)
       fname <- glue_data("sub-{id}_ses-{session}_run-{run_number}_drop-{drop_volumes}_trunc-{truncate_volumes}{imgext}", .x = this_run)
       img_odir <- ifelse(is.null(subj_outdir), dirname(this_run$run_nifti), subj_outdir)
@@ -112,9 +116,47 @@ truncate_runs <- function(mr_df, subj_outdir=NULL, lg=NULL) {
       if (!file.exists(trunc_file)) {
         lg$debug("Creating truncated file: %s", trunc_file)
         # create truncated image with fslroi, which uses 0-based indexing
-        runFSLCommand(paste("fslroi", this_run$run_nifti, trunc_file, first_volume - 1, final_volumes))
+        runFSLCommand(paste("fslroi", this_run$run_nifti, trunc_file, this_run$first_volume - 1, final_volumes))
       }
       this_run$run_nifti <- trunc_file
+
+      # if (!is.null(gpa$confound_settings$exclude_run)) {
+      #   # Need to recalculate run exclusion since this run may be newly excluded or re-included within the volumes retained
+      #   l1_exclusion_df <- read_df_sqlite(
+      #     gpa = gpa, id = this_run$id, session = this_run$session,
+      #     run_number = this_run$run_number, table = "l1_exclusion_data"
+      #   )
+
+      #   if (is.null(l1_exclusion_df) || !checkmate::test_data_frame(l1_exclusion_df)) {
+      #     lg$warn(
+      #       "Cannot find l1 run exclusion data for id: %s, session: %s, run_number: %s",
+      #       this_run$id, this_run$session, this_run$run_number
+      #     )
+      #   } else if (nrow(l1_exclusion_df) != this_run$orig_volumes) {
+      #     # no recalculation of exclusion is possible if we do not have the same number of rows in MR data and cached confound data
+      #     lg$warn(
+      #       "Number of rows in exclusion data in SQLite is %d, but in mr_df, we have %d. Cannot recalculate run exclusion.",
+      #       nrow(l1_exclusion_df), this_run$orig_volumes
+      #     )
+      #   } else {
+      #     l1_exclusion_df <- l1_exclusion_df[first_volume:last_volume, , drop = FALSE]
+      #     exclude_run <- tryCatch(with(l1_exclusion_df, eval(parse(text = gpa$confound_settings$exclude_run))),
+      #       error = function(e) {
+      #         lg$error(
+      #           "Problem recalculating run exclusion for subject: %s, session: %s, run_number: %s, expr: %s",
+      #           this_run$id, this_run$session, this_run$run_number,
+      #           gpa$confound_settings$exclude_run
+      #         )
+      #         lg$error("No change will be made to exclusion status.")
+      #         return(NULL)
+      #       }
+      #     )
+      #     if (!is.null(exclude_run)) {
+      #       # refresh exclusion status 
+
+      #     }
+      #   }
+      # }
     }
 
     return(this_run)

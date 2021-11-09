@@ -3,7 +3,7 @@
 #' @param analysis_name A character string providing a useful name for identifying this analysis. Practically, this
 #'   influences the top-level folder name of the group analysis outputs, as well as the name of .RData objects
 #'   saved by this function to the output directory for the analysis.
-#' @param scheduler Which HPC scheduler system should be used for queueing jobs. Options are 'slurm' or 'torque'.
+#' @param scheduler Which HPC scheduler system should be used for queueing jobs. Options are 'slurm', 'torque', or 'local'.
 #' @param subject_data A data.frame containing all subject-level data such as age, sex, or other covariates. Columns
 #'   from \code{subject_data} can be used as covariates in group (aka 'level 3') analyses. If \code{NULL}, then
 #'   this will be distilled from \code{trial_data} by looking for variables that vary at the same
@@ -96,7 +96,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                  feat_l1_args = list(z_thresh = 1.96, prob_thresh = .05)
                                )) {
   checkmate::assert_string(analysis_name) # must be scalar string
-  checkmate::assert_subset(scheduler, c("slurm", "sbatch", "torque", "qsub"), empty.ok = FALSE)
+  checkmate::assert_subset(scheduler, c("slurm", "sbatch", "torque", "qsub", "local", "sh"), empty.ok = FALSE)
   checkmate::assert_data_frame(subject_data, null.ok = TRUE)
   checkmate::assert_data_frame(run_data, null.ok = TRUE)
   checkmate::assert_data_frame(trial_data)
@@ -123,7 +123,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   # setup output directory, if needed
   if (!dir.exists(output_directory)) {
-    lg$info("Setting up output directory for pipeline: ", output_directory)
+    lg$info("Setting up output directory for pipeline: %s", output_directory)
     dir.create(output_directory, recursive = TRUE)
   }
 
@@ -169,7 +169,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
       all(col == 1)
     }) == TRUE))
 
-    lg$info("Retaining columns: ", paste(one_cols, collapse = ", "))
+    lg$info(paste0("Retaining columns: ", paste(one_cols, collapse = ", ")))
 
     # at present, this will keep all subject-level covariates, too. Maybe correct later?
     run_data <- trial_data %>%

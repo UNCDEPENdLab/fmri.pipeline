@@ -18,30 +18,51 @@
 #' @param session The session number
 #' @param run_number The run number
 #' @param gpa a \code{glm_pipeline_arguments} object containing pipeline specification
-get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, drop_volumes=0L, last_volume=NULL, demean=TRUE) {
+get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_number = NULL, gpa, demean=TRUE) {
+  # For now, we have a fork in the inputs here. If a user specifies id, session, and run_number separately, then use those
+  # If a single-row data.frame is passed in, use that, and update its fields. The latter is our default in finalize_pipeline_configuration
+  if (!is.null(run_df)) {
+    checkmate::assert_data_frame(run_df)
+    return_run_df <- TRUE 
+    id <- run_df$id
+    session <- run_df$session
+    run_number <- run_df$run_number
+  } else {
+    return_run_df <- FALSE
+    # lookup run information
+    run_df <- gpa$run_data %>% 
+      dplyr::filter(id == !!id & session == !!session & run_number == !!run_number)
+  }
+
+  # populate drop_volumes in run_df if not present
+  if (!"drop_volumes" %in% names(run_df)) run_df$drop_volumes <- gpa$drop_volumes
+
   if (checkmate::test_null(id)) { stop("get_l1_confounds requires a specific id for lookup") }
   checkmate::assert_integerish(session, null.ok=TRUE)
   if (is.null(session)) session <- 1
   checkmate::assert_integerish(run_number, lower=1, null.ok = FALSE)
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
-  checkmate::assert_integerish(drop_volumes, lower = 0)
-  checkmate::assert_integerish(last_volume, null.ok = TRUE)
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
 
   # structure to return if this lookup fails (predictable elements so that caller can handle them)
-  empty_set <- list(
-    l1_confound_file = NA_character_, l1_confounds_df = data.frame(),
-    exclude_run = FALSE, exclude_data = data.frame()
-  )
+  if (isTRUE(return_run_df)) {
+     # use defaults if missing in run_df
+    if (!"exclude_run" %in% names(run_df)) run_df$exclude_run <- FALSE
+    if (!"l1_confound_file" %in% names(run_df)) run_df$l1_confound_file <- NA_character_
+    empty_set <- run_df # unmodified copy of run_df
+  } else {
+    empty_set <- list(
+      l1_confound_file = NA_character_, l1_confounds_df = data.frame(),
+      exclude_run = FALSE, exclude_data = data.frame(), truncation_data = data.frame()
+    )
+  }
 
-  # lookup run information
-  rinfo <- gpa$run_data %>% dplyr::filter(id == !!id & session == !!session & run_number == !!run_number)
-  if (nrow(rinfo) > 1L) {
-    print(rinfo)
+  if (nrow(run_df) > 1L) {
+    print(run_df)
     lg$error("Multiple matches for a single run in get_l1_confounds.")
     return(empty_set)
-  } else if (nrow(rinfo) == 0L) {
+  } else if (nrow(run_df) == 0L) {
     lg$error("Unable to locate a record in gpa$run_data for id %s, session %s, run_number %s.", id, session, run_number)
     return(empty_set)
   }
@@ -86,9 +107,8 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     }
   }
 
-   # Determine whether we should be returning information about run truncation
-   # and whether this information has already been calculated.
-   # Note that truncation has to be calculated alongside timing events (downstream in setup_l1_models)
+   # Determine whether we should be returning information about run truncation and whether this information has already been calculated.
+   # Note that truncation has to be calculated alongside timing events since truncate expressions often involve timing
    generate_run_truncation <- FALSE
    if (!is.null(gpa$confound_settings$truncate_run)) {
      truncation_data <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_truncation_data")
@@ -98,23 +118,22 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
      }
    }
 
-
-  # If both run exclusion and l1 confounds exist, just use the precalculated information
+  # If run exclusion, l1 confounds, and truncation data exist, just use the precalculated information
   if (!(generate_l1_confounds || generate_run_exclusion || generate_run_truncation)) {
     if (!is.na(expected_l1_confound_file)) lg$debug("Returning extant file: %s in get_l1_confounds", expected_l1_confound_file)
 
     return(list(
-      l1_confound_file = expected_l1_confound_file, 
+      l1_confound_file = expected_l1_confound_file,
       l1_confounds_df = data.table::fread(expected_l1_confound_file, data.table = FALSE),
       exclude_run = exclude_run, exclude_data = exclude_data, truncation_data = truncation_data
     ))
   }
 
-  # read external confounds file
+  # read external confounds file (contains all volumes)
   confound_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_confound_inputs")
-  if (is.null(confound_df) && isTRUE(rinfo$confound_input_file_present[1])) {
+  if (is.null(confound_df) && isTRUE(run_df$confound_input_file_present[1])) {
     lg$debug("Generating l1 confounds for id: %s, session: %s, run_number: %s", id, session, run_number)
-    cfile <- get_mr_abspath(rinfo, "confound_input_file")[1]
+    cfile <- get_mr_abspath(run_df, "confound_input_file")[1]
     lg$debug("Reading confound file: %s", cfile)
     confound_df <- tryCatch(data.table::fread(cfile, data.table=FALSE, na.strings=gpa$confound_settings$na_strings),
     error = function(e) {
@@ -126,19 +145,13 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
       if (length(gpa$confound_settings$confound_input_colnames) != ncol(confound_df)) {
         lg$warn(
           "Mismatch in number of columns in confound file: %s relative to $confound_settings$confound_input_colnames",
-          rinfo$confound_input_file[1]
+          run_df$confound_input_file[1]
         )
       } else {
         # only set names in confound_df if the number of columns matches
         data.table::setnames(confound_df, gpa$confound_settings$confound_input_colnames)
       }
     }
-
-    if (is.null(last_volume)) {
-      last_volume <- nrow(confound_df)
-      lg$debug("Assuming that last row of confounds file is final volume: %d", last_volume)
-    }
-    confound_df <- confound_df[(1 + drop_volumes):last_volume, ]
 
     # cache original confounds to db
     insert_df_sqlite(gpa,
@@ -147,23 +160,23 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     )
   }
 
-  #read motion parameters file
+  #read motion parameters file (all volumes)
   motion_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_motion_parameters")
-  if (is.null(motion_df) && isTRUE(rinfo$motion_params_present[1])) {
+  if (is.null(motion_df) && isTRUE(run_df$motion_params_present[1])) {
     lg$debug("Generating motion params for id: %s, session: %s, run_number: %s", id, session, run_number)
-    mfile <- get_mr_abspath(rinfo, "motion_params_file")[1]
+    mfile <- get_mr_abspath(run_df, "motion_params_file")[1]
     lg$debug("Reading motion file: %s", mfile)
 
     # Note: Avoid demeaning columns within generate_motion_regressors so that calculated regressors do not
     # change scale prior to testing the run exclusion criteria below. Demeaning can be applied safely thereafter.
+    # Note: do not specify drop_volumes or last_volume at this phase -- we want original (full length) motion params
     motion_df <- tryCatch({
       generate_motion_regressors(
         mfile,
         col.names = gpa$confound_settings$motion_params_colnames,
-        drop_volumes = drop_volumes, last_volume = last_volume, demean=FALSE,
-        na.strings=gpa$confound_settings$na_strings, lg=lg
+        demean=FALSE, na.strings=gpa$confound_settings$na_strings, lg=lg
       )}, error = function(e) {
-      lg$error("Failed to read motion file: %s with error %s", rinfo$motion_params_file[1], as.character(e))
+      lg$error("Failed to read motion file: %s with error %s", run_df$motion_params_file[1], as.character(e))
       return(NULL)
     })
 
@@ -174,9 +187,12 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     )
   }
 
-  # combine motion and confound files
+  # combine motion and confound files (all volumes)
   if (is.null(motion_df) && is.null(confound_df)) {
-    lg$info("Neither confounds nor motion parameters are available for %s", rinfo$run_nifti[1L])
+    lg$info(
+      "Neither confounds nor motion parameters are available for id: %s, session: %s, run_number: %d",
+      id, session, run_number
+    )
     return(empty_set)
   } else if (is.null(motion_df)) {
     all_confounds <- confound_df
@@ -192,7 +208,7 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
       if (length(overlap_names) > 0L) {
         lg$info(
           "Motion parameters have overlapping columns with confounds file: %s. Preferring confounds to motion params",
-          rinfo$confound_input_file[1L]
+          run_df$confound_input_file[1L]
         )
         lg$info("Overlap: %s", overlap_names)
         data.table::setnames(motion_df, old = overlap_names, new = paste0(overlap_names, ".mot"))
@@ -202,7 +218,7 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     }
   }
 
-  # volume and time columns to confounds
+  # add volume and time columns to confounds in case these are helpful in exclusion or truncation expressions
   all_confounds <- all_confounds %>%
     mutate(volume = 1:n(), time = (volume - 1) * gpa$tr)
 
@@ -227,10 +243,16 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     )
   }
 
+  # At this point, truncation_data should be populated. Perform trucation on run_nifti if needed and update run_df with final volume settings
+  run_df <- truncate_runs(run_df, analysis_outdir, lg)
+
+  # truncate confounds to match
+  all_confounds <- all_confounds[run_df$first_volume:run_df$last_volume, , drop = FALSE]
+
   # calculate whether to retain or exclude this run
   if (isTRUE(generate_run_exclusion) && !is.null(gpa$confound_settings$exclude_run)) {
     if (!all(gpa$confound_settings$run_exclusion_columns %in% names(all_confounds))) {
-      lg$warn("Missing exclusion columns for subject: %s, session: %s", rinfo$id[1L], rinfo$session[1L])
+      lg$warn("Missing exclusion columns for subject: %s, session: %s", run_df$id[1L], run_df$session[1L])
       lg$warn("Column: %s", setdiff(gpa$confound_settings$run_exclusion_columns, names(all_confounds)))
       lg$warn("We will exclude this run from analysis until this is resolved!")
       exclude_run <- TRUE
@@ -266,11 +288,14 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
       id = id, session = session, run_number = run_number,
       data = data.frame(exclude_run = exclude_run), table = "l1_run_exclusions", immediate=TRUE
     )
+
+    # add run exclusion column to data.frame row
+    run_df$exclude_run <- exclude_run
   }
 
   # check for missing confound columns
   if (!all(gpa$confound_settings$l1_confound_regressors %in% names(all_confounds))) {
-    lg$warn("Missing confound columns for subject: %s, session: %s", rinfo$id[1L], rinfo$session[1L])
+    lg$warn("Missing confound columns for subject: %s, session: %s", run_df$id[1L], run_df$session[1L])
     lg$warn("Column: %s", setdiff(gpa$confound_settings$l1_confound_regressors, names(all_confounds)))
   }
 
@@ -297,6 +322,7 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
 
   lg$debug("Writing l1 confounds to file: %s", expected_l1_confound_file)
   write.table(all_confounds, file = expected_l1_confound_file, row.names = FALSE, col.names = FALSE)
+  run_df$l1_confound_file <- expected_l1_confound_file
 
   # cache final confounds to db
   insert_df_sqlite(gpa,
@@ -304,9 +330,14 @@ get_l1_confounds <- function(id = NULL, session = NULL, run_number = NULL, gpa, 
     data = all_confounds, table = "l1_confounds", immediate=TRUE
   )
 
-  return(list(
-    l1_confound_file = expected_l1_confound_file,
-    l1_confounds_df = all_confounds,
-    exclude_run = exclude_run, exclude_data = exclude_data, truncation_data = truncation_data
-  ))
+  if (isTRUE(return_run_df)) {
+    return(run_df)
+  } else {
+    return(list(
+      l1_confound_file = expected_l1_confound_file,
+      l1_confounds_df = all_confounds,
+      exclude_run = exclude_run, exclude_data = exclude_data, truncation_data = truncation_data
+    ))
+  }
+  
 }
