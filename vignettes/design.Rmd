@@ -250,3 +250,59 @@ gpa$confound_settings$spike_volumes <- c(fd0p9 = "-1,0; FD > 0.9", big_translate
 # Providing file inputs to fmri.pipeline
 
 TODO: Cover the direct `$run_data` approach versus the regex approach.
+
+# Output structure for FEAT group analysis
+
+The folder and file naming scheme for FEAT group analysis outputs is controlled by two settings in: `gpa$output_locations`. Here are the settings with
+their defaults: 
+
+```
+gpa$output_locations$feat_l3_directory = "{gpa$output_directory}/feat_l3/L1m-{l1_model}/L2m-{l2_model}_l2c-{l2_contrast}/L3m-{l3_model}"
+gpa$output_locations$feat_l3_fsf = "FEAT_l1c-{l1_contrast}.fsf"
+```
+
+Note that these use `glue()` syntax, which evaluates the expressions in curly braces at the time they are run, dynamically substituting the
+correct values for each combination fo models (this occurs in `fsl_l3_model.R`).
+
+Under these defaults, the resulting directories will look like this:
+
+```
+feat_l3/L1m-abspe/L2m-runavg_l2c-overall/L3m-age/FEAT_l1c-EV_abspe.gfeat
+feat_l3/L1m-abspe/L2m-runavg_l2c-overall/L3m-age/FEAT_l1c-EV_clock.gfeat
+feat_l3/L1m-abspe/L2m-runavg_l2c-overall/L3m-age/FEAT_l1c-EV_feedback.gfeat
+```
+
+In this case, the regressors in the first level model `abspe` are `clock`, `feedback`, and `abspe`.
+
+If you have a single-run analysis, you will not have a level 2 model, so that part of the naming scheme will be omitted.
+
+## l1_model_setup
+
+After running setup_l1_models, the gpa object will now have a new element called $l1_model_setup. This contains the following sub-elements:
+
+- `metadata`: A data.frame containing information about the imaging file inputs and confounds for level 1 analysis.
+- `fsl`: A data.frame with one row for every run that is analyzed with a given level 1 model using FSL. This will usually be something like n_l1_models x n_runs in length.
+- `spm`: Not implemented yet
+- `afni`: Not implemented yet
+
+### metadata
+
+The structure of this data.frame is:
+
+- `id`: The subject id
+- `session`: The session number
+- `run_number`: The run number for a given dataset
+- `run_nifti`: The nifti file that was used for level 1 analysis
+- `l1_confound_file`: The run confounds file that should be included in the level 1 GLM model
+- `run_volumes`: The number of volumes in the run_nifti that is analyzed
+- `orig_volumes`: The number of volumes that were in run_nifti prior to drops and truncation
+- `last_onset`: The time (in seconds) of the last event onset for this run
+- `last_offset`: The time (in seconds) of the last event offset for this run
+- `drop_volumes`: The number of volumes that have been dropped from the beginning of the NIfTI file
+- `truncate_volumes`: The number of volumes that have been truncated at the end of the NIfTI file based on the `$truncate_run` setting.
+- `exclude_run`: Whether the run was excluded from higher-level analysis
+
+
+## SELF NOTES
+
+1. Finalize pipeline configuration now enforces that l1, l2, and l3 models are in place. This is necessary to handle run truncation.
