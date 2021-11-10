@@ -622,8 +622,8 @@ bl1_build_signals <- function(l1_model_set, trial_data, lg=NULL) {
         tmp <- trial_data %>% bind_cols(trial_set=trial_set)
         by_id <- tmp %>%
           dplyr::group_by(id) %>%
-          dplyr::summarise(pct_true = sum(trial_set == TRUE) / n(), .groups = "drop") %>%
-          summarise(
+          dplyr::summarize(pct_true = sum(trial_set == TRUE) / n(), .groups = "drop") %>%
+          dplyr::summarize(
             mean = mean(pct_true, na.rm = T), sd = sd(pct_true, na.rm=T),
             min = min(pct_true, na.rm = T), max = max(pct_true, na.rm = T)
           ) %>%

@@ -513,7 +513,7 @@ calculate_subject_exclusions <- function(gpa) {
 
   n_good_runs_df <- gpa$run_data %>%
     dplyr::group_by(id, session) %>%
-    dplyr::summarise(n_good_runs = sum(exclude_run == FALSE)) %>% # sum of non-excluded runs
+    dplyr::summarize(n_good_runs = sum(exclude_run == FALSE)) %>% # sum of non-excluded runs
     dplyr::ungroup() %>%
     dplyr::select(id, session, n_good_runs)
 
@@ -556,13 +556,14 @@ calculate_subject_exclusions <- function(gpa) {
 #'   requests truncation after a final onset or offset.
 #' @return a modified copy of gpa with $run_data populated with last_offset and last_onset columns (times in seconds)
 #' @keywords internal
+#' @importFrom dplyr summarize group_by left_join
 populate_last_events <- function(gpa) {
   # get all events as a long data.frame
   m_events <- data.table::rbindlist(lapply(gpa$l1_models$events, function(this_event) this_event$data))
 
   last_events <- m_events %>%
     group_by(id, session, run_number) %>%
-    summarise(last_onset = max(onset, na.rm = TRUE), last_offset = max(onset + duration, na.rm = TRUE), .groups="drop")
+    dplyr::summarize(last_onset = max(onset, na.rm = TRUE), last_offset = max(onset + duration, na.rm = TRUE), .groups="drop")
 
   gpa$run_data <- gpa$run_data %>%
     dplyr::left_join(last_events, by=c("id", "session", "run_number"))
