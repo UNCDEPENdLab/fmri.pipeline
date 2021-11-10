@@ -43,7 +43,7 @@ truncate_runs <- function(mr_df, gpa = NULL, subj_outdir = NULL, truncation_data
       )
     } else {
       # add last onset and offset to truncation_data for calculating expression
-      truncation_data <- truncation_data %>% bind_cols(mr_df %>% dplyr::select(last_onset, last_offset))
+      truncation_data <- truncation_data %>% bind_cols(mr_df %>% dplyr::select(starts_with("last_")))
       last_volume <- tryCatch(with(truncation_data, eval(parse(text = gpa$confound_settings$truncate_run))),
         error = function(e) {
           lg$error(

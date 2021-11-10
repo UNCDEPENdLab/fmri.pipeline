@@ -563,7 +563,13 @@ populate_last_events <- function(gpa) {
 
   last_events <- m_events %>%
     group_by(id, session, run_number) %>%
-    dplyr::summarize(last_onset = max(onset, na.rm = TRUE), last_offset = max(onset + duration, na.rm = TRUE), .groups="drop")
+    dplyr::summarize(
+      last_event_idx = which.max(onset),
+      last_event = event[last_event_idx],      
+      last_onset = max(onset, na.rm = TRUE), 
+      last_offset = max(onset + duration, na.rm = TRUE), 
+      last_isi = isi[last_event_idx],
+      .groups="drop")
 
   gpa$run_data <- gpa$run_data %>%
     dplyr::left_join(last_events, by=c("id", "session", "run_number"))

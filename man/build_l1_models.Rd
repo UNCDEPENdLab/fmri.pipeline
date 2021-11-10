@@ -13,7 +13,9 @@ build_l1_models(
   duration_cols = NULL,
   duration_regex = ".*duration.*",
   value_cols = NULL,
-  value_regex = NULL
+  value_regex = NULL,
+  isi_cols = NULL,
+  isi_regex = "^(iti|isi).*"
 )
 }
 \arguments{
@@ -40,6 +42,11 @@ event duration columns in \code{trial_data}}
 
 \item{value_regex}{an optional PCRE-compatible regular expression for identifying potential
 event value columns in \code{trial_data}}
+
+\item{isi_cols}{an optional character vector of columns in \code{trial_data} that should be in the set of signal isi/iti}
+
+\item{isi_regex}{an optional PCRE-compatible regular expression for identifying potential
+isi/iti columns in \code{trial_data}}
 }
 \value{
 a \code{l1_model_set} object containing events, signals, and models, compatible with build_design_matrix

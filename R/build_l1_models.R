@@ -15,6 +15,9 @@
 #' @param value_cols an optional character vector of columns in \code{trial_data} that should be in the set of signal values
 #' @param value_regex an optional PCRE-compatible regular expression for identifying potential
 #'   event value columns in \code{trial_data}
+#' @param isi_cols an optional character vector of columns in \code{trial_data} that should be in the set of signal isi/iti
+#' @param isi_regex an optional PCRE-compatible regular expression for identifying potential
+#'   isi/iti columns in \code{trial_data}
 #'
 #' @details if \code{gpa} is not passed in, then we will work from trial_data and l1_model_set.
 #'
@@ -27,7 +30,7 @@
 build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
                            onset_cols=NULL, onset_regex=".*(onset|time).*",
                            duration_cols=NULL, duration_regex=".*duration.*",
-                           value_cols=NULL, value_regex=NULL) {
+                           value_cols=NULL, value_regex=NULL, isi_cols=NULL, isi_regex="^(iti|isi).*") {
 
   # Maybe allow glm object to be passed in that would have trial_data and variable_mapping.
   # I guess that would be like "add_l1_model"
@@ -72,7 +75,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
 
   # relies on scope of parent function for onset_cols etc.
   take_l1_actions <- function(l1_model_set, actions) {
-    checkmate::assert_integerish(actions, lower = 1, upper = 7)
+    checkmate::assert_integerish(actions, lower = 1, upper = 8)
     for (aa in actions) {
       if (aa == 1) {
         # onsets
@@ -87,12 +90,18 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
           select_cols = duration_cols, select_regex = duration_regex
         )
       } else if (aa == 3) {
+        # iti/isi
+        l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
+          field_name = "isis", field_desc = "ISI/ITI",
+          select_cols = isi_cols, select_regex = isi_regex
+        )
+      } else if (aa == 4) {
         # parametric values
         l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
           field_name = "values", field_desc = "parametric value",
           select_cols = value_cols, select_regex = value_regex
         )
-      } else if (aa == 4) {
+      } else if (aa == 5) {
         # within-subject factors
         l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
           field_name = "wi_factors", field_desc = "within-subject factor",
@@ -100,13 +109,13 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
         )
 
         # TODO: Need to convert integers to factors
-      } else if (aa == 5) {
+      } else if (aa == 6) {
         # events
         l1_model_set <- bl1_build_events(l1_model_set, trial_data)
-      } else if (aa == 6) {
+      } else if (aa == 7) {
         # signals
         l1_model_set <- bl1_build_signals(l1_model_set, trial_data, lg)
-      } else if (aa == 7) {
+      } else if (aa == 8) {
         # models
         l1_model_set <- bl1_build_models(l1_model_set, lg)
       }
@@ -121,14 +130,16 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
       "This process consists of six steps: ",
       "  1. Selection of event onset columns in trial_data. Event onsets must be in seconds relative to the scan start.",
       "  2. Selection of event duration columns in trial_data. Event durations must be in seconds relative to the scan start.",
-      "  3. Selection of all parametric modulator (continuous) event values in trial_data.",
-      "  4. Build 'events' which consist of onset times and durations.",
-      "  5. Build 'signals', which consist of an event, an event value (amplitude), and convolution and regressor settings.",
-      "  6. Build 'models', which consist of a set of signals and GLM contrasts for signal-related regressors.",
+      "  3. Optional selection of interstimulus/intertrial intervals in trial_data. These must be ISI/ISI durations in seconds.",
+      "  4. Selection of all parametric modulator (continuous) event values in trial_data.",
+      "  5. Optional selection of within-subject factor columns in trial_data that can be used in specifying signals.",
+      "  6. Build 'events' which consist of onset times, durations, and optional ITI/ISI.",
+      "  7. Build 'signals', which consist of an event, an event value (amplitude), and convolution and regressor settings.",
+      "  8. Build 'models', which consist of a set of signals and GLM contrasts for signal-related regressors.",
       sep = "\n"
     )
 
-    l1_model_set <- take_l1_actions(l1_model_set, 1:7) # run user through each step in sequence
+    l1_model_set <- take_l1_actions(l1_model_set, 1:8) # run user through each step in sequence
   } else {
     cat("Modifying existing l1 model structure\n")
   }
@@ -139,17 +150,18 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
     blm1_action <- menu(c(
       "Update event onset columns",                                             # 1
       "Update event duration columns",                                          # 2
-      "Update parametric value columns",                                        # 3
-      "Update within-subject factor columns",                                   # 4
-      "Update events (each consists of an onset and duration)",                 # 5
-      "Update signals (event, factor, parametric value, regressor settings)",   # 6
-      "Update models (consisting of signals and contrasts)",                    # 7
-      "Done with level 1 model building"                                        # 8
+      "Update ITI/ISI columns",                                                 # 3
+      "Update parametric value columns",                                        # 4
+      "Update within-subject factor columns",                                   # 5
+      "Update events (each consists of an onset and duration)",                 # 6
+      "Update signals (event, factor, parametric value, regressor settings)",   # 7
+      "Update models (consisting of signals and contrasts)",                    # 8
+      "Done with level 1 model building"                                        # 9
     ), title = "Level 1 model builder")
 
-    if (blm1_action < 8) {
+    if (blm1_action < 9) {
       l1_model_set <- take_l1_actions(l1_model_set, blm1_action)
-    } else if (blm1_action == 8) {
+    } else if (blm1_action == 9) {
       cat("Completing level 1 model building\n")
       blm1_complete <- TRUE
       break
@@ -312,6 +324,15 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL) {
           round(max(x$data$duration, na.rm = TRUE), 2), "]\n"
         )
         cat("    First 6 values:", paste(round(head(x$data$duration), 2), collapse = ", "), "\n\n")
+        if (!is.null(x$isi)) {
+          cat("  Event ISI/ITI:    ", x$isi, "\n")
+          cat(
+            "    mean [min -- max]: ",
+            round(mean(x$data$isi, na.rm = TRUE), 2), "[",
+            round(min(x$data$isi, na.rm = TRUE), 2), "--",
+            round(max(x$data$isi, na.rm = TRUE), 2), "]\n"
+          )
+        }
       })
     } else {
       cat("No events in l1 models\n")
@@ -373,6 +394,31 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL) {
         }
       }
 
+      # optional selection of ISI if chosen in initial setup
+      choose_isi <- menu(c("Yes", "No"), title = "Do you want to specify an ITI or ISI that follows this event?")
+      if (choose_isi == 1L) {
+        complete <- FALSE
+        while (isFALSE(complete)) {
+          choices <- c("Specify fixed ISI/ITI", l1_model_set$isis)
+          oval <- menu(choices, title = "Choose event ISI/ITI")
+          if (oval == 1) {
+            isi <- NULL
+            while (!checkmate::test_number(isi, lower = 0, upper = 5000)) {
+              isi <- as.numeric(readline(paste0("Enter the ISI/ITI value (in seconds) for ", ss$name, ": ")))
+            }
+            if (isi > 50) {
+              lg$warn("ISI/ITI more than 50s specified. Make sure that your ISI/ITI values are in seconds, not milliseconds!")
+            }
+
+            ss$isi <- duration
+            complete <- TRUE
+          } else if (oval > 1L) {
+            ss$isi <- choices[oval]
+            complete <- TRUE
+          }
+        }
+      }
+
       if (is.numeric(ss$duration)) {
         edata <- trial_data %>%
           dplyr::select(!!ss$onset) %>%
@@ -385,6 +431,19 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL) {
           dplyr::mutate(event = !!ss$name)
       }
 
+      if (!is.null(ss$isi)) {
+        if (is.numeric(ss$isi)) {
+          edata$isi <- ss$isi
+        } else {
+          idata <- trial_data %>%
+            dplyr::select(!!ss$isi) %>%
+            setNames("isi")
+          edata <- edata %>% bind_cols(idata) # add isi column
+        }
+      } else {
+        edata$isi <- NA_real_ # populate NA
+      }
+      
       ss$data <- metadata_df %>% dplyr::bind_cols(edata)
 
       l1_model_set$events[[nm]] <- ss
