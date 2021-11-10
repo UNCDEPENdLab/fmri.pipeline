@@ -14,10 +14,16 @@
 #'
 #' @return a list containing: confounds=<location of l1 confounds file>, exclude_run=<TRUE/FALSE denoting run exclusion,
 #'   exclude_data=<location of file containing columns used to calculate run exclusion>
+#' @param run_df a single-row data.frame containing information about the run whose confounds should be calculated
 #' @param id The subject id
 #' @param session The session number
 #' @param run_number The run number
 #' @param gpa a \code{glm_pipeline_arguments} object containing pipeline specification
+#' @param demean whether to demean confounds after calculation
+#' @keywords internal
+#' @importFrom dplyr n
+#' @importFrom checkmate assert_data_frame test_null assert_integerish assert_class
+#' @importFrom data.table setnames fread
 get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_number = NULL, gpa, demean=TRUE) {
   # For now, we have a fork in the inputs here. If a user specifies id, session, and run_number separately, then use those
   # If a single-row data.frame is passed in, use that, and update its fields. The latter is our default in finalize_pipeline_configuration

@@ -14,6 +14,8 @@ get_l1_confounds(
 )
 }
 \arguments{
+\item{run_df}{a single-row data.frame containing information about the run whose confounds should be calculated}
+
 \item{id}{The subject id}
 
 \item{session}{The session number}
@@ -21,6 +23,8 @@ get_l1_confounds(
 \item{run_number}{The run number}
 
 \item{gpa}{a \code{glm_pipeline_arguments} object containing pipeline specification}
+
+\item{demean}{whether to demean confounds after calculation}
 }
 \value{
 a list containing: confounds=<location of l1 confounds file>, exclude_run=<TRUE/FALSE denoting run exclusion,
@@ -42,3 +46,4 @@ Likewise, any run-level exclusions are tested according to $confound_settings$ex
   quoted expression that can tested against the confounds data.frame such that a single TRUE/FALSE is returned
   indicating whether a run is excluded (TRUE) or retained (FALSE) for higher-level analyses.
 }
+\keyword{internal}
