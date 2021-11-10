@@ -4,7 +4,7 @@
 \alias{populate_defaults}
 \title{helper function to copy any missing fields in target}
 \usage{
-populate_defaults(target, defaults)
+populate_defaults(target = NULL, defaults)
 }
 \arguments{
 \item{target}{a named list to be populated by defaults if fields are missing}

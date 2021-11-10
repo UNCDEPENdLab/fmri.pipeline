@@ -4,7 +4,7 @@
 \alias{bl1_build_signals}
 \title{helper function to build level 1 signals}
 \usage{
-bl1_build_signals(l1_model_set, trial_data)
+bl1_build_signals(l1_model_set, trial_data, lg = NULL)
 }
 \arguments{
 \item{l1_model_set}{An \code{l1_model_set} object whose signals should be created or modified}

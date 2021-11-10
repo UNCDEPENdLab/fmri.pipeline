@@ -6,33 +6,36 @@
 \usage{
 read_df_sqlite(
   gpa = NULL,
+  db_file = NULL,
   id = NULL,
   session = NULL,
   run_number = NULL,
   table = NULL,
-  drop_keys = TRUE
+  drop_keys = TRUE,
+  quiet = TRUE
 )
 }
 \arguments{
+\item{gpa}{A \code{glm_pipeline_arguments} object used to lookup location of SQLite database for this analysis}
+
+\item{db_file}{An optional string specifying the SQLite database from which to read}
+
 \item{id}{the id of the subject to whom these data belong}
+
+\item{session}{the session of these data}
 
 \item{run_number}{the run_number of these data}
 
-\item{table}{A character string of the table name to be modified}
+\item{table}{A character string of the table name from which to read}
 
-\item{sesssion}{the session of these data}
+\item{drop_keys}{whether to drop identifying metatdata columns from data before returning the object}
 
-\item{data}{A \code{data.frame} containing the data to be inserted into the sqlite db}
-
-\item{delete_extant}{Whether to delete any existing records for this id + session + run_number combination}
-
-\item{append}{Whether to append records to the table (passed through to dbWriteTable)}
-
-\item{overwrite}{Whether to overwrite the existing table (passed through to dbWriteTable)}
+\item{quiet}{a logical indicating whether to issue a warning if the table is not found}
 }
 \value{
-a TRUE/FALSE indicating whether the record was successfully inserted
+a data.frame containing the requested data. Will return NULL if not found
 }
 \description{
 helper function to lookup a keyed data.frame from the sqlite storage database
 }
+\keyword{internal}

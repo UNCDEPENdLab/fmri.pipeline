@@ -43,7 +43,7 @@ setup_glm_pipeline(
 influences the top-level folder name of the group analysis outputs, as well as the name of .RData objects
 saved by this function to the output directory for the analysis.}
 
-\item{scheduler}{Which HPC scheduler system should be used for queueing jobs. Options are 'slurm' or 'torque'.}
+\item{scheduler}{Which HPC scheduler system should be used for queueing jobs. Options are 'slurm', 'torque', or 'local'.}
 
 \item{output_directory}{The output directory for all configuration and job submission files for this analysis.
 Default is a subfolder called "glm_out" in the current working directory.}

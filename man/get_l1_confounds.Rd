@@ -5,12 +5,11 @@
 \title{helper function to generate confounds txt file for inclusion as additional regressors}
 \usage{
 get_l1_confounds(
+  run_df = NULL,
   id = NULL,
   session = NULL,
   run_number = NULL,
   gpa,
-  drop_volumes = 0L,
-  last_volume = NULL,
   demean = TRUE
 )
 }
