@@ -103,26 +103,16 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         })
       )
 
-      last_events <- m_events %>% dplyr::filter(run_number %in% !!rdata$run_number) %>%
-        group_by(run_number) %>%
-        summarise(last_onset = max(onset, na.rm = TRUE), last_offset = max(onset + duration, na.rm = TRUE))
-
-      last_onset <- last_events$last_onset
-      last_offset <- last_events$last_offset
-
       # lookup subject directory for placing truncated files
       subj_output_directory <- get_output_directory(id = subj_id, session = subj_session, gpa = gpa, create_if_missing = FALSE, what = "sub")
 
-      # initialize mr data frame with untruncated inputs
+      # initialize mr data frame with elements of $run_data
       mr_df <- data.frame(
         id = subj_id, session = subj_session, run_number = mr_run_nums, run_nifti, l1_confound_file = l1_confound_files, 
-        run_volumes = run_volumes, last_onset, last_offset, drop_volumes = gpa$drop_volumes, exclude_run, row.names=NULL
+        run_volumes = run_volumes, exclude_run, row.names=NULL
       )
 
-      mr_df <- truncate_runs(mr_df, subj_output_directory, lg)
-
       # Tracking list containing data.frames for each software, where we expect one row per run-level model (FSL)
-
       # or subject-level model (AFNI). The structure varies because FSL estimates per-run GLMs, while AFNI concatenates.
       l1_file_setup <- list(fsl = list(), spm = list(), afni = list(), metadata = mr_df)
 

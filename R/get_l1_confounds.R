@@ -45,11 +45,22 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
 
+  # these columns should be populated to run_df for every case
+  calculation_columns <- c(
+    "run_nifti", "run_volumes", "orig_volumes", "first_volume",
+    "last_volume", "truncate_volumes", "l1_confound_file", "exclude_run"
+  )
+
+  # use defaults if missing in run_df (ensure same return for every input)
+  calculation_defaults <- data.frame(
+    orig_volumes = NA_integer_, first_volume = NA_integer_, last_volume = NA_integer_, 
+    truncate_volumes = NA_integer_, l1_confound_file = NA_character_, exclude_run = FALSE
+  )
+
+  run_df <- populate_defaults(run_df, calculation_defaults)
+
   # structure to return if this lookup fails (predictable elements so that caller can handle them)
   if (isTRUE(return_run_df)) {
-     # use defaults if missing in run_df
-    if (!"exclude_run" %in% names(run_df)) run_df$exclude_run <- FALSE
-    if (!"l1_confound_file" %in% names(run_df)) run_df$l1_confound_file <- NA_character_
     empty_set <- run_df # unmodified copy of run_df
   } else {
     empty_set <- list(
@@ -89,6 +100,8 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   exclude_data <- data.frame()
   truncation_data <- data.frame()
 
+  l1_cached_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_run_calculations")
+
   # determine whether we should be returning information about run exclusions
   # and whether this information has already been calculated
   generate_run_exclusion <- FALSE
@@ -96,10 +109,9 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
     # no basis for exclusion (all runs okay)
     exclude_run <- FALSE
   } else {
-    exclude_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_run_exclusions")
     exclude_data <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_exclusion_data")
-    if (!is.null(exclude_df)) {
-      exclude_run <- as.logical(exclude_df$exclude_run)
+    if (!is.null(l1_cached_df)) {
+      exclude_run <- as.logical(l1_cached_df$exclude_run)
     } else {
       lg$debug("No record of run exclusion exists in database: %s.", gpa$output_locations$sqlite_db)
       exclude_run <- NA #default to missing
@@ -122,8 +134,24 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   if (!(generate_l1_confounds || generate_run_exclusion || generate_run_truncation)) {
     if (!is.na(expected_l1_confound_file)) lg$debug("Returning extant file: %s in get_l1_confounds", expected_l1_confound_file)
 
+    # populate cached values for run if not recalculating anything
     run_df$exclude_run <- exclude_run
     run_df$l1_confound_file <- expected_l1_confound_file
+
+    if (is.null(l1_cached_df)) {
+      msg <- "Not re-generating confound information, but l1_cached_df is NULL. Cannot proceed."
+      lg$error(msg)
+      stop(msg)
+    } else {
+      # SQLite cannot support logical/boolean types, need to convert 0/1 outcome
+      l1_cached_df$exclude_run <- as.logical(l1_cached_df$exclude_run)
+    }
+
+    # add/replace any cached calculations.
+    # TODO: the logic of exclude_run and l1_confound above seem redundant. Likewise, the 'is.null(l1_cached_df)' 
+    # above seems like it could be removed/factored out.
+    run_df[, calculation_columns] <- l1_cached_df[, calculation_columns]
+
     if (isTRUE(return_run_df)) {
       return(run_df)
     } else {
@@ -250,10 +278,11 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   }
 
   # At this point, truncation_data should be populated. Perform trucation on run_nifti if needed and update run_df with final volume settings
-  run_df <- truncate_runs(run_df, analysis_outdir, lg)
+  run_df <- truncate_runs(run_df, gpa, analysis_outdir, truncation_data, lg)
 
   # truncate confounds to match
   all_confounds <- all_confounds[run_df$first_volume:run_df$last_volume, , drop = FALSE]
+  motion_df <- motion_df[run_df$first_volume:run_df$last_volume, , drop = FALSE]
 
   # calculate whether to retain or exclude this run
   if (isTRUE(generate_run_exclusion) && !is.null(gpa$confound_settings$exclude_run)) {
@@ -290,14 +319,10 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
       id = id, session = session, run_number = run_number, data = exclude_data,
       table = "l1_exclusion_data", immediate=TRUE
     )
-    insert_df_sqlite(gpa,
-      id = id, session = session, run_number = run_number,
-      data = data.frame(exclude_run = exclude_run), table = "l1_run_exclusions", immediate=TRUE
-    )
-
-    # add run exclusion column to data.frame row
-    run_df$exclude_run <- exclude_run
   }
+
+  # add run exclusion column to data.frame
+  run_df$exclude_run <- exclude_run
 
   # check for missing confound columns
   if (!all(gpa$confound_settings$l1_confound_regressors %in% names(all_confounds))) {
@@ -334,6 +359,12 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   insert_df_sqlite(gpa,
     id = id, session = session, run_number = run_number,
     data = all_confounds, table = "l1_confounds", immediate=TRUE
+  )
+
+  # cache run_df calculations to db
+  insert_df_sqlite(gpa,
+    id = id, session = session, run_number = run_number,
+    data = run_df[, calculation_columns, drop = FALSE], table = "l1_run_calculations", immediate = TRUE
   )
 
   if (isTRUE(return_run_df)) {

@@ -1194,8 +1194,16 @@ cleanup_glm_pipeline <- function(gpa) {
 #' helper function to copy any missing fields in target
 #' @param target a named list to be populated by defaults if fields are missing
 #' @param defaults a named list containing default values
-populate_defaults <- function(target, defaults) {
+populate_defaults <- function(target = NULL, defaults) {
   if (is.null(target)) target <- list()
+  if (is.data.frame(target) && nrow(target) == 1L && is.data.frame(defaults) && nrow(defaults) == 1L) {
+    return_df <- TRUE
+    target <- as.list(target)
+    defaults <- as.list(defaults)
+  } else {
+    return_df <- FALSE
+  }
+
   miss_fields <- setdiff(names(defaults), names(target))
   if (length(miss_fields) > 0L) {
     for (mm in miss_fields) {
@@ -1203,6 +1211,7 @@ populate_defaults <- function(target, defaults) {
     }
   }
 
+  if (isTRUE(return_df)) target <- as.data.frame(target)
   return(target)
 }
 

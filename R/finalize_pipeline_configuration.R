@@ -26,6 +26,27 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
     gpa$sqlite_con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
   }
 
+  # l1 models must be specified to get started (hard enforcement)
+  if (!checkmate::test_class(gpa$l1_models, "l1_model_set")) {
+    msg <- "Could not find valid $l1_models specification in gpa. Be sure to run build_l1_models() before proceeding!"
+    lg$error(msg)
+    stop(msg)
+  }
+
+  # l2 models are optional and depend on whether it's a multi-run setup
+  if (isTRUE(gpa$multi_run) && !checkmate::test_class(gpa$l2_models, "hi_model_set")) {
+    msg <- "Could not find valid $l2_models specification in gpa. We will proceed, but weird things may happen! I suggest running build_l2_models()."
+    lg$warn(msg)
+    warning(msg)
+  }
+
+  # l3 models are optional but almost always should be in place
+  if (!checkmate::test_class(gpa$l3_models, "hi_model_set")) {
+    msg <- "Could not find valid $l3_models specification in gpa. We will proceed, but weird things may happen! I suggest running build_l3_models()."
+    lg$warn(msg)
+    warning(msg)
+  }
+
   # new approach: use internal model names for creating output directories at subject level
   # default to <analysis_name>/<l1_model>
   # add suffix if using preconvolution approach
@@ -63,7 +84,7 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
   checkmate::assert_subset(gpa$scheduler, c("slurm", "sbatch", "torque", "qsub", "local", "sh"))
 
   if (is.null(gpa$zthresh)) gpa$zthresh <- 3.09 # 1-tailed p=.001 for z stat
-  if (is.null(gpa$clustsize)) gpa$clustsize <- 50 # arbitrary reasonable lower bound on clusters
+  if (is.null(gpa$clustsize)) gpa$clustsize <- 50 # arbitrary reasonable lower bound on cluster size
   if (is.null(gpa$glm_software)) gpa$glm_software <- "fsl" # default to FSL FEAT
 
   if (is.null(gpa$log_json)) gpa$log_json <- TRUE # whether to write JSON log files
@@ -85,9 +106,9 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
   # remove bad ids before running anything further
   if (!is.null(gpa$bad_ids) && length(gpa$bad_ids) > 0L) {
     lg$info("Removing the following IDs from data structure before beginning analysis: %s", paste(gpa$bad_ids, collapse = ", "))
-    gpa$subject_data <- gpa$subject_data %>% filter(!id %in% gpa$bad_ids) # remove bad ids
-    gpa$run_data <- gpa$run_data %>% filter(!id %in% gpa$bad_ids) # remove bad ids
-    gpa$trial_data <- gpa$trial_data %>% filter(!id %in% gpa$bad_ids) # remove bad ids
+    gpa$subject_data <- gpa$subject_data %>% dplyr::filter(!id %in% gpa$bad_ids) # remove bad ids
+    gpa$run_data <- gpa$run_data %>% dplyr::filter(!id %in% gpa$bad_ids) # remove bad ids
+    gpa$trial_data <- gpa$trial_data %>% dplyr::filter(!id %in% gpa$bad_ids) # remove bad ids
   }
 
   # build design matrix default arguments
@@ -368,13 +389,6 @@ finalize_confound_settings <- function(gpa, lg) {
   } else if (!is.null(gpa$confound_settings$motion_params_file)) {
     checkmate::assert_string(gpa$confound_settings$motion_params_file)
     gpa$run_data$motion_params_file <- gpa$confound_settings$motion_params_file # this gets expanded by get_mr_abspath in get_l1_confounds
-    # gpa$run_data$motion_params_file <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
-    #     if (isTRUE(gpa$run_data$run_nifti_present[ii])) {
-    #       normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$motion_params_file))
-    #     } else {
-    #       NA_character_
-    #     }
-    #   })
   }
 
   if (!"motion_params_file" %in% names(gpa$run_data)) {
@@ -388,14 +402,6 @@ finalize_confound_settings <- function(gpa, lg) {
   } else if (!is.null(gpa$confound_settings$confound_input_file)) {
     checkmate::assert_string(gpa$confound_settings$confound_input_file)
     gpa$run_data$confound_input_file <- gpa$confound_settings$confound_input_file # this gets expanded by get_mr_abspath in get_l1_confounds
-
-    # gpa$run_data$confound_input_file <- sapply(seq_len(nrow(gpa$run_data)), function(ii) {
-    #   if (isTRUE(gpa$run_data$run_nifti_present[ii])) {
-    #     normalizePath(file.path(dirname(gpa$run_data$run_nifti[ii]), gpa$confound_settings$confound_input_file))
-    #   } else {
-    #     NA_character_
-    #   }
-    # })
   }
 
   # determine whether confound input files are present
@@ -452,17 +458,35 @@ finalize_confound_settings <- function(gpa, lg) {
   #   return(l1_info)
   # }, mc.cores = gpa$parallel$finalize_cores)
 
-  confound_info <- lapply(seq_len(nrow(gpa$run_data)), function(ii) {
-    # this should add rows to the SQLite data for a subject if not yet present, or just return those rows if they exist
-    l1_info <- get_l1_confounds(
-      id = gpa$run_data$id[ii], session = gpa$run_data$session[ii], run_number = gpa$run_data$run_number[ii],
-      gpa = gpa, drop_volumes = 0L, # N.B. dropped volumes are handled downstream in truncate_runs, which requires knowledge of events
-    )[c("l1_confound_file", "exclude_run")]
-    return(l1_info)
+  # add onset + offset data to run_data so that get_l1_confounds can handl run truncation appropriately
+  gpa <- populate_last_events(gpa)
+
+  # for each run, calculate confounds, exclusions, and truncation
+  run_list <- lapply(seq_len(nrow(gpa$run_data)), function(ii) {
+    get_l1_confounds(run_df = gpa$run_data[ii, , drop = FALSE], gpa = gpa)
   })
 
-  gpa$run_data$exclude_run <- sapply(confound_info, "[[", "exclude_run")
-  gpa$run_data$l1_confound_file <- sapply(confound_info, "[[", "l1_confound_file")
+  if (length(unique(sapply(run_list, length))) == 1L) {
+    gpa$run_data <- data.table::rbindlist(run_list)
+  } else {
+    msg <- "Lengths of confound run_df elements have different lengths. Cannot recombine"
+    lg$error(msg)
+    stop(msg)
+  }
+    
+  #l1_info <- get_l1_confounds(run_df = gpa$run_data[ii,,drop=F], gpa = gpa)
+
+  # confound_info <- lapply(seq_len(nrow(gpa$run_data)), function(ii) {
+  #   # this should add rows to the SQLite data for a subject if not yet present, or just return those rows if they exist
+  #   l1_info <- get_l1_confounds(
+  #     id = gpa$run_data$id[ii], session = gpa$run_data$session[ii], run_number = gpa$run_data$run_number[ii],
+  #     gpa = gpa, drop_volumes = 0L # N.B. dropped volumes are handled downstream in truncate_runs, which requires knowledge of events
+  #   )[c("l1_confound_file", "exclude_run")]
+  #   return(l1_info)
+  # })
+
+  # gpa$run_data$exclude_run <- sapply(confound_info, "[[", "exclude_run")
+  # gpa$run_data$l1_confound_file <- sapply(confound_info, "[[", "l1_confound_file")
 
   return(gpa)
 }

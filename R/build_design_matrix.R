@@ -145,24 +145,31 @@
 #' at a given moment in time. In conventional task-reated fMRI, this task indicator representation is then convolved with the HRF to model expected BOLD
 #' activity due to the occurrence of an event. Alternatively, \code{value} can be a data.frame containing \code{$run_number}, \code{$trial}, and \code{$value}
 #' columns that specify the height of the regressor at each trial. This specification is more useful for a parametric regressor, as in model-based fMRI.
+#'
+#' Optionally, one or more within-subject factor columns can be included in the value data.frame and noted in the 
+#' \code{wi_factors} element of the signal. In this case, regressors for each level of the wi_factors will be generated as
+#' separate regressors.
+#' 
 #' Here is an example:
 #'
 #' \preformatted{
 #'   signals <- list(
-#'     pe=list(event="outcome", normalization="none", convmax_1=TRUE,
+#'     pe=list(event="outcome", normalization="none", convmax_1=TRUE, wi_factors="trustee",
 #'     value=data.frame(
 #'       run_number=rep(1,5),
 #'       trial=1:5,
-#'       value=c(0, 10.2, -11.1, 6, 2.4, 1.5)
+#'       value=c(10.2, -11.1, 6, 2.4, 1.5),
+#'       trustee=c("Good", "Good", "Bad", "Bad", "Neutral")
 #'     )
 #'   )
 #' }
 #'
-#' Here, the parametrically varying prediction error signal will be aligned at the "outcome" event, have a duration copied from the
-#' \code{$duration} column of \code{events}, and will have parametrically varying heights (e.g., 10.2 at trial 2) prior to convolution.
-#' Note that the value \code{data.frame} need not have an entry for every trial in the run. For example, if a given signal is only relevant
-#' or only occurs for some "outcome" events, the trial column might be something like \code{c(2, 6, 10)}, indicating that the parametric
-#' modulator is only modeled at those trials. This is achieved by joining \code{events} with the relevant signal using \code{trial} as a key.
+#' Here, the parametrically varying prediction error signal will be aligned at the "outcome" event, have a duration copied 
+#' from the \code{$duration} column of \code{events}, and will have parametrically varying heights (e.g., 10.2 at trial 1)
+#' prior to convolution. Note that the value \code{data.frame} need not have an entry for every trial in the run. For example,
+#' if a given signal is only relevant or only occurs for some "outcome" events, the trial column might be something like
+#' \code{c(2, 6, 10)}, indicating that the parametric modulator is only modeled at those trials. This is achieved by joining
+#' \code{events} with the relevant signal using \code{trial} as a key.
 #'
 #' The \code{$normalization} element handles the normalization of the HRF for each regressor. This can be:
 #' \enumerate{
@@ -377,6 +384,49 @@ build_design_matrix <- function(
     stop("Invalid negative onsets included in events data.frame")
   }
 
+  # helper function to expand beta series
+  expand_signals <- function(orig) {
+    # use levels of wi_factors here to build out multiple signals, one per level... maybe just copy-paste these inside object, subsetting value?
+    signals_expanded <- lapply(orig, function(ss) {
+      if (is.null(ss$wi_factors)) {
+        return(ss)
+      } else {
+        # extract within-subject regression model matrix (has dummy coding)
+        model_df <- as.data.frame(model.matrix(ss$wi_model))
+        
+        # for each column of the model matrix, pull the signal value data.frame where
+        # the dummy code is 1 (i.e., rows to which the dummy pertains). This divides up the value
+        # data.frame into smaller data.frames, one per dummy combination
+        dummy_value <- lapply(model_df, function(x) {
+          which_1 <- which(x == 1)
+          ss$value %>%
+            dplyr::slice(!!which_1) %>%
+            dplyr::select(-!!ss$wi_factors)
+        })
+
+        # create a list of signals, one per dummy level, by copying the master signal
+        # settings, then amending the value field to include only relevant trials/rows
+        signal_list <- lapply(seq_along(dummy_value), function(x) {
+          sig_copy <- ss
+          # update signal name to reflect level of within-subject factor(s)
+          sig_copy$name <- paste(sig_copy$name, make.names(names(dummy_value)[x]), sep = "_")
+
+          # copy across relevant data.frame for this level
+          sig_copy$value <- dummy_value[[x]]
+
+          # remove residual within-subject modulation settings
+          sig_copy$wi_formula <- sig_copy$wi_model <- sig_copy$wi_factors <- NULL
+          sig_copy
+        })
+      }
+
+    })
+    
+    #now handle beta series
+  }
+
+
+
   #merge the trial-indexed signals with the time-indexed events
   #basically: put the events onto the time grid of the run based on the "event" element of the list
   signals_aligned <- lapply(signals, function(s) {
@@ -563,7 +613,7 @@ build_design_matrix <- function(
       message(paste0("Current run_volumes:", rv))
       if (nrow(additional_regressors_currun) < rv) { stop("additional regressors have fewer observations than run_volumes") }
       additional_regressors_currun <- dplyr::slice(additional_regressors_currun, (drop_volumes[i]+1):rv) %>% as.data.frame()
-      additional_regressors_df <- bind_rows(additional_regressors_df, additional_regressors_currun)
+      additional_regressors_df <- dplyr::bind_rows(additional_regressors_df, additional_regressors_currun)
     }
   } else {
     additional_regressors <- NULL
@@ -573,7 +623,7 @@ build_design_matrix <- function(
   if (!is.null(ts_multipliers)) {
     ts_multipliers_df <- data.frame()
 
-    for(i in seq_along(ts_multipliers)) {
+    for (i in seq_along(ts_multipliers)) {
       if (is.character(ts_multipliers)) {
         ts_multipliers_currun <- read.table(ts_multipliers[i]) #read in ith text file
       } else {
@@ -619,7 +669,7 @@ build_design_matrix <- function(
   }))
 
   #only retain runs to be analyzed
-  dmat <- dmat[runs_to_output,,drop=FALSE]
+  dmat <- dmat[runs_to_output, , drop=FALSE]
   run_volumes <- run_volumes[runs_to_output] #need to subset this, too, for calculations below to match
   drop_volumes <- drop_volumes[runs_to_output] #need to subset this, too, for calculations below to match
   if (!is.null(run_4d_files)) { run_4d_files <- run_4d_files[runs_to_output] }
@@ -805,7 +855,8 @@ build_design_matrix <- function(
           indicator_func <- apply(runvalues, 2, function(col) { all(col == 1.0)} )
           if (any(indicator_func)) { runvalues <- runvalues[,-1*which(indicator_func), drop=FALSE] }
 
-          #if the indicator regressor was the only thing present, revert to the notation TIME:DURATION notation for dmBLOCK (not TIME*PARAMETER:DURATION)
+          # if the indicator regressor was the only thing present, revert to the notation TIME:DURATION notation
+          # for dmBLOCK (not TIME*PARAMETER:DURATION)
           if (ncol(runvalues) == 0L) {
             runvec[i] <- paste(sapply(seq_along(runonsets), function(j) {
               paste0(round(runonsets[j], 6), ":", round(rundurations[j], 6))
