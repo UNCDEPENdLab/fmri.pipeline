@@ -17,4 +17,4 @@ a modified copy of l1_model_set with events added/updated
 \description{
 helper function to build events consisting of onsets and durations
 }
-\keyword{interanl}
+\keyword{internal}

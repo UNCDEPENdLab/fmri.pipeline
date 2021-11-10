@@ -292,7 +292,7 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
 #' @param l1_model_set an l1_model_set object that may have extant events in it
 #' @param trial_data the trial_data object from the \code{gpa} object
 #' @return a modified copy of l1_model_set with events added/updated
-#' @keywords interanl
+#' @keywords internal
 #' @importFrom dplyr select mutate
 #' @importFrom checkmate test_number
 #' @importFrom glue glue
