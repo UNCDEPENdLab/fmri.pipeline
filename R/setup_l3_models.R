@@ -100,13 +100,13 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   }
 
   # make sure l1 models have already been generated
-  enforce_l1_complete(gpa, level = 1L, lg)
+  enforce_glms_complete(gpa, level = 1L, lg)
 
   if (isTRUE(gpa$multi_run)) {
     lg$info("In setup_l3_models, using a multi-run 3-level setup with runs (l1), subjects (l2), sample (l3)")
 
     # in multi-run setup, an l2_model_setup must be present
-    enforce_l2_complete(gpa, level = 2L, lg)
+    enforce_glms_complete(gpa, level = 2L, lg)
 
   } else {
     lg$info("In setup_l3_models, using a single run 2-level setup with subjects (l1), sample (l3)")
