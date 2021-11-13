@@ -178,7 +178,7 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope",
 #' @importFrom glue glue_data
 #' @importFrom tidyselect all_of
 #' @importFrom parallel mclapply
-extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "zstat"), 
+extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "zstat"),
   aggregate = TRUE, aggFUN = mean, mask_file = NULL, ncores=1L, lg=NULL) {
 
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
@@ -303,6 +303,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
 
   # The slow part of beta extraction is the reading of images and calculation of summaries. Use mclapply to help
   stat_results$img_stats <- mclapply(stat_results$img, function(img) {
+    lg$debug("Processing image: %s", img)
     tryCatch(
       get_img_stats(img,
         mask = list(indices = m_indices, coordinates = m_coordinates, dim = dim(mask_img)),
@@ -340,6 +341,11 @@ build_beta_extraction <- function(gpa, extract_l1="prompt", extract_l2="prompt",
   build_lower_set <- function(gpa, l2_chosen="prompt") {
     lower_extract <- list()
 
+    # N.B. When using expand.grid, stringsAsFactors defaults to TRUE. If you then pass one element of a factor in as a subsetting expression
+    # of a named vector, it will evaluate to a number (the as.numeric on the factor), rather than looking up based on name. For example,
+    # lower_extract$l2_model[1] will become 1, not its character value in an expression like gpa$l1_cope_names[lower_extract$l2_models[1]].
+    # Thus, always use stringsAsFactors=FALSE!
+
     if (isTRUE(gpa$multi_run)) {
       l2_set <- choose_glm_models(gpa, l2_chosen, level = 2L, lg = lg)
         if (is.null(l2_set)) {
@@ -353,7 +359,7 @@ build_beta_extraction <- function(gpa, extract_l1="prompt", extract_l2="prompt",
             if (is.null(l1_set)) {
               lg$warn("No models chosen at l1 for l2 model %s", l2_model)
             } else {
-              lower_extract[[l2_model]] <- expand.grid(l2_model = l2_model, l1_model = l1_set)
+              lower_extract[[l2_model]] <- expand.grid(l2_model = l2_model, l1_model = l1_set, stringsAsFactors=FALSE)
             }
           }
         }
@@ -362,7 +368,7 @@ build_beta_extraction <- function(gpa, extract_l1="prompt", extract_l2="prompt",
       if (is.null(l1_set)) {
         lg$warn("No models chosen at l1.")
       } else {
-        lower_extract <- list(expand.grid(l1_model = l1_set))
+        lower_extract <- list(expand.grid(l1_model = l1_set, stringsAsFactors = FALSE))
       }
     }
 
@@ -411,7 +417,7 @@ build_beta_extraction <- function(gpa, extract_l1="prompt", extract_l2="prompt",
     if (extract_l1 == "prompt") {
       cat("\n------\nNext, choose models from which you want to extract run-level (level 1) statistics.\n")
     }
-    l1 <- expand.grid(l1_model = choose_glm_models(gpa, extract_l1, level = 1L, lg = lg))
+    l1 <- expand.grid(l1_model = choose_glm_models(gpa, extract_l1, level = 1L, lg = lg), stringsAsFactors = FALSE)
   }
 
   return(list(l1=l1, l2=l2, l3=l3))
