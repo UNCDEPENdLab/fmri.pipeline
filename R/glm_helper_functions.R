@@ -1182,7 +1182,7 @@ cleanup_glm_pipeline <- function(gpa) {
   })
 
   # replace copied L1 niftis with symlinks to the corresponding file
-  if (isTRUE(gpa$fsl$replace_l1_nifti_symlink)) {
+  if (isTRUE(gpa$glm_settings$fsl$replace_l1_nifti_symlink)) {
     feat_files <- file.path(
       gpa$l1_model_setup$fsl$feat_dir,
       "filtered_func_data.nii.gz"
