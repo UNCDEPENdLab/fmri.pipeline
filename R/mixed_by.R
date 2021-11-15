@@ -6,7 +6,10 @@
 #'   filenames can be passed, which will be read in sequentially and fit (.rds, .csv, .dat, and .txt
 #'   supported at present).
 #' @param outcomes A character vector of outcome variables to be analyzed
-#' @param rhs_model_formulae A lme4-format formula specifying the exact model to be run for each data split.
+#' @param rhs_model_formulae A named list of lme4-format formula specifying the exact model to be run for each data split.
+#' @param model_formulae Alternative to the outcome + rhs_model_formulae approach. This is a list of lme4-format
+#'   formulae that includes the outcome on the left-hand side. This is useful if the outcomes change from one
+#'   model to the next, but you don't want the Cartesian product (combinations) of outcomes and rhs_model_formulae
 #' @param split_on A character vector of columns in \code{data} used to split the analyses into separate models.
 #' @param external_df An optional data.frame/data.table containing external data that should be joined with \code{data}
 #'   prior to model fitting. Useful if \code{data} contains external time series data and \code{external_df} is a
@@ -67,7 +70,7 @@
 #' @importFrom doParallel registerDoParallel
 #' @importFrom broom.mixed tidy
 #' @importFrom data.table fread setDT setkeyv
-mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on = NULL,
+mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_formulae = NULL, split_on = NULL,
                      external_df = NULL, external_merge_by = NULL,
                      padjust_by = "term", padjust_method = "BY", outcome_transform = NULL, scale_predictors = NULL,
                      ncores = 1L, cl = NULL, refit_on_nonconvergence = 3,
@@ -84,6 +87,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
   require(doParallel)
   require(iterators)
   require(broom.mixed)
+  require(formula.tools)
 
   ## VALIDATE INPUTS
   # support data.frame input for single dataset execution or a vector of files that are imported and fit sequentially
@@ -97,7 +101,6 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
     single_df <- FALSE
   }
 
-  checkmate::assert_character(outcomes, null.ok = FALSE)
   checkmate::assert_character(split_on, null.ok = TRUE, unique = TRUE)
   if (!is.null(padjust_by)) {
     if (!is.list(padjust_by)) {
@@ -120,16 +123,40 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
   }
   checkmate::assert_integerish(refit_on_nonconvergence, null.ok = FALSE)
 
-  if (inherits(rhs_model_formulae, "formula")) {
-    rhs_model_formulae <- list(rhs_model_formulae)
-  } # wrap as list
-  lapply(rhs_model_formulae, checkmate::assert_formula)
-  if (is.null(names(rhs_model_formulae))) {
-    nm <- paste0("model", seq_along(rhs_model_formulae))
-    message("Using default model names of ", nm)
-    names(rhs_model_formulae) <- nm
+  validate_form_list <- function(ll) {
+    if (inherits(ll, "formula")) {
+      ll <- list(ll)  # wrap single formula as list
+    } else {
+      checkmate::assert_list(ll)
+    }
+    
+    lapply(ll, checkmate::assert_formula)
+    if (is.null(names(ll))) {
+      nm <- paste0("model", seq_along(ll))
+      message("Using default model names of ", paste(nm, collapse=", "))
+      names(ll) <- nm
+    }
+    return(ll)
   }
+  
+  if (!is.null(model_formulae)) {
+    message("Using model_formulae to setup model_set")
+    model_formulae <- validate_form_list(model_formulae)
+    
+    # don't expand combinations, just form outcomes, rhs, and formulae
+    model_set <- tibble(outcome = sapply(model_formulae, formula.tools::lhs.vars)) %>%
+      mutate(rhs = lapply(model_formulae, function(x) { update.formula(x, "NULL ~ .") }), form = model_formulae)
 
+  } else if (!is.null(rhs_model_formulae)) {
+    checkmate::assert_character(outcomes, null.ok = FALSE) # must provide valid outcomes
+    rhs_model_formulae <- validate_form_list(rhs_model_formulae)
+    
+    model_set <- expand.grid(outcome = outcomes, rhs = rhs_model_formulae, stringsAsFactors = FALSE) %>%
+      rowwise() %>%
+      mutate(form = list(update.formula(rhs, paste(outcome, "~ .")))) %>%
+      ungroup() %>% as_tibble()
+  }
+  
   # handle external_df
   if (!is.null(external_df)) {
     if (checkmate::test_string(external_df)) {
@@ -154,7 +181,8 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
 
     #apply z-scoring to specified predictors
     if (!is.null(scale_predictors)) {
-      model_terms <- all.vars(model_formula) #technically this will match the outcome, too -- hopefully the user uses outcome_transform in that case
+      # technically this will match the outcome, too -- hopefully the user uses outcome_transform in that case
+      model_terms <- all.vars(model_formula)
       if (any(model_terms %in% scale_predictors)) {
         for (aa in intersect(scale_predictors, model_terms)) {
           data[[aa]] <- as.vector(scale(data[[aa]]))
@@ -223,8 +251,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
     emt_metadata <- rbindlist(lapply(emtrends_spec, function(ee) { data.frame(ee[c("outcome", "model_name")])})) %>%
       mutate(emt_number = 1:n(), emt_label=names(emtrends_spec))
   }
-  
-  
+
   # setup parallel compute
   if (ncores > 1L && is.null(cl)) {
     cl <- makeCluster(ncores)
@@ -238,7 +265,6 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
     registerDoSEQ()
   }
 
-  model_set <- expand.grid(outcome = outcomes, rhs = rhs_model_formulae)
   mresults <- vector(mode = "list", length(df_set)) # preallocate list
 
   # loop over each dataset to be fit
@@ -277,12 +303,30 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
     }
 
     # verify that outcomes and split variables are present in data
-    checkmate::assert_subset(outcomes, names(data))
+    checkmate::assert_subset(model_set$outcome, names(data))
     checkmate::assert_subset(split_on, names(data))
 
     # nest data.tables for each combination of split factors
     setkeyv(data, split_on)
     data <- data[, .(dt = list(.SD)), by = split_on]
+
+    # for each split and each outcome + rhs, examine whether there are 0 non-NA cases
+    for (rr in seq_len(nrow(data))) {
+      for (mm in seq_len(nrow(model_set))) {
+        ff <- model_set$form[[mm]]
+        vv <- all.vars(ff)
+        miss_data <- data[rr, dt[[1]]] %>%
+          dplyr::select(!!vv) %>% # just keep model-relevant variables
+          mutate(any_miss = rowSums(is.na(select(., any_of(!!vv)))) > 0)
+        n_present <- miss_data %>%
+          dplyr::filter(any_miss == FALSE) %>%
+          nrow()
+
+        if (n_present == 0) {
+          browser()
+        }
+      }
+    }
 
     # loop over outcomes and rhs formulae within each chunk to maximize compute time by chunk (reduce worker overhead)
     message("Starting processing of data splits")
@@ -290,13 +334,18 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
       dt_split = iter(data, by = "row"), .packages = c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed", "emmeans"),
       .noexport = "data", .inorder = FALSE
     ) %dopar% {
+      if (nrow(dt_split$dt[[1L]]) == 0L) {
+        warning("No rows found in split. Skipping")
+        return(NULL)
+      }
+
       split_results <- lapply(seq_len(nrow(model_set)), function(mm) {
-        ff <- update.formula(model_set$rhs[[mm]], paste(model_set$outcome[[mm]], "~ .")) # replace LHS
+        ff <- model_set$form[[mm]]
         ret <- copy(dt_split)
         ret[, outcome := model_set$outcome[[mm]]]
         ret[, model_name := names(model_set$rhs)[mm]]
         ret[, rhs := as.character(model_set$rhs[mm])]
-        
+
         if ("parameter_estimates_reml" %in% calculate) {
           thism <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, scale_predictors, REML=TRUE)
           ret[, coef_df_reml := list(do.call(tidy, append(tidy_args, x = thism)))]
@@ -328,12 +377,12 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
             ret[, emm := list(list(emms))] 
           }
         }
-        
+
         # process emtrends
         if (!is.null(emtrends_spec)) {
           emt_torun <- emt_metadata %>% 
             filter(outcome == !!model_set$outcome[[mm]] & model_name == !!names(model_set$rhs)[mm])
-          
+
           if (nrow(emt_torun) > 0L) {
             this_emtspec <- emtrends_spec[emt_torun %>% pull(emt_number)] #subset list to relevant elements
             emts <- lapply(seq_along(this_emtspec), function(emt_i) {
@@ -341,27 +390,27 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
                 dplyr::bind_cols(emt_torun[emt_i,])
             })
             names(emts) <- names(this_emtspec)
-            
+
             #N.B. Need to double list wrap for data.table to keep list class for singleton list
             ret[, emt := list(list(emts))] 
           }
         }
-        
+
         ret[, dt := NULL] # drop original data.table for this split from data
-        
+
         return(ret)
       })
-      
+
       split_results <- rbindlist(split_results, fill=TRUE)
 
       #need to unnest
-      
+
       coef_df_reml <- NULL
       if ("parameter_estimates_reml" %in% calculate) {
         coef_df_reml <- split_results[, coef_df_reml[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
         coef_df_reml <- cbind(dt_split[, ..split_on], coef_df_reml) # add back metadata for this split
       }
-      
+
       coef_df_ml <- NULL
       if ("parameter_estimates_ml" %in% calculate) {
         coef_df_ml <- split_results[, coef_df_ml[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
@@ -373,19 +422,19 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, split_on 
         fit_df <- split_results[, fit_df[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
         fit_df <- cbind(dt_split[, ..split_on], fit_df) # add back metadata for this split
       }
-      
+
       emm_data <- NULL
       if (!is.null(emmeans_spec)) {
         emm_data <- subset(split_results, sapply(emm, function(x) !is.null(x)), 
                            select=c(split_on, "outcome", "model_name", "rhs", "emm"))
       }
-      
+
       emt_data <- NULL
       if (!is.null(emtrends_spec)) {
         emt_data <- subset(split_results, sapply(emt, function(x) !is.null(x)), 
                            select=c(split_on, "outcome", "model_name", "rhs", "emt"))
       }
-      
+
       list(coef_df_reml=coef_df_reml, coef_df_ml=coef_df_ml, fit_df=fit_df, 
            emm_data=emm_data, emt_data=emt_data) # return list
     }
