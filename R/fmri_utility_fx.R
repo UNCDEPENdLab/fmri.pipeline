@@ -133,6 +133,9 @@ get_collin_events <- function(dmat) {
 #'            \item hrf_parameters The parameters for the double-gamma HRF
 #'          }
 #'
+#' @details Note that any volumes dropped from the beginning of each run should already be reflected in the timings
+#'   of regressors in \code{dmat}. This prevents us from needing to have a drop_volumes implementation inside convolve_regressor,
+#'   which is confusing anyhow. Likewise, run_timing should reflect the post-drop cumulative volumes.
 #' @author Michael Hallquist
 #' @keywords internal
 place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_args) {
@@ -150,7 +153,7 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
                            center_values=bdm_args$center_values, convmax_1=bdm_args$convmax_1[j],
                            demean_convolved = FALSE, high_pass=bdm_args$high_pass, convolve=convolve,
                            beta_series=bdm_args$beta_series[j], ts_multiplier=bdm_args$ts_multiplier[[j]][[i]],
-                           drop_volumes = bdm_args$drop_volumes[i], hrf_parameters = bdm_args$hrf_parameters)
+                           hrf_parameters = bdm_args$hrf_parameters)
       })
 
       df <- do.call(data.frame, run_convolve) #pull into a data.frame with nvols rows and nregressors cols (convolved)
@@ -179,7 +182,6 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
                          center_values=bdm_args$center_values, convmax_1=bdm_args$convmax_1[j],
                          demean_convolved = FALSE, high_pass=bdm_args$high_pass, convolve=convolve,
                          beta_series=bdm_args$beta_series[reg], ts_multiplier=concat_ts_multiplier,
-                         drop_volumes = 0, #drop_volumes is weird in this case -- would need to chop from each run, right?
                          hrf_parameters = bdm_args$hrf_parameters)
 
       #now, to be consistent with code below (and elsewhere), split back into runs
@@ -246,7 +248,6 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
 #' @param beta_series If \code{TRUE}, split \code{reg} into separate regressors for each event (row). These can be used
 #'          to estimate separate betas in the GLM for each event.
 #' @param ts_multiplier A vector that is n_vols in length that will be multiplied against the stimulus vector before convolution.
-#' @param drop_volumes The number of volumes to drop from the beginning of the regressor
 #' @param hrf_parameters. A named vector of parameters passed to \code{fmri.stimulus} that control the shape of the double gamma HRF.
 #'          Default: \code{c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35)}.
 #'
@@ -254,7 +255,7 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
 #' @keywords internal
 convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zeros=TRUE,
                                    center_values=TRUE, convmax_1=FALSE, demean_convolved=FALSE,
-                                   high_pass=NULL, convolve=TRUE, beta_series=FALSE, ts_multiplier=NULL, drop_volumes=0,
+                                   high_pass=NULL, convolve=TRUE, beta_series=FALSE, ts_multiplier=NULL,
                                    hrf_parameters=c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35)) {
 
   #reg should be a matrix containing, minimally: trial, onset, duration, value
@@ -307,7 +308,7 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
 
   if (length(times) == 0L) {
     warning("No non-zero events for regressor to be convolved. Returning all-zero result for fMRI GLM.")
-    ret <- matrix(0, nrow=n_vols -  drop_volumes, ncol=1)
+    ret <- matrix(0, nrow=n_vols, ncol=1)
     colnames(ret) <- attr(reg, "reg_name")
     return(ret)
   }
@@ -416,12 +417,6 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
   #grand mean center convolved regressor
   if (demean_convolved) {
     tc_conv <- apply(tc_conv, 2, function(col) { col - mean(col, na.rm=TRUE) })
-  }
-
-  #If requested, drop volumes from the regressor. This should be applied after convolution in case an event happens during the
-  #truncated period, but the resulting BOLD activity has not yet resolved.
-  if (drop_volumes > 0) {
-    tc_conv <- tc_conv[-1 * (1:drop_volumes), , drop=FALSE]
   }
 
   #name the matrix columns appropriately
