@@ -473,20 +473,6 @@ finalize_confound_settings <- function(gpa, lg) {
     lg$error(msg)
     stop(msg)
   }
-    
-  #l1_info <- get_l1_confounds(run_df = gpa$run_data[ii,,drop=F], gpa = gpa)
-
-  # confound_info <- lapply(seq_len(nrow(gpa$run_data)), function(ii) {
-  #   # this should add rows to the SQLite data for a subject if not yet present, or just return those rows if they exist
-  #   l1_info <- get_l1_confounds(
-  #     id = gpa$run_data$id[ii], session = gpa$run_data$session[ii], run_number = gpa$run_data$run_number[ii],
-  #     gpa = gpa, drop_volumes = 0L # N.B. dropped volumes are handled downstream in truncate_runs, which requires knowledge of events
-  #   )[c("l1_confound_file", "exclude_run")]
-  #   return(l1_info)
-  # })
-
-  # gpa$run_data$exclude_run <- sapply(confound_info, "[[", "exclude_run")
-  # gpa$run_data$l1_confound_file <- sapply(confound_info, "[[", "l1_confound_file")
 
   return(gpa)
 }
