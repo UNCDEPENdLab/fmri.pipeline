@@ -17,7 +17,6 @@ convolve_regressor(
   convolve = TRUE,
   beta_series = FALSE,
   ts_multiplier = NULL,
-  drop_volumes = 0,
   hrf_parameters = c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35)
 )
 }
@@ -49,8 +48,6 @@ based on the corresponding onsets, durations, and values.}
 to estimate separate betas in the GLM for each event.}
 
 \item{ts_multiplier}{A vector that is n_vols in length that will be multiplied against the stimulus vector before convolution.}
-
-\item{drop_volumes}{The number of volumes to drop from the beginning of the regressor}
 
 \item{hrf_parameters.}{A named vector of parameters passed to \code{fmri.stimulus} that control the shape of the double gamma HRF.
 Default: \code{c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35)}.}

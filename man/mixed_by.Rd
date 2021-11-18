@@ -9,6 +9,7 @@ mixed_by(
   data,
   outcomes = NULL,
   rhs_model_formulae = NULL,
+  model_formulae = NULL,
   split_on = NULL,
   external_df = NULL,
   external_merge_by = NULL,
@@ -35,7 +36,11 @@ supported at present).}
 
 \item{outcomes}{A character vector of outcome variables to be analyzed}
 
-\item{rhs_model_formulae}{A lme4-format formula specifying the exact model to be run for each data split.}
+\item{rhs_model_formulae}{A named list of lme4-format formula specifying the exact model to be run for each data split.}
+
+\item{model_formulae}{Alternative to the outcome + rhs_model_formulae approach. This is a list of lme4-format
+formulae that includes the outcome on the left-hand side. This is useful if the outcomes change from one
+model to the next, but you don't want the Cartesian product (combinations) of outcomes and rhs_model_formulae}
 
 \item{split_on}{A character vector of columns in \code{data} used to split the analyses into separate models.}
 

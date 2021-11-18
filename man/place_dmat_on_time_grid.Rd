@@ -34,6 +34,11 @@ during the initial argument parsing. See build_design_matrix for details. Should
 Function to convert dmat (runs x regressor list) to a time-oriented representation.
 This yields a list of runs where each element is data.frame of volumes x regressors
 }
+\details{
+Note that any volumes dropped from the beginning of each run should already be reflected in the timings
+  of regressors in \code{dmat}. This prevents us from needing to have a drop_volumes implementation inside convolve_regressor,
+  which is confusing anyhow. Likewise, run_timing should reflect the post-drop cumulative volumes.
+}
 \author{
 Michael Hallquist
 }

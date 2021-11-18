@@ -13,6 +13,7 @@ build_design_matrix(
   baseline_coef_order = -1L,
   baseline_parameterization = "Legendre",
   run_4d_files = NULL,
+  run_4d_files_drop_applied = TRUE,
   run_volumes = NULL,
   drop_volumes = 0L,
   runs_to_output = NULL,
@@ -69,7 +70,8 @@ you can pass a character vector of relevant NIfTI filenames, one per run, and bu
 calculate the number of volumes based on the 4th dimension (time) of the fMRI data. Finally, if you
 do not pass in this argument, build_design_matrix will take a guess that the run should end 12 seconds
 (or whatever you specifiy for \code{iti_post}) after the last event ends:
-max(onset + duration + iti_post)/tr within each run.}
+max(onset + duration + iti_post)/tr within each run. Note that this is always the number of volumes *before*
+\code{drop_volumes} is applied.}
 
 \item{drop_volumes}{By default, all volumes are retained. If specified, this can be a vector of the number of volumes
 that will be removed from the \emph{beginning} of each convolved regressor. If you pass a single number (e.g., 3),
