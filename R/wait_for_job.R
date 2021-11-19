@@ -60,7 +60,8 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
           "REQUEUED" = "queued",
           "REVOKED" = "failed",
           "SUSPENDED" = "suspended",
-          "TIMEOUT" = "failed"
+          "TIMEOUT" = "failed",
+          "MISSING" = "missing" # scheduler has not registered the job
         )
       })
     } else if (scheduler %in% c("sh", "local")) {
@@ -120,6 +121,12 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
       }
     }
 
+    if (any(status == "missing")) {
+      if (isFALSE(quiet)) {
+        cat("Job(s) missing from scheduler response: ", paste(job_ids[status == "missing"], collapse = ","), "\n")
+      }
+    }
+
     if (wait_total > max_wait) {
       if (isTRUE(stop_on_timeout)) {
         stop("Maximum wait time: ", max_wait, " exceeded. Stopping execution of parent script because something is wrong.")
@@ -156,13 +163,44 @@ slurm_job_status <- function(job_ids = NULL, user = NULL,
 
   # -P specifies a parsable output separated by pipes
   # -X avoids printing subsidiary jobs within each job id
-  res <- system(paste("sacct", jstring, ustring, "-X -P -o", sacct_format), intern = TRUE)
-  if (length(res) == 1L) {
-    # data.table::fread will break down
-    readr::read_delim(I(res), delim = "|", show_col_types = FALSE)
-  } else {
-    data.table::fread(text = res)
+  #cmd <- paste("sacct", jstring, ustring, "-X -P -o", sacct_format)
+  cmd <- paste(jstring, ustring, "-X -P -o", sacct_format)
+  #cat(cmd, "\n")
+  res <- system2("sacct", args=cmd, stdout=TRUE)
+  
+  df_base <- data.frame(JobID = job_ids)
+  df_empty <- df_base %>%
+    mutate(
+      Submit = NA_character_,
+      Timelimit = NA_character_,
+      Start = NA_character_,
+      End = NA_character_,
+      State = "MISSING"
+    )
+
+  # handle non-zero exit status -- return empty data
+  if (!is.null(attr(res, "status"))) {
+    return(df_empty)
   }
+  
+  if (length(res) == 1L) {
+    # data.table::fread will break down (see Github issue )
+    out <- readr::read_delim(I(res), delim = "|", show_col_types = FALSE)
+  } else {
+    out <- data.table::fread(text = res, data.table=FALSE)
+  }
+
+  if (!checkmate::test_subset(c("JobID", "State"), names(out))) {
+    warning("Missing columns in sacct output")
+    return(df_empty)
+  }
+
+  out$JobID <- as.character(out$JobID)
+  df <- df_base %>%
+    dplyr::left_join(out, by = "JobID") %>%
+    mutate(State = if_else(is.na(State), "MISSING", State))
+
+  return(df)
 }
 
 local_job_status <- function(job_ids = NULL, user = NULL,
