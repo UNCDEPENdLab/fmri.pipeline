@@ -180,6 +180,8 @@ slurm_job_status <- function(job_ids = NULL, user = NULL,
 
   # handle non-zero exit status -- return empty data
   if (!is.null(attr(res, "status"))) {
+    warning("sacct call generated non-zero exit status")
+    print(cmd)
     return(df_empty)
   }
   

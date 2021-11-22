@@ -8,6 +8,7 @@ build_l1_models(
   gpa = NULL,
   trial_data = NULL,
   l1_model_set = NULL,
+  from_spec_file = NULL,
   onset_cols = NULL,
   onset_regex = ".*(onset|time).*",
   duration_cols = NULL,
@@ -25,6 +26,8 @@ shoudl be added. If $l1_models is already present, these will be amended.}
 \item{trial_data}{a data.frame containing trial-level data for one or more subjects}
 
 \item{l1_model_set}{optional existing l1_model_set to be modified}
+
+\item{from_spec_file}{optional YAML or JSON file containing settings to populated into l1 models}
 
 \item{onset_cols}{an optional character vector of columns in \code{trial_data} that should be
 in the set of event onsets}

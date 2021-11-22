@@ -65,9 +65,9 @@ runFSLCommand <- function(args, fsldir=NULL, stdout=NULL, stderr=NULL) {
 #' @keywords internal
 file_ext <- function(file, withdot = TRUE) {
   file <- tolower(file)
-  matches <- grepl("^.*\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", file)
+  matches <- grepl("^.*\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", file)
   ext <- rep(NA, length=length(file)) # return NA for inputs that can't be parsed
-  ext[matches] <- sub("^(.*)\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", "\\2\\3", file[matches])
+  ext[matches] <- sub("^(.*)\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", "\\2\\3", file[matches])
   if (isTRUE(withdot)) ext[matches] <- paste0(".", ext[matches])
   return(ext)
 }

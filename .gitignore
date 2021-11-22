@@ -43,7 +43,7 @@ slurm-*.out
 
 #local files that don't pertain to release
 #leaving these in for now (in prototyping phase)
-#/local/
+/local/
 
 #R CMD BATCH outputs
 *.Rout

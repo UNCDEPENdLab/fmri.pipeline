@@ -13,7 +13,8 @@ bl1_get_cols(
   select_regex = NULL,
   limit_cols = NULL,
   force_selection = TRUE,
-  alpha_sort = TRUE
+  alpha_sort = TRUE,
+  prompt_input = TRUE
 )
 }
 \arguments{
@@ -28,6 +29,14 @@ bl1_get_cols(
 \item{select_cols}{a character vector of current columns specified by the user to be added/included}
 
 \item{select_regex}{a PCRE-compatible regular expression for identifying columns}
+
+\item{limit_cols}{a vector of variable names in \code{trial_data} that constrains what can be chosen}
+
+\item{force_selection}{do not allow an empty return for this field}
+
+\item{alpha_sort}{whether to display eligible columns in alphabetical order}
+
+\item{prompt_input}{whether to ask user to confirm selections}
 }
 \value{
 a modified version of l1_model_set that has \code{field_name} updated according to user specification

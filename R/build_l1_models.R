@@ -4,6 +4,7 @@
 #'   shoudl be added. If $l1_models is already present, these will be amended.
 #' @param trial_data a data.frame containing trial-level data for one or more subjects
 #' @param l1_model_set optional existing l1_model_set to be modified
+#' @param from_spec_file optional YAML or JSON file containing settings to populated into l1 models
 #' @param onset_cols an optional character vector of columns in \code{trial_data} that should be
 #'   in the set of event onsets
 #' @param onset_regex an optional PCRE-compatible regular expression for identifying potential
@@ -25,9 +26,10 @@
 #' @author Michael Hallquist
 #' @importFrom checkmate assert_data_frame assert_class assert_subset
 #' @importFrom dplyr bind_cols select mutate
+#' @importFrom yaml read_yaml
+#' @importFrom jsonlite read_json
 #' @export
-#'
-build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
+build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_spec_file=NULL,
                            onset_cols=NULL, onset_regex=".*(onset|time).*",
                            duration_cols=NULL, duration_regex=".*duration.*",
                            value_cols=NULL, value_regex=NULL, isi_cols=NULL, isi_regex="^(iti|isi).*") {
@@ -49,7 +51,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
   }
 
   checkmate::assert_data_frame(trial_data, null.ok = FALSE)
-  checkmate::assert_class(l1_model_set, "l1_model_set", null.ok=TRUE)
+  checkmate::assert_class(l1_model_set, "l1_model_set", null.ok = TRUE)
   checkmate::assert_subset(onset_cols, names(trial_data)) #make sure that all onset columns are in the data frame
   checkmate::assert_string(onset_regex, null.ok = TRUE)
   checkmate::assert_subset(duration_cols, names(trial_data)) # make sure that all duration columns are in the data frame
@@ -65,6 +67,26 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
     new_l1 <- TRUE
   } else {
     new_l1 <- FALSE
+  }
+
+  if (!is.null(from_spec_file)) {
+    checkmate::assert_file_exists(from_spec_file)
+    lg$info("In build_l1_models, populated fields from: %s", from_spec_file)
+    ext <- file_ext(from_spec_file, withdot = FALSE)
+    if (ext == "yaml") {
+      spec_list <- yaml::read_yaml(from_spec_file)
+    } else if (ext == "json") {
+      spec_list <- jsonlite::read_json(from_spec_file)
+    } else {
+      msg <- sprintf("Cannot understand how to input spec file: %s", from_spec_file)
+      lg$error(msg)
+      stop(msg)
+    }
+
+    l1_model_set <- fields_from_spec(l1_model_set, spec_list, trial_data, c("onsets", "durations", "isis", "values", "wi_factors"))
+    l1_model_set <- bl1_build_events(l1_model_set, trial_data, lg, spec_list)
+    l1_model_set <- signals_from_spec(l1_model_set, spec_list, trial_data, lg)
+    new_l1 <- FALSE # always assume that the spec file has enough info not to walk through each stage
   }
 
   int_vars <- sapply(trial_data, checkmate::test_integerish)
@@ -111,7 +133,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL,
         # TODO: Need to convert integers to factors
       } else if (aa == 6) {
         # events
-        l1_model_set <- bl1_build_events(l1_model_set, trial_data)
+        l1_model_set <- bl1_build_events(l1_model_set, trial_data, lg)
       } else if (aa == 7) {
         # signals
         l1_model_set <- bl1_build_signals(l1_model_set, trial_data, lg)
@@ -192,12 +214,16 @@ c_string <- function(vec, null_val="none") {
 #' @param field_desc the text description of the field being modified (e.g., 'parametric value')
 #' @param select_cols a character vector of current columns specified by the user to be added/included
 #' @param select_regex a PCRE-compatible regular expression for identifying columns
-#'
+#' @param limit_cols a vector of variable names in \code{trial_data} that constrains what can be chosen
+#' @param force_selection do not allow an empty return for this field
+#' @param alpha_sort whether to display eligible columns in alphabetical order
+#' @param prompt_input whether to ask user to confirm selections
+#' 
 #' @return a modified version of l1_model_set that has \code{field_name} updated according to user specification
 #' @importFrom glue glue
 #' @keywords internal
-bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc = NULL,
-                         select_cols = NULL, select_regex = NULL, limit_cols=NULL, force_selection = TRUE, alpha_sort = TRUE) {
+bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc = NULL, select_cols = NULL, select_regex = NULL,
+  limit_cols=NULL, force_selection = TRUE, alpha_sort = TRUE, prompt_input=TRUE) {
   # record of columns before any adjustments.
   current_cols <- l1_model_set[[field_name]]
 
@@ -214,9 +240,14 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
   new_cols <- setdiff(select_cols, current_cols) # any new columns in the argument compared to the l1_model_set?
   chosen_cols <- current_cols # start with current columns
   if (length(new_cols) > 0L) {
-    cat(glue("Current {field_desc} columns in the l1 model structure are: {c_string(current_cols)}\n\n"))
-    cat(glue("The arguments to build_l1_models also included: {c_string(new_cols)}\n"))
-    res <- menu(c("Yes", "No"), title = glue("Do you want to add these columns to possible {field_desc}s?"))
+    cat(glue("Current {field_desc} columns in the l1 model structure are: {c_string(current_cols)}\n", .trim=FALSE))
+    cat(glue("The arguments to build_l1_models also included: {c_string(new_cols)}\n", .trim=FALSE))
+    if (isFALSE(prompt_input)) {
+      res <- 1L
+    } else {
+      res <- menu(c("Yes", "No"), title = glue("Do you want to add these columns to possible {field_desc}s?"))
+    }
+
     if (res == 1L) {
       # add chosen_cols to l1 set
       chosen_cols <- c(current_cols, new_cols) # else just keep current_cols
@@ -239,15 +270,18 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
 
   done_cols <- FALSE
   while (isFALSE(done_cols)) {
-
-    cat(glue("\n\n---\nCurrent {field_desc} columns: {c_string(chosen_cols)}\n\n"))
-    action <- menu(c(
-      glue("Add/modify {field_desc} columns"),
-      glue("Delete {field_desc} columns"),
-      glue("Done with {field_desc} selection")
-    ),
-    title = glue("Would you like to modify the event {field_desc} columns?")
-    )
+    if (isFALSE(prompt_input)) {
+      action <- 3L # Done
+    } else {
+      cat(glue("\n\n---\nCurrent {field_desc} columns: {c_string(chosen_cols)}\n\n", .trim=FALSE))
+      action <- menu(c(
+        glue("Add/modify {field_desc} columns"),
+        glue("Delete {field_desc} columns"),
+        glue("Done with {field_desc} selection")
+      ),
+      title = glue("Would you like to modify the event {field_desc} columns?")
+      )
+    }
 
     if (action == 1L) { # Add/modify
       chosen_cols <- select.list(possible_cols,
@@ -278,9 +312,8 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
       }
     } else if (action == 3L) { # Done
       done_cols <- TRUE
-      cat(glue("The following columns were chosen as event {field_desc}s.\n\n",
-        "These will be used as possible {field_desc}s for each regressor.\n\n"))
-      cat(glue("  {c_string(chosen_cols)}\n\n"))
+      cat(glue("\nThe following columns were chosen as possible event {field_desc}s.\n", .trim=FALSE))
+      cat(glue("  {c_string(chosen_cols)}\n", .trim=FALSE))
     }
   }
 
@@ -296,12 +329,8 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
 #' @importFrom dplyr select mutate
 #' @importFrom checkmate test_number
 #' @importFrom glue glue
-bl1_build_events <- function(l1_model_set, trial_data, lg=NULL) {
+bl1_build_events <- function(l1_model_set, trial_data, lg=NULL, spec_list = NULL) {
   cat("Specify all events that can be added to a GLM model. Events consist of an onset time and duration\n")
-
-  # basal data frame for each event
-  metadata_df <- trial_data %>%
-    dplyr::select(id, session, run_number, trial)
 
   summarize_events <- function(l1_model_set) {
     cat("Summary of events available in l1 models:\n--------\n")
@@ -339,13 +368,24 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL) {
     }
   }
 
+  if (!is.null(spec_list)) {
+    l1_model_set <- events_from_spec(l1_model_set, spec_list, trial_data)
+    prompt_input <- FALSE
+  } else {
+    prompt_input <- TRUE
+  }
+
   events_complete <- FALSE
   while (isFALSE(events_complete)) {
     summarize_events(l1_model_set)
-    action <- menu(c("Add event", "Delete event", "Done with event specification"))
+    if (prompt_input) {
+      action <- menu(c("Add event", "Delete event", "Done with event specification"))
+    } else {
+      action <- 3L
+    }
 
     if (action == 1L) { # add
-      ss <- list()
+      eobj <- list()
 
       # ---- event name ----
       complete <- FALSE
@@ -356,7 +396,7 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL) {
           if (nm %in% names(l1_model_set$events)) {
             cat("Event cannot have the same name as an existing event!\n")
           } else {
-            ss$name <- nm
+            eobj$name <- nm
             complete <- TRUE
           }
         }
@@ -367,7 +407,7 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL) {
       while (isFALSE(complete)) {
         oo <- menu(l1_model_set$onsets, title="Choose event onset")
         if (oo != 0) {
-          ss$onset <- l1_model_set$onsets[oo]
+          eobj$onset <- l1_model_set$onsets[oo]
           complete <- TRUE
         }
       }
@@ -380,16 +420,16 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL) {
         if (oval == 1) {
           duration <- NULL
           while (!checkmate::test_number(duration, lower = 0, upper = 5000)) {
-            duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", ss$name, ": ")))
+            duration <- as.numeric(readline(paste0("Enter the duration value (in seconds) for ", eobj$name, ": ")))
           }
           if (duration > 50) {
             lg$warn("Duration more than 50s specified. Make sure that your durations are in seconds, not milliseconds!")
           }
 
-          ss$duration <- duration
+          eobj$duration <- duration
           complete <- TRUE
         } else if (oval > 1L) {
-          ss$duration <- choices[oval]
+          eobj$duration <- choices[oval]
           complete <- TRUE
         }
       }
@@ -404,49 +444,24 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL) {
           if (oval == 1) {
             isi <- NULL
             while (!checkmate::test_number(isi, lower = 0, upper = 5000)) {
-              isi <- as.numeric(readline(paste0("Enter the ISI/ITI value (in seconds) for ", ss$name, ": ")))
+              isi <- as.numeric(readline(paste0("Enter the ISI/ITI value (in seconds) for ", eobj$name, ": ")))
             }
             if (isi > 50) {
               lg$warn("ISI/ITI more than 50s specified. Make sure that your ISI/ITI values are in seconds, not milliseconds!")
             }
 
-            ss$isi <- duration
+            eobj$isi <- duration
             complete <- TRUE
           } else if (oval > 1L) {
-            ss$isi <- choices[oval]
+            eobj$isi <- choices[oval]
             complete <- TRUE
           }
         }
       }
 
-      if (is.numeric(ss$duration)) {
-        edata <- trial_data %>%
-          dplyr::select(!!ss$onset) %>%
-          setNames(c("onset")) %>%
-            dplyr::mutate(duration = !!ss$duration, event = !!ss$name)
-      } else {
-        edata <- trial_data %>%
-          dplyr::select(!!ss$onset, !!ss$duration) %>%
-          setNames(c("onset", "duration")) %>%
-          dplyr::mutate(event = !!ss$name)
-      }
-
-      if (!is.null(ss$isi)) {
-        if (is.numeric(ss$isi)) {
-          edata$isi <- ss$isi
-        } else {
-          idata <- trial_data %>%
-            dplyr::select(!!ss$isi) %>%
-            setNames("isi")
-          edata <- edata %>% bind_cols(idata) # add isi column
-        }
-      } else {
-        edata$isi <- NA_real_ # populate NA
-      }
-      
-      ss$data <- metadata_df %>% dplyr::bind_cols(edata)
-
-      l1_model_set$events[[nm]] <- ss
+      # populate data frame for event
+      eobj <- populate_event_data(eobj, trial_data)
+      l1_model_set$events[[nm]] <- eobj
     } else if (action == 2L) { # delete
       event_names <- names(l1_model_set$events)
       which_del <- menu(event_names, title="Which event would you like to delete?")
@@ -676,41 +691,7 @@ bl1_build_signals <- function(l1_model_set, trial_data, lg=NULL) {
         trial_set <- rep(TRUE, nrow(trial_data))
       }
 
-      get_trial_subset_stats <- function(trial_data, trial_set) {
-        overall <- sum(trial_set == TRUE) / length(trial_set)
-        tmp <- trial_data %>% bind_cols(trial_set=trial_set)
-        by_id <- tmp %>%
-          dplyr::group_by(id) %>%
-          dplyr::summarize(pct_true = sum(trial_set == TRUE) / n(), .groups = "drop") %>%
-          dplyr::summarize(
-            mean = mean(pct_true, na.rm = T), sd = sd(pct_true, na.rm=T),
-            min = min(pct_true, na.rm = T), max = max(pct_true, na.rm = T)
-          ) %>%
-          mutate(overall = overall) %>% unlist()
-        return(by_id)
-      }
-
       ss$trial_subset_statistics <- get_trial_subset_stats(trial_data, trial_set)
-
-      get_value_df <- function(signal, trial_data, trial_set = NULL) {
-        value_df <- trial_data %>%
-          dplyr::select(id, session, run_number, trial)
-
-        if (!is.null(trial_set)) {
-          stopifnot(length(trial_set) == nrow(trial_data))
-          checkmate::assert_logical(trial_set)
-          value_df <- value_df[trial_set, , drop = FALSE]
-        }
-
-        if (signal$value_type %in% c("unit", "number")) {
-          value_df$value <- signal$value_fixed
-        } else if (signal$value_type == "parametric") {
-          value_df$value <- trial_data[[signal$parametric_modulator]][trial_set]
-        } else {
-          stop("Failing to populate value column")
-        }
-        return(value_df)
-      }
 
       ### ---- value of regressor ----
       if (isTRUE(modify)) {
@@ -1113,4 +1094,39 @@ get_regressors_from_signal <- function(sig) {
     cols <- c(cols, paste0("d_", cols)) # add temporal derivative for each column
   }
   return(cols)
+}
+
+get_value_df <- function(signal, trial_data, trial_set = NULL) {
+  value_df <- trial_data %>%
+    dplyr::select(id, session, run_number, trial)
+
+  if (!is.null(trial_set)) {
+    stopifnot(length(trial_set) == nrow(trial_data))
+    checkmate::assert_logical(trial_set)
+    value_df <- value_df[trial_set, , drop = FALSE]
+  }
+
+  if (signal$value_type %in% c("unit", "number")) {
+    value_df$value <- signal$value_fixed
+  } else if (signal$value_type == "parametric") {
+    value_df$value <- trial_data[[signal$parametric_modulator]][trial_set]
+  } else {
+    stop("Failing to populate value column")
+  }
+  return(value_df)
+}
+
+get_trial_subset_stats <- function(trial_data, trial_set) {
+  overall <- sum(trial_set == TRUE) / length(trial_set)
+  tmp <- trial_data %>% bind_cols(trial_set = trial_set)
+  by_id <- tmp %>%
+    dplyr::group_by(id) %>%
+    dplyr::summarize(pct_true = sum(trial_set == TRUE) / n(), .groups = "drop") %>%
+    dplyr::summarize(
+      mean = mean(pct_true, na.rm = T), sd = sd(pct_true, na.rm = T),
+      min = min(pct_true, na.rm = T), max = max(pct_true, na.rm = T)
+    ) %>%
+    mutate(overall = overall) %>%
+    unlist()
+  return(by_id)
 }
