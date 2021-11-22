@@ -1,0 +1,73 @@
+# define columns that can be selected in different parts of the model specification
+onsets:
+  - clock_onset
+  - feedback_onset
+
+durations:
+  - rt_csv
+
+isis:
+  - iti_ideal
+
+wi_factors:
+  - rew_om
+
+values:
+  - pe_max
+  - rew_om_c
+  - abs_pe_c
+  - abspexrew
+  - kld3_cum2
+  - log_kld3_cum2
+  - v_entropy             # overall entropy, not within-run scaled
+  - v_entropy_wi          # within-run scaled entropy
+  - v_entropy_wi_change
+  
+# events must consist of name, onset, and duration. isi is optional
+events:
+
+  clock:
+    name: clock
+    onset: clock_onset
+    duration: rt_csv
+
+  feedback:
+    name: feedback
+    onset: feedback_onset
+    duration: 0.9
+    isi: iti_ideal
+
+# if not otherwise speecified, signals will default to unit height regressors with no HRF normalization
+signals:
+  kld3_clock:
+    name: kld3_clock
+    event: clock
+    trial_subset_expression: rt_csv < 4
+    normalization: evtmax_1
+    parametric_modulator: kld3_cum2
+
+  pe:
+    name: pe
+    event: feedback
+    trial_subset_expression: rt_csv < 4
+    normalization: evtmax_1
+    parametric_modulator: pe_max
+  
+  clock:
+    name: clock
+    event: clock
+    value_fixed: 1
+
+  feedback:
+    name: feedback
+    event: feedback
+    value_fixed: 1
+
+models: # not implemented yet
+  abspe:
+    name: abspe
+    signals: 
+      - clock
+      - feedback
+      - abspe
+
