@@ -16,15 +16,47 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
   checkmate::assert_integerish(mobj$level, lower = 1L, upper = 3L, len = 1L)
   lg <- lgr::get_logger(paste0("glm_pipeline/l", mobj$level, "_setup"))
 
+  # ideally, we should expect a fitted model object to be passed in to support condition means and differences
+  # default values for different contrast selections
+  cond_means <- c() # factors for which we want model-predicted condition means
+  pairwise_diffs <- c() # factors for which we want pairwise differences
+  cell_means <- FALSE # whether to include cell means across all factors in design
+  overall_response <- FALSE # whether to include predicted average response across all predictors
+  simple_slopes <- list() # continuous variables over which to test slopes
+  weights <- "cells"
+  cat_vars <- c()
+  cont_vars <- c()
+
+  # subfunction to populate contrast_spec and create $contrast_list from spec
+  # uses lexical scope of specify_contrasts
+  populate_mobj_contrasts <- function(mobj) {
+    mobj$contrast_spec$diagonal <- include_diagonal
+    mobj$contrast_spec$cond_means <- cond_means
+    mobj$contrast_spec$pairwise_diffs <- pairwise_diffs
+    mobj$contrast_spec$cell_means <- cell_means
+    mobj$contrast_spec$overall_response <- overall_response
+    mobj$contrast_spec$simple_slopes <- simple_slopes
+    mobj$contrast_spec$weights <- weights
+    mobj$contrast_spec$cat_vars <- cat_vars
+    mobj$contrast_spec$regressors <- mobj$regressors
+    mobj <- get_contrasts_from_spec(mobj)
+  }
+
+  # list used internally for caching generated contrasts
+  if (is.null(mobj$contrast_list)) {
+    mobj$contrast_list <- list()
+  }
+
   prompt_contrasts <- FALSE
   if (!is.null(from_spec)) {
     if (!is.null(from_spec$contrasts$include_diagonal)) {
-      checkmate::assert_logical(from_spec$contrasts$include_diagonal, len=1L)
-      mobj$contrast_spec$include_diagonal <- from_spec$contrasts$include_diagonal
+      checkmate::assert_logical(from_spec$contrasts$include_diagonal, len = 1L)
+      include_diagonal <- from_spec$contrasts$include_diagonal
     } else {
       lg$debug("In contrast specification from spec file, including diagonal contrasts by default")
-      mobj$contrast_spec$include_diagonal <- TRUE
+      include_diagonal <- TRUE
     }
+    mobj <- populate_mobj_contrasts(mobj)
   } else if (is.null(mobj$contrast_spec)) {
     mobj$contrast_spec <- list()
     prompt_contrasts <- TRUE
@@ -36,13 +68,8 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     res <- menu(c("No", "Yes"), title = "Do you want to modify model contrasts?")
     if (res == 2L) {
       prompt_contrasts <- TRUE
-      mobj$contrast_list <- list() # clear prior contrasts that were calculated from the specification
+      mobj$contrast_list <- mobj$contrast_spec <- list() # clear prior contrasts that were calculated from the specification
     }
-  }
-
-  # list used internally for caching generated contrasts
-  if (is.null(mobj$contrast_list)) {
-    mobj$contrast_list <- list()
   }
 
   # if the user does not want to modify existing contrasts, return object unchanged
@@ -61,16 +88,6 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     include_diagonal <- menu(c("Yes", "No"), title = "Do you want to include diagonal contrasts for each regressor?")
     include_diagonal <- ifelse(include_diagonal == 1L, TRUE, FALSE)
   }
-
-  # ideally, we should expect a fitted model object to be passed in to support condition means and differences
-  cond_means <- c() # factors for which we want model-predicted condition means
-  pairwise_diffs <- c() # factors for which we want pairwise differences
-  cell_means <- FALSE # whether to include cell means across all factors in design
-  overall_response <- FALSE # whether to include predicted average response across all predictors
-  simple_slopes <- list() # continuous variables over which to test slopes
-  weights <- "cells"
-  cat_vars <- c()
-  cont_vars <- c()
 
   # in case of level 1 object, look for any within-subject factors and prompt for relevant contrasts of each
   if (mobj$level == 1L && inherits(mobj, "l1_model_spec")) {
@@ -198,20 +215,14 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     }
   }
 
+
   # populate contrast specification object
-  mobj$contrast_spec$diagonal <- include_diagonal
-  mobj$contrast_spec$cond_means <- cond_means
-  mobj$contrast_spec$pairwise_diffs <- pairwise_diffs
-  mobj$contrast_spec$cell_means <- cell_means
-  mobj$contrast_spec$overall_response <- overall_response
-  mobj$contrast_spec$simple_slopes <- simple_slopes
-  mobj$contrast_spec$weights <- weights
-  mobj$contrast_spec$cat_vars <- cat_vars
-  mobj$contrast_spec$regressors <- mobj$regressors
+  mobj <- populate_mobj_contrasts(mobj)
 
   cmat_base <- matrix(numeric(0), nrow = 0, ncol = length(mobj$regressors), dimnames = list(NULL, mobj$regressors))
-  mobj <- get_contrasts_from_spec(mobj)
   cmat <- mobj$contrasts
+
+
 
   # N.B. For now, hand off full model matrix and contrasts to fMRI fitting function (e.g., feat) and
   # let it handle the rank degeneracy. We may need to come back here and drop bad contrasts and use

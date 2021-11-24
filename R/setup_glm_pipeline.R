@@ -156,7 +156,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   multi_run <- ifelse(length(unique(trial_data$run_number)) > 1L, TRUE, FALSE)
 
   # create run data, if needed
-  if (is.null(run_data) && isTRUE(multi_run)) {
+  if (is.null(run_data)) {
     lg$info("Distilling run_data object from trial_data by finding variables that vary at run level")
 
     variation_df <- trial_data %>%
