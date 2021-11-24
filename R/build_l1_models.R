@@ -86,6 +86,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
     l1_model_set <- fields_from_spec(l1_model_set, spec_list, trial_data, c("onsets", "durations", "isis", "values", "wi_factors"))
     l1_model_set <- bl1_build_events(l1_model_set, trial_data, lg, spec_list)
     l1_model_set <- signals_from_spec(l1_model_set, spec_list, trial_data, lg)
+    l1_model_set <- bl1_build_models(l1_model_set, spec_list, lg)
     new_l1 <- FALSE # always assume that the spec file has enough info not to walk through each stage
   }
 
@@ -866,10 +867,10 @@ bl1_build_signals <- function(l1_model_set, trial_data, lg=NULL) {
 }
 
 ############### BUILD MODELS FROM SIGNALS AND EVENTS
-bl1_build_models <- function(l1_model_set, lg=NULL) {
+bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
   checkmate::assert_class(lg, "Logger")
 
-  create_new_model <- function(signal_list, to_modify=NULL) {
+  create_new_model <- function(signal_list, to_modify=NULL, from_spec=NULL) {
     checkmate::assert_class(to_modify, "l1_model_spec", null.ok=TRUE)
     if (is.null(to_modify)) {
       mobj <- list(level = 1L) #first-level model
@@ -885,6 +886,10 @@ bl1_build_models <- function(l1_model_set, lg=NULL) {
       cat("Current model name:", mobj$name, "\n")
       res <- menu(c("No", "Yes"), title="Change model name?")
       if (res == 2) { mobj$name <- NULL } #clear out so that it is respecified
+    }
+
+    if (!is.null(from_spec$name)) { # populate from specification, if requested
+      mobj$name <- from_spec$name
     }
 
     while (is.null(mobj$name) || mobj$name == "") {
@@ -908,8 +913,13 @@ bl1_build_models <- function(l1_model_set, lg=NULL) {
       }
     }
 
-    # signals
-    summarize_l1_signals(signal_list) #print summary
+    ### ------ model signals ------
+    if (!is.null(from_spec$signals)) {
+      checkmate::assert_subset(from_spec$signals, names(signal_list))
+      mobj$signals <- from_spec$signals
+    } else {
+      summarize_l1_signals(signal_list) # print summary of signals if user input is needed
+    }
 
     while (is.null(mobj$signals)) {
       signals <- select.list(names(signal_list), multiple = TRUE, preselect = mobj$signals,
@@ -935,7 +945,7 @@ bl1_build_models <- function(l1_model_set, lg=NULL) {
     # contrasts for each wi-factor-modulated signal.
 
     #contrast editor
-    mobj <- specify_contrasts(mobj, signal_list)
+    mobj <- specify_contrasts(mobj, signal_list, from_spec)
 
     return(mobj)
   }
@@ -943,6 +953,14 @@ bl1_build_models <- function(l1_model_set, lg=NULL) {
   model_list <- l1_model_set$models
   signal_list <- l1_model_set$signals
   add_more <- 1
+
+  if (!is.null(spec_list)) {
+    for (mm in spec_list$l1_models) {
+      mobj <- create_new_model(signal_list, from_spec=mm)
+      model_list[[mobj$name]] <- mobj # add to set
+    }
+  }
+
   while (add_more != 4) {
     summarize_l1_models(model_list)
 

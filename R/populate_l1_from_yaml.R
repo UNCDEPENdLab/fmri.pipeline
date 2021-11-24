@@ -105,7 +105,7 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
       } else {
         ss$value_type <- "number"
       }
-q    }
+    }
 
     if (!is.null(ss$normalization)) {
       checkmate::assert_subset(ss$normalization, c("none", "evtmax_1", "durmax_1"))

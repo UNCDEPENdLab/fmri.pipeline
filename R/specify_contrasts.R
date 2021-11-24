@@ -1,15 +1,15 @@
 #' Internal function to add, edit, rename, delete contrasts
 #'
 #' @param mobj \code{l1_model_spec} or \code{hi_model_spec} object
-#' @param include_diagonal A logical indicating whether to include a diagonal matrix of contrasts
-#'   in the model contrasts. Defaults to TRUE.
+#' @param signals a list of signals that provide information about regressor specification
+#' @param from_spec a list of settings for this model based on an external YAML/JSON specification file
 #' @keywords internal
 #' @author Michael Hallquist
 #' @importFrom magrittr %>%
 #' @importFrom emmeans emmeans emtrends
 #' @importFrom lgr get_logger
 #' @importFrom checkmate assert_multi_class assert_integerish
-specify_contrasts <- function(mobj = NULL, signals = NULL) {
+specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
   checkmate::assert_multi_class(mobj, c("l1_model_spec", "l1_wi_spec", "hi_model_spec")) # verify that we have an object of known structure
   checkmate::assert_list(signals, null.ok = TRUE)
 
@@ -17,7 +17,15 @@ specify_contrasts <- function(mobj = NULL, signals = NULL) {
   lg <- lgr::get_logger(paste0("glm_pipeline/l", mobj$level, "_setup"))
 
   prompt_contrasts <- FALSE
-  if (is.null(mobj$contrast_spec)) {
+  if (!is.null(from_spec)) {
+    if (!is.null(from_spec$contrasts$include_diagonal)) {
+      checkmate::assert_logical(from_spec$contrasts$include_diagonal, len=1L)
+      mobj$contrast_spec$include_diagonal <- from_spec$contrasts$include_diagonal
+    } else {
+      lg$debug("In contrast specification from spec file, including diagonal contrasts by default")
+      mobj$contrast_spec$include_diagonal <- TRUE
+    }
+  } else if (is.null(mobj$contrast_spec)) {
     mobj$contrast_spec <- list()
     prompt_contrasts <- TRUE
   } else {
