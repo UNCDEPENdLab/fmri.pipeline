@@ -936,7 +936,7 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
     }
 
     #look up what the regressors will be for this.
-    mobj$regressors_list <- sapply(signal_list[mobj$signals], get_regressors_from_signal)
+    mobj$regressors_list <- sapply(signal_list[mobj$signals], get_regressors_from_signal, simplify=FALSE)
     mobj$regressors <- unlist(mobj$regressors_list)
 
     # NOTE: at level 1, we always essentially have an additive model and rely on the user for contrast specification. Usually, this will

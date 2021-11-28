@@ -66,7 +66,7 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
   for (ss in slist$signals) {
     # initialize defaults
     sobj <- list(
-      normalization = "none", trial_subset = FALSE, add_deriv = FALSE, ts_multiplier = FALSE,
+      normalization = "none", trial_subset = FALSE, add_deriv = FALSE, ts_multiplier = NULL,
       demean_convolved = TRUE, beta_series = FALSE, value_type = "unit", value_fixed = 1
     )
     checkmate::assert_string(ss$name)

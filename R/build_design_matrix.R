@@ -610,7 +610,7 @@ build_design_matrix <- function(
   #Add ts_multipliers to signals as needed. Will generate a list in which each element is a run
   #NB. This doesn't handle runs_to_output appropriately!!
   bdm_args$ts_multiplier <- lapply(signals, function(s) {
-    if (is.null(s$ts_multiplier)) {
+    if (is.null(s$ts_multiplier) || isFALSE(s$ts_multiplier)) {
       return(NULL)
     } else {
       #split the relevant column of the ts_multipliers_df for this signal at run boundaries
