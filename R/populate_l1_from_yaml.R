@@ -93,7 +93,7 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
     }
 
     # this gets populated in signals even with empty trial subset expression
-    sobj$trial_subset_statistics <- get_trial_subset_stats(trial_data, trial_set)
+    sobj <- get_trial_subset_stats(sobj, trial_data, trial_set)
 
     if (!is.null(ss$parametric_modulator)) {
       sobj$parametric_modulator <- ss$parametric_modulator

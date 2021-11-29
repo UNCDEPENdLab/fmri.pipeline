@@ -30,7 +30,7 @@
 #' }
 #'
 #' @author Michael Hallquist
-#' @importFrom dplyr full_join
+#' @importFrom dplyr full_join if_else
 #' @export
 wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 24,
                          scheduler = "local", quiet = TRUE, stop_on_timeout = TRUE) {

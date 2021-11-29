@@ -245,6 +245,7 @@
 #' @importFrom utils read.table write.table
 #' @importFrom RNifti niftiHeader
 #' @importFrom checkmate assert_file_exists
+#' @importFrom rlang flatten
 #'
 #' @author Michael Hallquist
 #' @author Alison Schreiber
@@ -406,49 +407,12 @@ build_design_matrix <- function(
   shorten_additional <- TRUE # whether to apply drop_volumes to additional regressors (would only be FALSE if user supplied confound files that already dropped these)
   shorten_ts <- TRUE # whether to apply drop_volumes to ts regressors (would only be FALSE if user supplied confound files that already dropped these)
 
-  # helper function to expand beta series
-  expand_signals <- function(orig) {
-    # use levels of wi_factors here to build out multiple signals, one per level... maybe just copy-paste these inside object, subsetting value?
-    signals_expanded <- lapply(orig, function(ss) {
-      if (is.null(ss$wi_factors)) {
-        return(ss)
-      } else {
-        # extract within-subject regression model matrix (has dummy coding)
-        model_df <- as.data.frame(model.matrix(ss$wi_model))
-
-        # for each column of the model matrix, pull the signal value data.frame where
-        # the dummy code is 1 (i.e., rows to which the dummy pertains). This divides up the value
-        # data.frame into smaller data.frames, one per dummy combination
-        dummy_value <- lapply(model_df, function(x) {
-          which_1 <- which(x == 1)
-          ss$value %>%
-            dplyr::slice(!!which_1) %>%
-            dplyr::select(-!!ss$wi_factors)
-        })
-
-        # create a list of signals, one per dummy level, by copying the master signal
-        # settings, then amending the value field to include only relevant trials/rows
-        signal_list <- lapply(seq_along(dummy_value), function(x) {
-          sig_copy <- ss
-          # update signal name to reflect level of within-subject factor(s)
-          sig_copy$name <- paste(sig_copy$name, make.names(names(dummy_value)[x]), sep = "_")
-
-          # copy across relevant data.frame for this level
-          sig_copy$value <- dummy_value[[x]]
-
-          # remove residual within-subject modulation settings
-          sig_copy$wi_formula <- sig_copy$wi_model <- sig_copy$wi_factors <- NULL
-          sig_copy
-        })
-      }
-
-    })
-    
-    #now handle beta series
-  }
+  # expand_signal returns a list itself -- use flatten to make one big mega-list
+  # signals_expanded <- rlang::flatten(lapply(signals, expand_signal))
 
   # merge the trial-indexed signals with the time-indexed events
   # basically: put the events onto the time grid of the run based on the "event" element of the list
+  # signals_aligned <- lapply(signals_expanded, function(s) {
   signals_aligned <- lapply(signals, function(s) {
     if (is.null(s$event)) { stop("Signal does not have event element") }
     if (is.null(s$value)) {
@@ -1074,3 +1038,5 @@ get_additional_regressors <- function(additional_regressors, run_volumes, drop_v
 # dnuisrun1 <- dnuis$design_convolved$run1
 # dnuisrun1$time <- 1:nrow(dnuisrun1)
 # ggplot(dnuisrun1, aes(x = time, y = wm)) + geom_line(size = 0.8)
+
+

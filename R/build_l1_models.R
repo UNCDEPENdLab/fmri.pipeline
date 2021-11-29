@@ -681,16 +681,7 @@ bl1_build_signals <- function(l1_model_set, trial_data, lg=NULL) {
         }
       }
 
-      # if user has a cached trial expression, need to evaluate the trial set before getting value df
-      if (isTRUE(ss$trial_subset)) {
-        # calculate trial set from cached expression
-        if (is.null(trial_set)) trial_set <- with(trial_data, eval(parse(text = ss$trial_subset_expression)))
-      } else {
-        # when FALSE: keep all trials. This is a local variable that is calculated every time this function is called (e.g., modification)
-        trial_set <- rep(TRUE, nrow(trial_data))
-      }
-
-      ss$trial_subset_statistics <- get_trial_subset_stats(trial_data, trial_set)
+      ss <- get_trial_subset_stats(ss, trial_data, trial_set)
 
       ### ---- value of regressor ----
       if (isTRUE(modify)) {
@@ -1082,44 +1073,9 @@ bl1_specify_wi_factors <- function(ss, l1_model_set, trial_data, modify) {
   return(ss)
 }
 
-# helper function to figure out expected regressor columns for a given signal based on whether
-# the signal has within-subject factors, is a beta series signal, and/or includes a temporal derivative
-get_regressors_from_signal <- function(sig) {
-  # in terms of design, always add derivative columns en bloc after the corresponding non-derivative columns
-  if (!is.null(sig$wi_factors)) {
-    # use the lmfit object in the signal to determine the columns that will be included
-    # for within-subject factor modulation, always include the signal as the prefix on the column names
-    cols <- paste(sig$name, names(coef(sig$wi_model)), sep = ".")
-  } else if (isTRUE(sig$beta_series)) {
-    if (is.data.frame(sig$value)) {
-      # TODO: this approach is imperfect if there are jumps in trials for a subject
-      # this assumes that all subjects have all trials
-      trials <- sort(unique(sig$value$trial)) # vector of trials for parametric signal
-    } else {
-      # trials will be in corresponding event in case value is a scalar
-      trials <- sort(unique(event_list[[sig$event]]$trial))
-    }
-
-    cols <- paste(sig$name, sprintf("%03d", trials), sep = "_t") # signal_t001 etc.
-  } else {
-    cols <- sig$name # nothing special
-  }
-
-  if (isTRUE(sig$add_deriv)) {
-    cols <- c(cols, paste0("d_", cols)) # add temporal derivative for each column
-  }
-  return(cols)
-}
 
 get_value_df <- function(signal, trial_data, wi_factors = NULL) {
-  if (isTRUE(signal$trial_subset)) {
-    # calculate trial set from cached expression
-    trial_set <- with(trial_data, eval(parse(text = signal$trial_subset_expression)))
-  } else {
-    # when FALSE: keep all trials. This is a local variable that is calculated every time this function is called (e.g., modification)
-    trial_set <- rep(TRUE, nrow(trial_data))
-  }
-
+  trial_set <- get_trial_set_from_signal(signal, trial_data)
   value_df <- trial_data %>%
     dplyr::select(id, session, run_number, trial, !!wi_factors)
 
@@ -1138,19 +1094,4 @@ get_value_df <- function(signal, trial_data, wi_factors = NULL) {
   }
 
   return(value_df)
-}
-
-get_trial_subset_stats <- function(trial_data, trial_set) {
-  overall <- sum(trial_set == TRUE) / length(trial_set)
-  tmp <- trial_data %>% bind_cols(trial_set = trial_set)
-  by_id <- tmp %>%
-    dplyr::group_by(id) %>%
-    dplyr::summarize(pct_true = sum(trial_set == TRUE) / n(), .groups = "drop") %>%
-    dplyr::summarize(
-      mean = mean(pct_true, na.rm = T), sd = sd(pct_true, na.rm = T),
-      min = min(pct_true, na.rm = T), max = max(pct_true, na.rm = T)
-    ) %>%
-    mutate(overall = overall) %>%
-    unlist()
-  return(by_id)
 }
