@@ -1088,7 +1088,8 @@ get_regressors_from_signal <- function(sig) {
   # in terms of design, always add derivative columns en bloc after the corresponding non-derivative columns
   if (!is.null(sig$wi_factors)) {
     # use the lmfit object in the signal to determine the columns that will be included
-    cols <- names(coef(sig$wi_model))
+    # for within-subject factor modulation, always include the signal as the prefix on the column names
+    cols <- paste(sig$name, names(coef(sig$wi_model)), sep = ".")
   } else if (isTRUE(sig$beta_series)) {
     if (is.data.frame(sig$value)) {
       # TODO: this approach is imperfect if there are jumps in trials for a subject

@@ -639,6 +639,9 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     c_colnames <- names(coef(lmfit)) # prefer model-specific regressors (if they vary by subject)
   }
 
+  # for within-subject factors, always add the signal name as a prefix (cf. get_regressors_from_signal)
+  c_colnames <- paste0(prefix, c_colnames)
+
   ### add diagonal contrasts
   c_diagonal <- contrast_list$diagonal
   if (isTRUE(spec$diagonal) && is.null(c_diagonal)) {
@@ -821,7 +824,7 @@ get_wi_contrast_matrix <- function(mobj, c_colnames) {
 
   cnames <- do.call(c, lapply(clist, rownames))
   cmat <- matrix(0, nrow = length(cnames), ncol = length(c_colnames), dimnames = list(cnames, c_colnames))
-  
+
   # fill in relevant rows and columns in combined matrix for each wi model contrast matrix
   for (cc in clist) {
     cmat[rownames(cc), colnames(cc)] <- cc
