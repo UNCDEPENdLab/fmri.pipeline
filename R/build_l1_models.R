@@ -132,6 +132,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
         )
 
         # TODO: Need to convert integers to factors
+
       } else if (aa == 6) {
         # events
         l1_model_set <- bl1_build_events(l1_model_set, trial_data, lg)
@@ -467,7 +468,7 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL, spec_list = NULL
       event_names <- names(l1_model_set$events)
       which_del <- menu(event_names, title="Which event would you like to delete?")
       if (which_del > 0) {
-        proceed <- menu(c("Proceed", "Cancel"), title = glue("Are you sure you want to delete {event_names}?"))
+        proceed <- menu(c("Proceed", "Cancel"), title = glue("Are you sure you want to delete {event_names[which_del]}?"))
         if (proceed==1) {
           cat(glue("  Deleting {event_names[which_del]}\n"))
           l1_model_set$events[[which_del]] <- NULL
