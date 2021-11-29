@@ -140,7 +140,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
         l1_model_set <- bl1_build_signals(l1_model_set, trial_data, lg)
       } else if (aa == 8) {
         # models
-        l1_model_set <- bl1_build_models(l1_model_set, lg)
+        l1_model_set <- bl1_build_models(l1_model_set, lg=lg)
       }
     }
 
@@ -451,7 +451,7 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL, spec_list = NULL
               lg$warn("ISI/ITI more than 50s specified. Make sure that your ISI/ITI values are in seconds, not milliseconds!")
             }
 
-            eobj$isi <- duration
+            eobj$isi <- isi
             complete <- TRUE
           } else if (oval > 1L) {
             eobj$isi <- choices[oval]
@@ -697,7 +697,7 @@ bl1_build_signals <- function(l1_model_set, trial_data, lg=NULL) {
       ### ---- value of regressor ----
       if (isTRUE(modify)) {
         # repopulate value data.frame in case subset has changed
-        ss$value <- get_value_df(ss, trial_data, trial_set)
+        ss$value <- get_value_df(ss, trial_data)
 
         cat(
           "Current signal value:",
@@ -731,7 +731,7 @@ bl1_build_signals <- function(l1_model_set, trial_data, lg=NULL) {
           ss$value_fixed <- 1.0
         } else if (regtype == 2L) {
           val <- NULL
-          while (!test_number(val)) {
+          while (!checkmate::test_number(val)) {
             val <- as.numeric(readline("Enter the regressor value/height (pre-convolution): "))
           }
           ss$value_type <- "number"
@@ -752,7 +752,7 @@ bl1_build_signals <- function(l1_model_set, trial_data, lg=NULL) {
         }
 
         # populate value data frame for this signal
-        ss$value <- get_value_df(ss, trial_data, trial_set)
+        ss$value <- get_value_df(ss, trial_data)
       }
 
       ### ---- within-subject factor modulation ----
@@ -1066,23 +1066,20 @@ bl1_specify_wi_factors <- function(ss, l1_model_set, trial_data, modify) {
   ss$wi_formula <- update.formula(wi_formula, ~ . - 1)
   ss$wi_factors <- wi_vars
 
+  if (!checkmate::test_data_frame(ss$value)) {
+    stop("Signal value element is not a data.frame. Within-subject factors only setup to use data.frames right now.")
+  }
+
+  # repopulate trial data for this signal, including the selected wi_factors
+  ss$value <- get_value_df(ss, trial_data, wi_factors = wi_vars)
+
   # fit dummy model to populate a set of dummy coefficients, then save those to the object
-  wi_df <- trial_data %>%
-    dplyr::select(all_of(wi_vars)) %>%
+  wi_df <- ss$value %>%
     mutate(dummy = rnorm(n()))
   ffit <- update.formula(ss$wi_formula, "dummy ~ .")
 
   ss$wi_model <- lm(ffit, wi_df)
 
-  if (!checkmate::test_data_frame(ss$value)) {
-    stop("Signal value element is not a data.frame. Within-subject factors only setup to use data.frames right now")
-  } else if (nrow(ss$value) != nrow(trial_data)) {
-    stop("Bizarre situation where signal value data.frame has different number of rows than trial_data.")
-  } else {
-    # tack on the within-subject factors into value data.frame so that build_design_matrix can sort things out
-    ss$value <- ss$value %>% bind_cols(trial_data %>% dplyr::select(all_of(wi_vars)))
-  }
-  
   return(ss)
 }
 
@@ -1114,9 +1111,17 @@ get_regressors_from_signal <- function(sig) {
   return(cols)
 }
 
-get_value_df <- function(signal, trial_data, trial_set = NULL) {
+get_value_df <- function(signal, trial_data, wi_factors = NULL) {
+  if (isTRUE(signal$trial_subset)) {
+    # calculate trial set from cached expression
+    trial_set <- with(trial_data, eval(parse(text = signal$trial_subset_expression)))
+  } else {
+    # when FALSE: keep all trials. This is a local variable that is calculated every time this function is called (e.g., modification)
+    trial_set <- rep(TRUE, nrow(trial_data))
+  }
+
   value_df <- trial_data %>%
-    dplyr::select(id, session, run_number, trial)
+    dplyr::select(id, session, run_number, trial, !!wi_factors)
 
   if (!is.null(trial_set)) {
     stopifnot(length(trial_set) == nrow(trial_data))
@@ -1131,6 +1136,7 @@ get_value_df <- function(signal, trial_data, trial_set = NULL) {
   } else {
     stop("Failing to populate value column")
   }
+
   return(value_df)
 }
 
