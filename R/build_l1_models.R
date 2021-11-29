@@ -130,9 +130,6 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
           field_name = "wi_factors", field_desc = "within-subject factor",
           limit_cols = possible_factors
         )
-
-        # TODO: Need to convert integers to factors
-
       } else if (aa == 6) {
         # events
         l1_model_set <- bl1_build_events(l1_model_set, trial_data, lg)
@@ -1076,7 +1073,8 @@ bl1_specify_wi_factors <- function(ss, l1_model_set, trial_data, modify) {
 
   # fit dummy model to populate a set of dummy coefficients, then save those to the object
   wi_df <- ss$value %>%
-    mutate(dummy = rnorm(n()))
+    mutate(dummy = rnorm(n())) %>%
+    mutate(across(!!wi_vars, factor)) # always force wi_factors to be stored as factor to make contrasts straightforward
   ffit <- update.formula(ss$wi_formula, "dummy ~ .")
 
   ss$wi_model <- lm(ffit, wi_df)

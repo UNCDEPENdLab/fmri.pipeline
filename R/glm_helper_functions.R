@@ -630,6 +630,9 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   checkmate::assert_list(spec)
   checkmate::assert_list(contrast_list)
 
+  # prefix for contrast names
+  prefix <- ifelse(inherits(mobj, "l1_wi_spec"), paste0(mobj$signal_name, "."), "")
+
   if (is.null(lmfit)) {
     c_colnames <- spec$regressors
   } else {
@@ -641,7 +644,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   if (isTRUE(spec$diagonal) && is.null(c_diagonal)) {
 
     diag_mat <- diag(length(c_colnames))
-    rownames(diag_mat) <- paste0("EV_", c_colnames) # simple contrast naming for each individual regressor
+    rownames(diag_mat) <- paste0("EV_", prefix, c_colnames) # simple contrast naming for each individual regressor
     colnames(diag_mat) <- c_colnames # always have columns named by regressor
 
     c_diagonal <- diag_mat
@@ -664,7 +667,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
       }
 
       # add contrast names to matrix
-      rownames(econ) <- paste(vv, enames, sep=".")
+      rownames(econ) <- paste0(prefix, paste(vv, enames, sep = "."))
 
       # add contrasts to matrix
       c_cond_means <- rbind(c_cond_means, econ)
@@ -690,7 +693,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
       enames <- enames[!which_na]
     }
 
-    rownames(econ) <- enames
+    rownames(econ) <- paste0(prefix, enames)
     c_cell_means <- rbind(c_cell_means, econ)
     colnames(c_cell_means) <- c_colnames
   }
@@ -700,7 +703,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   if (isTRUE(spec$overall_response) && is.null(c_overall)) {
     ee <- emmeans(lmfit, ~1, weights = spec$weights)
     econ <- ee@linfct
-    rownames(econ) <- "overall"
+    rownames(econ) <- paste0(prefix, "overall")
     colnames(econ) <- c_colnames
     c_overall <- econ
   }
@@ -723,7 +726,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
       }
 
       # add contrast names to matrix
-      rownames(econ) <- enames
+      rownames(econ) <- paste0(prefix, enames)
 
       # add pairwise differences for this factor to the pairwise matrix
       c_pairwise_diffs <- rbind(c_pairwise_diffs, econ)
@@ -752,7 +755,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
           enames <- enames[!which_na]
         }
 
-        rownames(econ) <- enames
+        rownames(econ) <- paste0(prefix, enames)
         c_simple_slopes <- rbind(c_simple_slopes, econ)
       }
     }
