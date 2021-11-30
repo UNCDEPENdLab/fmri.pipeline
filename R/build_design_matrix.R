@@ -408,33 +408,37 @@ build_design_matrix <- function(
   shorten_ts <- TRUE # whether to apply drop_volumes to ts regressors (would only be FALSE if user supplied confound files that already dropped these)
 
   # expand_signal returns a list itself -- use flatten to make one big mega-list
-  # signals_expanded <- rlang::flatten(lapply(signals, expand_signal))
+  signals_expanded <- rlang::flatten(unname(lapply(signals, expand_signal)))
+  names(signals_expanded) <- sapply(signals_expanded, "[[", "name")
 
   # merge the trial-indexed signals with the time-indexed events
   # basically: put the events onto the time grid of the run based on the "event" element of the list
-  # signals_aligned <- lapply(signals_expanded, function(s) {
-  signals_aligned <- lapply(signals, function(s) {
+  signals_aligned <- lapply(signals_expanded, function(s) {
+  #signals_aligned <- lapply(signals, function(s) {
     if (is.null(s$event)) { stop("Signal does not have event element") }
     if (is.null(s$value)) {
       message("Signal is missing a 'value' element. Adding 1 for value, assuming a unit-height regressor.")
       s$value <- 1
     }
 
+    join_cols <- c("run_number", "trial")
     df_events <- dplyr::filter(events, event == s$event)
-    df_signal <- s$value #the signal data.frame for this signal
+    event_runs <- factor(sort(unique(df_events$run_number)))
+    df_signal <- s$value # the signal data.frame for this signal
+    
+    if ("id" %in% names(df_events)) { 
+      join_cols <- c(join_cols, "id")
+    }
+    if ("session" %in% names(df_events)) {
+      join_cols <- c(join_cols, "session")
+    }
+
     if (length(df_signal)==1L && is.numeric(df_signal)) { #task indicator-type regressor
       s_aligned <- df_events
       s_aligned$value <- df_signal #replicate requested height for all occurrences
     } else if (is.data.frame(df_signal)) {
-      if (!identical(sort(unique(df_events$run_number)), sort(unique(df_signal$run_number)))) {
-        missing_runs <- setdiff(df_events$run_number, df_signal$run_number) #setdiff discards duplicates
-        for (m in missing_runs) {
-          message("Missing value for event: ", s$event, " in run: ", as.character(m))
-          df_signal <- rbind(df_signal, data.frame(run_number=m, trial=1, value=0)) #populate an empty event for each missing run
-        }
-      }
       s_aligned <- df_signal %>%
-        dplyr::left_join(df_events, by = c("run_number", "trial")) %>%
+        dplyr::left_join(df_events, by = join_cols) %>%
         dplyr::arrange(run_number, trial) # enforce match on signal side
     } else { stop("Unknown data type for signal.") }
 
@@ -450,12 +454,15 @@ build_design_matrix <- function(
       }
     }
 
-    #transform to make dmat happy (runs x regressors 2-d list)
-    #dplyr::select will tolerate quoted names, which avoids R CMD CHECK complaints
-    retdf <- s_aligned %>% dplyr::select("trial", "onset", "duration", "value")
-    retsplit <- split(retdf, s_aligned$run_number)
+    # transform to make dmat happy (runs x regressors 2-d list)
+    # dplyr::select will tolerate quoted names, which avoids R CMD CHECK complaints
+    retdf <- s_aligned %>%
+      dplyr::select("run_number", "trial", "onset", "duration", "value") %>%
+      mutate(run_number = factor(run_number, levels = event_runs)) %>%
+      setDT()
+    # use data.table split method to keep all levels and drop by column. sorted=TRUE also keeps things in run order
+    retsplit <- split(retdf, by="run_number", keep.by=FALSE, sorted=TRUE) 
     names(retsplit) <- paste0("run_number", names(retsplit))
-
     #tag the aligned signal with the event element so that we can identify which regressors are aligned to the same event later
     retsplit <- lapply(retsplit, function(rr) { attr(rr, "event") <- s$event; return(rr) })
 
@@ -463,18 +470,18 @@ build_design_matrix <- function(
   })
 
   #extract the normalization for each regressor into a vector
-  bdm_args$normalizations <- sapply(signals, function(s) {
+  bdm_args$normalizations <- sapply(signals_expanded, function(s) {
     ifelse(is.null(s$normalization), "none", s$normalization) #default to none
   })
 
   #extract whether to divide a given regressor into a beta series (one regressor per event)
-  bdm_args$beta_series <- sapply(signals, function(s) {
+  bdm_args$beta_series <- sapply(signals_expanded, function(s) {
     ifelse(isTRUE(s$beta_series), TRUE, FALSE) #no beta series by default
   })
 
   #Extract whether to remove zero values from the regressor prior to convolution.
   #This is especially useful when mean centering before convolution.
-  bdm_args$rm_zeros <- sapply(signals, function(s) {
+  bdm_args$rm_zeros <- sapply(signals_expanded, function(s) {
     if (is.null(s$rm_zeros)) {
       TRUE #default to removing zeros before convolution
     } else {
@@ -487,7 +494,7 @@ build_design_matrix <- function(
   })
 
   #extract the convmax_1 settings for each regressor into a vector
-  bdm_args$convmax_1 <- sapply(signals, function(s) {
+  bdm_args$convmax_1 <- sapply(signals_expanded, function(s) {
     if (is.null(s$convmax_1)) {
       FALSE
     } else {
@@ -500,7 +507,7 @@ build_design_matrix <- function(
   })
 
   #determine whether to add a temporal derivative for each signal
-  bdm_args$add_derivs <- sapply(signals, function(s) {
+  bdm_args$add_derivs <- sapply(signals_expanded, function(s) {
     if (is.null(s$add_deriv)) {
       FALSE
     } else {
@@ -573,7 +580,7 @@ build_design_matrix <- function(
 
   #Add ts_multipliers to signals as needed. Will generate a list in which each element is a run
   #NB. This doesn't handle runs_to_output appropriately!!
-  bdm_args$ts_multiplier <- lapply(signals, function(s) {
+  bdm_args$ts_multiplier <- lapply(signals_expanded, function(s) {
     if (is.null(s$ts_multiplier) || isFALSE(s$ts_multiplier)) {
       return(NULL)
     } else {
@@ -583,13 +590,13 @@ build_design_matrix <- function(
     }
   })
 
-  #Build the runs x signals 2-D list
-  #Note that we enforce dropped volumes (from beginning of run) below
-  #This is because fmri.stimulus gives odd behaviors (e.g. constant 1s) if an onset time is negative
+  # Build the runs x signals 2-D list
+  # Note that we enforce dropped volumes (from beginning of run) below
+  # This is because fmri.stimulus gives odd behaviors (e.g. constant 1s) if an onset time is negative
   dmat <- do.call(cbind, lapply(seq_along(signals_aligned), function(signal) {
     lapply(signals_aligned[[signal]], function(run) {
       mm <- as.matrix(run)
-      attr(mm, "event") <- attr(run, "event") #propagate event tag
+      attr(mm, "event") <- attr(run, "event") # propagate event tag
       return(mm)
     })
   }))
@@ -677,32 +684,25 @@ build_design_matrix <- function(
     if ("fsl" %in% write_timing_files) {
       for (i in 1:dim(dmat)[1L]) {
         for (reg in 1:dim(dmat)[2L]) {
-          regout <- dmat[[i, reg]][, c("onset", "duration", "value"), drop=FALSE]
-
-          #handle beta series outputs
-          if (isTRUE(bdm_args$beta_series[reg])) {
-            for (k in 1:nrow(regout)) {
-              #only write out a 3-column file for a non-zero event (regardless of rm_zeros)
-              if (isFALSE(abs(regout[k,"value"]) < 1e-5)) {
-                fname <- paste0("run", runs_to_output[i], "_", dimnames(dmat)[[2L]][reg], "_b", sprintf("%03d", k), "_FSL3col.txt")
-                write.table(regout[k,,drop=FALSE], file=file.path(output_directory, fname), sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
-              }
-            }
+          regout <- dmat[[i, reg]]
+          if (nrow(regout) == 0L) {
+            next
           } else {
-            if (center_values && !all(na.omit(regout[, "value"]) == 0.0)) {
-              #remove zero-value events from the regressor
-              regout <- regout[regout[, "value"] != 0, ]
-
-              #now mean center values (unless there is no variation, such as a task indicator function)
-              if (sd(regout[, "value"], na.rm=TRUE) > 0) { 
-                regout[, "value"] <- regout[, "value"] - mean(regout[, "value"], na.rm=TRUE)
-              }
-            }
-
-            fname <- paste0("run", runs_to_output[i], "_", dimnames(dmat)[[2L]][reg], "_FSL3col.txt")
-            write.table(regout, file=file.path(output_directory, fname), sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
-
+            regout <- regout[, c("onset", "duration", "value"), drop = FALSE]
           }
+         
+          if (center_values && !all(na.omit(regout[, "value"]) == 0.0)) {
+            #remove zero-value events from the regressor
+            regout <- regout[regout[, "value"] != 0, , drop = FALSE]
+
+            #now mean center values (unless there is no variation, such as a task indicator function)
+            if (nrow(regout) > 1L && sd(regout[, "value"], na.rm=TRUE) > 0) {
+              regout[, "value"] <- regout[, "value"] - mean(regout[, "value"], na.rm=TRUE)
+            }
+          }
+
+          fname <- paste0("run", runs_to_output[i], "_", dimnames(dmat)[[2L]][reg], "_FSL3col.txt")
+          write.table(regout, file=file.path(output_directory, fname), sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
         }
       }
     }
@@ -853,6 +853,7 @@ shift_dmat_timing <- function(dmat, tr, drop_volumes = 0, shift_timing = TRUE) {
   for (i in 1:dim(dmat)[1]) { # run
     for (j in 1:dim(dmat)[2]) { # regressor
       df <- dmat[[i, j]]
+      if (nrow(df) == 0L) next # empty regressor
       df[, "onset"] <- df[, "onset"] - time_offset[i]
       if (min(df[, "onset"] < 0)) {
         message(

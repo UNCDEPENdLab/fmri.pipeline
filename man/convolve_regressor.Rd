@@ -15,7 +15,6 @@ convolve_regressor(
   demean_convolved = FALSE,
   high_pass = NULL,
   convolve = TRUE,
-  beta_series = FALSE,
   ts_multiplier = NULL,
   hrf_parameters = c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35)
 )
@@ -43,9 +42,6 @@ typically center values prior to convolution, and retaining zeros will lead them
 \item{convolve}{If \code{TRUE}, the regressor is convolved with the HRF. If \code{FALSE},
 the regressor values are simply aligned onto the time grid without convolution
 based on the corresponding onsets, durations, and values.}
-
-\item{beta_series}{If \code{TRUE}, split \code{reg} into separate regressors for each event (row). These can be used
-to estimate separate betas in the GLM for each event.}
 
 \item{ts_multiplier}{A vector that is n_vols in length that will be multiplied against the stimulus vector before convolution.}
 

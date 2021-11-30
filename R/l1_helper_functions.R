@@ -68,7 +68,7 @@ get_regressors_from_signal <- function(sig) {
 expand_signal <- function(sig) {
   if (is.null(sig$wi_factors) && isFALSE(sig$beta_series)) {
     # nothing to expand
-    s_list <- sig
+    s_list <- list(sig) # wrap as list to ensure we always get a list return
   } else if (!is.null(sig$wi_factors) && isTRUE(sig$beta_series)) {
     stop("In expand_signal, cannot sort out what to do when beta series is enabled and there is a within-subject factor!")
   } else if (!is.null(sig$wi_factors)) {
