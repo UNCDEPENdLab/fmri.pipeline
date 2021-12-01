@@ -232,7 +232,8 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   # time for finalize_pipeline_configuration in run_glm_pipeline
   if (is.null(gpa$parallel$finalize_time)) gpa$parallel$finalize_time <- "6:00:00" # 6.0 hours (includes run truncation, which is slow)
   if (is.null(gpa$parallel$l1_setup_time)) gpa$parallel$l1_setup_time <- "4:00:00" # 4.0 hours
-  if (is.null(gpa$parallel$l2_setup_time)) gpa$parallel$l2_setup_time <- "2:00:00" # 2.0 hours
+  if (is.null(gpa$parallel$l2_setup_run_time)) gpa$parallel$l2_setup_run_time <- "12:00:00" # 12 hours for l2 setup and execution to clear scheduler (all jobs)
+  if (is.null(gpa$parallel$l3_setup_run_time)) gpa$parallel$l3_setup_run_time <- "72:00:00" # 72 hours for all L3 analyses to clear scheduler (all jobs)
   if (is.null(gpa$parallel$compute_environment)) {
     lg$info("Using default R compute environment for UNC Longleaf")
     gpa$parallel$compute_environment <- c(

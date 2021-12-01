@@ -94,7 +94,7 @@ l3_model_names = "prompt", glm_software = NULL) {
     # setup of l2 models (should follow l1)
     l2_batch <- f_batch$copy(
       job_name = "setup_run_l2", n_cpus = gpa$parallel$l2_setup_cores,
-      cpu_time = gpa$parallel$l2_setup_time,
+      cpu_time = gpa$parallel$l2_setup_run_time,
       r_code = c(
         "gpa <- setup_l2_models(gpa)",
         "child_job_ids <- run_feat_sepjobs(gpa, level = 2L)"
@@ -108,7 +108,7 @@ l3_model_names = "prompt", glm_software = NULL) {
   if (!is.null(model_list$l3_model_names)) {
     l3_batch <- f_batch$copy(
       job_name = "setup_run_l3", n_cpus = gpa$parallel$l2_setup_cores,
-      cpu_time = gpa$parallel$l2_setup_time,
+      cpu_time = gpa$parallel$l3_setup_run_time,
       r_code = c(
         "gpa <- setup_l3_models(gpa)",
         "child_job_ids <- run_feat_sepjobs(gpa, level = 3L)"
