@@ -4,7 +4,7 @@ get_trial_set_from_signal <- function(ss, trial_data=NULL) {
   # if user has a cached trial expression, need to evaluate the trial set before getting value df
   if (isTRUE(ss$trial_subset)) {
     # calculate trial set from cached expression
-    if (is.null(trial_set)) trial_set <- with(trial_data, eval(parse(text = ss$trial_subset_expression)))
+    trial_set <- with(trial_data, eval(parse(text = ss$trial_subset_expression)))
   } else {
     # when FALSE: keep all trials. This is a local variable that is calculated every time this function is called (e.g., modification)
     trial_set <- rep(TRUE, nrow(trial_data))
