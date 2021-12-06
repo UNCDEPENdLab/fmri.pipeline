@@ -429,6 +429,17 @@ R_batch_sequence <- R6::R6Class("batch_sequence",
       sapply(private$sequence_jobs, checkmate::assert_class, "batch_job")
     },
 
+    #' @description add one or more R_batch_job objects to the sequence
+    #' @param ... One or more R_batch_job objects to be added to sequence
+    add = function(...) {
+      others <- list(...)
+      others <- others[!sapply(others, is.null)] # remove NULLs
+      if (length(others) > 1L) {
+        sapply(others, checkmate::assert_class, "batch_job")
+        private$sequence_jobs <- c(private$sequence_jobs, others)
+      }
+    },
+
     #' @description submit the job sequence to the scheduler or local compute
     submit = function() {
       job_list <- private$sequence_jobs

@@ -74,7 +74,7 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
     if (!ss$event %in% names(l1_model_set$events)) {
       stop(sprintf("Cannot locate event %s in l1_model_set$events", ss$event))
     }
-    
+
     sobj$name <- ss$name
     sobj$event <- ss$event
 
@@ -100,10 +100,12 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
       sobj$value_type <- "parametric"
       sobj$value_fixed <- NULL
     } else if (!is.null(ss$value_fixed)) {
+      checkmate::assert_number(ss$value_fixed)
+      sobj$value_fixed <- ss$value_fixed
       if (abs(ss$value_fixed - 1) < 1e-5) {
-        ss$value_type <- "unit"
+        sobj$value_type <- "unit"
       } else {
-        ss$value_type <- "number"
+        sobj$value_type <- "number"
       }
     }
 
@@ -112,7 +114,39 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
       sobj$normalization <- ss$normalization
     }
 
-    sobj$value <- get_value_df(sobj, trial_data, trial_set)
+    if (!is.null(ss$demean_convolved)) {
+      checkmate::assert_logical(ss$demean_convolved, len = 1L)
+      sobj$demean_convolved <- ss$demean_convolved
+    }
+
+    if (!is.null(ss$add_deriv)) {
+      checkmate::assert_logical(ss$add_deriv, len = 1L)
+      sobj$add_deriv <- ss$add_deriv
+    }
+
+    if (!is.null(ss$wi_factors)) {
+      checkmate::assert_subset(ss$wi_factors, l1_model_set$wi_factors)
+      sobj$wi_factors <- ss$wi_factors
+
+      ff <- NULL
+      if (!is.null(ss$wi_formula)) {
+        ff <- tryCatch(as.formula(ss$wi_formula), error = function(e) {
+          wi_formula <- tryCatch(as.formula(wi_formula), error = function(e) {
+            print(e)
+            cat("Problem converting your syntax to formula. Defaulting to additive model\n")
+            return(NULL)
+          })
+        })
+      }
+
+      if (is.null(ff)) {
+        ff <- as.formula(paste("~", paste(ss$wi_factors, collapse = " + ")))
+      }
+
+      sobj$wi_formula <- ff
+    }
+
+    sobj$value <- get_value_df(sobj, trial_data, wi_factors = sobj$wi_factors)
     l1_model_set$signals[[sobj$name]] <- sobj # this will overwrite existing specification
   }
 
