@@ -100,10 +100,19 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope",
       `3` = extract_model_spec$l3
     )
 
+    ospec <- switch(level,
+      `1` = l1_expression,
+      `2` = l2_expression,
+      `3` = l3_expression
+    )
+
     res_list <- list()
 
     # if nothing to extract, return empty list
-    if (to_extract == "none") return(res_list)
+    # a bit too accommodating on mixed types, but don't want to fix up build_beta_extraction
+    if (is.null(espec) || (is.data.frame(espec) && nrow(espec) == 0L) || (is.list(espec) && length(espec) == 0L))  {
+      return(res_list)
+    }
 
     for (aa in mask_files) {
       lg$info("Extracting statistics from mask: %s", aa)
@@ -118,7 +127,7 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope",
     res_list <- rbindlist(res_list)
     if (isTRUE(write_data)) {
       res_split <- res_list %>%
-        mutate(out_file = glue_data(., !!l3_expression)) %>%
+        mutate(out_file = glue_data(., !!ospec)) %>%
         split(by = "out_file", keep.by = FALSE) %>%
         write_list()
     }
