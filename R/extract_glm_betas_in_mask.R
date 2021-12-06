@@ -25,6 +25,7 @@
 #' @importFrom foreach registerDoSEQ
 #' @importFrom data.table fwrite rbindlist
 #' @importFrom glue glue_data
+#' @importFrom RNifti readNifti
 #' @export
 extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope", "zstat"), out_dir=getwd(),
   extract_l1="all", extract_l2="all", extract_l3="all",
@@ -69,43 +70,6 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope",
   # ask user to specify the models from which betas should be extracted
   extract_model_spec <- build_beta_extraction(gpa, extract_l1, extract_l2, extract_l3, lg)
 
-  # double loop over mask_files and extract_spec -- make extract_fsl_betas a single mask image
-
-  l1_list <- list()
-  l2_list <- list()
-  l3_list <- list()
-
-  for (aa in mask_files) {
-    lg$info("Extracting statistics from mask: %s", aa)
-
-    if (extract_l3 != "none") {
-      lg$info("Extracting group-level statistics for model combinations:")
-      lg$info("%s", capture.output(print(extract_model_spec$l3)))
-      l3_list[[aa]] <- extract_fsl_betas(gpa,
-        extract = extract_model_spec$l3, level = 3L, what = what,
-        aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores=ncores, lg=lg
-      )
-    }
-
-    if (extract_l2 != "none") {
-      lg$info("Extracting subject-level statistics for model combinations:")
-      lg$info("%s", capture.output(print(extract_model_spec$l2)))
-      l2_list[[aa]] <- extract_fsl_betas(gpa,
-        extract = extract_model_spec$l2, level = 2L, what = what,
-        aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores=ncores, lg=lg
-      )
-    }
-
-    if (extract_l1 != "none") {
-      lg$info("Extracting run-level statistics for model combinations:")
-      lg$info("%s", capture.output(print(extract_model_spec$l1)))
-      l1_list[[aa]] <- extract_fsl_betas(gpa,
-        extract = extract_model_spec$l1, level = 1L, what = what,
-        aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores=ncores, lg=lg
-      )
-    }
-  }
-
   # helper function to write out data.frames to csv files for each element in a list (split by key factors like contrast)
   write_list <- function(data_split) {
     for (ff in seq_along(data_split)) {
@@ -116,39 +80,121 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope",
     return(names(data_split))
   }
 
-  # sort out files based on glue expressions
-  if (extract_l3 != "none") {
-    l3_list <- rbindlist(l3_list)
+  # subfunction to process and write betas from a given level
+  extract_and_write <- function(level=1L) {
+    to_extract <- switch(level,
+      `1` = extract_l1,
+      `2` = extract_l2,
+      `3` = extract_l3
+    )
+
+    lev_name <- switch(level,
+      `1` = "run-level",
+      `2` = "subject-level",
+      `3` = "group-level"
+    )
+
+    espec <- switch(level,
+      `1` = extract_model_spec$l1,
+      `2` = extract_model_spec$l2,
+      `3` = extract_model_spec$l3
+    )
+
+    res_list <- list()
+
+    # if nothing to extract, return empty list
+    if (to_extract == "none") return(res_list)
+
+    for (aa in mask_files) {
+      lg$info("Extracting statistics from mask: %s", aa)
+      lg$info("Extracting %s statistics for model combinations:", lev_name)
+      lg$info("%s", capture.output(print(espec)))
+      res_list[[aa]] <- extract_fsl_betas(gpa,
+        extract = espec, level = level, what = what,
+        aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores = ncores, lg = lg
+      )
+    }
+
+    res_list <- rbindlist(res_list)
     if (isTRUE(write_data)) {
-      l3_split <- l3_list %>%
+      res_split <- res_list %>%
         mutate(out_file = glue_data(., !!l3_expression)) %>%
         split(by = "out_file", keep.by = FALSE) %>%
         write_list()
     }
+
+    return(res_list)
   }
 
-  if (extract_l2 != "none") {
-    l2_list <- rbindlist(l2_list)
-    if (isTRUE(write_data)) {
-      l2_split <- l2_list %>%
-        mutate(out_file = glue_data(., !!l2_expression)) %>%
-        split(by = "out_file", keep.by = FALSE) %>%
-        write_list()
-    }
-  }
+  l1_df <- extract_and_write(1L)
+  l2_df <- extract_and_write(2L)
+  l3_df <- extract_and_write(3L)
+
+  # for (aa in mask_files) {
+  #   lg$info("Extracting statistics from mask: %s", aa)
+
+  #   if (extract_l3 != "none") {
+  #     lg$info("Extracting group-level statistics for model combinations:")
+  #     lg$info("%s", capture.output(print(extract_model_spec$l3)))
+  #     l3_list[[aa]] <- extract_fsl_betas(gpa,
+  #       extract = extract_model_spec$l3, level = 3L, what = what,
+  #       aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores=ncores, lg=lg
+  #     )
+  #   }
+
+  #   if (extract_l2 != "none") {
+  #     lg$info("Extracting subject-level statistics for model combinations:")
+  #     lg$info("%s", capture.output(print(extract_model_spec$l2)))
+  #     l2_list[[aa]] <- extract_fsl_betas(gpa,
+  #       extract = extract_model_spec$l2, level = 2L, what = what,
+  #       aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores=ncores, lg=lg
+  #     )
+  #   }
+
+  #   if (extract_l1 != "none") {
+  #     lg$info("Extracting run-level statistics for model combinations:")
+  #     lg$info("%s", capture.output(print(extract_model_spec$l1)))
+  #     l1_list[[aa]] <- extract_fsl_betas(gpa,
+  #       extract = extract_model_spec$l1, level = 1L, what = what,
+  #       aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores=ncores, lg=lg
+  #     )
+  #   }
+  # }
+
+
+  # sort out files based on glue expressions
+  # if (extract_l3 != "none") {
+  #   l3_list <- rbindlist(l3_list)
+  #   if (isTRUE(write_data)) {
+  #     l3_split <- l3_list %>%
+  #       mutate(out_file = glue_data(., !!l3_expression)) %>%
+  #       split(by = "out_file", keep.by = FALSE) %>%
+  #       write_list()
+  #   }
+  # }
+
+  # if (extract_l2 != "none") {
+  #   l2_list <- rbindlist(l2_list)
+  #   if (isTRUE(write_data)) {
+  #     l2_split <- l2_list %>%
+  #       mutate(out_file = glue_data(., !!l2_expression)) %>%
+  #       split(by = "out_file", keep.by = FALSE) %>%
+  #       write_list()
+  #   }
+  # }
   
-  if (extract_l1 != "none") {
-    l1_list <- rbindlist(l1_list)
-    if (isTRUE(write_data)) {
-      l1_split <- l1_list %>%
-        mutate(out_file = glue_data(., !!l1_expression)) %>%
-        split(by = "out_file", keep.by = FALSE) %>%
-        write_list()
-    }
-  }
+  # if (extract_l1 != "none") {
+  #   l1_list <- rbindlist(l1_list)
+  #   if (isTRUE(write_data)) {
+  #     l1_split <- l1_list %>%
+  #       mutate(out_file = glue_data(., !!l1_expression)) %>%
+  #       split(by = "out_file", keep.by = FALSE) %>%
+  #       write_list()
+  #   }
+  # }
 
   if (isTRUE(return_data)) {
-    return(list(l1 = l1_list, l2 = l2_list, l3 = l3_list))
+    return(list(l1 = l1_df, l2 = l2_df, l3 = l3_df))
   } else {
     return(invisible(NULL))
   }
@@ -169,7 +215,11 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope",
 #' @param what which elements of the FEAT output should be extracted. Default is cope and zstat
 #' @param aggregate whether to aggregate voxels within each parcel
 #' @param aggFUN the function to use for aggregating voxels within a parcel
+#' @param remove_zeros whether to remove statistics that are very close to zero (and may thus represent masked-out voxels)
 #' @param mask_file a nifti image containing integer values for each parcel from which we should extract statistics
+#' @param ncores the number of cores to use for image extraction. Default: 1
+#' @param lg a Logger object for logging beta extraction
+#'
 #' @keywords internal
 #' @importFrom oro.nifti readNIfTI translateCoordinate
 #' @importFrom checkmate assert_class assert_integerish assert_subset assert_logical assert_file_exists
@@ -179,7 +229,7 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope",
 #' @importFrom tidyselect all_of
 #' @importFrom parallel mclapply
 extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "zstat"),
-  aggregate = TRUE, aggFUN = mean, mask_file = NULL, ncores=1L, lg=NULL) {
+  aggregate = TRUE, aggFUN = "mean", remove_zeros = TRUE, mask_file = NULL, ncores=1L, lg=NULL) {
 
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_integerish(level, lower = 1, upper = 3, len = 1)
@@ -198,22 +248,57 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
 
   # helper subfunction to extract voxel statistics from a 3D image within a mask
   get_img_stats <- function(img_name, mask, aggregate=TRUE, aggFUN=mean) {
-    img <- readNIfTI(img_name, reorient = FALSE)
-    stopifnot(img@dim_[1] == 3L)
+    # use readNifti from the RNifti package for speed (about 8x faster than oro.nifti)
+    # microbenchmark(
+    #   img = readNIfTI(img_name, reorient = FALSE),
+    #   abc = readNifti(img_name),
+    #   def = readNifti(img_name, internal=TRUE)
+    # )
+    # img <- readNIfTI(img_name, reorient = FALSE)
+    # stopifnot(img@dim_[1] == 3L)
+
+    img <- readNifti(img_name, internal = TRUE)
+
     stopifnot(identical(mask$dim, dim(img))) # enforce identical dimensions for mask and target image
     # note that the direct matrix indexing is about 500x faster than the apply approach. leaving here for record-keeping
     # microbenchmark(
     #   coef_vec = img[m_indices],
     #   coef_mat = apply(m_coordinates[, c("i", "j", "k")], 1, function(r) { img[r["i"], r["j"], r["k"]] })
     # )
-    coef_vec <- img[mask$indices]
-    coef_df <- mask$coordinates %>% bind_cols(value = coef_vec)
+
+    # use data.table for faster aggregate + join operations
+    coef_df <- copy(mask$coordinates)
+    setDT(coef_df, key = c("mask_value", "vnum"))
+    coef_df[, value := img[mask$indices]]
+
+    #coef_df <- mask$coordinates %>% bind_cols(value = coef_vec)
+    #setDT(coef_df)
+
+    # microbenchmark(
+    #   tt = merge(mask$agg_coordinates, coef_df[, .(value = mean(value)), by = .(mask_value)], by = "mask_value"),
+    #   withmean=coef_df %>%
+    #     group_by(mask_value) %>%
+    #     # get center of gravity and aggregate coefficient per parcel
+    #     dplyr::summarize(mask_name = mask_name[1], x = mean(x), y = mean(y), z = mean(z), value = aggFUN(value)) %>%
+    #     ungroup(),
+    #   agg = coef_df %>%
+    #     group_by(mask_value) %>%
+    #     dplyr::summarize(value = mean(value)) %>%
+    #     left_join(mask$agg_coordinates, by="mask_value"), times=400
+    # )
+
+
     if (isTRUE(is_int_mask) && isTRUE(aggregate)) {
-      coef_df <- coef_df %>%
-        group_by(mask_value) %>%        
-        # get center of gravity and aggregate coefficient per parcel
-        dplyr::summarize(mask_name = mask_name[1], x=mean(x), y=mean(y), z=mean(z), value = aggFUN(value)) %>%
-        ungroup()
+      coef_df <- merge(
+        mask$agg_coordinates,
+        coef_df[, .(value = aggFUN(value)), by = .(mask_value)],
+        by = "mask_value"
+      )
+      # coef_df <- coef_df %>%
+      #   group_by(mask_value) %>%
+      #   # get center of gravity and aggregate coefficient per parcel
+      #   dplyr::summarize(mask_name = mask_name[1], x=mean(x), y=mean(y), z=mean(z), value = aggFUN(value)) %>%
+      #   ungroup()
     }
 
     return(coef_df)
@@ -299,14 +384,52 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   }
 
   stat_results <- stat_results %>%
-      dplyr::filter(img_exists == TRUE)
+    dplyr::filter(img_exists == TRUE)
+
+  # library(microbenchmark)
+  # afni appears to be about 2-3x faster than internal use of oro.nifti, but not much faster than RNifti
+  # microbenchmark(
+  #   afni = data.table::fread(text = system(paste("3dROIstats -1DRformat -mask", mask_file, "-nomeanout -nobriklab -nzmean", paste(xx, collapse = " ")), intern = TRUE)),
+  #   local = lapply(xx, function(img) {
+  #     lg$debug("Processing image: %s", img)
+  #     tryCatch(
+  #       get_img_stats(img,
+  #         mask = list(indices = m_indices, coordinates = m_coordinates, dim = dim(mask_img)),
+  #         aggregate = aggregate, aggFUN = aggFUN
+  #       ),
+  #       error = function(e) {
+  #         lg$error("Problem extracting statistics from image %s. Error: %s", img, as.character(e))
+  #         return(NULL)
+  #       }
+  #     )
+  #   }), times=30
+  # )
+
+  # afni_stats <- function(img_list, aggFUN) {
+  #   if (!is.null(attr(res, "status"))) {
+  #     afni_output <- text = system2("3dROIstats", args = paste("-1DRformat -mask", mask_file, "-nomeanout -nobriklab -nzmean", paste(xx, collapse = " ")), stdout = TRUE)
+  #     afni_df <- data.table::fread(text = afni_output)
+  #   } else {
+  #     stop("Problem running 3dROIstats")
+  #   }
+  # }
 
   # The slow part of beta extraction is the reading of images and calculation of summaries. Use mclapply to help
+  # Pre-compute ROI-level center of gravity, rather than computing the means repeatedly for each image
+  if (isTRUE(is_int_mask) && isTRUE(aggregate)) {
+    agg_coordinates <- m_coordinates %>%
+      group_by(mask_value) %>%
+      dplyr::summarize(mask_name = mask_name[1], x=mean(x), y=mean(y), z=mean(z), .groups="drop") %>%
+      setDT(key = "mask_value")
+  } else {
+    agg_coordinates <- NULL
+  }
+
   stat_results$img_stats <- mclapply(stat_results$img, function(img) {
     lg$debug("Processing image: %s", img)
     tryCatch(
       get_img_stats(img,
-        mask = list(indices = m_indices, coordinates = m_coordinates, dim = dim(mask_img)),
+        mask = list(indices = m_indices, coordinates = m_coordinates, agg_coordinates = agg_coordinates, dim = dim(mask_img)),
         aggregate = aggregate, aggFUN = aggFUN
       ),
       error = function(e) {

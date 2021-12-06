@@ -10,7 +10,8 @@ extract_fsl_betas(
   level = NULL,
   what = c("cope", "zstat"),
   aggregate = TRUE,
-  aggFUN = mean,
+  aggFUN = "mean",
+  remove_zeros = TRUE,
   mask_file = NULL,
   ncores = 1L,
   lg = NULL
@@ -27,7 +28,13 @@ extract_fsl_betas(
 
 \item{aggFUN}{the function to use for aggregating voxels within a parcel}
 
+\item{remove_zeros}{whether to remove statistics that are very close to zero (and may thus represent masked-out voxels)}
+
 \item{mask_file}{a nifti image containing integer values for each parcel from which we should extract statistics}
+
+\item{ncores}{the number of cores to use for image extraction. Default: 1}
+
+\item{lg}{a Logger object for logging beta extraction}
 }
 \description{
 function to extract voxelwise betas from a given level of FSL analysis

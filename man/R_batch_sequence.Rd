@@ -12,6 +12,7 @@ Description of R_batch_sequence R6 class
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-new}{\code{R_batch_sequence$new()}}
+\item \href{#method-add}{\code{R_batch_sequence$add()}}
 \item \href{#method-submit}{\code{R_batch_sequence$submit()}}
 \item \href{#method-clone}{\code{R_batch_sequence$clone()}}
 }
@@ -31,6 +32,23 @@ create a new R_batch_sequence object
 \item{\code{...}}{One or more R_batch_job objects to be run in sequence}
 
 \item{\code{joblist}}{Optional list of jobs to be used instead of ...}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-add"></a>}}
+\if{latex}{\out{\hypertarget{method-add}{}}}
+\subsection{Method \code{add()}}{
+add one or more R_batch_job objects to the sequence
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$add(...)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{...}}{One or more R_batch_job objects to be added to sequence}
 }
 \if{html}{\out{</div>}}
 }

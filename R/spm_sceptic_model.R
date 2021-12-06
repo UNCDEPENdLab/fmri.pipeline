@@ -1,6 +1,5 @@
 spm_sceptic_model <- function(subj_data, sceptic_signals, mrfiles, runlengths, mrrunnums, execute=FALSE, force=FALSE,
                               drop_volumes=0, outdir=NULL, usepreconvolve=FALSE, spikeregressors=FALSE, model_suffix="", ...) {
-  require(Rniftilib)
   require(dplyr)
   require(tidyr)
   require(dependlab)
