@@ -15,7 +15,7 @@
 #' @export
 #'
 fsl_l1_model <- function(
-  id=NULL, session=NULL, l1_confound_files=NULL, d_obj, gpa, 
+  id=NULL, session=NULL, l1_confound_files=NULL, d_obj, gpa,
   model_name=NULL, run_nifti=NULL, nvoxels=NULL, execute_feat=FALSE) {
 
   checkmate::assert_scalar(id, null.ok = FALSE)

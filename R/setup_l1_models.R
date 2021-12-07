@@ -126,6 +126,14 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
           # filter down to this id if the signal is a data.frame
           if (inherits(this_signal$value, "data.frame")) {
             this_signal$value <- this_signal$value %>% dplyr::filter(id == !!subj_id & session == !!subj_session)
+
+            #refit wi model if needed
+            if (!is.null(this_signal$wi_model)) {
+              this_signal$value$dummy <- rnorm(nrow(this_signal$value))
+              ff <- update.formula(this_signal$wi_formula, "dummy ~ .")
+              this_signal$wi_model <- lm(ff, this_signal$value)
+              this_signal$value$dummy <- NULL
+            }
           }
           return(this_signal)
         })

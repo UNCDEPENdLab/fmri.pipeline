@@ -74,6 +74,9 @@ expand_signal <- function(sig) {
   } else if (!is.null(sig$wi_factors)) {
     # extract within-subject regression model matrix (has dummy coding)
     model_df <- as.data.frame(model.matrix(sig$wi_model))
+    if (nrow(model_df) != nrow(sig$value)) {
+      warning("Number of rows in wi_model data.frame does not match signal value data.frame")
+    }
 
     # for each column of the model matrix, pull the signal value data.frame where
     # the dummy code is 1 (i.e., rows to which the dummy pertains). This divides up the value
