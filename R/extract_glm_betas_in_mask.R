@@ -139,69 +139,6 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope",
   l2_df <- extract_and_write(2L)
   l3_df <- extract_and_write(3L)
 
-  # for (aa in mask_files) {
-  #   lg$info("Extracting statistics from mask: %s", aa)
-
-  #   if (extract_l3 != "none") {
-  #     lg$info("Extracting group-level statistics for model combinations:")
-  #     lg$info("%s", capture.output(print(extract_model_spec$l3)))
-  #     l3_list[[aa]] <- extract_fsl_betas(gpa,
-  #       extract = extract_model_spec$l3, level = 3L, what = what,
-  #       aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores=ncores, lg=lg
-  #     )
-  #   }
-
-  #   if (extract_l2 != "none") {
-  #     lg$info("Extracting subject-level statistics for model combinations:")
-  #     lg$info("%s", capture.output(print(extract_model_spec$l2)))
-  #     l2_list[[aa]] <- extract_fsl_betas(gpa,
-  #       extract = extract_model_spec$l2, level = 2L, what = what,
-  #       aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores=ncores, lg=lg
-  #     )
-  #   }
-
-  #   if (extract_l1 != "none") {
-  #     lg$info("Extracting run-level statistics for model combinations:")
-  #     lg$info("%s", capture.output(print(extract_model_spec$l1)))
-  #     l1_list[[aa]] <- extract_fsl_betas(gpa,
-  #       extract = extract_model_spec$l1, level = 1L, what = what,
-  #       aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores=ncores, lg=lg
-  #     )
-  #   }
-  # }
-
-
-  # sort out files based on glue expressions
-  # if (extract_l3 != "none") {
-  #   l3_list <- rbindlist(l3_list)
-  #   if (isTRUE(write_data)) {
-  #     l3_split <- l3_list %>%
-  #       mutate(out_file = glue_data(., !!l3_expression)) %>%
-  #       split(by = "out_file", keep.by = FALSE) %>%
-  #       write_list()
-  #   }
-  # }
-
-  # if (extract_l2 != "none") {
-  #   l2_list <- rbindlist(l2_list)
-  #   if (isTRUE(write_data)) {
-  #     l2_split <- l2_list %>%
-  #       mutate(out_file = glue_data(., !!l2_expression)) %>%
-  #       split(by = "out_file", keep.by = FALSE) %>%
-  #       write_list()
-  #   }
-  # }
-  
-  # if (extract_l1 != "none") {
-  #   l1_list <- rbindlist(l1_list)
-  #   if (isTRUE(write_data)) {
-  #     l1_split <- l1_list %>%
-  #       mutate(out_file = glue_data(., !!l1_expression)) %>%
-  #       split(by = "out_file", keep.by = FALSE) %>%
-  #       write_list()
-  #   }
-  # }
-
   if (isTRUE(return_data)) {
     return(list(l1 = l1_df, l2 = l2_df, l3 = l3_df))
   } else {
@@ -238,7 +175,7 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope",
 #' @importFrom tidyselect all_of
 #' @importFrom parallel mclapply
 extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "zstat"),
-  aggregate = TRUE, aggFUN = "mean", remove_zeros = TRUE, mask_file = NULL, ncores=1L, lg=NULL) {
+  aggregate = TRUE, aggFUN = mean, remove_zeros = TRUE, mask_file = NULL, ncores=1L, lg=NULL) {
 
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_integerish(level, lower = 1, upper = 3, len = 1)
@@ -330,6 +267,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     return(NULL)
   }
 
+  extra <- NULL # columns to extract
   if (level == 1L) {
     stat_results <- to_extract %>%
       left_join(get_l1_cope_df(gpa, extract), by = c("id", "session", "l1_model"))
@@ -339,6 +277,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
       stat_results <- stat_results %>%
         mutate("{ww}" := glue_data(., "{feat_dir}/stats/{ww}{l1_cope_number}.nii.gz"))
     }
+    extra <- "run_number" # also extract
   } else if (level == 2L) {
     stat_results <- to_extract %>%
       left_join(get_l2_cope_df(gpa, extract), by = c("id", "session", "l2_model")) %>%
@@ -358,7 +297,10 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   }
 
   stat_results <- stat_results %>%
-    dplyr::select(id, session, feat_dir, matches("l[1-3]_model"), matches("l[1-3]_cope_number"), matches("l[1-3]_cope_name"), all_of(what))
+    dplyr::select(
+      id, session, all_of(extra), feat_dir,
+      matches("l[1-3]_model"), matches("l[1-3]_cope_number"), matches("l[1-3]_cope_name"), all_of(what)
+    )
 
   mask_img <- oro.nifti::readNIfTI(mask_file, reorient = FALSE)
   if (mask_img@dim_[1L] == 4) {
