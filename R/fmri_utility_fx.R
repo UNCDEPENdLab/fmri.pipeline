@@ -140,7 +140,7 @@ get_collin_events <- function(dmat) {
 #' @keywords internal
 place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_args) {
 
-  if (bdm_args$convolve_wi_run) {
+  if (isTRUE(bdm_args$convolve_wi_run)) {
     #create an HRF-convolved version of the list
 
     #i is run, j is regressor

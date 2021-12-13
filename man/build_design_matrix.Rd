@@ -12,9 +12,8 @@ build_design_matrix(
   hrf_parameters = c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35),
   baseline_coef_order = -1L,
   baseline_parameterization = "Legendre",
-  run_4d_files = NULL,
-  run_4d_files_drop_applied = TRUE,
-  run_volumes = NULL,
+  run_data = NULL,
+  run_nifti_drop_applied = TRUE,
   drop_volumes = 0L,
   runs_to_output = NULL,
   plot = TRUE,
@@ -63,22 +62,17 @@ within each run (e.g. baseline_coef_order = 1 includes both an intercept and a l
 which uses \code{fmri.design} from the \code{fmri} package to add polynomial regressors that
 are orthogonal to substantive design factors.}
 
-\item{run_volumes}{Expects a numeric vector containing the number of volumes per run. If just a single number is passed,
-the function assumes all runs have this number of volumes. This parameter sets
-the corresponding lengths of convolved regressors so that they match the MR data. Alternatively,
-you can pass a character vector of relevant NIfTI filenames, one per run, and build_design_matrix will
-calculate the number of volumes based on the 4th dimension (time) of the fMRI data. Finally, if you
-do not pass in this argument, build_design_matrix will take a guess that the run should end 12 seconds
-(or whatever you specifiy for \code{iti_post}) after the last event ends:
-max(onset + duration + iti_post)/tr within each run. Note that this is always the number of volumes *before*
-\code{drop_volumes} is applied.}
+\item{run_data}{a data.frame containing metadata about the runs for which we want to model the task design. This
+data.frame should contain the columns run_number, run_volumes, run_nifti, and drop_volumes. If run_nifti
+is provided, but run_volumes is not, then the number of volumes is looked up from the NIfTI header.}
 
 \item{drop_volumes}{By default, all volumes are retained. If specified, this can be a vector of the number of volumes
 that will be removed from the \emph{beginning} of each convolved regressor. If you pass a single number (e.g., 3),
 this number of volumes will be dropped from each run. This is useful if you have dropped the first n volumes
-of your MR data, for example to handle problems with steady state magnetization.}
+of your MR data, for example to handle problems with steady state magnetization. If you include drop_volumes in
+the \code{run_data} data.frame, this will be used over this setting.}
 
-\item{runs_to_output}{A numeric vector of runs to be output. By default, all runs are preserved.
+\item{runs_to_output}{A numeric vector of run numbers to be output. By default, all runs are preserved.
 This is used to model only a subset such as \code{c(1, 2, 6)}.}
 
 \item{plot}{By default (\code{TRUE}), \code{build_design_matrix} will plot the design matrix in the plot window of your R session.

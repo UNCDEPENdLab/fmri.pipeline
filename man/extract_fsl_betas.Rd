@@ -10,7 +10,7 @@ extract_fsl_betas(
   level = NULL,
   what = c("cope", "zstat"),
   aggregate = TRUE,
-  aggFUN = "mean",
+  aggFUN = mean,
   remove_zeros = TRUE,
   mask_file = NULL,
   ncores = 1L,

@@ -58,6 +58,8 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
     foreach::registerDoSEQ() #formally register a sequential 'pool' so that dopar is okay
   }
 
+  browser()
+
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
   all_subj_l1_list <- foreach(subj_df = iter(gpa$subject_data, by="row"), .inorder=FALSE, .packages=c("dplyr"),
     .export=c("truncate_runs", "fsl_l1_model", "get_mr_abspath",
@@ -108,7 +110,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
       # initialize mr data frame with elements of $run_data
       mr_df <- data.frame(
-        id = subj_id, session = subj_session, run_number = mr_run_nums, run_nifti, l1_confound_file = l1_confound_files, 
+        id = subj_id, session = subj_session, run_number = mr_run_nums, run_nifti, l1_confound_file = l1_confound_files,
         run_volumes = run_volumes, exclude_run, row.names=NULL
       )
 
@@ -161,8 +163,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
           bdm_args$tr <- gpa$tr
           bdm_args$write_timing_files <- t_out
           bdm_args$drop_volumes <- gpa$drop_volumes
-          bdm_args$run_volumes <- run_volumes
-          bdm_args$run_4d_files <- run_nifti
+          bdm_args$run_data <- mr_df
           bdm_args$runs_to_output <- mr_run_nums
           bdm_args$output_directory <- file.path(l1_output_dir, "timing_files")
           d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error=function(e) {
@@ -171,11 +172,11 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
             return(NULL)
           })
 
-          if (is.null(d_obj)) { next } #skip to next iteration on error
-
           save(d_obj, bdm_args, mr_df, mr_run_nums, subj_mr_dir, run_nifti, run_volumes, l1_confound_files,
             subj_id, subj_session, this_model, file = bdm_out_file
           )
+
+          if (is.null(d_obj)) { next } #skip to next iteration on error
         }
 
         if ("fsl" %in% gpa$glm_software) {

@@ -6,7 +6,7 @@
 #' @param model_name a string indicating the model name within \code{gpa} to setup. If
 #'   you wish to setup multiple models, this is handled upstream in setup_l1_models.R
 #' @param run_nifti an optional character vector of NIfTI filenames used in l1 analysis.
-#'   Prefer to pass these via the build_design_matrix object in $run_4d_files
+#'   Prefer to pass these via the build_design_matrix object in $run_nifti
 #'
 #' @importFrom checkmate assert_class assert_string assert_character assert_file_exists
 #' @importFrom lgr get_logger
@@ -27,9 +27,9 @@ fsl_l1_model <- function(
   if (is.null(nvoxels)) { nvoxels <- rep(5e4, length(run_nifti)) } #arbitrarily use 50k voxels in fsf
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
-  if (!is.null(d_obj$run_4d_files)) {
-    lg$debug("Using internal NIfTI files (run_4d_files) within d_obj for Feat level 1 setup")
-    run_nifti <- d_obj$run_4d_files
+  if (!is.null(d_obj$run_nifti)) {
+    lg$debug("Using internal NIfTI files (run_nifti) within d_obj for Feat level 1 setup")
+    run_nifti <- d_obj$run_nifti
   }
 
   if (!is.null(l1_confound_files)) {

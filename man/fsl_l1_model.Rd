@@ -26,7 +26,7 @@ fsl_l1_model(
 you wish to setup multiple models, this is handled upstream in setup_l1_models.R}
 
 \item{run_nifti}{an optional character vector of NIfTI filenames used in l1 analysis.
-Prefer to pass these via the build_design_matrix object in $run_4d_files}
+Prefer to pass these via the build_design_matrix object in $run_nifti}
 }
 \description{
 This function specifies a first-level GLM model in FSL based on a build_design_matrix
