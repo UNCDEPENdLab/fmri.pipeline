@@ -147,16 +147,26 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
     dmat_convolved <- lapply(1:dim(dmat)[1L], function(i) {
       run_convolve <- lapply(1:dim(dmat)[2L], function(j) {
         reg <- dmat[[i, j]] # regressor j for a given run i
+        attr(reg, "reg_name") <- dimnames(dmat)[[2L]][j] # tag regressor with a name attribute so that return is named properly
+        
         if (nrow(reg) == 0L) {
-          return(NULL)
-        }
-        attr(reg, "reg_name") <- dimnames(dmat)[[2L]][j] #tag regressor with a name attribute so that return is named properly
-        convolve_regressor(n_vols=bdm_args$run_volumes[i], reg=reg, tr=bdm_args$tr,
-                           normalization=bdm_args$normalizations[j], rm_zeros = bdm_args$rm_zeros[j],
-                           center_values=bdm_args$center_values, convmax_1=bdm_args$convmax_1[j],
-                           demean_convolved = FALSE, high_pass=bdm_args$high_pass, convolve=convolve,
-                           ts_multiplier=bdm_args$ts_multiplier[[j]][[i]],
-                           hrf_parameters = bdm_args$hrf_parameters)
+          if (isTRUE(bdm_args$keep_empty_regressors)) {
+            empty <- matrix(rep(0, bdm_args$run_volumes[i]), ncol = 1)
+            colnames(empty) <- attr(reg, "reg_name")
+            return(empty) # keep all-zeros regressor
+          } else {
+            return(NULL)
+          }
+        } else {
+          convolve_regressor(
+            n_vols = bdm_args$run_volumes[i], reg = reg, tr = bdm_args$tr,
+            normalization = bdm_args$normalizations[j], rm_zeros = bdm_args$rm_zeros[j],
+            center_values = bdm_args$center_values, convmax_1 = bdm_args$convmax_1[j],
+            demean_convolved = FALSE, high_pass = bdm_args$high_pass, convolve = convolve,
+            ts_multiplier = bdm_args$ts_multiplier[[j]][[i]],
+            hrf_parameters = bdm_args$hrf_parameters
+          )
+        }      
       })
 
       # drop null events before combining into data.frame

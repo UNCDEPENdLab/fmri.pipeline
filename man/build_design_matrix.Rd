@@ -19,6 +19,7 @@ build_design_matrix(
   plot = TRUE,
   write_timing_files = NULL,
   output_directory = "run_timing",
+  keep_empty_regressors = TRUE,
   convolve_wi_run = TRUE,
   high_pass = NULL,
   iti_post = 12,
@@ -88,6 +89,11 @@ HRF such that the 1-column output is in volumes (i.e., one row per volume).}
 \item{output_directory}{Where to output the timing files. By default, the function will output the timing files
 to a folder called "run_timing" in the current working directory. If such a folder does not exist,
 it will make a folder in your R session's current working directory.}
+
+\item{keep_empty_regressors}{If TRUE, then a regressor that contains no events for a given run is still retained
+as an all-zeros regressor in the convolved timing files and the FSL 3-column files. This is useful if
+you want to include regressors that only occur for some subjects, but not others. That said, handling
+contrasts involving these regressors is a more complicated matter.}
 
 \item{convolve_wi_run}{If \code{TRUE} (the default), convolution -- and any corresponding mean centering and
 normalization of the heights of parametric signals -- is applied to each run separately.
