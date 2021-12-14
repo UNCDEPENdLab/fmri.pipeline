@@ -9,6 +9,9 @@ durations:
 isis:
   - iti_ideal
 
+wi_factors:
+  - rew_om
+
 values:
   - pe_max
   - rew_om_c
@@ -24,12 +27,10 @@ values:
 events:
 
   clock:
-    name: clock
     onset: clock_onset
     duration: rt_csv    # RT convolution
 
   feedback:
-    name: feedback
     onset: feedback_onset
     duration: 0.9
     isi: iti_ideal
@@ -37,20 +38,17 @@ events:
 # if not otherwise speecified, signals will default to unit height regressors with no HRF normalization
 signals:
   clock:
-    name: clock
     event: clock
     normalization: none
     value_fixed: 1
 
   feedback:
-    name: feedback
     event: feedback
     normalization: none
     value_fixed: 1
 
   # clock-aligned entropy without run centering and normalization
   entropy_clock:
-    name: entropy_clock
     event: clock
     trial_subset_expression: rt_csv < 4
     normalization: evtmax_1
@@ -58,65 +56,56 @@ signals:
 
   # clock-aligned entropy with run z-scoring
   entropy_wiz_clock:
-    name: entropy_wiz_clock
     event: clock
     trial_subset_expression: rt_csv < 4
     normalization: evtmax_1
     parametric_modulator: v_entropy_wi
 
   entropy_change_clock:
-    name: entropy_change_clock
     event: clock
     trial_subset_expression: rt_csv < 4
     normalization: evtmax_1
     parametric_modulator: v_entropy_wi_change_lag # change following outcome of last trial -- clock-aligned
 
   entropy_change_clock_lag:
-    name: entropy_change_clock_lag
     event: clock
     trial_subset_expression: rt_csv < 4
     normalization: evtmax_1
     parametric_modulator: v_entropy_wi_change_lag2 # change following outcome of trial t-2 -- clock-aligned
 
   entropy_change_feedback:
-    name: entropy_change_feedback
     event: feedback
     trial_subset_expression: rt_csv < 4
     normalization: evtmax_1
     parametric_modulator: v_entropy_wi_change # change following outcome of current trial -- RT-aligned
 
   entropy_change_feedback_lag:
-    name: entropy_change_feedback_lag
     event: feedback
     trial_subset_expression: rt_csv < 4
     normalization: evtmax_1
     parametric_modulator: v_entropy_wi_change_lag # change following outcome of last trial -- RT-aligned
 
   kld3_clock:
-    name: kld3_clock
     event: clock
     trial_subset_expression: rt_csv < 4
     normalization: evtmax_1
     parametric_modulator: kld3_cum2
 
   log_kld3_clock:
-    name: log_kld3_clock
     event: clock
     trial_subset_expression: rt_csv < 4
     normalization: evtmax_1
     parametric_modulator: log_kld3_cum2
 
   abs_pe:
-    name: abs_pe
     event: feedback
     trial_subset_expression: rt_csv < 4
     normalization: evtmax_1
     parametric_modulator: abs_pe
 
-l1_models: # not implemented yet
+l1_models:
   # overall entropy (no z-scoring)
   entropy:
-    name: entropy
     signals:
       - clock
       - feedback
@@ -126,7 +115,6 @@ l1_models: # not implemented yet
 
   # within-run z-scored entropy
   entropy_wiz:
-    name: entropy_wiz
     signals:
       - clock
       - feedback
@@ -136,7 +124,6 @@ l1_models: # not implemented yet
 
   # entropy with kld in the model
   entropy_kld3:
-    name: entropy_kld3
     signals:
       - clock
       - feedback
@@ -147,7 +134,6 @@ l1_models: # not implemented yet
   
   # entropy with log kld in the model
   entropy_logkld3:
-    name: entropy_logkld3
     signals:
       - clock
       - feedback
@@ -159,7 +145,6 @@ l1_models: # not implemented yet
 
   # entropy-change, feedback aligned (change due to immediate outcome)
   echange:
-    name: echange
     signals:
       - clock
       - feedback
@@ -169,7 +154,6 @@ l1_models: # not implemented yet
 
   # as above, but with feedback-aligned absPE
   echange_abspe:
-    name: echange_abspe
     signals:
       - clock
       - feedback
@@ -179,7 +163,6 @@ l1_models: # not implemented yet
       include_diagonal: yes
 
   entropy_echange:
-    name: entropy_echange
     signals:
       - clock
       - feedback
@@ -189,7 +172,6 @@ l1_models: # not implemented yet
        include_diagonal: yes
 
   elagclock_echange: # previous change, clock-aligned + current change, feedback-aligned
-    name: elagclock_echange
     signals:
       - clock
       - feedback

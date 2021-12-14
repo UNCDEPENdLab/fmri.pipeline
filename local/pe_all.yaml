@@ -1,0 +1,134 @@
+# define columns that can be selected in different parts of the model specification
+onsets:
+  - clock_onset
+  - feedback_onset
+
+durations:
+  - rt_csv
+
+isis:
+  - iti_ideal
+
+wi_factors:
+  - rew_om
+
+values:
+  - pe_max
+  - rew_om_c
+  - abs_pe_c
+  - abspexrew
+  - kld3_cum2
+  - log_kld3_cum2
+  
+# events must consist of name, onset, and duration. isi is optional
+events:
+
+  clock:
+    onset: clock_onset
+    duration: rt_csv    # RT convolution
+
+  feedback:
+    onset: feedback_onset
+    duration: 0.9
+    isi: iti_ideal
+
+# if not otherwise speecified, signals will default to unit height regressors with no HRF normalization
+signals:
+  clock:
+    event: clock
+    normalization: none
+    value_fixed: 1
+
+  feedback:
+    event: feedback
+    normalization: none
+    value_fixed: 1
+
+  # absolute prediction error
+  abspe:
+    event: feedback
+    trial_subset_expression: rt_csv < 4
+    normalization: evtmax_1
+    parametric_modulator: abs_pe_c
+
+  # signed prediction error
+  pe:
+    event: feedback
+    trial_subset_expression: rt_csv < 4
+    normalization: evtmax_1
+    parametric_modulator: pe_max
+
+  # reward (0.5/-0.5)
+  rew_om:
+    event: feedback
+    trial_subset_expression: rt_csv < 4
+    normalization: evtmax_1
+    parametric_modulator: rew_om_c
+
+  abspe_byrew:
+    event: feedback
+    trial_subset_expression: rt_csv < 4
+    normalization: evtmax_1
+    parametric_modulator: abspe
+    wi_factors: rew_om
+    wi_formula: ~ rew_om - 1
+
+  abspexrew:
+    event: feedback
+    trial_subset_expression: rt_csv < 4
+    normalization: evtmax_1
+    parametric_modulator: abspexrew
+    
+l1_models:
+  # signed PE
+  pe:
+    signals:
+      - clock
+      - feedback
+      - pe
+    contrasts:
+      include_diagonal: yes
+
+  # reward/omission only
+  rew_om:
+    signals:
+      - clock
+      - feedback
+      - rew_om
+    contrasts:
+      include_diagonal: yes
+
+  # absolute PE
+  abspe:
+    signals:
+      - clock
+      - feedback
+      - abspe
+    contrasts:
+      include_diagonal: yes
+  
+  # additive model
+  abspe_plus_rew:
+    signals:
+      - clock
+      - feedback
+      - abspe
+      - rew_om
+    contrasts:
+      include_diagonal: yes
+
+  # interaction model
+  abspexrew:
+    signals:
+      - clock
+      - feedback
+      - abspe
+      - rew_om
+      - abspexrew
+
+  # interaction model with wi-factors
+  abspe_by_rew:
+    signals:
+      - clock
+      - feedback
+      - abspe_byrew

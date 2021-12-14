@@ -185,3 +185,24 @@ populate_event_data <- function(eobj, trial_data) {
   eobj$data <- edata #metadata_df %>% dplyr::bind_cols(edata)
   return(eobj)
 }
+
+# Helper function to propagate names of each element into the $name field for that element
+# For example, the events should be named in the YAML specification. The user can also supply a name field for the event, which is almost
+# always redundant. Thus, if the name field is not specified for an event, fall back to the name of the event in the event list
+# Example:
+#   events:
+#     clock:
+#       name: clock # this is redundant!
+propagate_spec_names <- function(spec_list) {
+  fields <- c("signals", "events", "l1_models")
+  for (ff in fields) {
+    this_l <- spec_list[[ff]]
+    for (ii in seq_along(this_l)) {
+      if (is.null(this_l[[ii]]$name)) {
+        this_l[[ii]]$name <- names(this_l)[ii]
+      }
+    }
+    spec_list[[ff]] <- this_l
+  }
+  return(spec_list)
+}

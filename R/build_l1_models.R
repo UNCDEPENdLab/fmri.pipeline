@@ -83,6 +83,8 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
       stop(msg)
     }
 
+    spec_list <- propagate_spec_names(spec_list)
+
     l1_model_set <- fields_from_spec(l1_model_set, spec_list, trial_data, c("onsets", "durations", "isis", "values", "wi_factors"))
     l1_model_set <- bl1_build_events(l1_model_set, trial_data, lg, spec_list)
     l1_model_set <- signals_from_spec(l1_model_set, spec_list, trial_data, lg)
