@@ -196,7 +196,7 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   }
 
   # pipeline_cores: number of cores used in push_pipeline when looping over l1 model variants
-  gpa <- specify_cores(gpa, "pipeline_cores", ifelse(is.null(gpa$l1_models), 4, length(gpa$l1_models$models)))
+  gpa <- specify_cores(gpa, "pipeline_cores", ifelse(is.null(gpa$l1_models$models), 4, length(gpa$l1_models$models)))
 
   # l1_setup_cores defines how many cores to use when looping over models in setup_l1_models
   # default to 4 cores in setup_lvl1_models
