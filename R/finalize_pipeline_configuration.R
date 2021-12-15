@@ -249,11 +249,11 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
 
   # number of cores to use in Feat LVL2 analyses (fixed effects combination of runs)
   if (is.null(gpa$parallel$fsl$l2_cores)) gpa$parallel$fsl$l2_cores <- 20
-  if (is.null(gpa$parallel$fsl$l1_feat_time)) gpa$parallel$fsl$l1_feat_time <- "8:00:00" # 8 hours
+  if (is.null(gpa$parallel$fsl$l1_feat_time)) gpa$parallel$fsl$l1_feat_time <- "10:00:00" # 10 hours
   if (is.null(gpa$parallel$fsl$l1_feat_memgb)) gpa$parallel$fsl$l1_feat_memgb <- "12" # 12 GB by default
   if (is.null(gpa$parallel$fsl$l1_feat_cpus_per_job)) gpa$parallel$fsl$l1_feat_cpus_per_job <- 8
   if (is.null(gpa$parallel$fsl$l1_feat_runs_per_cpu)) gpa$parallel$fsl$l1_feat_runs_per_cpu <- 2 # 2 runs per cpu in a job
-  if (is.null(gpa$parallel$fsl$l2_feat_time)) gpa$parallel$fsl$l2_feat_time <- "1:00:00" # 1 hour
+  if (is.null(gpa$parallel$fsl$l2_feat_time)) gpa$parallel$fsl$l2_feat_time <- "2:00:00" # 2 hours
   if (is.null(gpa$parallel$fsl$l2_feat_memgb)) gpa$parallel$fsl$l2_feat_memgb <- "12" # 12 GB by default
   if (is.null(gpa$parallel$fsl$l3_feat_time)) gpa$parallel$fsl$l3_feat_time <- "24:00:00" # 24 hours
   if (is.null(gpa$parallel$fsl$l3_feat_memgb)) gpa$parallel$fsl$l3_feat_memgb <- "32" # 32 GB by default

@@ -129,10 +129,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
             #refit wi model if needed
             if (!is.null(this_signal$wi_model)) {
-              this_signal$value$dummy <- rnorm(nrow(this_signal$value))
-              ff <- update.formula(this_signal$wi_formula, "dummy ~ .")
-              this_signal$wi_model <- lm(ff, this_signal$value)
-              this_signal$value$dummy <- NULL
+              this_signal <- fit_wi_model(this_signal)
             }
           }
           return(this_signal)

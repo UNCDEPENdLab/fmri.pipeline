@@ -150,12 +150,7 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
       sobj$value <- get_value_df(sobj, trial_data, wi_factors = sobj$wi_factors)
 
       # fit dummy model to populate a set of dummy coefficients, then save those to the object
-      wi_df <- sobj$value %>%
-        mutate(dummy = rnorm(n())) %>%
-        mutate(across(!!sobj$wi_factors, factor)) # always force wi_factors to be stored as factor to make contrasts straightforward
-      ffit <- update.formula(sobj$wi_formula, "dummy ~ .")
-
-      sobj$wi_model <- lm(ffit, wi_df)
+      sobj <- fit_wi_model(sobj)
     } else {
       sobj$value <- get_value_df(sobj, trial_data)
     }

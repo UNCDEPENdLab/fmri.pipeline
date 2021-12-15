@@ -1065,12 +1065,7 @@ bl1_specify_wi_factors <- function(ss, l1_model_set, trial_data, modify) {
   ss$value <- get_value_df(ss, trial_data, wi_factors = wi_vars)
 
   # fit dummy model to populate a set of dummy coefficients, then save those to the object
-  wi_df <- ss$value %>%
-    mutate(dummy = rnorm(n())) %>%
-    mutate(across(!!wi_vars, factor)) # always force wi_factors to be stored as factor to make contrasts straightforward
-  ffit <- update.formula(ss$wi_formula, "dummy ~ .")
-
-  ss$wi_model <- lm(ffit, wi_df)
+  ss <- fit_wi_model(ss)
 
   return(ss)
 }

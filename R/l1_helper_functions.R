@@ -146,6 +146,22 @@ expand_signal <- function(sig) {
   return(s_list)
 }
 
+fit_wi_model <- function(sobj) {
+  if (!all(c("wi_factors", "wi_formula") %in% names(sobj))) {
+    return(sobj) # cannot proceed with fitting
+  }
+  
+  wi_df <- sobj$value %>%
+    mutate(dummy = rnorm(n())) %>%
+    mutate(across(!!sobj$wi_factors, factor)) # always force wi_factors to be stored as factor to make contrasts straightforward
+  ffit <- update.formula(sobj$wi_formula, "dummy ~ .")
+
+  sobj$wi_model <- lm(ffit, wi_df)
+  return(sobj)
+
+}
+  
+
 
 #obsolete
 # # helper function to expand beta series
