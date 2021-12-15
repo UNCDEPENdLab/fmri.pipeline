@@ -96,6 +96,7 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
     sobj <- get_trial_subset_stats(sobj, trial_data, trial_set)
 
     if (!is.null(ss$parametric_modulator)) {
+      stopifnot(ss$parametric_modulator %in% slist$values)
       sobj$parametric_modulator <- ss$parametric_modulator
       sobj$value_type <- "parametric"
       sobj$value_fixed <- NULL
@@ -124,6 +125,7 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
       sobj$add_deriv <- ss$add_deriv
     }
 
+    # TODO: this is a bit redundant with parts of bl1_specify_wi_factors... would be nice to unify
     if (!is.null(ss$wi_factors)) {
       checkmate::assert_subset(ss$wi_factors, l1_model_set$wi_factors)
       sobj$wi_factors <- ss$wi_factors
@@ -144,9 +146,20 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
       }
 
       sobj$wi_formula <- ff
+
+      sobj$value <- get_value_df(sobj, trial_data, wi_factors = sobj$wi_factors)
+
+      # fit dummy model to populate a set of dummy coefficients, then save those to the object
+      wi_df <- sobj$value %>%
+        mutate(dummy = rnorm(n())) %>%
+        mutate(across(!!sobj$wi_factors, factor)) # always force wi_factors to be stored as factor to make contrasts straightforward
+      ffit <- update.formula(sobj$wi_formula, "dummy ~ .")
+
+      sobj$wi_model <- lm(ffit, wi_df)
+    } else {
+      sobj$value <- get_value_df(sobj, trial_data)
     }
 
-    sobj$value <- get_value_df(sobj, trial_data, wi_factors = sobj$wi_factors)
     l1_model_set$signals[[sobj$name]] <- sobj # this will overwrite existing specification
   }
 
