@@ -69,7 +69,7 @@ signals:
     event: feedback
     trial_subset_expression: rt_csv < 4
     normalization: evtmax_1
-    parametric_modulator: abspe
+    parametric_modulator: abs_pe_c
     wi_factors: rew_om
     wi_formula: ~ rew_om - 1
 

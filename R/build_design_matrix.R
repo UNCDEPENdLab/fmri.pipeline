@@ -365,9 +365,15 @@ build_design_matrix <- function(
 
   # If drop_volumes is just 1 in length, assume it applies to all runs
   # This will only have an effect if run_data does not already have a drop_volumes column
-  if (is.null(run_data$drop_volumes) && length(drop_volumes) == 1L && is.numeric(drop_volumes) && drop_volumes[1L] > 0) {
-    message("Using first element of drop_volumes for all runs: ", drop_volumes[1L])
-    run_data$drop_volumes <- rep(drop_volumes[1L], nrow(run_data))
+  if (is.null(run_data$drop_volumes)) {
+    if (length(drop_volumes) == nrow(run_data)) {
+      run_data$drop_volumes <- drop_volumes # populate run-wise drops
+    } else if (length(drop_volumes) == 1L && is.numeric(drop_volumes) && drop_volumes[1L] > 0) {
+      message("Using first element of drop_volumes for all runs: ", drop_volumes[1L])
+      run_data$drop_volumes <- rep(drop_volumes[1L], nrow(run_data))
+    } else {
+      run_data$drop_volumes <- 0
+    }
   }
 
   #take a snapshot of arguments to build_design_matrix that we pass to subsidiary functions
