@@ -94,6 +94,8 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
     }
   }
 
+  ret_code <- NULL # should be set to TRUE if all jobs complete and FALSE if any job fails 
+
   while (job_complete == FALSE) {
     status <- get_job_status()
 
@@ -105,25 +107,25 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
 
     if (any(status == "running")) {
       if (isFALSE(quiet)) {
-        cat("Job(s) still running: ", paste(job_ids[status == "running"], collapse = ","), "\n")
+        cat("Job(s) still running:", paste(job_ids[status == "running"], collapse = ", "), "\n")
       }
     }
 
     if (any(status == "queued")) {
       if (isFALSE(quiet)) {
-        cat("Job(s) still queued: ", paste(job_ids[status == "queued"], collapse = ","), "\n")
+        cat("Job(s) still queued:", paste(job_ids[status == "queued"], collapse = ", "), "\n")
       }
     }
 
     if (any(status == "suspended")) {
       if (isFALSE(quiet)) {
-        cat("Job(s) suspended: ", paste(job_ids[status == "suspended"], collapse = ","), "\n")
+        cat("Job(s) suspended:", paste(job_ids[status == "suspended"], collapse = ", "), "\n")
       }
     }
 
     if (any(status == "missing")) {
       if (isFALSE(quiet)) {
-        cat("Job(s) missing from scheduler response: ", paste(job_ids[status == "missing"], collapse = ","), "\n")
+        cat("Job(s) missing from scheduler response:", paste(job_ids[status == "missing"], collapse = ", "), "\n")
       }
     }
 
@@ -133,17 +135,23 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
       } else {
         return(FALSE)
       }
-    } else if (all(status == "complete")) {
+    } else if (all(status %in% c("failed", "complete"))) {
       job_complete <- TRUE # drop out of this loop
       if (isFALSE(quiet)) {
         cat("All jobs have finished.\n")
+      }
+      if (any(status == "failed")) {
+        cat("The following jobs(s) failed:", paste(job_ids[status == "failed"], collapse = ", "), "\n")
+        ret_code <- FALSE
+      } else {
+        ret_code <- TRUE
       }
     } else {
       Sys.sleep(repolling_interval) # wait and repoll jobs
     }
   }
 
-  return(invisible(TRUE))
+  return(invisible(ret_code))
 }
 
 # calls sacct with a job list
@@ -184,7 +192,7 @@ slurm_job_status <- function(job_ids = NULL, user = NULL,
     print(cmd)
     return(df_empty)
   }
-  
+
   if (length(res) == 1L) {
     # data.table::fread will break down (see Github issue )
     out <- readr::read_delim(I(res), delim = "|", show_col_types = FALSE)
