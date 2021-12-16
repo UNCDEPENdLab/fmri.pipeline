@@ -990,7 +990,7 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
   }
 
   l1_model_set$models <- model_list
-  l1_model_set$n_contrasts <- sapply(model_list, function(mm) { ncol(mm$contrasts) })
+  l1_model_set$n_contrasts <- sapply(model_list, function(mm) { nrow(mm$contrasts) })
   return(l1_model_set)
 }
 

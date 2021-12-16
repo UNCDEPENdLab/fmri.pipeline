@@ -34,6 +34,8 @@ fsl_l1_model <- function(
 
   if (!is.null(l1_confound_files)) {
     stopifnot(length(l1_confound_files) == length(run_nifti))
+  } else {
+    l1_confound_files <- NA_character_ # to make data.frame() call work for empty input
   }
 
   stopifnot(length(run_nifti) == length(d_obj$run_volumes)) #need these to align
