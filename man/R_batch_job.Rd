@@ -98,6 +98,7 @@ Create a new R_batch_job object for execution on an HPC cluster
   batch_code = NULL,
   r_packages = NULL,
   scheduler = NULL,
+  wait_for_children = NULL,
   input_environment = NULL,
   output_environment = NULL,
   scheduler_options = NULL,
@@ -135,6 +136,12 @@ job begins.}
 \item{\code{r_packages}}{A character vector of R packages to be loaded when compute script runs}
 
 \item{\code{scheduler}}{The scheduler to be used for this compute. Options are 'slurm', 'torque', or 'local'.}
+
+\item{\code{wait_for_children}}{If TRUE, do not end this job until all child jobs have completed}
+
+\item{\code{input_environment}}{The name of the environment to be loaded at the beginning of the R batch prior to executing code}
+
+\item{\code{output_environment}}{The name of the environment to be saved at the end of the R batch execution}
 
 \item{\code{scheduler_options}}{A character vector of scheduler options to be added to the header of the batch script}
 

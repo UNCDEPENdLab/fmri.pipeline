@@ -1,4 +1,5 @@
 #' Description of R_batch_job R6 class
+#' @importFrom lubridate period_to_seconds
 #' @export
 R_batch_job <- R6::R6Class("batch_job",
   private = list(
@@ -143,8 +144,9 @@ R_batch_job <- R6::R6Class("batch_job",
           syntax,
           "if (exists('child_job_ids') && inherits(child_job_ids, c('numeric', 'integer', 'character'))) {",
           paste0(
-            "  fmri.pipeline::wait_for_job(child_job_ids, quiet=FALSE,",
-            " repolling_interval=", self$repolling_interval,
+            "  fmri.pipeline::wait_for_job(child_job_ids, quiet=FALSE",
+            ", repolling_interval=", self$repolling_interval,
+            ", max_wait=", lubridate::period_to_seconds(dhms(self$cpu_time)),
             ", scheduler='", self$scheduler, "')"
           ),
           "} else {",
@@ -246,11 +248,14 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param batch_code A character vector of code to be included in the batch script for job scheduling
     #' @param r_packages A character vector of R packages to be loaded when compute script runs
     #' @param scheduler The scheduler to be used for this compute. Options are 'slurm', 'torque', or 'local'.
+    #' @param wait_for_children If TRUE, do not end this job until all child jobs have completed
+    #' @param input_environment The name of the environment to be loaded at the beginning of the R batch prior to executing code
+    #' @param output_environment The name of the environment to be saved at the end of the R batch execution
     #' @param scheduler_options A character vector of scheduler options to be added to the header of the batch script
     #' @param repolling_interval The number of seconds to wait before rechecking whether parent jobs have completed
     initialize = function(batch_directory = NULL, parent_jobs = NULL, job_name = NULL, n_nodes = NULL, n_cpus = NULL,
                           cpu_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL,
-                          batch_code = NULL, r_packages = NULL, scheduler = NULL, 
+                          batch_code = NULL, r_packages = NULL, scheduler = NULL, wait_for_children = NULL,
                           input_environment = NULL, output_environment = NULL,
                           scheduler_options = NULL, repolling_interval = NULL) {
       if (!is.null(batch_directory)) self$batch_directory <- batch_directory
@@ -307,6 +312,11 @@ R_batch_job <- R6::R6Class("batch_job",
       if (!is.null(repolling_interval)) {
         checkmate::assert_number(repolling_interval, lower = 0.1, upper = 2e5)
         self$repolling_interval <- repolling_interval
+      }
+
+      if (!is.null(wait_for_children)) {
+        checkmate::assert_logical(wait_for_children, len = 1L)
+        self$wait_for_children <- wait_for_children
       }
     },
 

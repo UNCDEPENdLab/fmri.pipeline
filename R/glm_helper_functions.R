@@ -1135,6 +1135,7 @@ lookup_nvoxels <- function(nifti) {
 #'
 #' @param str string containing a duration that may include a days specification
 #' @importFrom lubridate hms
+#' @importFrom checkmate assert_string
 #' @keywords internal
 dhms <- function(str) {
   checkmate::assert_string(str)
