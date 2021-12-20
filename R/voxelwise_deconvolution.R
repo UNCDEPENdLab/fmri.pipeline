@@ -45,7 +45,7 @@
 #' @importFrom data.table fread
 #' @importFrom oro.nifti readNIfTI translateCoordinate
 #' @importFrom checkmate assert_file_exists
-#' @importFrom dependlab deconvolve_nlreg_resample deconvolve_nlreg runAFNICommand
+#' @importFrom dependlab deconvolve_nlreg_resample deconvolve_nlreg run_afni_command
 #' @importFrom foreach foreach
 #' @importFrom dplyr mutate mutate_at select left_join
 #' @importFrom readr write_delim
@@ -145,7 +145,7 @@ voxelwise_deconvolution <- function(niftis, add_metadata=NULL, out_dir=getwd(), 
 
       cat("  Deconvolving subject: ", niftis[si], "\n")
       dump_out <- tempfile()
-      afnistat <- runAFNICommand(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]))
+      afnistat <- run_afni_command(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]))
       ts_out <- data.table::fread(dump_out) #read time series
 
       #to_deconvolve is a voxels x time matrix

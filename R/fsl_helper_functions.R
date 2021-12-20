@@ -464,7 +464,7 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
       if (!is.null(template_brain)) file.symlink(template_brain, file.path(afni_dir, paste0("template_brain", template_ext)))
     }
     tcatcall <- paste("3dTcat -overwrite -prefix", afni_out, paste(ss$nii_file, collapse = " "))
-    runAFNICommand(tcatcall)
+    run_afni_command(tcatcall)
 
     z_briks <- which(ss$image_type %in% c("z", "zthresh")) - 1 # subtract 1 because AFNI uses 0-based indexing
 
@@ -473,7 +473,7 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
       "3drefit -fbuc ", paste("-substatpar", z_briks, "fizt", collapse = " "),
       " -relabel_all_str '", paste(ss$afni_briks, collapse = " "), "' ", afni_out
     )
-    runAFNICommand(refitcall)
+    run_afni_command(refitcall)
 
   })
   return(meta_df)
@@ -531,7 +531,7 @@ feat_stats_to_brik <- function(feat_dir, out_filename = "feat_stats",
 
   # concatenate stat images
   tcatcall <- paste("3dTcat -overwrite -prefix", afni_out, paste(stat_order, collapse = " "))
-  runAFNICommand(tcatcall)
+  run_afni_command(tcatcall)
 
   if (!is.null(label_prefix)) { # allow user to add label prefix to brik names
     brik_names <- paste0(label_prefix, brik_names)
@@ -542,7 +542,7 @@ feat_stats_to_brik <- function(feat_dir, out_filename = "feat_stats",
     "3drefit -fbuc ", paste("-substatpar", z_briks, "fizt", collapse = " "),
     " -relabel_all_str '", paste(brik_names, collapse = " "), "' ", afni_out
   )
-  runAFNICommand(refitcall)
+  run_afni_command(refitcall)
 
   return(list(feat_dir = feat_dir, afni_img = afni_out, feat_info = feat_info, brik_names = brik_names, contrast_names = contrast_names))
 }

@@ -245,6 +245,7 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param mem_total The total amount of memory to requested by the job
     #' @param batch_id The batch id (not currently used)
     #' @param r_code A character vector or expression containing R code to be executed
+    #' @param r_script The path to an R script to be executed by the batch (mutually exclusive with \code{r_code}).
     #' @param batch_code A character vector of code to be included in the batch script for job scheduling
     #' @param r_packages A character vector of R packages to be loaded when compute script runs
     #' @param scheduler The scheduler to be used for this compute. Options are 'slurm', 'torque', or 'local'.
@@ -254,7 +255,7 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param scheduler_options A character vector of scheduler options to be added to the header of the batch script
     #' @param repolling_interval The number of seconds to wait before rechecking whether parent jobs have completed
     initialize = function(batch_directory = NULL, parent_jobs = NULL, job_name = NULL, n_nodes = NULL, n_cpus = NULL,
-                          cpu_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL,
+                          cpu_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL, r_script = NULL,
                           batch_code = NULL, r_packages = NULL, scheduler = NULL, wait_for_children = NULL,
                           input_environment = NULL, output_environment = NULL,
                           scheduler_options = NULL, repolling_interval = NULL) {
@@ -280,6 +281,15 @@ R_batch_job <- R6::R6Class("batch_job",
       }
 
       if (!is.null(batch_id)) self$batch_id <- as.character(batch_id)
+
+      if (!is.null(r_script)) {
+        if (!is.null(r_code)) {
+          stop("Both r_script and r_code provided to R_batch_job. These are mutually exclusive!")
+        }
+
+        checkmate::assert_file_exists(r_script)
+        r_code <- readLines(r_script) # read in r_code from external script
+      }
 
       if (is.null(r_code)) {
         stop("Unable to initialize R_batch_job object without r_code")

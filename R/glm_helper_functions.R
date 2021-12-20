@@ -2,7 +2,7 @@
 
 #wrapper for running an AFNI command safely within R
 #if AFNI does not have its environment setup properly, commands may not work
-runAFNICommand <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, ...) {
+run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, ...) {
   #look for AFNIDIR in system environment if not passed in
   if (is.null(afnidir)) {
     env <- system("env", intern=TRUE)
@@ -1263,15 +1263,15 @@ enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
   } else {
     if ("fsl" %in% gpa$glm_software) {
       nmiss <- sum(obj$fsl$feat_complete == FALSE)
-      nruns <- nrow(obj$fsl)
-      if (nmiss == nruns) {
+      n_feat_runs <- nrow(obj$fsl)
+      if (nmiss == n_feat_runs) {
         msg <- sprintf("All feat runs in %s$fsl are incomplete.", obj_name)
         lg$error(msg)
         stop(msg)
       } else if (nmiss > 0) {
         lg$warn(
-          "There are %d missing runs in %s$fsl. Using complete %d runs.",
-          nmiss, obj_name, nruns - nmiss
+          "There are %d missing FEAT outputs in %s$fsl. Using complete %d outputs.",
+          nmiss, obj_name, n_feat_runs - nmiss
         )
       }
     }
