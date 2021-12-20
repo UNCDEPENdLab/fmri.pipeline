@@ -169,3 +169,102 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 
   return(jobid)
 }
+
+
+
+#' helper function to submit a set of shell jobs that are independent of one another
+#' @param job_list a list or character vector where each element represents an independent job to execute in a shell environment
+#' 
+cluster_submit_shell_jobs <- function(job_list, commands_per_cpu = 1L, cpus_per_job = 8L, memgb_per_command = 8, time_per_job="1:00:00",
+  fork_jobs = TRUE, pre=NULL, post=NULL, sched_args = NULL, env_variables = NULL, wait_jobs = NULL, scheduler="slurm", 
+  job_out_dir=getwd(), job_script_prefix="job", log_file="cluster_submit_jobs.csv")
+{
+  checkmate::assert_multi_class(job_list, c("list", "character"))
+  checkmate::assert_integerish(commands_per_cpu, len = 1L, lower = 1, upper = 1e4)
+  checkmate::assert_integerish(cpus_per_job, len=1L, lower=1, upper=1e3)
+  checkmate::assert_number(memgb_per_command, lower = 0.01, upper = 1e3) # max 1TB
+  checkmate::assert_logical(fork_jobs, len=1L)
+
+  n_jobs <- ceiling(length(job_list) / (cpus_per_job * commands_per_cpu))
+
+  # how every job submission script begins
+  preamble <- c(
+    "#!/bin/bash",
+    ""
+  )
+
+  if (scheduler == "slurm") {
+    file_suffix <- ".sbatch"
+    preamble <- c(preamble,
+      "#SBATCH -N 1", #always single node for now
+      paste0("#SBATCH -n ", cpus_per_job),
+      paste0("#SBATCH --time=", time_per_job),
+      paste0("#SBATCH --mem-per-cpu=", memgb_per_command, "G"),
+      "cd $SLURM_SUBMIT_DIR",
+      ""
+    )
+  } else if (scheduler == "torque") {
+    file_suffix <- ".pbs"
+    preamble <- c(
+      preamble,
+      paste0("#PBS -l nodes=1:ppn=", cpus_per_job),
+      paste0("#PBS -l pmem=", memgb_per_command, "gb"),
+      paste0("#PBS -l walltime=", time_per_job),
+      "cd $PBS_O_WORKDIR",
+      ""
+    )
+  } else if (scheduler == "local") {
+    file_suffix <- ".bash"
+  }
+
+  # add any user-specified code that should precede each job execution
+  preamble <- c(preamble, pre, "")
+
+  job_df <- data.frame(
+    job_number = rep(seq_len(n_jobs), each = cpus_per_job * commands_per_cpu, length.out = length(job_list)), 
+    job_id = NA_character_,
+    stringsAsFactors = FALSE
+  )
+
+  job_df$cmd = job_list # post-assignment keeps as list, if relevant
+
+  for (j in seq_len(n_jobs)) {
+    this_run <- job_df$cmd[job_df$job_number == j]
+
+    outfile <- file.path(job_out_dir, paste0(job_script_prefix, "_", j, file_suffix))
+    cat(preamble, file = outfile, sep = "\n")
+
+    if (is.list(this_run)) {
+      # for list inputs, each job consists of multiple commands. make sure these are executed together using a subshell
+      browser()
+      job_str <- sapply(this_run, function(x) {
+        c("(", x, ")", ifelse(fork_jobs == TRUE, "&", ""))
+      })
+      cat(job_str, file = outfile, sep = "\n", append = TRUE)
+    } else {
+      cat(paste(this_run, ifelse(fork_jobs == TRUE, "&", "")), file = outfile, sep = "\n", append = TRUE)
+    }
+
+    
+
+    # make sure parent script waits for forked jobs to complete before exiting
+    if (isTRUE(fork_jobs)) {
+      cat("wait\n\n", file = outfile, append = TRUE)
+    }
+
+    if (!is.null(post)) {
+      cat(post, file=outfile, sep="\n", append = TRUE)
+    }
+
+    # job_id <- cluster_job_submit(outfile, scheduler = scheduler, sched_args = sched_args, env_variables = env_variables, wait_jobs = wait_jobs)
+    job_id <- paste0("dummy", j)
+    job_df$job_id[job_df$job_number==j] <- job_id
+    
+  }
+
+  # write job log to file
+  write.csv(job_df, file=log_file, row.names=FALSE)
+  return(TRUE)
+
+
+}

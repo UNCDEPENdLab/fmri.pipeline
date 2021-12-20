@@ -242,7 +242,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
         unique(dirname(thisrun))
       ), sep = "\n", file = outfile, append = TRUE)
     }
-    joblist[j] <- cluster_job_submit(outfile)
+    joblist[j] <- cluster_job_submit(outfile, scheduler=gpa$scheduler)
     #joblist[j] <- "dummy"
   }
 
@@ -252,3 +252,4 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
 
   return(joblist)
 }
+
