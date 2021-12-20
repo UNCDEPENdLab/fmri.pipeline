@@ -130,7 +130,15 @@ R_batch_job <- R6::R6Class("batch_job",
         if (!file.exists(self$input_environment)) {
           # warning(sprintf("input_environment %s did not exist at the time of script generation.", self$input_environment))
         }
-        syntax <- c(syntax, paste0("if (file.exists('", self$input_environment, "')) load('", self$input_environment, "')"))
+
+        syntax <- c(
+          syntax,
+          paste(glue("if (file.exists('{self$input_environment}'))"), "{"),
+          glue("  load('{self$input_environment}')"),
+          "} else {",
+          glue("  stop('Cannot load input environment object: {self$input_environment}')"),
+          "}"
+        )
       }
 
       syntax <- c(syntax, self$r_code)
@@ -193,7 +201,7 @@ R_batch_job <- R6::R6Class("batch_job",
 
     #' @field input_environment The name of the environment to be loaded at the beginning of the R batch prior to executing
     #     other code. Used to setup any local objects needed to begin computation.
-    input_environment = "job_environment.RData",
+    input_environment = NULL,
 
     #' @field output_environment The name of the environment to be saved at the end of the R batch execution, which can then
     #'    be loaded by subsequent jobs.
@@ -251,13 +259,15 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param scheduler The scheduler to be used for this compute. Options are 'slurm', 'torque', or 'local'.
     #' @param wait_for_children If TRUE, do not end this job until all child jobs have completed
     #' @param input_environment The name of the environment to be loaded at the beginning of the R batch prior to executing code
+    #' @param input_objects A character vector of object names in the current execution environment to be cached and used as input to the R batch.
+    #'   This is mutually exclusive with input_environment at present.
     #' @param output_environment The name of the environment to be saved at the end of the R batch execution
     #' @param scheduler_options A character vector of scheduler options to be added to the header of the batch script
     #' @param repolling_interval The number of seconds to wait before rechecking whether parent jobs have completed
     initialize = function(batch_directory = NULL, parent_jobs = NULL, job_name = NULL, n_nodes = NULL, n_cpus = NULL,
                           cpu_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL, r_script = NULL,
                           batch_code = NULL, r_packages = NULL, scheduler = NULL, wait_for_children = NULL,
-                          input_environment = NULL, output_environment = NULL,
+                          input_environment = NULL, input_objects = NULL, output_environment = NULL,
                           scheduler_options = NULL, repolling_interval = NULL) {
       if (!is.null(batch_directory)) self$batch_directory <- batch_directory
       if (!is.null(parent_jobs)) self$parent_jobs <- parent_jobs
@@ -310,6 +320,21 @@ R_batch_job <- R6::R6Class("batch_job",
 
       checkmate::assert_subset(scheduler, c("torque", "qsub", "slurm", "sbatch", "sh", "local"))
       if (!is.null(scheduler)) self$scheduler <- scheduler
+
+      if (!is.null(input_objects)) {
+        if (!is.null(input_environment)) {
+          stop("At present, you cannot specify both input_environment and input_objects as inputs.")
+        }
+        checkmate::assert_character(input_objects)
+        have_objs <- sapply(input_objects, exists, frame=1) # force search in environment from which R_batch_job was called
+        if (any(have_objs == FALSE)) {
+          stop("Cannot find the following input_objects in this environment: ", paste(input_objects[!have_objs], collapse = ", "))
+        } else {
+          ofile <- file.path(self$batch_directory, "R_batch_job_environment.RData")
+          save(file = ofile, list = input_objects, envir = sys.frame(1))
+          self$input_environment <- ofile
+        }
+      }
 
       if (!is.null(input_environment)) self$input_environment <- input_environment
       if (!is.null(output_environment)) self$output_environment <- output_environment
