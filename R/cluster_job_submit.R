@@ -174,10 +174,22 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 
 #' helper function to submit a set of shell jobs that are independent of one another
 #' @param job_list a list or character vector where each element represents an independent job to execute in a shell environment
+#' @param commands_per_cpu how many elements from \code{job_list} are executed by each core within a single job
+#' @param cpus_per_job how many cpus/cores are requested for each job
+#' @param memgb_per_command amount of memory (RAM) requested for each command (in GB)
+#' @param time_per_job amount of time requested for each job
+#' @param job_out_dir the directory where job scripts should be written
+#' @param job_script_prefix the filename prefix for each job script
+#' @param log_file a csv log file containing the job ids and commands that were executed
+#' @param debug a logical indicating whether to actually submit the jobs (TRUE) or just create the scripts for inspection (FALSE)
 #' 
+#' @importFrom tidyr unnest
+#' @importFrom checkmate assert_multi_class
+#' 
+#' @export 
 cluster_submit_shell_jobs <- function(job_list, commands_per_cpu = 1L, cpus_per_job = 8L, memgb_per_command = 8, time_per_job="1:00:00",
   fork_jobs = TRUE, pre=NULL, post=NULL, sched_args = NULL, env_variables = NULL, wait_jobs = NULL, scheduler="slurm", 
-  job_out_dir=getwd(), job_script_prefix="job", log_file="cluster_submit_jobs.csv")
+  job_out_dir=getwd(), job_script_prefix="job", log_file="cluster_submit_jobs.csv", debug = FALSE)
 {
   checkmate::assert_multi_class(job_list, c("list", "character"))
   checkmate::assert_integerish(commands_per_cpu, len = 1L, lower = 1, upper = 1e4)
@@ -226,7 +238,9 @@ cluster_submit_shell_jobs <- function(job_list, commands_per_cpu = 1L, cpus_per_
     stringsAsFactors = FALSE
   )
 
-  job_df$cmd = job_list # post-assignment keeps as list, if relevant
+  job_df$cmd <- job_list # post-assignment keeps as list, if relevant
+
+  submitted_jobs <- rep(NA_character_, n_jobs)
 
   for (j in seq_len(n_jobs)) {
     this_run <- job_df$cmd[job_df$job_number == j]
@@ -236,16 +250,13 @@ cluster_submit_shell_jobs <- function(job_list, commands_per_cpu = 1L, cpus_per_
 
     if (is.list(this_run)) {
       # for list inputs, each job consists of multiple commands. make sure these are executed together using a subshell
-      browser()
       job_str <- sapply(this_run, function(x) {
-        c("(", x, ")", ifelse(fork_jobs == TRUE, "&", ""))
+        c("(", x, paste0(")", ifelse(fork_jobs == TRUE, " &", "")))
       })
       cat(job_str, file = outfile, sep = "\n", append = TRUE)
     } else {
       cat(paste(this_run, ifelse(fork_jobs == TRUE, "&", "")), file = outfile, sep = "\n", append = TRUE)
     }
-
-    
 
     # make sure parent script waits for forked jobs to complete before exiting
     if (isTRUE(fork_jobs)) {
@@ -256,15 +267,24 @@ cluster_submit_shell_jobs <- function(job_list, commands_per_cpu = 1L, cpus_per_
       cat(post, file=outfile, sep="\n", append = TRUE)
     }
 
-    # job_id <- cluster_job_submit(outfile, scheduler = scheduler, sched_args = sched_args, env_variables = env_variables, wait_jobs = wait_jobs)
-    job_id <- paste0("dummy", j)
-    job_df$job_id[job_df$job_number==j] <- job_id
-    
+    # in debug mode, we only create the scripts, but we do not submit them
+    if (isTRUE(debug)) {
+      job_id <- paste0("dummy", j)
+    } else {
+      job_id <- cluster_job_submit(outfile, scheduler = scheduler, sched_args = sched_args, env_variables = env_variables, wait_jobs = wait_jobs)
+    }
+
+    job_df$job_id[job_df$job_number == j] <- job_id
+    submitted_jobs[j] <- job_id
+
   }
 
   # write job log to file
-  write.csv(job_df, file=log_file, row.names=FALSE)
-  return(TRUE)
+  if (is.list(job_list)) {
+    write.csv(job_df %>% unnest(cmd), file = log_file, row.names = FALSE)
+  } else {
+    write.csv(job_df, file = log_file, row.names = FALSE)
+  }
 
-
+  return(submitted_jobs)
 }
