@@ -173,6 +173,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 
 
 #' helper function to submit a set of shell jobs that are independent of one another
+#' 
 #' @param job_list a list or character vector where each element represents an independent job to execute in a shell environment
 #' @param commands_per_cpu how many elements from \code{job_list} are executed by each core within a single job
 #' @param cpus_per_job how many cpus/cores are requested for each job
@@ -188,7 +189,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 #' 
 #' @export 
 cluster_submit_shell_jobs <- function(job_list, commands_per_cpu = 1L, cpus_per_job = 8L, memgb_per_command = 8, time_per_job="1:00:00",
-  fork_jobs = TRUE, pre=NULL, post=NULL, sched_args = NULL, env_variables = NULL, wait_jobs = NULL, scheduler="slurm", 
+  fork_jobs = TRUE, pre=NULL, post=NULL, sched_args = NULL, env_variables = NULL, wait_jobs = NULL, scheduler="slurm",
   job_out_dir=getwd(), job_script_prefix="job", log_file="cluster_submit_jobs.csv", debug = FALSE)
 {
   checkmate::assert_multi_class(job_list, c("list", "character"))

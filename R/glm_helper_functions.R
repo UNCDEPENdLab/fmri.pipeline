@@ -1,8 +1,28 @@
 #cutting down on redundancy across glm setup scripts
 
-#wrapper for running an AFNI command safely within R
-#if AFNI does not have its environment setup properly, commands may not work
-run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, ...) {
+#' Wrapper for running an AFNI command safely within R
+#'
+#' @param args AFNI command string to be run
+#' @param afnidir Location of AFNI installation. If NULL, the function will serach the environment for AFNIDIF
+#' @param stdout File target for redirecting stdout. If NULL, stdout will not be captured
+#' @param stderr File target for redirecting stderr. If NULL, stderr will not be captured
+#' @param echo Whether to print AFNI command to the screen
+#'
+#' @return The exit status of the executed AFNI command. 0 for success, non-zero for failure
+#'
+#' @details
+#'
+#' This command ensures that AFNI comamnds are in the system PATH
+#'
+#' @author Michael Hallquist
+#' @export
+#'
+#' @examples
+#'
+#' \dontrun{
+#' runAFNICommand("3dcopy test_data copy_data")
+#' }
+run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo = TRUE, ...) {
   #look for AFNIDIR in system environment if not passed in
   if (is.null(afnidir)) {
     env <- system("env", intern=TRUE)
@@ -19,7 +39,7 @@ run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, ...) 
   afnicmd  <- paste0(afnisetup, args)
   if (!is.null(stdout)) { afnicmd <- paste(afnicmd, ">", stdout) }
   if (!is.null(stderr)) { afnicmd <- paste(afnicmd, "2>", stderr) }
-  cat("AFNI command: ", afnicmd, "\n")
+  if (echo) { cat("AFNI command: ", afnicmd, "\n") }
   retcode <- system(afnicmd, ...)
   return(retcode)
 }

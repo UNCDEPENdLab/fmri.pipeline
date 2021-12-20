@@ -95,11 +95,13 @@ Create a new R_batch_job object for execution on an HPC cluster
   mem_total = NULL,
   batch_id = NULL,
   r_code = NULL,
+  r_script = NULL,
   batch_code = NULL,
   r_packages = NULL,
   scheduler = NULL,
   wait_for_children = NULL,
   input_environment = NULL,
+  input_objects = NULL,
   output_environment = NULL,
   scheduler_options = NULL,
   repolling_interval = NULL
@@ -131,6 +133,8 @@ job begins.}
 
 \item{\code{r_code}}{A character vector or expression containing R code to be executed}
 
+\item{\code{r_script}}{The path to an R script to be executed by the batch (mutually exclusive with \code{r_code}).}
+
 \item{\code{batch_code}}{A character vector of code to be included in the batch script for job scheduling}
 
 \item{\code{r_packages}}{A character vector of R packages to be loaded when compute script runs}
@@ -140,6 +144,9 @@ job begins.}
 \item{\code{wait_for_children}}{If TRUE, do not end this job until all child jobs have completed}
 
 \item{\code{input_environment}}{The name of the environment to be loaded at the beginning of the R batch prior to executing code}
+
+\item{\code{input_objects}}{A character vector of object names in the current execution environment to be cached and used as input to the R batch.
+This is mutually exclusive with input_environment at present.}
 
 \item{\code{output_environment}}{The name of the environment to be saved at the end of the R batch execution}
 

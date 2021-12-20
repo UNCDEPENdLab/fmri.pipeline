@@ -45,7 +45,7 @@
 #' @importFrom data.table fread
 #' @importFrom oro.nifti readNIfTI translateCoordinate
 #' @importFrom checkmate assert_file_exists
-#' @importFrom dependlab deconvolve_nlreg_resample deconvolve_nlreg run_afni_command
+#' @importFrom dependlab deconvolve_nlreg_resample deconvolve_nlreg
 #' @importFrom foreach foreach
 #' @importFrom dplyr mutate mutate_at select left_join
 #' @importFrom readr write_delim
