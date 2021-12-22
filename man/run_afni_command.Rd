@@ -10,6 +10,7 @@ run_afni_command(
   stdout = NULL,
   stderr = NULL,
   echo = TRUE,
+  omp_num_threads = 1L,
   ...
 )
 }

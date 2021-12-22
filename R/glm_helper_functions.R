@@ -23,7 +23,7 @@
 #' runAFNICommand("3dcopy test_data copy_data")
 #' }
 run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo = TRUE, omp_num_threads=1L, ...) {
-  checkmate::assert_string(afnidir)
+  checkmate::assert_string(afnidir, null.ok=TRUE)
   if (!is.null(afnidir)) checkmate::assert_directory_exists(afnidir)
   checkmate::assert_integerish(omp_num_threads, lower=1, len=1)
   #look for AFNIDIR in system environment if not passed in
@@ -1180,7 +1180,13 @@ dhms <- function(str) {
   return(period)
 }
 
+#' helper function to validate format of walltime inputs for HPC submission
+#'
+#' @param str string containing a duration that may include a days specification
+#' @importFrom checkmate assert_string
+#' @keywords internal
 validate_dhms <- function(str) {
+  checkmate::assert_string(str)
   if (grepl("^(\\d+-)?\\d+:\\d+(:\\d+)?$", str, perl=T)) {
     return(str) # hms, dhms, or ms format
   } else if (grepl("^\\d+-\\d+$", str, perl=T)) {

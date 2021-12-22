@@ -468,7 +468,6 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
           "child_job_ids <- run_afni_command('{private$clustsim_call}', omp_num_threads = {private$ncpus})"
         )
       )
-browser()
       private$clustsim_batch$submit()
 
     },
@@ -479,11 +478,11 @@ browser()
   )
 )
 
-setwd("/proj/mnhallqlab/studies/MMClock/MR_Proc/10637_20140304/mni_5mm_aroma/sceptic_vchosen_ventropy_dauc_pemax_vtime_preconvolve")
-res4d_files <- list.files(pattern = "res4d.nii.gz", getwd(), full.names = T, recursive = T)
-fwhmx_mask_files <- list.files(pattern = "mask.nii.gz", getwd(), full.names = T, recursive = T)
+# setwd("/proj/mnhallqlab/studies/MMClock/MR_Proc/10637_20140304/mni_5mm_aroma/sceptic_vchosen_ventropy_dauc_pemax_vtime_preconvolve")
+# res4d_files <- list.files(pattern = "res4d.nii.gz", getwd(), full.names = T, recursive = T)
+# fwhmx_mask_files <- list.files(pattern = "mask.nii.gz", getwd(), full.names = T, recursive = T)
 
-mytest <- clustsim_spec$new(
-  fwhmx_input_files = res4d_files, fwhmx_mask_files = fwhmx_mask_files, scheduler = "local",
-  clustsim_mask = "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask_2.3mm.nii"
-  )
+# mytest <- clustsim_spec$new(
+#   fwhmx_input_files = res4d_files, fwhmx_mask_files = fwhmx_mask_files, scheduler = "local",
+#   clustsim_mask = "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask_2.3mm.nii"
+#   )
