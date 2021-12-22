@@ -19,26 +19,26 @@ R_batch_job <- R6::R6Class("batch_job",
     #    submits additional jobs through the scheduler directly
     child_job_ids = NULL, #currently no simple way to populate these without a messaging interface with running batch job
 
-    get_unique_file_name = function(script_name = "") {
-      base <- tools::file_path_sans_ext(script_name)
-      ext <- tools::file_ext(script_name)
+    get_unique_file_name = function(file_name = "") {
+      base <- tools::file_path_sans_ext(file_name)
+      ext <- tools::file_ext(file_name)
 
-      script_name <- paste0(
+      file_name <- paste0(
         base,
         ifelse(is.null(self$job_name), "", paste0("_", self$job_name)),
         ".", ext
       )
 
-      if (file.exists(normalizePath(file.path(self$batch_directory, script_name), mustWork = FALSE))) {
+      if (file.exists(normalizePath(file.path(self$batch_directory, file_name), mustWork = FALSE))) {
         # add unique random string to script name if the file already exists
-        script_name <- sub(
+        file_name <- sub(
           paste0("\\.", ext, "$"),
           paste0("_", sub("^/", "", tempfile(pattern = "", tmpdir = "")), ".", ext),
-          script_name
+          file_name
         )
       }
 
-      return(normalizePath(file.path(self$batch_directory, script_name), mustWork = FALSE))
+      return(normalizePath(file.path(self$batch_directory, file_name), mustWork = FALSE))
     },
 
     # helper to generate and return the full path to the batch script
@@ -126,25 +126,25 @@ R_batch_job <- R6::R6Class("batch_job",
         )
       }
 
-      if (!is.null(self$input_environment)) {
-        if (!file.exists(self$input_environment)) {
-          # warning(sprintf("input_environment %s did not exist at the time of script generation.", self$input_environment))
+      if (!is.null(self$input_rdata_file)) {
+        if (!file.exists(self$input_rdata_file)) {
+          # warning(sprintf("input_rdata_file %s did not exist at the time of script generation.", self$input_rdata_file))
         }
 
         syntax <- c(
           syntax,
-          paste(glue("if (file.exists('{self$input_environment}'))"), "{"),
-          glue("  load('{self$input_environment}')"),
+          paste(glue::glue("if (file.exists('{self$input_rdata_file}'))"), "{"),
+          glue::glue("  load('{self$input_rdata_file}')"),
           "} else {",
-          glue("  stop('Cannot load input environment object: {self$input_environment}')"),
+          glue::glue("  stop('Cannot load input environment object: {self$input_rdata_file}')"),
           "}"
         )
       }
 
       syntax <- c(syntax, self$r_code)
 
-      if (!is.null(self$output_environment)) {
-        syntax <- c(syntax, paste0("save.image(file='", self$output_environment, "')"))
+      if (!is.null(self$output_rdata_file)) {
+        syntax <- c(syntax, paste0("save.image(file='", self$output_rdata_file, "')"))
       }
 
       if (isTRUE(self$wait_for_children)) {
@@ -164,6 +164,14 @@ R_batch_job <- R6::R6Class("batch_job",
       }
       message("Writing R script to: ", private$get_compute_file_name())
       writeLines(syntax, con = private$get_compute_file_name())
+    },
+    write_rdata_file = function() {
+      if (is.null(self$input_objects)) {
+        return(invisible(NULL))
+      } # nothing to do
+
+      self$input_rdata_file <- private$get_unique_file_name(self$input_rdata_file)
+      save(list = ls(all.names = TRUE, envir = self$input_objects), envir = self$input_objects, file = self$input_rdata_file)
     }
   ),
   public = list(
@@ -199,13 +207,17 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @field mem_per_cpu The amount of memory (RAM) requested per cpu (total = mem_per_cpu * n_cpus)
     mem_per_cpu = NULL,
 
-    #' @field input_environment The name of the environment to be loaded at the beginning of the R batch prior to executing
-    #     other code. Used to setup any local objects needed to begin computation.
-    input_environment = NULL,
+    #' @field input_objects An environment containing all objects to be written to an RData object and passed
+    #'   to the batch job at execution
+    input_objects = NULL,
 
-    #' @field output_environment The name of the environment to be saved at the end of the R batch execution, which can then
+    #' @field input_rdata_file The name of the environment to be loaded at the beginning of the R batch prior to executing
+    #     other code. Used to setup any local objects needed to begin computation.
+    input_rdata_file = NULL,
+
+    #' @field output_rdata_file The name of the environment to be saved at the end of the R batch execution, which can then
     #'    be loaded by subsequent jobs.
-    output_environment = NULL,
+    output_rdata_file = NULL,
 
     #' @field sqlite_db Not used yet, but will be used for job tracking in future
     sqlite_db = NULL,
@@ -258,16 +270,16 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param r_packages A character vector of R packages to be loaded when compute script runs
     #' @param scheduler The scheduler to be used for this compute. Options are 'slurm', 'torque', or 'local'.
     #' @param wait_for_children If TRUE, do not end this job until all child jobs have completed
-    #' @param input_environment The name of the environment to be loaded at the beginning of the R batch prior to executing code
-    #' @param input_objects A character vector of object names in the current execution environment to be cached and used as input to the R batch.
-    #'   This is mutually exclusive with input_environment at present.
-    #' @param output_environment The name of the environment to be saved at the end of the R batch execution
+    #' @param input_rdata_file The name of the environment to be loaded at the beginning of the R batch prior to executing code
+    #' @param input_objects A list object in the current execution environment to be cached and used as input to the R batch.
+    #'   This is mutually exclusive with input_rdata_file at present.
+    #' @param output_rdata_file The name of the environment to be saved at the end of the R batch execution
     #' @param scheduler_options A character vector of scheduler options to be added to the header of the batch script
     #' @param repolling_interval The number of seconds to wait before rechecking whether parent jobs have completed
     initialize = function(batch_directory = NULL, parent_jobs = NULL, job_name = NULL, n_nodes = NULL, n_cpus = NULL,
                           cpu_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL, r_script = NULL,
                           batch_code = NULL, r_packages = NULL, scheduler = NULL, wait_for_children = NULL,
-                          input_environment = NULL, input_objects = NULL, output_environment = NULL,
+                          input_rdata_file = NULL, input_objects = NULL, output_rdata_file = NULL,
                           scheduler_options = NULL, repolling_interval = NULL) {
       if (!is.null(batch_directory)) self$batch_directory <- batch_directory
       if (!is.null(parent_jobs)) self$parent_jobs <- parent_jobs
@@ -322,22 +334,23 @@ R_batch_job <- R6::R6Class("batch_job",
       if (!is.null(scheduler)) self$scheduler <- scheduler
 
       if (!is.null(input_objects)) {
-        if (!is.null(input_environment)) {
-          stop("At present, you cannot specify both input_environment and input_objects as inputs.")
+        if (!is.null(input_rdata_file)) {
+          stop("At present, you cannot specify both input_rdata_file and input_objects as inputs.")
         }
-        checkmate::assert_character(input_objects)
-        have_objs <- sapply(input_objects, exists, frame=2) # force search in environment from which R_batch_job was called
-        if (any(have_objs == FALSE)) {
-          stop("Cannot find the following input_objects in this environment: ", paste(input_objects[!have_objs], collapse = ", "))
-        } else {
-          ofile <- file.path(self$batch_directory, "R_batch_job_environment.RData")
-          save(file = ofile, list = input_objects, envir = sys.frame(2))
-          self$input_environment <- ofile
+
+        checkmate::assert_multi_class(input_objects, c("list", "environment"))
+        if (checkmate::test_list(input_objects)) {
+          if (is.null(names(input_objects))) {
+            stop("For list input_objects input, elements of the list must be named.")
+          }
+          input_objects <- as.environment(input_objects) # always convert to environment for type consistency
         }
+        self$input_objects <- input_objects # store objects internally for output when write_compute_file is called
+        self$input_rdata_file <- "R_batch_job_environment.RData"
       }
 
-      if (!is.null(input_environment)) self$input_environment <- input_environment
-      if (!is.null(output_environment)) self$output_environment <- output_environment
+      if (!is.null(input_rdata_file)) self$input_rdata_file <- input_rdata_file
+      if (!is.null(output_rdata_file)) self$output_rdata_file <- output_rdata_file
 
       if (!is.null(scheduler_options)) {
         checkmate::assert_character(scheduler_options)
@@ -359,12 +372,19 @@ R_batch_job <- R6::R6Class("batch_job",
     #'
     #' @details this is called by \code{$submit} when a job is submitted and is provided
     #'   here in case the user wants to generate the batch files without executing them
-    generate = function() {
+    generate = function(force = FALSE) {
+      if (isFALSE(force) && isTRUE(private$batch_generated)) {
+        # skip out of generation if this has already completed
+        return(self)
+      }
+
       # create batch_directory, if missing
       if (!dir.exists(self$batch_directory)) dir.create(self$batch_directory, recursive = TRUE)
+      private$write_rdata_file() # save input_objects to file if needed
       private$write_batch_file()
       private$write_compute_file()
       private$batch_generated <- TRUE
+      return(self)
     },
 
     #' @description Submit job to scheduler or local compute
@@ -509,6 +529,12 @@ R_batch_sequence <- R6::R6Class("batch_sequence",
           }
         }
       }
+      return(self)
+    },
+    generate = function() {
+      # call generation steps for each job (mostly for testing)
+      lapply(private$sequence_jobs, function(x) x$generate())
+      return(self)
     }
   )
 )

@@ -36,7 +36,7 @@ l3_model_names = "prompt", glm_software = NULL) {
   # batch job to finalize pipeline configuration
   f_batch <- R_batch_job$new(
     job_name = "finalize_configuration", batch_directory = batch_directory, scheduler = gpa$scheduler,
-    input_environment = gpa_cache, output_environment = gpa_cache,
+    input_rdata_file = gpa_cache, output_rdata_file = gpa_cache,
     n_nodes = 1, n_cpus = 1, cpu_time = gpa$parallel$finalize_time,
     mem_total = "16G",
     r_code = "gpa <- finalize_pipeline_configuration(gpa)", r_packages = "fmri.pipeline",

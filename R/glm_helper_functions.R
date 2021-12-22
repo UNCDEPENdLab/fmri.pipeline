@@ -23,7 +23,8 @@
 #' runAFNICommand("3dcopy test_data copy_data")
 #' }
 run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo = TRUE, omp_num_threads=1L, ...) {
-  checkmate::assert_string(afnidir, null.ok=TRUE)
+  checkmate::assert_string(args, null.ok = FALSE)
+  checkmate::assert_string(afnidir, null.ok = TRUE)
   if (!is.null(afnidir)) checkmate::assert_directory_exists(afnidir)
   checkmate::assert_integerish(omp_num_threads, lower=1, len=1)
   #look for AFNIDIR in system environment if not passed in
