@@ -375,7 +375,7 @@ R_batch_job <- R6::R6Class("batch_job",
     generate = function(force = FALSE) {
       if (isFALSE(force) && isTRUE(private$batch_generated)) {
         # skip out of generation if this has already completed
-        return(self)
+        return(invisible(self))
       }
 
       # create batch_directory, if missing
@@ -384,7 +384,7 @@ R_batch_job <- R6::R6Class("batch_job",
       private$write_batch_file()
       private$write_compute_file()
       private$batch_generated <- TRUE
-      return(self)
+      return(invisible(self))
     },
 
     #' @description Submit job to scheduler or local compute

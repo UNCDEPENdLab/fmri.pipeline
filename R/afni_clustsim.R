@@ -18,9 +18,9 @@ fwhmx_spec <- R6::R6Class("fwhmx_spec",
       if (is.null(private$mask_file)) {
         mask_string <- "-automask"
       } else {
-        mask_string <- glue("-mask {private$mask_file}")
+        mask_string <- glue::glue("-mask {private$mask_file}")
       }
-      private$call <- glue(
+      private$call <- glue::glue(
         "3dFWHMx -overwrite -acf {private$out_detailed}",
         " -out {private$out_by_subbrik}",
         " -input {private$input_file} {mask_string} {private$average}",
@@ -47,7 +47,7 @@ fwhmx_spec <- R6::R6Class("fwhmx_spec",
       }
 
       # always return self for side-effect methods
-      return(self)
+      return(invisible(self))
     }
   ),
   public = list(
@@ -180,7 +180,7 @@ fwhmx_set_spec <- R6::R6Class("fwhmx_set_spec",
       private$fwhmx_df <- data.frame(input = inp_files, acf_mat)
 
       # always return self for side-effect methods
-      return(self)
+      return(invisible(self))
     },
     get_fwhmx_calls = function(include_complete = FALSE) {
       if (isTRUE(include_complete)) {
@@ -337,13 +337,13 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
       if (!is.null(self$inset_files)) {
         private$sim_string <- glue("-inset {paste(self$inset_files, collapse=' ')}")
         if (!is.null(private$clustsim_mask)) {
-          private$sim_string <- paste(private$sim_string, glue("-mask {private$clustsim_mask}")) # -mask compatible with -inset
+          private$sim_string <- paste(private$sim_string, glue::glue("-mask {private$clustsim_mask}")) # -mask compatible with -inset
         }
       } else if (!is.null(private$clustsim_mask)) {
-        private$sim_string <- glue("-mask {private$clustsim_mask}")
+        private$sim_string <- glue::glue("-mask {private$clustsim_mask}")
       } else {
         # use voxel size and matrix size
-        private$sim_string <- glue("-nxyz {paste(private$nxyz, collapse=' ')} -dxyz {paste(private$dxyz, collapse=' ')}")
+        private$sim_string <- glue::glue("-nxyz {paste(private$nxyz, collapse=' ')} -dxyz {paste(private$dxyz, collapse=' ')}")
       }
     },
     build_call = function() {
@@ -352,13 +352,13 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
           warning("Cannot build 3dClustSim call because some 3dFWHMx runs are incomplete.")
           return(invisible(NULL))
         }
-        acf_string <- glue("-acf {paste(self$fwhmx_set$get_acf_average(), collapse=' ')}")
+        acf_string <- glue::glue("-acf {paste(self$fwhmx_set$get_acf_average(), collapse=' ')}")
       } else {
-        acf_string <- glue("-acf {paste(private$acf_params, collapse=' ')}")
+        acf_string <- glue::glue("-acf {paste(private$acf_params, collapse=' ')}")
       }
 
       private$which_sim()
-      private$clustsim_call <- glue(
+      private$clustsim_call <- glue::glue(
         "3dClustSim {private$sim_string} -iter {private$iter} {acf_string} -prefix {private$prefix}",
         " -pthr {private$pthr} -athr {private$athr} -seed {private$seed}{private$nopad}{private$nodec}"
       )
@@ -368,7 +368,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         return(invisible(NULL)) # data frame has already been compiled
       }
 
-      clustsim_files <- list.files(path = private$out_dir, pattern = glue("{private$prefix}.*sided\\.1D"), full.names = TRUE)
+      clustsim_files <- list.files(path = private$out_dir, pattern = glue::glue("{private$prefix}.*sided\\.1D"), full.names = TRUE)
       if (length(clustsim_files) == 0L) {
         warning("Cannot find any clustsim output files in: ", private$out_dir)
         return(invisible(NULL))
@@ -419,6 +419,12 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         stop("Only one method can be passed for the 3dClustSim volume settings. Use dxyz + nxyz, clustsim_mask, or inset_files")
       }
 
+      if (!is.null(scheduler)) {
+        checkmate::assert_string(scheduler)
+        checkmate::assert_subset(scheduler, c("torque", "slurm", "local"))
+        private$scheduler <- scheduler
+      }
+
       if (!is.null(out_dir)) {
         checkmate::assert_directory_exists(out_dir)
         private$out_dir <- out_dir
@@ -431,7 +437,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
 
       if (!is.null(fwhmx_input_files)) {
         private$use_fwhmx_acf <- TRUE
-        self$fwhmx_set <- fwhmx_set_spec$new(input_files = fwhmx_input_files, mask_files = fwhmx_mask_files)
+        self$fwhmx_set <- fwhmx_set_spec$new(input_files = fwhmx_input_files, mask_files = fwhmx_mask_files, scheduler=scheduler)
         if (!is.null(acf_params)) {
           stop("Cannot pass fwhmx_input_files and acf_params since the ACF parameters are calculated by 3dFWHMx!")
         }
@@ -517,12 +523,6 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         private$seed <- as.integer(seed)
       }
 
-      if (!is.null(scheduler)) {
-        checkmate::assert_string(scheduler)
-        checkmate::assert_subset(scheduler, c("torque", "slurm", "local"))
-        private$scheduler <- scheduler
-      }
-
       if (!is.null(ncpus)) {
         checkmate::assert_integerish(ncpus, lower = 1, len = 1)
         private$ncpus <- ncpus
@@ -548,16 +548,19 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         )
       )
 
-      browser()
       # need to run 3dFWHMx before 3dClustSim can run
       if (isTRUE(private$use_fwhmx_acf) && isFALSE(self$fwhmx_set$is_fwhmx_complete())) {
         fwhmx_batch <- self$fwhmx_set$get_batch()
-        clust_seq <- R_batch_sequence$new(fwhmx_batch, private$clustsim_batch)
-        #clust_seq$run()
-        clust_seq$generate()
+        batch_obj <- private$clustsim_batch
+        batch_obj$depends_on_parents <- "run_3dfwhmx"
+        clust_seq <- R_batch_sequence$new(fwhmx_batch, batch_obj)
+        clust_seq$submit()
+        # clust_seq$generate()
       } else {
         private$clustsim_batch$submit()
       }
+      
+      return(invisible(self))
     },
     get_clustsim_df = function() {
       private$build_df()
