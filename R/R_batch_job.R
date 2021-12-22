@@ -326,12 +326,12 @@ R_batch_job <- R6::R6Class("batch_job",
           stop("At present, you cannot specify both input_environment and input_objects as inputs.")
         }
         checkmate::assert_character(input_objects)
-        have_objs <- sapply(input_objects, exists, frame=1) # force search in environment from which R_batch_job was called
+        have_objs <- sapply(input_objects, exists, frame=2) # force search in environment from which R_batch_job was called
         if (any(have_objs == FALSE)) {
           stop("Cannot find the following input_objects in this environment: ", paste(input_objects[!have_objs], collapse = ", "))
         } else {
           ofile <- file.path(self$batch_directory, "R_batch_job_environment.RData")
-          save(file = ofile, list = input_objects, envir = sys.frame(1))
+          save(file = ofile, list = input_objects, envir = sys.frame(2))
           self$input_environment <- ofile
         }
       }
@@ -401,6 +401,9 @@ R_batch_job <- R6::R6Class("batch_job",
       message("Job received job id: ", private$job_id)
 
       if (!is.null(cd) && dir.exists(cd)) setwd(cd) # reset working directory (don't attempt if that directory is absent)
+
+      # return job id in case there are subsidiary scripts that depend on this
+      return(private$job_id)
     },
 
     #' @description Function to create a deep copy of a batch job

@@ -1,12 +1,12 @@
 # N.B. This class doesn't even expose the Gaussian ACF options given false positive problems
 fwhmx_spec <- R6::R6Class("fwhmx_spec",
   private = list(
-    data_file = NULL,
+    input_file = NULL,
+    mask_file = NULL,
     out_dir = NULL, # where to put calculations
     out_summary = NULL,
     out_detailed = NULL,
     out_by_subbrik = NULL,
-    mask_file = NULL,
     demed = FALSE,
     unif = FALSE,
     average = "-geom",
@@ -23,7 +23,7 @@ fwhmx_spec <- R6::R6Class("fwhmx_spec",
       private$call <- glue(
         "3dFWHMx -overwrite -acf {private$out_detailed}",
         " -out {private$out_by_subbrik}",
-        " -input {private$data_file} {mask_string} {private$average}",
+        " -input {private$input_file} {mask_string} {private$average}",
         " > {private$out_summary}"
       )
     },
@@ -48,16 +48,23 @@ fwhmx_spec <- R6::R6Class("fwhmx_spec",
     }
   ),
   public = list(
-    initialize = function(data_file = NULL, out_dir = NULL, mask_file = NULL, demed = NULL, unif = NULL, average = "geometric") {
-      if (is.null(data_file)) {
+    initialize = function(input_file = NULL, mask_file = NULL, out_dir = NULL, demed = NULL, unif = NULL, average = "geometric") {
+      if (is.null(input_file)) {
         stop("Cannot run 3dFWHMx without -input dataset.")
       } else {
-        checkmate::assert_file_exists(data_file)
-        private$data_file <- normalizePath(data_file)
+        checkmate::assert_file_exists(input_file)
+        private$input_file <- normalizePath(input_file)
+      }
+
+      if (is.null(mask_file)) {
+        message("No mask_file provided. Will default to 3dFWHMx -automask")
+      } else {
+        checkmate::assert_file_exists(mask_file)
+        private$mask_file <- mask_file
       }
 
       if (is.null(out_dir)) {
-        private$out_dir <- dirname(private$data_file)
+        private$out_dir <- dirname(private$input_file)
       } else {
         private$out_dir <- normalizePath(out_dir)
       }
@@ -66,11 +73,9 @@ fwhmx_spec <- R6::R6Class("fwhmx_spec",
       private$out_by_subbrik <- file.path(private$out_dir, "3dFWHMx_acf_bysubbrik.txt")
       private$out_detailed <- file.path(private$out_dir, "3dFWHMx_acf_radius.txt")
 
-      if (is.null(mask_file)) {
-        message("No mask_file provided. Will default to 3dFWHMx -automask")
-      } else {
-        checkmate::assert_file_exists(mask_file)
-        private$mask_file <- mask_file
+      if (file.exists(private$out_summary)) {
+        # populate from cached txt file (rather than forcing the command to re-run)
+        private$populate_params()
       }
 
       # demedian
@@ -126,7 +131,7 @@ fwhmx_spec <- R6::R6Class("fwhmx_spec",
       private$acf_params
     },
     get_input_file = function() {
-      private$data_file
+      private$input_file
     },
     get_outputs = function() {
       c(
@@ -135,6 +140,135 @@ fwhmx_spec <- R6::R6Class("fwhmx_spec",
         out_detailed = private$out_detailed,
         out_by_subbrik = private$out_by_subbrik
       )
+    },
+    is_fwhmx_complete = function() {
+      private$fwhmx_complete
+    }
+  )
+)
+
+# class for running 3dFWHMx on a group of input files using a scheduler/cluster
+fwhmx_set_spec <- R6::R6Class("fwhmx_set_spec",
+  private = list(
+    fwhmx_batch = NULL, # batch object
+    walltime = "10:00:00", # 10 hours default for all jobs
+    fwhmx_objs = list(),
+    fwhmx_df = data.frame(),
+    fwhmx_acf_avg = setNames(rep(NA_real_, 4), c("a", "b", "c")),
+    fwhmx_effective_fwhm = NA_real_,
+    all_fwhmx_complete = FALSE,
+    scheduler = "slurm",
+    input_files = NULL,
+    mask_files = NULL,
+
+    populate_acf_df = function() {
+      res <- lapply(private$fwhmx_objs, function(x) x$get_acf_params())
+      inp_files <- sapply(private$fwhmx_objs, function(x) x$get_input_file())
+      lens <- sapply(res, length)
+      if (!all(lens == 4)) {
+        stop("The length of some ACF outputs from $get_acf_params is not 4. Don't know how to proceed!")
+      }
+      acf_mat <- do.call(rbind, res)
+      colnames(acf_mat) <- c("a", "b", "c", "effective_fwhm")
+
+      private$fwhmx_df <- data.frame(input = inp_files, acf_mat)
+    },
+    get_fwhmx_calls = function(include_complete = FALSE) {
+      if (isTRUE(include_complete)) {
+        fwhmx_return <- rep(TRUE, length(private$fwhmx_objs))
+      } else {
+        fwhmx_return <- sapply(private$fwhmx_objs, function(x) !x$is_fwhmx_complete())
+      }
+
+      return(sapply(private$fwhmx_objs[fwhmx_return], function(x) x$get_call()))
+    },
+    generate_batch = function(include_complete = FALSE) {
+      # this will return all 3dfwhmx calls
+
+      fwhmx_calls <- private$get_fwhmx_calls(include_complete = include_complete)
+      if (length(fwhmx_calls) == 0L) {
+        message("All 3dFWHMx runs have already completed. If you want to force a re-run, use $run(force=TRUE)")
+        private$fwhmx_batch <- NULL # reset to NULL for consistency
+        return(invisible(NULL))
+      }
+
+      # create parent batch job to run all 3dFWHMx scripts
+      private$fwhmx_batch <- R_batch_job$new(
+        job_name = "run_3dfwhmx", n_cpus = 1,
+        cpu_time = private$walltime, scheduler = private$scheduler,
+        input_objects = "fwhmx_calls", # export this object to the job
+        wait_for_children = TRUE, r_packages = "fmri.pipeline",
+        r_code = glue(
+          "child_job_ids <- cluster_submit_shell_jobs(fwhmx_calls, memgb_per_command=8, fork_jobs=TRUE, scheduler='{private$scheduler}')"
+        )
+      )
+    }
+  ),
+  public = list(
+    initialize = function(input_files = NULL, mask_files = NULL, scheduler = NULL, walltime="10:00:00", ...) {
+      if (is.null(input_files)) {
+        stop("fwhmx_set_spec requires at least one input file")
+      }
+
+      checkmate::assert_character(input_files)
+      checkmate::assert_file_exists(input_files)
+      private$input_files <- input_files
+
+      if (!is.null(mask_files)) {
+        checkmate::assert_file_exists(mask_files)
+        stopifnot(length(mask_files) == length(input_files)) # enforce length match for inputs and masks (otherwise, how do they line up?)
+        private$mask_files <- mask_files
+      }
+
+      # create 3dFWHMx object for each input file
+      private$fwhmx_objs <- lapply(seq_along(input_files), function(ii) {
+        fwhmx_spec$new(input_file = private$input_files[ii], mask_file = private$mask_files[ii], ...)
+      })
+
+      private$all_fwhmx_complete <- all(sapply(private$fwhmx_objs, function(x) x$is_fwhmx_complete()))
+
+      if (!is.null(scheduler)) {
+        checkmate::assert_string(scheduler)
+        checkmate::assert_subset(scheduler, c("torque", "slurm", "local"))
+        private$scheduler <- scheduler
+      }
+
+      if (!is.null(walltime)) {
+        private$walltime <- validate_dhms(walltime)
+      }
+    },
+    run = function(force = FALSE) {
+      private$generate_batch(include_complete = force)
+      if (!is.null(private$fwhmx_batch)) {
+        private$fwhmx_batch$submit()
+      } else {
+        message("Nothing to run")
+      }
+    },
+    get_batch = function(include_complete = FALSE) {
+      private$generate_batch(include_complete = include_complete)
+      return(private$fwhmx_batch)
+    },
+    get_acf_average = function(allow_incomplete_fwhmx=FALSE) {
+      private$populate_acf_df()
+      if (any(is.na(private$fwhmx_df)) && isFALSE(allow_incomplete_fwhmx)) {
+        stop("Unable to get ACF average because parameters are missing for some datasets. Make sure you've run 3dFWHMx for all inputs provided!")
+      }
+
+      cmeans <- colMeans(private$fwhmx_df[, c("a", "b", "c", "effective_fwhm")], na.rm = TRUE)
+      private$fwhmx_acf_avg <- cmeans[c("a", "b", "c")]
+      private$fwhmx_effective_fwhm <- cmeans["effective_fwhm"]
+      return(private$fwhmx_acf_avg)
+    },
+    get_acf_df = function() {
+      private$populate_acf_df()
+      private$fwhmx_df
+    },
+    get_effective_fwhm = function() {
+      if (is.na(private$fwhmx_effective_fwhm)) {
+        private$populate_acf_df()
+      }
+      return(private$fwhmx_effective_fwhm)
     }
   )
 )
@@ -143,19 +277,23 @@ fwhmx_spec <- R6::R6Class("fwhmx_spec",
 
 clustsim_spec <- R6::R6Class("clustsim_spec",
   private = list(
-    fwhmx_objs = NULL,
-    fwhmx_df = data.frame(),
-    fwhmx_acf_avg = setNames(rep(NA_real_, 4), c("a", "b", "c")),
-    fwhmx_effective_fwhm = NA_real_,
+    out_dir = NULL,
+    prefix = "clustsim_",
+    use_fwhmx_acf = FALSE,
+    acf_params = setNames(rep(NA_real_, 3), c("a", "b", "c")),
+    clustsim_batch = NULL,
     clustsim_call = NULL,
+    clustsim_mask = NULL,
     method = "fwhmx", # or 'inset' for 3dttest++ approach or 'xyz' for voxel + matrix approach
     nopad = "",
     pthr = ".02 .01 .005 .002 .001 .0005 .0002 .0001",
     athr = ".05 .02 .01 .005 .002 .001 .0005 .0002 .0001",
-    clustsim_mask = NULL,
     iter = 10000L,
+    nodec = "",
+    seed = 0,
     sim_string = "",
     scheduler = "slurm",
+    ncpus = 1L,
     which_sim = function() {
       if (!is.null(self$inset_files)) {
         private$sim_string <- glue("-inset {paste(self$inset_files, collapse=' ')}")
@@ -170,57 +308,60 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
       }
     },
     build_call = function() {
-      if (private$method == "fwhmx") {
-
+      if (isTRUE(private$use_fwhmx_acf)) {
+        acf_string <- glue("-acf {paste(self$fwhmx_set$get_acf_average(), collapse=' ')}")
+      } else {
+        acf_string <- glue("-acf {paste(private$acf_params, collapse=' ')}")
       }
+
       private$which_sim()
-      private$get_acf_average()
       private$clustsim_call <- glue(
-        "3dClustSim {private$sim_string} -iter {private$iter} -acf {private$fwhmx_acf_avg}",
-        " -pthr {private$pthr} -athr {private$athr} {private$nopad}"
+        "3dClustSim {private$sim_string} -iter {private$iter} {acf_string} -prefix {private$prefix}",
+        " -pthr {private$pthr} -athr {private$athr} -seed {private$seed}{private$nopad}{private$nodec}"
       )
-      browser()
-    },
-    populate_acf_df = function() {
-      res <- lapply(private$fwhmx_objs, function(x) x$get_acf_params())
-      inp_files <- sapply(private$fwhmx_objs, function(x) x$get_input_file())
-      lens <- sapply(res, length)
-      if (!all(lens == 4)) {
-        stop("The length of some ACF outputs from $get_acf_params is not 4. Don't know how to proceed!")
-      }
-      acf_mat <- do.call(rbind, res)
-      colnames(acf_mat) <- c("a", "b", "c", "effective_fwhm")
-
-      private$fwhmx_df <- data.frame(input = inp_files, acf_mat)
     }
   ),
   public = list(
-    #' @field fwhmx_files A character vector of files from run-level data to be passed to 3dFWHMx (these should usually be residuals)
-    fwhmx_files = NULL,
-
-    #' @field A character vector of masks for each element of \code{fwhmx_files} -- passed as -mask to 3dFWHMx
-    mask_files = NULL,
+    #' @field fwhmx_set A fwhmx_set_spec object containing 3dFWHMx information for all fwhmx_input_files
+    fwhmx_set = NULL,
 
     #' @field inset_files A character vector of files to use directly as volumes to threshold and clusterize
     inset_files = NULL,
-    initialize = function(fwhmx_files = NULL, mask_files = NULL, inset_files = NULL, dxyz = NULL, nxyz = NULL,
-                          clustsim_mask = NULL, nopad = NULL, pthr = NULL, athr = NULL, iter = NULL, scheduler = NULL) {
-      if (!is.null(fwhmx_files)) {
-        checkmate::assert_character(fwhmx_files)
-        checkmate::assert_file_exists(fwhmx_files)
-        private$method <- "fwhmx"
-        self$fwhmx_files <- fwhmx_files
+
+    initialize = function(out_dir = NULL, prefix=NULL,
+                          fwhmx_input_files = NULL, fwhmx_mask_files = NULL, inset_files = NULL, dxyz = NULL, nxyz = NULL,
+                          clustsim_mask = NULL, acf_params = NULL, nopad = NULL, pthr = NULL, athr = NULL, iter = NULL, nodec = NULL, 
+                          seed = NULL, scheduler = NULL, ncpus = NULL) {
+
+      # only one method can be used for the volume over which 3dClustSim simulates. (the first two are parts of the same method)
+      n_passed <- sapply(list(dxyz, nxyz, clustsim_mask, inset_files), function(x) !is.null(x))
+      methods_passed <- sum(n_passed[1] || n_passed[2], n_passed[3], n_passed[4])
+
+      if (methods_passed != 1L) {
+        stop("Only one method can be passed for the 3dClustSim volume settings. Use dxyz + nxyz, clustsim_mask, or inset_files")
       }
 
-      if (!is.null(mask_files)) {
-        checkmate::assert_file_exists(mask_files)
-        stopifnot(length(mask_files) == length(fwhmx_files)) # enforce length match for inputs and masks (otherwise, how do they line up?)
-        self$mask_files <- mask_files
+      if (!is.null(out_dir)) {
+        checkmate::assert_directory_exists(out_dir)
+        private$out_dir <- out_dir
+      }
+
+      if (!is.null(prefix)) {
+        checkmate::assert_string(prefix)
+        private$prefix <- prefix
+      }
+
+      if (!is.null(fwhmx_input_files)) {
+        private$use_fwhmx_acf <- TRUE
+        self$fwhmx_set <- fwhmx_set_spec$new(input_files = fwhmx_input_files, mask_files = fwhmx_mask_files)
+        if (!is.null(acf_params)) {
+          stop("Cannot pass fwhmx_input_files and acf_params since the ACF parameters are calculated by 3dFWHMx!")
+        }
       }
 
       if (!is.null(inset_files)) {
-        if (!is.null(fwhmx_files)) {
-          stop("Cannot specify both inset_files and fwhmx_files. See 3dClustSim documentation!")
+        if (!is.null(fwhmx_input_files)) {
+          stop("Cannot specify both inset_files and fwhmx_input_files. See 3dClustSim documentation!")
         }
 
         private$method <- "inset"
@@ -251,9 +392,13 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         message("No clustsim_mask argument received. All voxels in volume will be used for cluster simulations!")
       }
 
+      if (!is.null(acf_params)) {
+        checkmate::assert_numeric(acf_params, len=3)
+      }
+
       if (!is.null(nopad)) {
         checkmate::assert_logical(nopad, len = 1L)
-        if (isTRUE(nopad)) private$nopad <- "-nopad"
+        if (isTRUE(nopad)) private$nopad <- " -nopad"
       }
 
       check_nums <- function(inp, lower = 0, upper = 1e10) {
@@ -275,7 +420,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         private$pthr <- check_nums(pthr, lower = 1e-10, upper = .999)
       }
 
-      if (!is.null(pthr)) {
+      if (!is.null(athr)) {
         private$athr <- check_nums(athr, lower = 1e-10, upper = .999)
       }
 
@@ -284,12 +429,14 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         private$iter <- as.integer(iter)
       }
 
-      # if (is.null(private$fwhmx_objs) || !inherits(private$fwhmx_objs, "list") || length(private$fwhx_objs) != length(self$fwhmx_files)) {
-      if (private$method == "fwhmx") {
-        # execute 3dFWHMx for each input file
-        private$fwhmx_objs <- lapply(seq_along(self$fwhmx_files), function(ii) {
-          fwhmx_spec$new(data_file = self$fwhmx_files[ii], mask_file = self$mask_files[ii])
-        })
+      if (!is.null(nodec)) {
+        checkmate::assert_logical(nodec, len = 1L)
+        if (isTRUE(nodec)) private$nodec <- " -nodec"
+      }
+
+      if (!is.null(seed)) {
+        checkmate::assert_integerish(seed, len = 1L, lower=0)
+        private$seed <- as.integer(seed)
       }
 
       if (!is.null(scheduler)) {
@@ -297,54 +444,35 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         checkmate::assert_subset(scheduler, c("torque", "slurm", "local"))
         private$scheduler <- scheduler
       }
-    },
-    run_3dfwhmx = function(force = FALSE) {
-      if (private$method != "fwhmx") {
-        stop("This clustsim object does not appear to be setup for 3dFHWMx inputs!")
+
+      if (!is.null(ncpus)) {
+        checkmate::assert_integerish(ncpus, lower = 1, len = 1)
+        private$ncpus <- ncpus
       }
-
-      # this will return all 3dfwhmx calls
-      fwhmx_calls <- sapply(private$fwhmx_objs, function(x) x$get_call())
-
-      # create parent batch job to run all 3dFWHMx scripts
-      fwhmx_batch <- R_batch_job$new(
-        job_name = "run_3dfwhmx", n_cpus = 1,
-        cpu_time = "10:00:00", scheduler = private$scheduler,
-        input_objects = "fwhmx_calls", # export this object to the job
-        wait_for_children = TRUE, r_packages="fmri.pipeline",
-        r_code = glue(
-          "child_job_ids <- cluster_submit_shell_jobs(fwhmx_calls, memgb_per_command=8, fork_jobs=TRUE, scheduler='{private$scheduler}')"
-        )
-      )
-
-      fwhmx_batch$submit()
-    },
-    get_acf_average = function(allow_incomplete_fwhmx=FALSE) {
-      private$populate_acf_df()
-      if (any(is.na(private$fwhmx_df)) && isFALSE(allow_incomplete_fwhmx)) {
-        stop("Unable to get ACF average because parameters are missing for some datasets. Make sure you've run 3dFWHMx for all inputs provided!")
-      }
-
-      cmeans <- colMeans(private$fwhmx_df[, c("a", "b", "c", "effective_fwhm")], na.rm = TRUE)
-      private$fwhmx_acf_avg <- cmeans[c("a", "b", "c")]
-      private$fwhmx_effective_fwhm <- cmeans["effective_fwhm"]
-      return(private$fwhmx_acf_avg)
-    },
-    get_acf_df = function() {
-      private$populate_acf_df()
-      private$fwhmx_df
-    },
-    get_effective_fwhm = function() {
-      if (is.na(private$fwhmx_effective_fwhm)) {
-        private$populate_acf_df()
-      }
-      return(private$fwhmx_effective_fwhm)
     },
     run = function() {
+      private$build_call()
+      if (is.null(private$out_dir)) {
+        private$out_dir <- NULL
+      } else {
+        cur_dir <- getwd()
+        setwd(private$out_dir)
+        on.exit(setwd(cur_dir))
+      }
+
+      private$clustsim_batch <- R_batch_job$new(
+        job_name = "run_3dclustsim", n_cpus = private$ncpus,
+        cpu_time = private$walltime, scheduler = private$scheduler,
+        wait_for_children = TRUE, r_packages = "fmri.pipeline",
+        r_code = glue(
+          "child_job_ids <- run_afni_command('{private$clustsim_call}', omp_num_threads = {private$ncpus})"
+        )
+      )
+browser()
+      private$clustsim_batch$submit()
 
     },
     get_call = function() {
-      browser()
       private$build_call()
       private$clustsim_call
     }
@@ -353,6 +481,9 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
 
 setwd("/proj/mnhallqlab/studies/MMClock/MR_Proc/10637_20140304/mni_5mm_aroma/sceptic_vchosen_ventropy_dauc_pemax_vtime_preconvolve")
 res4d_files <- list.files(pattern = "res4d.nii.gz", getwd(), full.names = T, recursive = T)
-mask_files <- list.files(pattern = "mask.nii.gz", getwd(), full.names = T, recursive = T)
+fwhmx_mask_files <- list.files(pattern = "mask.nii.gz", getwd(), full.names = T, recursive = T)
 
-mytest <- clustsim_spec$new(fwhmx_files = res4d_files, mask_files = mask_files)
+mytest <- clustsim_spec$new(
+  fwhmx_input_files = res4d_files, fwhmx_mask_files = fwhmx_mask_files, scheduler = "local",
+  clustsim_mask = "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask_2.3mm.nii"
+  )

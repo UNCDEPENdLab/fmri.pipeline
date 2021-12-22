@@ -22,7 +22,10 @@
 #' \dontrun{
 #' runAFNICommand("3dcopy test_data copy_data")
 #' }
-run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo = TRUE, ...) {
+run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo = TRUE, omp_num_threads=1L, ...) {
+  checkmate::assert_string(afnidir)
+  if (!is.null(afnidir)) checkmate::assert_directory_exists(afnidir)
+  checkmate::assert_integerish(omp_num_threads, lower=1, len=1)
   #look for AFNIDIR in system environment if not passed in
   if (is.null(afnidir)) {
     env <- system("env", intern=TRUE)
@@ -33,7 +36,11 @@ run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo 
       afnidir <- paste0(normalizePath("~/"), "/afni")
     }
   }
-  
+
+  cur_threads <- Sys.getenv("OMP_NUM_THREADS")
+  if (omp_num_threads > 1L) {
+    Sys.setenv(OMP_NUM_THREADS = omp_num_threads) # setup OMP threads
+  }
   Sys.setenv(AFNIDIR=afnidir) #export to R environment
   afnisetup <- paste0("AFNIDIR=", afnidir, "; PATH=${AFNIDIR}:${PATH}; DYLD_FALLBACK_LIBRARY_PATH=${AFNIDIR}; ${AFNIDIR}/")
   afnicmd  <- paste0(afnisetup, args)
@@ -41,6 +48,9 @@ run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo 
   if (!is.null(stderr)) { afnicmd <- paste(afnicmd, "2>", stderr) }
   if (echo) { cat("AFNI command: ", afnicmd, "\n") }
   retcode <- system(afnicmd, ...)
+  if (omp_num_threads > 1L && cur_threads != "") {
+    Sys.setenv(OMP_NUM_THREADS = cur_threads) # reset threads
+  }
   return(retcode)
 }
 
@@ -1168,6 +1178,18 @@ dhms <- function(str) {
     period <- lubridate::hms(str)
   }
   return(period)
+}
+
+validate_dhms <- function(str) {
+  if (grepl("^(\\d+-)?\\d+:\\d+(:\\d+)?$", str, perl=T)) {
+    return(str) # hms, dhms, or ms format
+  } else if (grepl("^\\d+-\\d+$", str, perl=T)) {
+    return(paste0(str, ":00:00")) # days-hours
+  } else if (grepl("^\\d+$", str, perl=T)) {
+    return(paste0(str, ":00")) # minutes only -> minutes:seconds
+  } else {
+    stop("Invalid duration string: ", str)
+  }
 }
 
 #' convert a number of hours to a days, hours, minutes, seconds format
