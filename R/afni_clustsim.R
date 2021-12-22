@@ -277,13 +277,16 @@ fwhmx_set_spec <- R6::R6Class("fwhmx_set_spec",
 
 clustsim_spec <- R6::R6Class("clustsim_spec",
   private = list(
-    out_dir = NULL,
+    out_dir = getwd(),
+    clustsim_df = tibble(),
+    out_files = NULL,
     prefix = "clustsim_",
     use_fwhmx_acf = FALSE,
     acf_params = setNames(rep(NA_real_, 3), c("a", "b", "c")),
     clustsim_batch = NULL,
     clustsim_call = NULL,
     clustsim_mask = NULL,
+    clustsim_complete = FALSE,
     method = "fwhmx", # or 'inset' for 3dttest++ approach or 'xyz' for voxel + matrix approach
     nopad = "",
     pthr = ".02 .01 .005 .002 .001 .0005 .0002 .0001",
@@ -319,6 +322,41 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         "3dClustSim {private$sim_string} -iter {private$iter} {acf_string} -prefix {private$prefix}",
         " -pthr {private$pthr} -athr {private$athr} -seed {private$seed}{private$nopad}{private$nodec}"
       )
+    },
+    build_df = function() {
+      if (isTRUE(private$clustsim_complete) && nrow(private$clustsim_df) > 0L) {
+        return(invisible(NULL)) # data frame has already been compiled
+      }
+
+      clustsim_files <- list.files(path = private$out_dir, pattern = glue("{private$prefix}.*sided\\.1D"), full.names = TRUE)
+      if (length(clustsim_files) == 0L) {
+        warning("Cannot find any clustsim output files in: ", private$out_dir)
+        return(invisible(NULL))
+      } else if (length(clustsim_files) == 9L) {
+        private$clustsim_complete <- TRUE
+      } else {
+        warning("Fewer than 9 clustsim files output files detected: ", paste(clustsim_files, collapse=", "))
+      }
+
+      read_clustsim_1d <- function(file) {
+        checkmate::assert_file_exists(file)
+        nn <- as.integer(sub("^.*NN([1-3])_.*", "\\1", file, perl = TRUE))
+        sided <- sub("^.*NN[1-3]_(1|2|bi)sided.*", "\\1", file, perl = TRUE)
+        data <- read.table(file, header = FALSE)
+        header <- grep(pattern = "^\\s*#.*", readLines(file), value = TRUE)
+        p_line <- gsub("[#|]", "", grep(pattern = "^\\s*#\\s*pthr.*", header, value = TRUE)) # strip # and | from header line
+        c_names <- strsplit(trimws(p_line), "\\s+")[[1]]
+        stopifnot(length(c_names) == ncol(data))
+        names(data) <- c_names
+        data_long <- data %>%
+          tidyr::pivot_longer(cols = !pthr, names_to = "athr", values_to = "nvoxels") %>%
+          dplyr::mutate(athr = as.numeric(athr), nn = !!nn, sided = !!sided) %>%
+          dplyr::select(nn, sided, pthr, athr, nvoxels)
+        return(data_long)
+      }
+
+      # read each clustsim output and compile into single indexed data.frame
+      private$clustsim_df <- dplyr::bind_rows(lapply(clustsim_files, read_clustsim_1d))
     }
   ),
   public = list(
@@ -450,39 +488,37 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         private$ncpus <- ncpus
       }
     },
-    run = function() {
-      private$build_call()
-      if (is.null(private$out_dir)) {
-        private$out_dir <- NULL
-      } else {
-        cur_dir <- getwd()
-        setwd(private$out_dir)
-        on.exit(setwd(cur_dir))
+    run = function(force=FALSE) {
+      if (isTRUE(private$clustsim_complete) && isFALSE(force)) {
+        message("3dClustSim already finished for these inputs. Use $run(force=TRUE) to re-run or $get_clustsim_df() to retrieve results.")
+        return(invisible(NULL))
       }
+      private$build_call()
+      cur_dir <- getwd()
+      setwd(private$out_dir)
+      on.exit(setwd(cur_dir))
 
       private$clustsim_batch <- R_batch_job$new(
         job_name = "run_3dclustsim", n_cpus = private$ncpus,
         cpu_time = private$walltime, scheduler = private$scheduler,
-        wait_for_children = TRUE, r_packages = "fmri.pipeline",
+        r_packages = "fmri.pipeline",
         r_code = glue(
-          "child_job_ids <- run_afni_command('{private$clustsim_call}', omp_num_threads = {private$ncpus})"
+          "run_afni_command('{private$clustsim_call}', omp_num_threads = {private$ncpus})"
         )
       )
       private$clustsim_batch$submit()
 
     },
+    get_clustsim_df = function() {
+      private$build_df()
+      private$clustsim_df
+    },
     get_call = function() {
       private$build_call()
       private$clustsim_call
+    },
+    get_out_dir = function() {
+      private$out_dir
     }
   )
 )
-
-# setwd("/proj/mnhallqlab/studies/MMClock/MR_Proc/10637_20140304/mni_5mm_aroma/sceptic_vchosen_ventropy_dauc_pemax_vtime_preconvolve")
-# res4d_files <- list.files(pattern = "res4d.nii.gz", getwd(), full.names = T, recursive = T)
-# fwhmx_mask_files <- list.files(pattern = "mask.nii.gz", getwd(), full.names = T, recursive = T)
-
-# mytest <- clustsim_spec$new(
-#   fwhmx_input_files = res4d_files, fwhmx_mask_files = fwhmx_mask_files, scheduler = "local",
-#   clustsim_mask = "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask_2.3mm.nii"
-#   )
