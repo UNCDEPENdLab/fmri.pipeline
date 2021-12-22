@@ -245,7 +245,6 @@ get_feat_dir_files <- function(feat_dir) {
   feat_dir <- normalizePath(feat_dir) # convert to absolute path
   stats_dir <- file.path(feat_dir, "stats")
   if (!checkmate::test_directory_exists(stats_dir)) return(NULL)
-  
 
   # inside the stats directory we will have pes, copes, varcopes, and zstats
   z_files <- list.files(path = stats_dir, pattern = "zstat[0-9]+\\.nii.*", full.names = TRUE)
@@ -467,6 +466,9 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
     run_afni_command(tcatcall)
 
     z_briks <- which(ss$image_type %in% c("z", "zthresh")) - 1 # subtract 1 because AFNI uses 0-based indexing
+    
+    # tack on statistic type as suffix to sub-brik name (avoid ambiguity)
+    ss$afni_briks <- paste(ss$afni_briks, ss$image_type, sep="_")
 
     # label images
     refitcall <- paste0(
