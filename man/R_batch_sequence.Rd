@@ -14,6 +14,7 @@ Description of R_batch_sequence R6 class
 \item \href{#method-new}{\code{R_batch_sequence$new()}}
 \item \href{#method-add}{\code{R_batch_sequence$add()}}
 \item \href{#method-submit}{\code{R_batch_sequence$submit()}}
+\item \href{#method-generate}{\code{R_batch_sequence$generate()}}
 \item \href{#method-clone}{\code{R_batch_sequence$clone()}}
 }
 }
@@ -60,6 +61,15 @@ add one or more R_batch_job objects to the sequence
 submit the job sequence to the scheduler or local compute
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$submit()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-generate"></a>}}
+\if{latex}{\out{\hypertarget{method-generate}{}}}
+\subsection{Method \code{generate()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$generate()}\if{html}{\out{</div>}}
 }
 
 }

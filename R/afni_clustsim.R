@@ -150,7 +150,10 @@ fwhmx_spec <- R6::R6Class("fwhmx_spec",
   )
 )
 
-# class for running 3dFWHMx on a group of input files using a scheduler/cluster
+#' R6 class for running 3dFWHMx on a group of input files using a scheduler/cluster
+#'
+#' @importFrom R6 R6Class
+#' @export
 fwhmx_set_spec <- R6::R6Class("fwhmx_set_spec",
   private = list(
     fwhmx_batch = NULL, # batch object
@@ -305,11 +308,13 @@ fwhmx_set_spec <- R6::R6Class("fwhmx_set_spec",
 )
 
 
-
+#' R6 class for 3dClustSim automation
+#' @keywords internal
+#' @importFrom tibble tibble
 clustsim_spec <- R6::R6Class("clustsim_spec",
   private = list(
     out_dir = getwd(),
-    clustsim_df = tibble(),
+    clustsim_df = tibble::tibble(),
     out_files = NULL,
     prefix = "clustsim_",
     use_fwhmx_acf = FALSE,

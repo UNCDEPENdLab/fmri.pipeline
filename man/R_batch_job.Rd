@@ -34,9 +34,12 @@ status queries on a job scheduler}
 
 \item{\code{mem_per_cpu}}{The amount of memory (RAM) requested per cpu (total = mem_per_cpu * n_cpus)}
 
-\item{\code{input_environment}}{The name of the environment to be loaded at the beginning of the R batch prior to executing}
+\item{\code{input_objects}}{An environment containing all objects to be written to an RData object and passed
+to the batch job at execution}
 
-\item{\code{output_environment}}{The name of the environment to be saved at the end of the R batch execution, which can then
+\item{\code{input_rdata_file}}{The name of the environment to be loaded at the beginning of the R batch prior to executing}
+
+\item{\code{output_rdata_file}}{The name of the environment to be saved at the end of the R batch execution, which can then
 be loaded by subsequent jobs.}
 
 \item{\code{sqlite_db}}{Not used yet, but will be used for job tracking in future}
@@ -100,9 +103,9 @@ Create a new R_batch_job object for execution on an HPC cluster
   r_packages = NULL,
   scheduler = NULL,
   wait_for_children = NULL,
-  input_environment = NULL,
+  input_rdata_file = NULL,
   input_objects = NULL,
-  output_environment = NULL,
+  output_rdata_file = NULL,
   scheduler_options = NULL,
   repolling_interval = NULL
 )}\if{html}{\out{</div>}}
@@ -143,12 +146,12 @@ job begins.}
 
 \item{\code{wait_for_children}}{If TRUE, do not end this job until all child jobs have completed}
 
-\item{\code{input_environment}}{The name of the environment to be loaded at the beginning of the R batch prior to executing code}
+\item{\code{input_rdata_file}}{The name of the environment to be loaded at the beginning of the R batch prior to executing code}
 
-\item{\code{input_objects}}{A character vector of object names in the current execution environment to be cached and used as input to the R batch.
-This is mutually exclusive with input_environment at present.}
+\item{\code{input_objects}}{A list object in the current execution environment to be cached and used as input to the R batch.
+This is mutually exclusive with input_rdata_file at present.}
 
-\item{\code{output_environment}}{The name of the environment to be saved at the end of the R batch execution}
+\item{\code{output_rdata_file}}{The name of the environment to be saved at the end of the R batch execution}
 
 \item{\code{scheduler_options}}{A character vector of scheduler options to be added to the header of the batch script}
 
@@ -163,7 +166,7 @@ This is mutually exclusive with input_environment at present.}
 \subsection{Method \code{generate()}}{
 Helper function that generates the batch and compute files for a job
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_job$generate()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{R_batch_job$generate(force = FALSE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Details}{
