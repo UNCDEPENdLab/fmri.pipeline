@@ -27,6 +27,7 @@ R6 class for 3dClustSim automation
 \item \href{#method-get_call}{\code{clustsim_spec$get_call()}}
 \item \href{#method-get_out_dir}{\code{clustsim_spec$get_out_dir()}}
 \item \href{#method-get_ncpus}{\code{clustsim_spec$get_ncpus()}}
+\item \href{#method-get_use_fwhmx_acf}{\code{clustsim_spec$get_use_fwhmx_acf()}}
 \item \href{#method-clone}{\code{clustsim_spec$clone()}}
 }
 }
@@ -99,6 +100,15 @@ R6 class for 3dClustSim automation
 \subsection{Method \code{get_ncpus()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{clustsim_spec$get_ncpus()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-get_use_fwhmx_acf"></a>}}
+\if{latex}{\out{\hypertarget{method-get_use_fwhmx_acf}{}}}
+\subsection{Method \code{get_use_fwhmx_acf()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{clustsim_spec$get_use_fwhmx_acf()}\if{html}{\out{</div>}}
 }
 
 }

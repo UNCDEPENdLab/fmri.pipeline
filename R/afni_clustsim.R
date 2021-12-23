@@ -1,5 +1,9 @@
-# N.B. This class doesn't even expose the Gaussian ACF options given false positive problems
-fwhmx_spec <- R6::R6Class("fwhmx_spec",
+#' R6 class for running 3dFWHMx on a single input file based on user specification
+#'
+#' @importFrom R6 R6Class
+#' @details N.B. This class doesn't even expose the Gaussian ACF options given false positive problems
+#' @export
+fwhmx <- R6::R6Class("fwhmx",
   private = list(
     input_file = NULL,
     mask_file = NULL,
@@ -255,7 +259,7 @@ fwhmx_set_spec <- R6::R6Class("fwhmx_set_spec",
 
       # create 3dFWHMx object for each input file
       private$fwhmx_objs <- lapply(seq_along(private$input_files), function(ii) {
-        fwhmx_spec$new(input_file = private$input_files[ii], mask_file = private$mask_files[ii], ...)
+        fwhmx$new(input_file = private$input_files[ii], mask_file = private$mask_files[ii], ...)
       })
 
       private$all_fwhmx_complete <- all(sapply(private$fwhmx_objs, function(x) x$is_fwhmx_complete()))
@@ -542,7 +546,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         r_packages = "fmri.pipeline",
         r_code = c(
           "# refresh completeness of 3dFWHMx runs in case these were run by a preceding batch job",
-          "if (isTRUE(csim_obj$use_fwhmx_acf)) csim_obj$fwhmx_set$refresh()",
+          "if (isTRUE(csim_obj$get_use_fwhmx_acf())) csim_obj$fwhmx_set$refresh()",
           "setwd(csim_obj$get_out_dir())",
           "run_afni_command(csim_obj$get_call(), omp_num_threads = csim_obj$get_ncpus())"
         )
@@ -575,6 +579,10 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
     },
     get_ncpus = function() {
       private$ncpus
+    },
+    get_use_fwhmx_acf = function() {
+      private$use_fwhmx_acf
     }
+
   )
 )
