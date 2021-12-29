@@ -140,6 +140,9 @@ fwhmx <- R6::R6Class("fwhmx",
     get_input_file = function() {
       private$input_file
     },
+    get_mask_file = function() {
+      private$mask_file
+    },
     get_outputs = function() {
       c(
         out_dir = private$out_dir,
@@ -174,6 +177,7 @@ fwhmx_set_spec <- R6::R6Class("fwhmx_set_spec",
     populate_acf_df = function() {
       res <- lapply(private$fwhmx_objs, function(x) x$get_acf_params())
       inp_files <- sapply(private$fwhmx_objs, function(x) x$get_input_file())
+      mask_files <- sapply(private$fwhmx_objs, function(x) x$get_mask_file())
       lens <- sapply(res, length)
       if (!all(lens == 4)) {
         stop("The length of some ACF outputs from $get_acf_params is not 4. Don't know how to proceed!")
@@ -181,8 +185,12 @@ fwhmx_set_spec <- R6::R6Class("fwhmx_set_spec",
       acf_mat <- do.call(rbind, res)
       colnames(acf_mat) <- c("a", "b", "c", "effective_fwhm")
 
-      private$fwhmx_df <- data.frame(input = inp_files, acf_mat)
-
+      if (is.null(mask_files)) {
+        private$fwhmx_df <- data.frame(input = private$input_files, acf_mat)
+      } else {
+        private$fwhmx_df <- data.frame(input = private$input_files, mask = private$mask_files, acf_mat)
+      }
+      
       # always return self for side-effect methods
       return(invisible(self))
     },
@@ -311,6 +319,10 @@ fwhmx_set_spec <- R6::R6Class("fwhmx_set_spec",
   )
 )
 
+# 3dttest++ -toz -randomsign 1000 -setA res4d.nii.gz -mask ../mask.nii.gz -prefix manual
+# -DAFNI_AUTOMATIC_FDR=NO -DAFNI_DONT_LOGFILE=YES
+
+# gfeat_
 
 #' R6 class for 3dClustSim automation
 #' @keywords internal
@@ -374,7 +386,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
 
       clustsim_files <- list.files(path = private$out_dir, pattern = glue::glue("{private$prefix}.*sided\\.1D"), full.names = TRUE)
       if (length(clustsim_files) == 0L) {
-        warning("Cannot find any clustsim output files in: ", private$out_dir)
+        # most likely, the $run method has not completed yet.
         return(invisible(NULL))
       } else if (length(clustsim_files) == 9L) {
         private$clustsim_complete <- TRUE
@@ -531,6 +543,9 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         checkmate::assert_integerish(ncpus, lower = 1, len = 1)
         private$ncpus <- ncpus
       }
+
+      # populate 3dClustSim object at initialization (if output files are cached already)
+      private$build_df()
     },
     run = function(force=FALSE) {
       if (isTRUE(private$clustsim_complete) && isFALSE(force)) {
@@ -559,11 +574,10 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         batch_obj$depends_on_parents <- "run_3dfwhmx"
         clust_seq <- R_batch_sequence$new(fwhmx_batch, batch_obj)
         clust_seq$submit()
-        # clust_seq$generate()
       } else {
         private$clustsim_batch$submit()
       }
-      
+
       return(invisible(self))
     },
     get_clustsim_df = function() {

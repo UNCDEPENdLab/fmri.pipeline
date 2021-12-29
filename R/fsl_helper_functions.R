@@ -267,9 +267,64 @@ get_feat_dir_files <- function(feat_dir) {
   pe_nums <- as.numeric(sub(".*pe(\\d+)\\.nii.*$", "\\1", pe_files, perl=TRUE))
   pe_files <- pe_files[order(pe_nums)]
 
-  aux_files <- sapply(c("sigmasquareds", "threshac1", "res4d"), function(x) {
-    ff <- list.files(path = stats_dir, pattern = glue("^{x}\\.nii.*"), full.names = TRUE)
-    if (length(ff) > 0L) return(ff) else return(character(0))
+  aux_files <- sapply(
+    c(
+      "sigmasquareds", "threshac1", "res4d",
+      "mean_outlier_random_effects_var1", "mean_random_effects_var1", "prob_outlier1", "global_prob_outlier1"
+    ),
+    function(x) {
+      ff <- list.files(path = stats_dir, pattern = glue("^{x}\\.nii.*"), full.names = TRUE)
+      if (length(ff) > 0L) {
+        return(ff)
+      } else {
+        return(character(0))
+      }
+    }
+  )
+
+  txt_files <- sapply(c("dof", "smoothness", "lmax_zstats\\d+_std\\.txt", "cluster_zstat\\d+_std\\.txt"), function(x) {
+    ff <- list.files(path = feat_dir, pattern = glue("^{x}"), full.names = TRUE, recursive=TRUE)
+    browser()
+    if (length(ff) > 0L) {
+      if (x == "dof") {
+        return(as.numeric(readLines(x)))
+      } else if (x == "smoothness") {
+        ss <- readLines(x)
+        dlh <- NA_real_
+        volume <- NA_integer_
+        resels <- NA_real_
+        fwhm_voxel <- rep(NA_real_, 3)
+        fwhm_mm <- rep(NA_real_, 3)
+        dlh_line <- grep("^\\s*DLH\\s+", ss, value = TRUE)
+        if (length(dlh_line) == 1L && nchar(dlh_line[1L]) > 0L) {
+          dlh <- as.numeric(sub("^\\s*DLH\\s+(-?[0-9.]+)\\s*$", "\\1", dlh_line[1L], perl = TRUE))
+        }
+        volume_line <- grep("^\\s*VOLUME\\s+", ss, value = TRUE)
+        if (length(volume_line) == 1L && nchar(volume_line[1L]) > 0L) {
+          volume <- as.integer(sub("^\\s*VOLUME\\s+([0-9]+)\\s*$", "\\1", volume_line[1L], perl = TRUE))
+        }
+        resels_line <- grep("^\\s*RESELS\\s+", ss, value = TRUE)
+        if (length(volume_line) == 1L && nchar(volume_line[1L]) > 0L) {
+          resels <- as.numeric(sub("^\\s*RESELS\\s+([0-9.]+)\\s*$", "\\1", resels_line[1L], perl = TRUE))
+        }
+        fwhm_voxel_line <- grep("^\\s*FWHMvoxel\\s+", ss, value = TRUE)
+        if (length(fwhm_voxel_line) == 1L && nchar(fwhm_voxel_line[1L]) > 0L) {
+          fwhm_voxel <- as.numeric(strapply(fwhm_voxel_line, "[0-9.]+", simplify = c))
+          stopifnot(length(fwhm_voxel) == 3L)
+        }
+        fwhm_mm_line <- grep("^\\s*FWHMmm\\s+", ss, value = TRUE)
+        if (length(fwhm_mm_line) == 1L && nchar(fwhm_mm_line[1L]) > 0L) {
+          fwhm_mm <- as.numeric(strapply(fwhm_mm_line, "[0-9.]+", simplify = c))
+          stopifnot(length(fwhm_mm) == 3L)
+        }
+
+        return(named_list(dlh, volume, resels, fwhm_voxel, fwhm_mm))
+      } else {
+        return(readLines(x))
+      }
+    } else {
+      return(character(0))
+    }
   })
 
   design_files <- sapply(
@@ -296,7 +351,7 @@ get_feat_dir_files <- function(feat_dir) {
 
   ret_list <- named_list(
     pe_files, cope_files, varcope_files, z_files, zthresh_files,
-    rendered_zthresh_files, t_files, contrast_names, aux_files, design_files
+    rendered_zthresh_files, t_files, contrast_names, aux_files, design_files, txt_files
   )
 
   # create a combined data.frame of cope-level statistics
