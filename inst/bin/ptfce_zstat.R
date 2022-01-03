@@ -34,7 +34,7 @@ if (length(argpos) > 0L) {
 }
 
 if (length(args) == 0L) {
-  message("ptfce_zstat expects a single z-statistc image from a GLM analysis using --zstat <z_img>.\n")
+  message("ptfce_zstat expects a single z-statistc image from a GLM analysis using --zstat <z_img> and a corresponding --mask <mask_img>.\n")
   print_help()
   quit(save = "no", 1, FALSE)
 }
@@ -44,7 +44,7 @@ if (!require("pacman")) {
   library(pacman)
 }
 
-pacman::p_load(oro.nifti, checkmate, pTFCE)
+pacman::p_load(oro.nifti, checkmate, pTFCE, dplyr)
 
 z_img <- NA_character_
 mask_img <- NA_character_
@@ -147,6 +147,7 @@ if (!is.na(residuals_img)) {
   call_list <- list(V = V, Rd = Rd, resels = resels)
 } else {
   cat("Estimating smoothness internally from z-stat image\n")
+  call_list <- list()
 }
 
 # run ptfce
