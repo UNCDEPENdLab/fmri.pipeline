@@ -16,6 +16,7 @@ print_help <- function() {
     "  --twosided: If specified, then both the positive and negative z-statistics are corrected (DEFAULT).",
     "  --onesided: If specified, only the positive z-statistics are FWE-corrected and negative voxels are dropped.",
     "  --fwep <.05>: The p-values for which the map is corrected for multiple comparisons. Multiple values may be specified.",
+    "  --write_thresh_imgs: If specified, then each p-value supplied in --fwep will be applied to the pTFCE-enhanced image, then saved",
     "\n\n",
     sep = "\n"
   ))
@@ -56,6 +57,7 @@ write_thresh_imgs <- FALSE # whether to write hard-thresholded images at each FW
 
 argpos <- 1
 while (argpos <= length(args)) {
+  #print(args[argpos])
   if (args[argpos] == "--zstat") {
     z_img <- args[argpos + 1] # name of z-stat image
     argpos <- argpos + 2
@@ -80,20 +82,28 @@ while (argpos <= length(args)) {
     } else if (checkmate::test_file_exists(dof_arg)) {
       dof <- as.integer(readLines(dof_arg))
     }
+    argpos <- argpos + 2
   } else if (args[argpos] == "--twosided") {
     two_sided <- TRUE
+    argpos <- argpos + 1
   } else if (args[argpos] == "--onesided") {
     two_sided <- FALSE
+    argpos <- argpos + 1
   } else if (args[argpos] == "--fwep") {
-    next_arg <- grep("^--", args[(argpos + 1):length(args)])[1L]
-    if (next_arg == argpos + 1) {
-      stop("No valid --fwep values provided")
+    named_args <- grep("^--", args)
+    if (any(named_args > argpos)) {
+      next_arg <- named_args[named_args > argpos][1L] # first named argument after --fwep
+      if (next_arg == argpos + 1) {
+        stop("No valid --fwep values provided")
+      }
+      last_el <- next_arg - 1
     } else {
-      fwep_inp <- as.numeric(args[(argpos + 1):(next_arg - 1)])
-      checkmate::assert_numeric(fwep_inp, lower = 1e-10, upper = .9999, any.missing = FALSE)
-      argpos <- argpos + 1 + length(fwep_inp)
-      fwe_p <- fwep_inp
+      last_el <- length(args)
     }
+    fwep_inp <- as.numeric(args[(argpos + 1):last_el])
+    checkmate::assert_numeric(fwep_inp, lower = 1e-10, upper = .9999, any.missing = FALSE)
+    argpos <- argpos + 1 + length(fwep_inp)
+    fwe_p <- fwep_inp
   } else if (args[argpos] == "--write_thresh_imgs") {
     write_thresh_imgs <- TRUE
     argpos <- argpos + 1
@@ -103,7 +113,7 @@ while (argpos <= length(args)) {
 }
 
 ptfce_worker <- function(args_list) {
-  do.call(ptfce, args_list)
+  do.call(pTFCE::ptfce, args_list)
 }
 
 # for testing
@@ -128,7 +138,7 @@ if (!is.na(residuals_img)) {
   cat("Using residuals image to calculate smoothness\n")
   call_list <- list(residual=residuals_img, dof=dof)
 } else if (!is.na(fsl_smoothest)) {
-  cat("Using FSL smoothest file\n")
+  cat("Using FSL smoothest file:", fsl_smoothest, "\n")
   smooth_data <- read.table(fsl_smoothest, nrow = 3) # DLH, VOLUME, RESELS
   V <- smooth_data[2, 2] # VOLUME
   Rd <- smooth_data[1, 2] * smooth_data[2, 2] # DLH * VOLUME
@@ -140,7 +150,7 @@ if (!is.na(residuals_img)) {
 }
 
 # run ptfce
-cat("pTFCE running:\n")
+cat("pTFCE running: ", as.character(Sys.time()), "\n")
 
 Z <- oro.nifti::readNIfTI(z_img, reorient = FALSE)
 mask <- oro.nifti::readNIfTI(mask_img, reorient = FALSE)
@@ -148,9 +158,9 @@ mask <- oro.nifti::readNIfTI(mask_img, reorient = FALSE)
 call_list[["mask"]] <- mask
 
 # always use the positive z-stats for FWE (both one- and two-sided)
-#Z_pos <- Z # for now, we use the whole image (based on Smith and Nichols 2009)
-#Z_pos@.Data[Z_pos@.Data < 0] <- 0 # zero negative values
-call_list[["img"]] <- Z #Z_pos
+#z_pos <- Z # for now, we use the whole image (based on Smith and Nichols 2009)
+#z_pos@.Data[z_pos@.Data < 0] <- 0 # zero negative values
+call_list[["img"]] <- Z #z_pos
 ptfce_pos <- ptfce_worker(call_list)
 
 # The pTFCE correction produces massive negative values for the other tail of the distribution, including outside of
@@ -160,20 +170,17 @@ ptfce_pos <- ptfce_worker(call_list)
 ptfce_pos$Z@.Data[ptfce_pos$Z@.Data < 0] <- 0
 
 if (isTRUE(two_sided)) {
-  Z_neg <- -1*Z # the literal interpretation of Smith and Nichols is to use the whole image
-  #Z_neg@.Data[Z_neg@.Data > 0] <- 0 # zero positive values
-  #Z_neg@.Data[Z_neg@.Data < 0] <- Z_neg@.Data[Z_neg@.Data < 0] * -1 # invert negative stats
-  call_list[["img"]] <- Z_neg
+  z_neg <- -1*Z # the literal interpretation of Smith and Nichols is to use the whole image
+  #z_neg@.Data[z_neg@.Data > 0] <- 0 # zero positive values
+  #z_neg@.Data[z_neg@.Data < 0] <- z_neg@.Data[z_neg@.Data < 0] * -1 # invert negative stats
+  call_list[["img"]] <- z_neg
   ptfce_neg <- ptfce_worker(call_list)
   ptfce_neg$Z@.Data[ptfce_neg$Z@.Data < 0] <- 0
-  ptfce_neg$Z <- -1 * ptfce_neg$Z
-}
+  ptfce_neg$Z <- -1 * ptfce_neg$Z # make negative z-stats negative again
 
-# create combined pTFCE-corrected image
-if (!is.null(neg_obj)) { # two-sided correction
+  # create combined pTFCE-corrected image with positive and negative results
+  # ptfce_obj@.Data[ptfce_neg$Z > 0] <- -1 * ptfce_neg$Z[ptfce_neg$Z > 0] # fill in negative z-stats
   ptfce_obj <- ptfce_pos$Z + ptfce_neg$Z
-
-  #ptfce_obj@.Data[ptfce_neg$Z > 0] <- -1 * ptfce_neg$Z[ptfce_neg$Z > 0] # fill in negative z-stats
 } else {
   ptfce_obj <- pos_obj # only positive values
 }
@@ -186,20 +193,21 @@ for (pv in seq_along(fwe_p)) {
   if (isTRUE(write_thresh_imgs)) {
     zi <- ptfce_obj
     zi[abs(zi) < z_thresh] <- 0 # zero out below-threshold values
-    writeNIfTI(zi, file.path(z_dir, paste0(base, "_ptfce_fwep_", round(this_p, 3), ext)))
+    writeNIfTI(zi, file.path(z_dir, paste0(base, "_ptfce_fwep_", round(fwe_p[pv], 3))))
   }
   p_list[[pv]] <- data.frame(
-    z_ptfce = z_thresh, p_value = fwe_p[pv], two_sided = two_sided,
-    number_of_resels = ptfce_pos$number_of_resels
+    z_ptfce = round(z_thresh, 4), p_value = fwe_p[pv], two_sided = two_sided,
+    number_of_resels = round(ptfce_pos$number_of_resels, 4)
   )
 }
 
 p_df <- dplyr::bind_rows(p_list)
 
-# write overall image here.
-writeNIfTI(ptfce_obj, file.path(z_dir, paste0(base, "_ptfce", ext)))
-write.csv(p_df, file.path(z_dir, paste0(base, "_ptfce_zthresh.csv")))
+# write overall pTFCE image here
+writeNIfTI(ptfce_obj, file.path(z_dir, paste0(base, "_ptfce")))
+write.csv(p_df, file.path(z_dir, paste0(base, "_ptfce_zthresh.csv")), row.names=FALSE)
 
-cat("pTFCE completed\n")
+cat("pTFCE completed: ", as.character(Sys.time()), "\n")
 
+# if we want to build out the fsleyes call to look at the image.
 #echo "fsleyes  $FSLDIR/data/standard/MNI152_T1_1mm_brain.nii.gz -cm greyscale pTFCE_Z_$BASE  -dr `cat thres_z_$BASE.txt` `fslstats pTFCE_Z_$BASE -p 100` -cm red-yellow &"
