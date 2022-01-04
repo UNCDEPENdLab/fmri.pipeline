@@ -189,14 +189,38 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 #' 
 #' @export 
 cluster_submit_shell_jobs <- function(job_list, commands_per_cpu = 1L, cpus_per_job = 8L, memgb_per_command = 8, time_per_job="1:00:00",
-  fork_jobs = TRUE, pre=NULL, post=NULL, sched_args = NULL, env_variables = NULL, wait_jobs = NULL, scheduler="slurm",
+  time_per_command = NULL, fork_jobs = TRUE, pre=NULL, post=NULL, sched_args = NULL, env_variables = NULL, wait_jobs = NULL, scheduler="slurm",
   job_out_dir=getwd(), job_script_prefix="job", log_file="cluster_submit_jobs.csv", debug = FALSE)
 {
   checkmate::assert_multi_class(job_list, c("list", "character"))
   checkmate::assert_integerish(commands_per_cpu, len = 1L, lower = 1, upper = 1e4)
   checkmate::assert_integerish(cpus_per_job, len=1L, lower=1, upper=1e3)
   checkmate::assert_number(memgb_per_command, lower = 0.01, upper = 1e3) # max 1TB
-  checkmate::assert_logical(fork_jobs, len=1L)
+  checkmate::assert_logical(fork_jobs, len = 1L)
+  if (!is.null(time_per_command)) {
+    if (!is.null(time_per_job)) {
+      message("Using time_per_command specification, even though time_per_job was also provided")
+    }
+    
+    # convert to lubridate object for math
+    time_per_command <- dhms(time_per_command)
+
+    if (isTRUE(fork_jobs)) {
+      # if we fork, then the total job duration is just the number of commands per cpu (default 1) multiplied
+      # by the per-command time. Note that at present, the forking does not respect a job limit equal to cpus_per_job.
+      # So, if you say commands_per_cpu=3 and cpus_per_job=8, then 24 jobs will launch at once. Need a jobs | wc -l waiting approach
+      time_per_job <- time_per_command * commands_per_cpu
+    } else {
+      # if we do not fork, the total time increases by a factor of cpus_per_job
+      # this is useful if each command is a multithreaded job (e.g., MCMC sampling multiple chains).
+      time_per_job <- time_per_command * commands_per_cpus * cpus_per_job
+    }
+
+    # convert back to time string from period
+    time_per_job <- as_dhms(time_per_job)
+  } else {
+    time_per_job <- validate_dhms(time_per_job)
+  }
 
   n_jobs <- ceiling(length(job_list) / (cpus_per_job * commands_per_cpu))
 
