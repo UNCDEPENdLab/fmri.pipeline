@@ -1170,6 +1170,7 @@ lookup_nvoxels <- function(nifti) {
 #' @keywords internal
 dhms <- function(str) {
   checkmate::assert_string(str)
+  str <- validate_dhms(str) # force checks
   if (grepl("^\\d+-", str, perl = TRUE)) {
     split_hyphen <- strsplit(str, "-", fixed = TRUE)[[1]]
     days <- as.numeric(split_hyphen[1])
@@ -1181,19 +1182,50 @@ dhms <- function(str) {
   return(period)
 }
 
+#' helper function to convert a period object back into a d-h:m:s string
+#'
+#' @keywords internal
+#' @importFrom checkmate assert_class
+#' @importFrom lubridate seconds_to_period period_to_seconds
+as_dhms <- function(per) {
+  checkmate::assert_class(per, "Period")
+
+  # if any element of the period exceeds intelligent tolerances (e.g., minutes > 60),
+  # re-create the period so that it enforces reasonable tolerances.
+  per <- seconds_to_period(period_to_seconds(per))
+    
+  dhms_str <- paste0(
+    sprintf("%02d", hour(per)), ":",
+    sprintf("%02d", minute(per)), ":",
+    sprintf("%02d", second(per))
+  )
+
+  if (per@day > 0) {
+    dhms_str <- paste0(per@day, "-", dhms_str)
+  }
+  return(dhms_str)
+}
+
 #' helper function to validate format of walltime inputs for HPC submission
 #'
 #' @param str string containing a duration that may include a days specification
 #' @importFrom checkmate assert_string
+#' @details this always converts to an hms format, and if days are present, it
+#'   converts to dhms. Supported date formats match slurm sbatch:
+#'   https://slurm.schedmd.com/sbatch.html
 #' @keywords internal
 validate_dhms <- function(str) {
   checkmate::assert_string(str)
-  if (grepl("^(\\d+-)?\\d+:\\d+(:\\d+)?$", str, perl=T)) {
-    return(str) # hms, dhms, or ms format
-  } else if (grepl("^\\d+-\\d+$", str, perl=T)) {
-    return(paste0(str, ":00:00")) # days-hours
+  if (grepl("^\\d+:\\d+?$", str, perl=T)) { # m:s input
+    return(paste0("00:", str)) # add 0 hours prefix
+  } else if (grepl("^(\\d+-)?\\d+:\\d+:\\d+?$", str, perl=T)) { # h:m:s or d-h:m:s input
+    return(str) 
+  } else if (grepl("^(\\d+-)?\\d+:\\d+?$", str, perl=T)) { # d-h:m input
+    return(paste0(str, ":00")) # add 0 seconds  
+  } else if (grepl("^\\d+-\\d+$", str, perl=T)) { # days-hours input
+    return(paste0(str, ":00:00")) # add 0 minutes, 0 seconds
   } else if (grepl("^\\d+$", str, perl=T)) {
-    return(paste0(str, ":00")) # minutes only -> minutes:seconds
+    return(paste0("00:", str, ":00")) # minutes only -> hours:minutes:seconds
   } else {
     stop("Invalid duration string: ", str)
   }
