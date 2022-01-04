@@ -19,6 +19,7 @@ N.B. This class doesn't even expose the Gaussian ACF options given false positiv
 \item \href{#method-get_call}{\code{fwhmx$get_call()}}
 \item \href{#method-get_acf_params}{\code{fwhmx$get_acf_params()}}
 \item \href{#method-get_input_file}{\code{fwhmx$get_input_file()}}
+\item \href{#method-get_mask_file}{\code{fwhmx$get_mask_file()}}
 \item \href{#method-get_outputs}{\code{fwhmx$get_outputs()}}
 \item \href{#method-is_fwhmx_complete}{\code{fwhmx$is_fwhmx_complete()}}
 \item \href{#method-clone}{\code{fwhmx$clone()}}
@@ -73,6 +74,15 @@ N.B. This class doesn't even expose the Gaussian ACF options given false positiv
 \subsection{Method \code{get_input_file()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{fwhmx$get_input_file()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-get_mask_file"></a>}}
+\if{latex}{\out{\hypertarget{method-get_mask_file}{}}}
+\subsection{Method \code{get_mask_file()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{fwhmx$get_mask_file()}\if{html}{\out{</div>}}
 }
 
 }

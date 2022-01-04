@@ -70,6 +70,10 @@ fwe_spec <- R6::R6Class("fwe_spec",
   )
 )
 
+#' R6 class for pTFCE specification for one or more z-statistic images
+#' 
+#' @importFrom R6 R6Class
+#' @importFrom checkmate assert_directory_exists assert_subset assert_string
 ptfce_spec <- R6::R6Class("ptfce_spec",
   private = list(
     gfeat_info = NULL,
@@ -83,6 +87,9 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     pvt_two_sided = TRUE,
     pvt_fwe_p = NULL,
     expect_list = NULL,
+    scheduler = "slurm",
+    time_per_zstat = "12:00", # 12 minutes for one run of pTFCE (at 2.3mm, takes about 2.5 mins for me)
+    memgb_per_command = 8, # 8 GB requested for every ptfce run
     set_fwep = function(vec) {
       checkmate::assert_numeric(vec, lower = 1e-10, upper = .9999, any.missing = FALSE, unique = TRUE, null.ok = FALSE)
       private$pvt_fwe_p <- vec
@@ -154,9 +161,13 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     #'   the TFCE z-threshold calculation.)
     #' @param write_thresh_imgs If TRUE, then pTFCE thresholds for each fwe_p will be applied to the TFCE image and saved
     #'   to the same folder as the z-statistic. These thresholded files let you look at the map at a given FWE threshold.
+    #' @param scheduler Which scheduler to use for submitting jobs. Options are 'local', 'slurm', and 'torque'.
+    #' @param time_per_zstat The amount of time to budget for each zstat to run through pTFCE in dd-hh:mm:ss format.
+    #'   Default is 10:00 (10 minutes).
     initialize = function(gfeat_dir = NULL, zstat_numbers = NULL, fsl_smoothest_file = NULL, dof = NULL, residuals_file = NULL,
-      z_files = NULL, mask_files = NULL, fwe_p = .05, two_sided = TRUE, write_thresh_imgs = TRUE) {
-      
+      z_files = NULL, mask_files = NULL, fwe_p = .05, two_sided = TRUE, write_thresh_imgs = TRUE, 
+      scheduler = NULL, time_per_zstat = NULL, memgb_per_command = NULL) {
+
       if (!is.null(gfeat_dir)) {
         checkmate::assert_directory_exists(gfeat_dir)
         private$gfeat_info <- read_gfeat_dir(gfeat_dir)
@@ -220,9 +231,27 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
         private$write_thresh_imgs <- write_thresh_imgs
       }
 
+      if (!is.null(scheduler)) {
+        checkmate::assert_string(scheduler)
+        checkmate::assert_subset(scheduler, c("torque", "slurm", "local"))
+        private$scheduler <- scheduler
+      }
+
+      if (!is.null(time_per_zstat)) {
+        private$time_per_zstat <- validate_dhms(time_per_zstat)
+      }
+
+      if (!is.null(memgb_per_command)) {
+        checkmate::assert_number(memgb_per_command)
+        private$memgb_per_command <- memgb_per_command
+      }
+
     },
+
+    #' method to return calls to external ptfce_zstat.R script for each zstat
+    #' @param include_complete if TRUE, return calls for zstats that already appear to have
+    #'   pTFCE-corrected images in place. Default: FALSE.
     get_ptfce_calls = function(include_complete = FALSE) {
-      # calls <-
       if (private$smoothness_method == "smoothest") {
         method_string <- glue("--fsl_smoothest {private$fsl_smoothest_file}")
       } else if (private$smoothness_method == "residuals") {
@@ -244,15 +273,25 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
       }
 
       calls <- rep(NA_character_, length(private$z_files))
+      script_loc <- system.file("bin/ptfce_zstat.R", package = "fmri.pipeline")
+      if (script_loc == "") {
+        stop("Cannot find ptfce_zstat.R inside fmri.pipeline R installation folder.")
+      }
+
       for (pp in seq_along(private$z_files)) {
         if (isTRUE(include_complete)) {
           run_me <- TRUE
         } else {
+          #check whether all expected files for a given zstat input exist
           run_me <- !checkmate::test_file_exists(unlist(private$expect_list[[pp]]))
         }
 
         if (run_me == FALSE) next
-        calls[pp] <- glue("ptfce_zstat.R --zstat {private$z_files[pp]} --mask {private$mask_files[pp]} {side_string} --fwep {self$fwe_p} {method_string} {write_string}")
+
+        calls[pp] <- glue(
+          "{script_loc} --zstat {private$z_files[pp]} --mask {private$mask_files[pp]}",
+          "--fwep {self$fwe_p} {method_string} {write_string} {side_string}", .sep=" "
+        )
       }
       
       return(na.omit(calls))
@@ -263,10 +302,20 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     run = function(force = FALSE) {
       # run pTFCE right here
       require(pTFCE)
-
+      stop("At present, we only work through the external ptfce_zstat.R script.")
     },
-    submit = function(force = FALSE) {
 
+    #' method to submit all ptfce_zstat.R calls to a cluster based on the scheduler specified
+    #' @param force if TRUE, re-run pTFCE for zstat images that already appear to have pTFCE-corrected outputs in place
+    submit = function(force = FALSE) {
+      ptfce_calls <- self$get_ptfce_calls(include_complete = force)
+      child_job_ids <- fmri.pipeline::cluster_submit_shell_jobs(
+        ptfce_calls,
+        time_per_command = private$time_per_zstat,
+        memgb_per_command = private$memgb_per_command, fork_jobs = TRUE,
+        scheduler = private$scheduler
+      )
+      return(child_job_ids)
     },
     all_expected_exist = function() {
       checkmate::test_file_exists(unlist(private$expect_list))
@@ -275,19 +324,17 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
 
 )
 
-zf <- list.files(
-  pattern = "zstat[0-9]+\\.nii\\.gz", path = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-age_sex/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats",
-  full.names = TRUE
-)
+# zf <- list.files(
+#   pattern = "zstat[0-9]+\\.nii\\.gz", path = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-age_sex/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats",
+#   full.names = TRUE
+# )
 
-x <- ptfce_spec$new(
-  #z_files = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/zstat1.nii.gz",
-  z_files = zf,
-  mask_files = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/mask.nii.gz",
-  fsl_smoothest_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/smoothness"
-)
-
-
+# x <- ptfce_spec$new(
+#   #z_files = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/zstat1.nii.gz",
+#   z_files = zf,
+#   mask_files = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/mask.nii.gz",
+#   fsl_smoothest_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/smoothness"
+# )
 
 build_fwe_correction <- function(gpa, lg=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")

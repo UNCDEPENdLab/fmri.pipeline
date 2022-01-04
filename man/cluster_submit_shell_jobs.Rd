@@ -10,6 +10,7 @@ cluster_submit_shell_jobs(
   cpus_per_job = 8L,
   memgb_per_command = 8,
   time_per_job = "1:00:00",
+  time_per_command = NULL,
   fork_jobs = TRUE,
   pre = NULL,
   post = NULL,
