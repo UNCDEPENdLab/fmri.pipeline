@@ -17,6 +17,7 @@ print_help <- function() {
     "  --onesided: If specified, only the positive z-statistics are FWE-corrected and negative voxels are dropped.",
     "  --fwep <.05>: The p-values for which the map is corrected for multiple comparisons. Multiple values may be specified.",
     "  --write_thresh_imgs: If specified, then each p-value supplied in --fwep will be applied to the pTFCE-enhanced image, then saved",
+    "  --verbose: If specified, the verbose option of pTFCE will be turned on, which prints out progress and diagnostics.",
     "\n\n",
     sep = "\n"
   ))
@@ -54,6 +55,7 @@ fsl_smoothest <- NA_character_
 two_sided <- TRUE
 fwe_p <- .05
 write_thresh_imgs <- FALSE # whether to write hard-thresholded images at each FWE p-value
+verbose <- FALSE
 
 argpos <- 1
 while (argpos <= length(args)) {
@@ -107,6 +109,9 @@ while (argpos <= length(args)) {
   } else if (args[argpos] == "--write_thresh_imgs") {
     write_thresh_imgs <- TRUE
     argpos <- argpos + 1
+  } else if (args[argpos] == "--verbose") {
+    verbose <- TRUE
+    argpos <- argpos + 1
   } else {
     stop("Not sure what to do with argument: ", args[argpos])
   }
@@ -136,7 +141,7 @@ if (!is.na(residuals_img)) {
     stop("If --residuals image is specified, then --dof must be provided, too!")
   }
   cat("Using residuals image to calculate smoothness\n")
-  call_list <- list(residual=residuals_img, dof=dof)
+  call_list <- list(residual=residuals_img, dof=dof, verbose = verbose)
 } else if (!is.na(fsl_smoothest)) {
   cat("Using FSL smoothest file:", fsl_smoothest, "\n")
   smooth_data <- read.table(fsl_smoothest, nrow = 3) # DLH, VOLUME, RESELS
@@ -144,10 +149,10 @@ if (!is.na(residuals_img)) {
   Rd <- smooth_data[1, 2] * smooth_data[2, 2] # DLH * VOLUME
   resels <- smooth_data[3, 2] # RESELS
 
-  call_list <- list(V = V, Rd = Rd, resels = resels)
+  call_list <- list(V = V, Rd = Rd, resels = resels, verbose = verbose)
 } else {
   cat("Estimating smoothness internally from z-stat image\n")
-  call_list <- list()
+  call_list <- list(verbose = verbose)
 }
 
 # run ptfce
