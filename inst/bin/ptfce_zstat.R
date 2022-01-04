@@ -175,6 +175,15 @@ ptfce_pos <- ptfce_worker(call_list)
 # Thus, zero out anything below zero in both cases for clarity.
 ptfce_pos$Z@.Data[ptfce_pos$Z@.Data < 0] <- 0
 
+# There is also a problem where some images (including mine) produce NaNs in the TFCE-enhanced image. This is documented here:
+# https://github.com/spisakt/pTFCE/issues/8. But it is not entirely resolved. For now, rather than leave NAs in the image, set
+# them to zero and produce a warning.
+nmiss <- sum(is.na(ptfce_pos$Z))
+if (nmiss) > 0L) {
+  warning("NAs produced in ", nmiss, " voxels for the positive z-statistic TFCE. These will be set to zero.")
+  ptfce_pos$Z@.Data[is.na(ptfce_pos$Z@.Data)] <- 0
+}
+
 if (isTRUE(two_sided)) {
   z_neg <- -1*Z # the literal interpretation of Smith and Nichols is to use the whole image
   #z_neg@.Data[z_neg@.Data > 0] <- 0 # zero positive values
@@ -182,6 +191,13 @@ if (isTRUE(two_sided)) {
   call_list[["img"]] <- z_neg
   ptfce_neg <- ptfce_worker(call_list)
   ptfce_neg$Z@.Data[ptfce_neg$Z@.Data < 0] <- 0
+
+  nmiss <- sum(is.na(ptfce_neg$Z))
+  if (nmiss) > 0L) {
+    warning("NAs produced in ", nmiss, " voxels for the negative z-statistic TFCE. These will be set to zero.")
+    ptfce_neg$Z@.Data[is.na(ptfce_neg$Z@.Data)] <- 0
+  }
+
   ptfce_neg$Z <- -1 * ptfce_neg$Z # make negative z-stats negative again
 
   # create combined pTFCE-corrected image with positive and negative results
