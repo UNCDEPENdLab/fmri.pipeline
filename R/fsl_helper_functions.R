@@ -234,13 +234,57 @@ refresh_feat_status <- function(gpa, level = 1L, lg = NULL) {
   return(gpa)
 }
 
-#' internal helper function to look up core stats outputs from a .feat folder
+#' helper function to look up core stats outputs from a .gfeat folder
+#' @param gfeat_dir a .gfeat folder containing the outputs of an FSL analysis
+#' @return a list containing sorted vectors of each stat output
+#' @importFrom glue glue
+#' @importFrom checkmate assert_directory_exists assert_file_exists test_directory_exists
+#' @importFrom readr read_delim
+#' @export
+read_gfeat_dir <- function(gfeat_dir) {
+  gfeat_dir <- normalizePath(gfeat_dir) # convert to absolute path
+
+  cope_dirs <- grep("/cope[0-9]+\\.feat",
+    list.dirs(path = gfeat_dir, full.names = TRUE, recursive = FALSE),
+    value = TRUE, perl = TRUE
+  )
+
+  # sort copes in numeric order to match ascending expectation
+  cope_nums <- as.numeric(sub(".*/cope(\\d+).feat", "\\1", cope_dirs, perl = TRUE))
+  cope_dirs <- cope_dirs[order(cope_nums)]
+
+  ret_list <- lapply(cope_dirs, read_feat_dir)
+  names(ret_list) <- basename(cope_dirs)
+  ret_list$design_files <- get_design_files(gfeat_dir)
+  return(ret_list)
+}
+
+get_design_files <- function(dir) {
+  sapply(
+    c(
+      "design.con", "design_cov.png", "design_cov.ppm", "design.frf",
+      "design.fsf", "design.mat", "design.min", "design.png", "design.ppm",
+      "design.grp", "design.lcon", "design.lev"
+    ), function(x) {
+      ff <- file.path(dir, x)
+      if (file.exists(ff)) {
+        return(ff)
+      } else {
+        return(character(0))
+      }
+    },
+    simplify = FALSE
+  )
+}
+
+#' helper function to look up core stats outputs from a .feat folder
 #' @param feat_dir a .feat folder containing the outputs of an FSL analysis
 #' @return a list containing sorted vectors of each stat output
-#' @keywords internal
 #' @importFrom glue glue
-#' @importFrom checkmate assert_directory_exists assert_file_exists
-get_feat_dir_files <- function(feat_dir) {
+#' @importFrom checkmate assert_directory_exists assert_file_exists test_directory_exists
+#' @importFrom readr read_delim
+#' @export
+read_feat_dir <- function(feat_dir) {
   if (!checkmate::test_directory_exists(feat_dir)) return(NULL)
   feat_dir <- normalizePath(feat_dir) # convert to absolute path
   stats_dir <- file.path(feat_dir, "stats")
@@ -282,14 +326,22 @@ get_feat_dir_files <- function(feat_dir) {
     }
   )
 
-  txt_files <- sapply(c("dof", "smoothness", "lmax_zstats\\d+_std\\.txt", "cluster_zstat\\d+_std\\.txt"), function(x) {
-    ff <- list.files(path = feat_dir, pattern = glue("^{x}"), full.names = TRUE, recursive=TRUE)
-    browser()
-    if (length(ff) > 0L) {
+  txt_files <- sapply(c("dof", "smoothness", "lmax_zstat", "cluster_zstat"), function(x) {
+    if (x == "lmax_zstat") {
+      pat <- "lmax_zstat\\d+_std\\.txt"
+    } else if (x == "cluster_zstat") {
+      pat <- "cluster_zstat\\d+_std\\.txt"
+    } else {
+      pat <- x # literal
+    }
+    files <- list.files(path = feat_dir, pattern = glue("^{pat}$"), full.names = TRUE, recursive=TRUE)
+    if (length(files) > 0L) {
       if (x == "dof") {
-        return(as.numeric(readLines(x)))
+        stopifnot(length(files) == 1L)
+        return(as.numeric(readLines(files)))
       } else if (x == "smoothness") {
-        ss <- readLines(x)
+        stopifnot(length(files) == 1L)
+        ss <- readLines(files)
         dlh <- NA_real_
         volume <- NA_integer_
         resels <- NA_real_
@@ -319,24 +371,29 @@ get_feat_dir_files <- function(feat_dir) {
         }
 
         return(named_list(dlh, volume, resels, fwhm_voxel, fwhm_mm))
+      } else if (x == "cluster_zstat") {
+        f_out <- lapply(files, read.table, header = T, sep = "\t")
+        names(f_out) <- basename(files)
+        return(f_out)
+      } else if (x == "lmax_zstat") {
+        f_out <- lapply(files, function(f) {
+          inp <- readLines(f)
+          # these files have a trailing tab on the first line and also have a space in the header row
+          inp[1] <- trimws(sub("Cluster Index", "Cluster_Index", inp[1], fixed = TRUE))
+          res <- readr::read_delim(I(inp), delim = "\t", show_col_types = FALSE)
+        })
+        names(f_out) <- basename(files)
+        return(f_out)
       } else {
-        return(readLines(x))
+        return(lapply(files, readLines))
       }
     } else {
       return(character(0))
     }
   })
 
-  design_files <- sapply(
-    c(
-      "design.con", "design_cov.png", "design_cov.ppm", "design.frf",
-      "design.fsf", "design.mat", "design.min", "design.png", "design.ppm",
-      "design.grp", "design.lcon", "design.lev"
-    ), function(x) {
-      ff <- file.path(feat_dir, x)
-      if (file.exists(ff)) return(ff) else return(character(0))
-    }, simplify = FALSE
-  )
+  # get design files
+  design_files <- get_design_files(feat_dir)
 
   # lookup contrast names
   contrast_file <- design_files$design.con
@@ -490,7 +547,7 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
   # Note: in the current implementation of l3 analysis, the cope1.feat folder in the l3 .gfeat folder always corresponds
   # to the single lower-level cope that was fed forward for group analysis. This relates to the 'Inputs are lower-level
   # FEAT directories' (many .feat folders in .gfeat) versus 'Inputs are 3D cope images from FEAT directores' (one .feat folder).
-  l3_stats <- lapply(file.path(gpa$l3_model_setup$fsl$feat_dir, "cope1.feat"), get_feat_dir_files)
+  l3_stats <- lapply(file.path(gpa$l3_model_setup$fsl$feat_dir, "cope1.feat"), read_feat_dir)
 
   if (isTRUE(gpa$multi_run)) {
     meta_df <- gpa$l3_model_setup$fsl %>% dplyr::select(l1_model, l1_cope_name, l2_model, l2_cope_name, l3_model, feat_dir)
@@ -552,7 +609,7 @@ feat_stats_to_brik <- function(feat_dir, out_filename = "feat_stats",
   if (!checkmate::test_directory_exists(file.path(feat_dir, "stats"))) return(NULL)
   feat_dir <- normalizePath(feat_dir) # convert to absolute path
 
-  feat_info <- get_feat_dir_files(feat_dir)
+  feat_info <- read_feat_dir(feat_dir)
   checkmate::assert_subset(what, names(feat_info))
   checkmate::assert_string(label_prefix, null.ok = TRUE)
 
