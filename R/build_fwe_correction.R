@@ -267,7 +267,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
         write_string <- ""
       }
 
-      if (isTRUE(private$two_sided)) {
+      if (isTRUE(private$pvt_two_sided)) {
         side_string <- "--twosided"
       } else {
         side_string <- "--onesided"
