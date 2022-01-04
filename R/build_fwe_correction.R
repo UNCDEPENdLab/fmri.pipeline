@@ -74,6 +74,7 @@ fwe_spec <- R6::R6Class("fwe_spec",
 #' 
 #' @importFrom R6 R6Class
 #' @importFrom checkmate assert_directory_exists assert_subset assert_string
+#' @export
 ptfce_spec <- R6::R6Class("ptfce_spec",
   private = list(
     gfeat_info = NULL,
@@ -302,7 +303,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     run = function(force = FALSE) {
       # run pTFCE right here
       require(pTFCE)
-      stop("At present, we only work through the external ptfce_zstat.R script.")
+      stop("At present, we only work through the external ptfce_zstat.R script. Use $submit()")
     },
 
     #' method to submit all ptfce_zstat.R calls to a cluster based on the scheduler specified
