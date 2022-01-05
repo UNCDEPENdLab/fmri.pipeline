@@ -179,7 +179,7 @@ ptfce_pos$Z@.Data[ptfce_pos$Z@.Data < 0] <- 0
 # https://github.com/spisakt/pTFCE/issues/8. But it is not entirely resolved. For now, rather than leave NAs in the image, set
 # them to zero and produce a warning.
 nmiss <- sum(is.na(ptfce_pos$Z))
-if (nmiss) > 0L) {
+if (nmiss > 0L) {
   warning("NAs produced in ", nmiss, " voxels for the positive z-statistic TFCE. These will be set to zero.")
   ptfce_pos$Z@.Data[is.na(ptfce_pos$Z@.Data)] <- 0
 }
@@ -193,7 +193,7 @@ if (isTRUE(two_sided)) {
   ptfce_neg$Z@.Data[ptfce_neg$Z@.Data < 0] <- 0
 
   nmiss <- sum(is.na(ptfce_neg$Z))
-  if (nmiss) > 0L) {
+  if (nmiss > 0L) {
     warning("NAs produced in ", nmiss, " voxels for the negative z-statistic TFCE. These will be set to zero.")
     ptfce_neg$Z@.Data[is.na(ptfce_neg$Z@.Data)] <- 0
   }
