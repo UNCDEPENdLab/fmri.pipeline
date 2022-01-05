@@ -244,6 +244,9 @@ refresh_feat_status <- function(gpa, level = 1L, lg = NULL) {
 read_gfeat_dir <- function(gfeat_dir) {
   gfeat_dir <- normalizePath(gfeat_dir) # convert to absolute path
 
+  mask_file <- file.path(gfeat_dir, "mask.nii.gz")
+  mask_file <- ifelse(checkmate::test_file_exists(mask_file), mask_file, NA_character_)
+
   cope_dirs <- grep("/cope[0-9]+\\.feat",
     list.dirs(path = gfeat_dir, full.names = TRUE, recursive = FALSE),
     value = TRUE, perl = TRUE
@@ -253,10 +256,31 @@ read_gfeat_dir <- function(gfeat_dir) {
   cope_nums <- as.numeric(sub(".*/cope(\\d+).feat", "\\1", cope_dirs, perl = TRUE))
   cope_dirs <- cope_dirs[order(cope_nums)]
 
-  ret_list <- lapply(cope_dirs, read_feat_dir)
-  names(ret_list) <- basename(cope_dirs)
-  ret_list$design_files <- get_design_files(gfeat_dir)
+  cope_list <- lapply(cope_dirs, read_feat_dir)
+  names(cope_list) <- basename(cope_dirs)
+  ret_list <- list(cope_dirs = cope_list, design_files = get_design_files(gfeat_dir), mask_file = mask_file)
+  class(ret_list) <- c("list", "gfeat_info")
   return(ret_list)
+}
+
+# incomplete function stub for subselecting parts of the gfeat_info into a combined data.frame
+# initially developed for getting specific cope dirs and zstats for ptfce setup. Low priority at present
+get_feat_files <- function(gfeat_info, lower_cope_numbers = NULL, what = "") {
+  checkmate::assert_class(gfeat_info)
+  checkmate::assert_integerish(lower_cope_numbers)
+  if (is.null(gfeat_info$cope_dir)) {
+    stop("Cannot find cope_dirs in gfeat_info")
+  }
+
+  # look for specific lower-level cope .feat directories that are in the .gfeat folder
+  if (!is.null(lower_cope_numbers)) {
+    expect_cope_dirs <- paste0("cope", lower_cope_numbers, ".feat")
+  } else {
+    expect_cope_dirs <- names(gfeat_info$cope_dirs)
+  }
+
+  checkmate::assert_subset(expect_cope_dirs, names(gfeat_info$cope_dirs))
+  #file_list <- c
 }
 
 get_design_files <- function(dir) {
@@ -298,6 +322,10 @@ read_feat_dir <- function(feat_dir) {
   t_files <- file.path(dirname(z_files), sub("zstat", "tstat", basename(z_files), fixed = TRUE))
   cope_files <- file.path(dirname(z_files), sub("zstat", "cope", basename(z_files), fixed = TRUE))
   varcope_files <- file.path(dirname(z_files), sub("zstat", "varcope", basename(z_files), fixed = TRUE))
+  zptfce_files <- file.path(dirname(z_files), sub("zstat(\\d+)", "zstat\\1_ptfce", basename(z_files), perl = TRUE))
+  zptfce_exists <- sapply(zptfce_files, checkmate::test_file_exists)
+  zptfce_files[!zptfce_exists] <- NA_character_ # NA out the missing ptfce files
+
   checkmate::assert_file_exists(t_files)
   checkmate::assert_file_exists(cope_files)
   checkmate::assert_file_exists(varcope_files)
@@ -311,6 +339,15 @@ read_feat_dir <- function(feat_dir) {
   pe_nums <- as.numeric(sub(".*pe(\\d+)\\.nii.*$", "\\1", pe_files, perl=TRUE))
   pe_files <- pe_files[order(pe_nums)]
 
+  get_file <- function(str) {
+    ff <- file.path(feat_dir, str)
+    ff <- ifelse(checkmate::test_file_exists(ff), ff, NA_character_)
+  }
+
+  mask_file <- get_file("mask.nii.gz")
+  smoothness_file <- get_file("stats/smoothness")
+  dof_file <- get_file("stats/dof")
+  
   aux_files <- sapply(
     c(
       "sigmasquareds", "threshac1", "res4d",
@@ -326,7 +363,7 @@ read_feat_dir <- function(feat_dir) {
     }
   )
 
-  txt_files <- sapply(c("dof", "smoothness", "lmax_zstat", "cluster_zstat"), function(x) {
+  parsed_txt <- sapply(c("dof", "smoothness", "lmax_zstat", "cluster_zstat"), function(x) {
     if (x == "lmax_zstat") {
       pat <- "lmax_zstat\\d+_std\\.txt"
     } else if (x == "cluster_zstat") {
@@ -406,9 +443,9 @@ read_feat_dir <- function(feat_dir) {
     contrast_names <- NULL
   }
 
-  ret_list <- named_list(
-    pe_files, cope_files, varcope_files, z_files, zthresh_files,
-    rendered_zthresh_files, t_files, contrast_names, aux_files, design_files, txt_files
+  ret_list <- named_list(mask_file, smoothness_file, dof_file,
+    pe_files, cope_files, varcope_files, z_files, zthresh_files, zptfce_files,
+    rendered_zthresh_files, t_files, contrast_names, aux_files, design_files, parsed_txt
   )
 
   # create a combined data.frame of cope-level statistics
@@ -417,7 +454,7 @@ read_feat_dir <- function(feat_dir) {
   # these elements should all have the same length (one file per contrast)
   to_stitch <- ret_list[c(
     "contrast_names", "cope_files", "varcope_files", "z_files", "zthresh_files",
-    "rendered_zthresh_files", "t_files"
+    "rendered_zthresh_files", "t_files", "zptfce_files"
   )]
 
   to_stitch <- do.call(data.frame, lapply(to_stitch, function(x) {
@@ -426,7 +463,7 @@ read_feat_dir <- function(feat_dir) {
     } else {
       return(x)
     }
-  })) %>% setNames(c("contrast_name", "cope", "varcope", "z", "zthresh", "rendered_zthresh", "t"))
+  })) %>% setNames(c("contrast_name", "cope", "varcope", "z", "zthresh", "rendered_zthresh", "t", "zptfce"))
 
   to_stitch <- to_stitch %>%
     dplyr::mutate(cope_number = 1:n()) %>%
