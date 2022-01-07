@@ -216,9 +216,12 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   }
   if (gpa$scheduler == "slurm") {
     if (is.null(gpa$parallel$sched_args)) {
-      gpa$parallel$sched_args <- c("-p general")
-      lg$info("Using default SLURM scheduler arguments: ")
-      lg$info("Argument: %s", gpa$parallel$sched_args)
+      # Jan 2022: turns out Longleaf doesn't want us to use a partition by default!
+      # gpa$parallel$sched_args <- c("-p general")
+      # lg$info("Using default SLURM scheduler arguments: ")
+      # lg$info("Argument: %s", gpa$parallel$sched_args)
+    } else {
+      checkmate::assert_character(gpa$parallel$sched_args)
     }
   } else if (gpa$scheduler == "torque") {
     # gpa$parallel$sched_args <- c("-A mnh5174_c_g_sc_default", "-W group_list=mnh5174_collab")
