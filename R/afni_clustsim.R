@@ -190,7 +190,7 @@ fwhmx_set_spec <- R6::R6Class("fwhmx_set_spec",
       } else {
         private$fwhmx_df <- data.frame(input = private$input_files, mask = private$mask_files, acf_mat)
       }
-      
+
       # always return self for side-effect methods
       return(invisible(self))
     },
@@ -333,7 +333,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
     clustsim_df = tibble::tibble(),
     out_files = NULL,
     prefix = "clustsim_",
-    use_fwhmx_acf = FALSE,
+    pvt_use_fwhmx_acf = FALSE,
     acf_params = setNames(rep(NA_real_, 3), c("a", "b", "c")),
     clustsim_batch = NULL,
     clustsim_call = NULL,
@@ -363,7 +363,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
       }
     },
     build_call = function() {
-      if (isTRUE(private$use_fwhmx_acf)) {
+      if (isTRUE(private$pvt_use_fwhmx_acf)) {
         if (isFALSE(self$fwhmx_set$is_fwhmx_complete())) {
           warning("Cannot build 3dClustSim call because some 3dFWHMx runs are incomplete.")
           return(invisible(NULL))
@@ -423,16 +423,16 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
     inset_files = NULL,
 
     initialize = function(out_dir = NULL, prefix=NULL,
-                          fwhmx_input_files = NULL, fwhmx_mask_files = NULL, inset_files = NULL, dxyz = NULL, nxyz = NULL,
+                          fwhmx_input_files = NULL, fwhmx_mask_files = NULL, residuals_file = NULL, inset_files = NULL, dxyz = NULL, nxyz = NULL,
                           clustsim_mask = NULL, acf_params = NULL, nopad = NULL, pthr = NULL, athr = NULL, iter = NULL, nodec = NULL, 
                           seed = NULL, scheduler = NULL, ncpus = NULL) {
 
       # only one method can be used for the volume over which 3dClustSim simulates. (the first two are parts of the same method)
-      n_passed <- sapply(list(dxyz, nxyz, clustsim_mask, inset_files), function(x) !is.null(x))
+      n_passed <- sapply(list(dxyz, nxyz, clustsim_mask, residuals_file, inset_files), function(x) !is.null(x))
       methods_passed <- sum(n_passed[1] || n_passed[2], n_passed[3], n_passed[4])
 
       if (methods_passed != 1L) {
-        stop("Only one method can be passed for the 3dClustSim volume settings. Use dxyz + nxyz, clustsim_mask, or inset_files")
+        stop("Only one method can be passed for the 3dClustSim volume settings. Use dxyz + nxyz, clustsim_mask, residuals_file, or inset_files")
       }
 
       if (!is.null(scheduler)) {
@@ -452,7 +452,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
       }
 
       if (!is.null(fwhmx_input_files)) {
-        private$use_fwhmx_acf <- TRUE
+        private$pvt_use_fwhmx_acf <- TRUE
         self$fwhmx_set <- fwhmx_set_spec$new(input_files = fwhmx_input_files, mask_files = fwhmx_mask_files, scheduler=scheduler)
         if (!is.null(acf_params)) {
           stop("Cannot pass fwhmx_input_files and acf_params since the ACF parameters are calculated by 3dFWHMx!")
@@ -467,6 +467,12 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         private$method <- "inset"
         checkmate::assert_file_exists(inset_files)
         self$inset_files <- inset_files
+      }
+
+      # if a residuals file is provided, we pass it to 3dttest++ for permutation testing
+      if (!is.null(residuals_file)) {
+        checkmate::assert_file_exists(residuals_file)
+        private$method <- "residuals"
       }
 
       if (!is.null(dxyz) || !is.null(nxyz)) {
@@ -568,7 +574,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
       )
 
       # need to run 3dFWHMx before 3dClustSim can run
-      if (isTRUE(private$use_fwhmx_acf) && isFALSE(self$fwhmx_set$is_fwhmx_complete())) {
+      if (isTRUE(private$pvt_use_fwhmx_acf) && isFALSE(self$fwhmx_set$is_fwhmx_complete())) {
         fwhmx_batch <- self$fwhmx_set$get_batch()
         batch_obj <- private$clustsim_batch
         batch_obj$depends_on_parents <- "run_3dfwhmx"
@@ -594,9 +600,124 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
     get_ncpus = function() {
       private$ncpus
     },
-    get_use_fwhmx_acf = function() {
-      private$use_fwhmx_acf
+    #' return TRUE/FALSE for whether this clustsim relies on the ACF estimates from 3dFWHMx
+    use_fwhmx_acf = function() {
+      private$pvt_use_fwhmx_acf
     }
 
   )
 )
+
+simulate_null_3dttest <- R6::R6Class("simulate_null_3dttest",
+  private = list(
+    residuals_file = NULL,
+    mask_file = NULL,
+    npermutations = 20000,
+    njobs = 16,
+    use_sdat = TRUE,
+    scheduler = "slurm",
+    method = "residuals", # in future, potentially support full 3dttest++ inputs like -setA and so on
+    perm_batch = NULL,
+    expected_files_exist = function() {
+
+    },
+    # handy one-liner from: https://stackoverflow.com/questions/64828789/creating-a-function-to-split-single-number-in-approximately-equal-groups-r
+    int_split = function(n, p) n %/% p + (sequence(p) - 1 < n %% p),
+    generate_batch = function() {
+      # this will create an R_batch_job object for running all 3dttest++ calls
+
+      perm_calls <- self$get_3dttest_calls()
+      if (length(perm_calls) == 0L) {
+        message("No 3dttest++ calls are returned")
+        private$perm_batch <- NULL # reset to NULL for consistency
+        return(invisible(NULL))
+      }
+
+      # create parent batch job to run all 3dFWHMx scripts
+      private$perm_batch <- R_batch_job$new(
+        job_name = "run_3dttest", n_cpus = 1,
+        cpu_time = private$walltime, scheduler = private$scheduler,
+        input_objects = list(perm_calls = perm_calls), # export this object to the job
+        wait_for_children = TRUE, r_packages = "fmri.pipeline",
+        r_code = glue(
+          "child_job_ids <- cluster_submit_shell_jobs(perm_calls, memgb_per_command=8, fork_jobs=TRUE, scheduler='{private$scheduler}')",
+          "wait_for_job" # TODO
+          "run_afni_command [sdats here]"
+        )
+        # cleanup_r_code = glue(
+        #   "batch_obj$refresh()" #update fwhmx objs/params,
+        # )
+      )
+    }
+  ), 
+  public = list(
+    initialize = function(residuals_file = NULL, mask_file = NULL, njobs = NULL, npermutations = NULL, use_sdat = NULL) {
+      checkmate::assert_string(residuals_file) # for now, must be single input
+      checkmate::assert_file_exists(residuals_file)
+      private$residuals_file <- residuals_file
+
+      # for now, we just support this method
+      private$method <- "residuals"
+
+      if (!is.null(mask_file)) {
+        checkmate::assert_string(mask_file)
+        checkmate::assert_file_exists(mask_file)
+        private$mask_file <- mask_file
+      }
+
+      if (!is.null(njobs)) {
+        checkmate::assert_integerish(njobs, lower = 1, upper = 1e4)
+        private$njobs <- as.integer(njobs)
+      }
+
+      if (!is.null(npermutations)) {
+        checkmate::assert_integerish(npermutations, lower = 1, upper = 1e8)
+        if (npermutations < 100) {
+          warning("Number of permutations chosen is less than 100! It's hard to know why this is a good idea!")
+        }
+        private$npermutations <- as.integer(npermutations)
+      }
+
+      if (!is.null(use_sdat)) {
+        checkmate::assert_logical(use_sdat, len = 1L)
+        private$use_sdat <- use_sdat
+      }
+    },
+    is_complete = function() {
+
+    },
+    submit = function() {
+
+    },
+    get_3dttest_calls = function() {
+      if (private$method == "residuals") {
+        # 3dttest++ uses all caps for SDAT output and lower case for nii/BRIK output
+        if (isTRUE(private$use_sdat)) {
+          fmt_str <- "-RANDOMSIGN"
+        } else {
+          fmt_str <- "-randomsign"
+        }
+
+        o_prefix <- paste(file_sans_ext(private$residuals_file), "randomsign", sep="_")
+        mask_str <- ifelse(is.null(private$mask_file), "", glue("-mask {private$mask_file}"))
+
+        # based on afni src: https://github.com/afni/afni/blob/9b6398061ab25afc95a14eed7f86eb9d1b1deb37/src/3dttest%2B%2B.c#L5335
+        base <- glue(
+          "3dttest++ -DAFNI_AUTOMATIC_FDR=NO -DAFNI_DONT_LOGFILE=YES ",
+          "-nomeans -toz -setA {private$residuals_file} {mask_str}"
+        )
+        split_iter <- private$int_split(private$npermutations, private$njobs)
+        all_calls <- sapply(seq_along(split_iter), function(i) {
+          glue(base, " {fmt_str} {split_iter[i]} -prefix {paste(o_prefix, sprintf('%04d', i), sep='_')}")
+        })
+
+        return(all_calls)
+
+      } else {
+        stop("Not implemented!")
+      }
+    }
+  )
+)
+
+x <- simulate_null_3dttest$new(residuals_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/res4d.nii.gz")

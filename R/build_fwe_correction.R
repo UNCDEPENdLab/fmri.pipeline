@@ -39,7 +39,7 @@ create_fwe_spec <- function(gpa, level = level, lg = NULL) {
 
   # https://www.r-bloggers.com/2020/05/filtering-with-string-statements-in-dplyr/
   to_fwe <- gpa$l3_model_setup$fsl %>% dplyr::filter(rlang::eval_tidy(rlang::parse_expr(filter_expr)))
-  
+
   if (nrow(to_fwe) == 0L) {
     msg <- "No model outputs match this combination of selections."
     lg$error(msg)
@@ -62,11 +62,15 @@ create_fwe_spec <- function(gpa, level = level, lg = NULL) {
   # gfeat_set <- gpa$l3_model_setup$fsl %>% dplyr::filter(l3_model == !!l3_set & feat_complete == TRUE)
   
   #choices = c("pTFCE", "3dFWHMx + 3dClustSim", "3dtest++ -randomsign + 3dClustSim", "PALM"),
+
+  # all objects here should support $submit(force = X)
   if (which_fwe == "pTFCE") {
-    ptfce_objs <- lapply(to_fwe$feat_dir, function(gg) {
-      oo <- ptfce_spec$new(gfeat_dir = gg)
-    })
+    fwe_obj <- ptfce_spec$new(gfeat_dir = to_fwe$feat_dir)
+  } else if (which_fwe == "3dFWHMx + 3dClustSim") {
+    stop("x")
   }
+
+  return(fwe_obj)
 
 }
 
@@ -81,10 +85,17 @@ fwe_spec <- R6::R6Class("fwe_spec",
   private = list(
     # data: keyed data.table object
     data = NULL,
-    fwe_type = NULL
+    fwe_obj_list = list()
+    #fwe_type = NULL
   ), public = list(
-    initialize = function(fwe_type = NULL) {
-      checkmate::assert_subset(fwe_type, c("ptfce, 3dclustsim", "palm", "randomise"), empty.ok = FALSE)
+    initialize = function(..., fwe_data = NULL) {
+      objs <- list(...)
+      #checkmate::assert_subset(fwe_type, c("ptfce, 3dclustsim", "palm", "randomise"), empty.ok = FALSE)
+
+    },
+    submit = function() {
+      # run submit method for every fwe object
+      lapply(fwe_obj_list$submit())
     }
   )
 )

@@ -78,8 +78,8 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     }
   ),
   public = list(
-    #' @param gfeat_dir a .gfeat folder containing a higher-level FSL analysis. This will be used for zstat images
-    #'   and mask files.
+    #' @param gfeat_dir One or more .gfeat folders containing a higher-level FSL analysis. These will be used for zstat images,
+    #'   mask files, and fsl residual smoothness estimates.
     #' @param zstat_numbers if a \code{gfeat_dir} is used, a vector of zstat numbers can also be provided to
     #'   subset the zstat images that are used in pTFCE correction. Ignored if gfeat_dir is not provided.
     #' @param z_files A vector of z-statistic filenames that should be corrected using pTFCE
@@ -103,31 +103,44 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
         }
 
         checkmate::assert_directory_exists(gfeat_dir)
-        private$gfeat_info <- read_gfeat_dir(gfeat_dir)
+        private$gfeat_info <- lapply(gfeat_dir, read_gfeat_dir)
+
         # TODO: need to support subsetting by cope number (e.g., cope3.feat) and zstat number (e.g., zstat1.nii.gz)
         # not currently supported (no high-priority use case)
-        z_list <- lapply(private$gfeat_info$cope_dirs, function(x) {
-          if (!is.null(zstat_numbers)) {
-            checkmate::assert_integerish(zstat_numbers)
-            x$cope_df %>%
-              filter(cope_number %in% !!zstat_numbers) %>%
-              pull(z)
-          } else {
-            x$cope_df %>% pull(z)
-          }
-        })
+        z_list <- do.call(c, lapply(private$gfeat_info, function(gf) {
+          lapply(gf$cope_dirs, function(x) {
+            if (!is.null(zstat_numbers)) {
+              checkmate::assert_integerish(zstat_numbers)
+              x$cope_df %>%
+                filter(cope_number %in% !!zstat_numbers) %>%
+                pull(z)
+            } else {
+              x$cope_df %>% pull(z)
+            }
+          })
+        }))
 
         # number of z stats in each .feat folder
         z_lens <- sapply(z_list, length)
 
         # build out mask files to match each cope directory zstats
-        mask_files <- rep(sapply(private$gfeat_info$cope_dirs, "[[", "mask_file", USE.NAMES = FALSE), z_lens)
-        fsl_smoothest_file <- rep(sapply(private$gfeat_info$cope_dirs, "[[", "smoothness_file", USE.NAMES = FALSE), z_lens)
-        
+        mask_files <- rep(
+          do.call(c, lapply(private$gfeat_info, function(gf) {
+            sapply(gf$cope_dirs, "[[", "mask_file", USE.NAMES = FALSE)
+          })),
+          z_lens
+        )
+        fsl_smoothest_file <- rep(
+          do.call(c, lapply(private$gfeat_info, function(gf) {
+            sapply(gf$cope_dirs, "[[", "smoothness_file", USE.NAMES = FALSE)
+          })),
+          z_lens
+        )
+
         # for now, if gfeat_dir is provided, just use smoothness file, which is computed by smoothest on the res4D
         # this is more efficient than having ptfce handle it internally
         #dof <- rep(sapply(private$gfeat_info$cope_dirs, function(x) x$parsed_txt$dof), z_lens)
-        
+
         # To support multiple L2 cope folders in an L3 gfeat folder, we need to allow for multiple stats/smoothness and dof files
         # these can vary by the .feat folder. Thus, build out logic that class has an fsl_smoothest element for every z_file
         # example:
@@ -218,14 +231,6 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     #' @param include_complete if TRUE, return calls for zstats that already appear to have
     #'   pTFCE-corrected images in place. Default: FALSE.
     get_ptfce_calls = function(include_complete = FALSE) {
-      if (private$smoothness_method == "smoothest") {
-        method_string <- glue("--fsl_smoothest {private$fsl_smoothest_file}")
-      } else if (private$smoothness_method == "residuals") {
-        method_string <- glue("--residuals {private$residuals_file} --dof {private$dof}")
-      } else {
-        method_string <- ""
-      }
-
       if (isTRUE(private$write_thresh_imgs)) {
         write_string <- "--write_thresh_imgs"
       } else {
@@ -254,6 +259,14 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
 
         if (run_me == FALSE) next
 
+        if (private$smoothness_method == "smoothest") {
+          method_string <- glue("--fsl_smoothest {private$fsl_smoothest_file[pp]}")
+        } else if (private$smoothness_method == "residuals") {
+          method_string <- glue("--residuals {private$residuals_file[pp]} --dof {private$dof[pp]}")
+        } else {
+          method_string <- ""
+        }
+
         calls[pp] <- glue(
           "{script_loc} --zstat {private$z_files[pp]} --mask {private$mask_files[pp]}",
           "--fwep {paste(self$fwe_p, collapse=' ')} {method_string} {write_string} {side_string}", .sep=" "
@@ -274,14 +287,27 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     #' method to submit all ptfce_zstat.R calls to a cluster based on the scheduler specified
     #' @param force if TRUE, re-run pTFCE for zstat images that already appear to have pTFCE-corrected outputs in place
     submit = function(force = FALSE) {
+      checkmate::assert_logical(force, len=1L)
+      if (isTRUE(self$all_expected_exist()) && isFALSE(force)) {
+        message("All expected pTFCE outputs exist. No jobs to submit.")
+        return(invisible(character(0)))
+      }
+
+      # lookup ptfce calls for all inputs
       ptfce_calls <- self$get_ptfce_calls(include_complete = force)
+      if (length(ptfce_calls) == 0L) { # this is unlikely given the all_expected_exist() check above, but still
+        message("No pTFCE jobs need to be run for this input. If you want to recalculate completed outputs, use force=TRUE")
+        return(invisible(character(0)))
+      }
+
+      # submit job to cluster
       child_job_ids <- fmri.pipeline::cluster_submit_shell_jobs(
         ptfce_calls,
         time_per_command = private$time_per_zstat,
         memgb_per_command = private$memgb_per_command, fork_jobs = TRUE,
         scheduler = private$scheduler
       )
-      return(child_job_ids)
+      return(invisible(child_job_ids))
     },
     all_expected_exist = function() {
       checkmate::test_file_exists(unlist(private$expect_list))
@@ -305,8 +331,11 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
 # )
 
 # y <- ptfce_spec$new(
-#   gfeat_dir = "/proj/mnhallqlab/studies/MMClock/group_analyses/MMClock_aroma_preconvolve_fse_groupfixed/sceptic-clock-feedback-v_entropy-preconvolve_fse_groupfixed/v_entropy/v_entropy-Intercept-Age.gfeat"
+#   gfeat_dir = c(
+#     "/proj/mnhallqlab/studies/MMClock/group_analyses/MMClock_aroma_preconvolve_fse_groupfixed/sceptic-clock-feedback-v_entropy-preconvolve_fse_groupfixed/v_entropy/v_entropy-Intercept-Age.gfeat"
+#     #"/proj/mnhallqlab/studies/MMClock/group_analyses/MMClock_aroma_preconvolve_fse_groupfixed/sceptic-clock-feedback-v_entropy-preconvolve_fse_groupfixed/v_entropy/v_entropy-Intercept.gfeat"
+#   )
+#   ,
 #   fwe_p = c(.05, .01)
 # )
 # y$submit()
-

@@ -97,10 +97,22 @@ runFSLCommand <- function(args, fsldir=NULL, stdout=NULL, stderr=NULL) {
 file_ext <- function(file, withdot = TRUE) {
   file <- tolower(file)
   matches <- grepl("^.*\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", file)
-  ext <- rep(NA, length=length(file)) # return NA for inputs that can't be parsed
+  ext <- rep(NA, length = length(file)) # return NA for inputs that can't be parsed
   ext[matches] <- sub("^(.*)\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", "\\2\\3", file[matches])
   if (isTRUE(withdot)) ext[matches] <- paste0(".", ext[matches])
   return(ext)
+}
+
+
+#' internal function for returning a file (and path) without its extension
+#' at present, it returns NA if no recognized extension is there
+#' @keywords internal
+file_sans_ext <- function(file, withdot = TRUE) {
+  file <- tolower(file)
+  matches <- grepl("^.*\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", file)
+  fout <- rep(NA, length=length(file)) # return NA for inputs that can't be parsed
+  fout[matches] <- sub("^(.*)\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", "\\1", file[matches])
+  return(fout)
 }
 
 #' helper function for generating motion regressors from raw 6-parameter motion coregistration
