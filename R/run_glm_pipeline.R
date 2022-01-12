@@ -37,7 +37,7 @@ l3_model_names = "prompt", glm_software = NULL) {
   f_batch <- R_batch_job$new(
     job_name = "finalize_configuration", batch_directory = batch_directory, scheduler = gpa$scheduler,
     input_rdata_file = gpa_cache, output_rdata_file = gpa_cache,
-    n_nodes = 1, n_cpus = 1, cpu_time = gpa$parallel$finalize_time,
+    n_nodes = 1, n_cpus = 1, wall_time = gpa$parallel$finalize_time,
     mem_total = "16G",
     r_code = "gpa <- finalize_pipeline_configuration(gpa)", r_packages = "fmri.pipeline",
     batch_code = gpa$parallel$compute_environment
@@ -63,7 +63,7 @@ l3_model_names = "prompt", glm_software = NULL) {
     # batch job for setting up l1 models -- calls setup_l1_models to create relevant FSFs
       l1_setup_batch <- f_batch$copy(
         job_name = "setup_l1", n_cpus = gpa$parallel$l1_setup_cores,
-        cpu_time = gpa$parallel$l1_setup_time,
+        wall_time = gpa$parallel$l1_setup_time,
         r_code = sprintf(
           "gpa <- setup_l1_models(gpa, l1_model_names=%s)", paste(deparse(model_list$l1_model_name), collapse = "")
         )
@@ -75,7 +75,7 @@ l3_model_names = "prompt", glm_software = NULL) {
       # batch job for executing l1 jobs (and waiting) after setup
       l1_execute_batch <- f_batch$copy(
         job_name = "run_l1", n_cpus = 1,
-        cpu_time = gpa$parallel$fsl$l1_feat_alljobs_time,
+        wall_time = gpa$parallel$fsl$l1_feat_alljobs_time,
         r_code = "child_job_ids <- run_feat_sepjobs(gpa, level = 1L)" # execute l1 jobs
       )
 
@@ -94,7 +94,7 @@ l3_model_names = "prompt", glm_software = NULL) {
     # setup of l2 models (should follow l1)
     l2_batch <- f_batch$copy(
       job_name = "setup_run_l2", n_cpus = gpa$parallel$l2_setup_cores,
-      cpu_time = gpa$parallel$l2_setup_run_time,
+      wall_time = gpa$parallel$l2_setup_run_time,
       r_code = c(
         "gpa <- setup_l2_models(gpa)",
         "child_job_ids <- run_feat_sepjobs(gpa, level = 2L)"
@@ -108,7 +108,7 @@ l3_model_names = "prompt", glm_software = NULL) {
   if (!is.null(model_list$l3_model_names)) {
     l3_batch <- f_batch$copy(
       job_name = "setup_run_l3", n_cpus = gpa$parallel$l2_setup_cores,
-      cpu_time = gpa$parallel$l3_setup_run_time,
+      wall_time = gpa$parallel$l3_setup_run_time,
       r_code = c(
         "gpa <- setup_l3_models(gpa)",
         "child_job_ids <- run_feat_sepjobs(gpa, level = 3L)"
@@ -122,7 +122,7 @@ l3_model_names = "prompt", glm_software = NULL) {
   # cleanup step: refresh l3 feat status and copy gpa back to main directory
   cleanup_batch <- f_batch$copy(
     job_name = "cleanup_fsl", n_cpus = 1,
-    cpu_time = "30:00", # 30 minutes should be plenty
+    wall_time = "30:00", # 30 minutes should be plenty
     r_code = c(
       "gpa <- cleanup_glm_pipeline(gpa)"
     )
