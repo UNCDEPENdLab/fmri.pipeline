@@ -108,10 +108,9 @@ file_ext <- function(file, withdot = TRUE) {
 #' at present, it returns NA if no recognized extension is there
 #' @keywords internal
 file_sans_ext <- function(file, withdot = TRUE) {
-  file <- tolower(file)
-  matches <- grepl("^.*\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", file)
+  matches <- grepl("^.*\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", file, ignore.case = TRUE)
   fout <- rep(NA, length=length(file)) # return NA for inputs that can't be parsed
-  fout[matches] <- sub("^(.*)\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", "\\1", file[matches])
+  fout[matches] <- sub("^(.*)\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", "\\1", file[matches], ignore.case = TRUE)
   return(fout)
 }
 
