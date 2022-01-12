@@ -76,7 +76,7 @@ R_batch_job <- R6::R6Class("batch_job",
           syntax,
           paste("#SBATCH -N", self$n_nodes),
           paste("#SBATCH -n", self$n_cpus),
-          paste("#SBATCH -t", self$cpu_time),
+          paste("#SBATCH -t", self$wall_time),
           mem_string,
           job_string,
           sched_string,
@@ -95,7 +95,7 @@ R_batch_job <- R6::R6Class("batch_job",
         syntax <- c(
           syntax,
           paste0("#PBS -l nodes=", self$n_nodes, ":ppn=", self$n_cpus),
-          paste("#PBS -l walltime=", self$cpu_time),
+          paste("#PBS -l walltime=", self$wall_time),
           mem_string,
           ifelse(is.null(self$job_name), NULL, paste("#PBS -N", self$job_name)),
           paste("#PBS", self$scheduler_options),
@@ -154,13 +154,21 @@ R_batch_job <- R6::R6Class("batch_job",
           paste0(
             "  fmri.pipeline::wait_for_job(child_job_ids, quiet=FALSE",
             ", repolling_interval=", self$repolling_interval,
-            ", max_wait=", lubridate::period_to_seconds(dhms(self$cpu_time)),
+            ", max_wait=", lubridate::period_to_seconds(dhms(self$wall_time)),
             ", scheduler='", self$scheduler, "')"
           ),
           "} else {",
           "  warning('Attempt to wait for child jobs failed due to non-existent or improper child_job_ids variable.')",
           "}"
         )
+
+        # add any post-children R code to be executed (e.g., combining outputs from the child jobs)
+        if (!is.null(self$post_children_r_code)) {
+          syntax <- c(
+            syntax,
+            self$post_children_r_code
+          )
+        }
       }
       message("Writing R script to: ", private$get_compute_file_name())
       writeLines(syntax, con = private$get_compute_file_name())
@@ -191,9 +199,9 @@ R_batch_job <- R6::R6Class("batch_job",
     #'    \code{child_job_ids} to finish before the batch exits. It's up to your code to use this variable name
     wait_for_children = FALSE,
 
-    #' @field cpu_time The amount of time requested on the job scheduler, following d-hh:mm:ss format. Defaults to
+    #' @field wall_time The amount of time requested on the job scheduler, following d-hh:mm:ss format. Defaults to
     #'    "4:00:00", which is 4 hours.
-    cpu_time = "4:00:00",
+    wall_time = "4:00:00",
 
     #' @field n_nodes The number of nodes to be requested on the job scheduler
     n_nodes = "1",
@@ -236,6 +244,10 @@ R_batch_job <- R6::R6Class("batch_job",
     #'    R statements or an expression object containing the R code to be evaluated
     r_code = NULL,
 
+    #' @field r_code The R code to be executed after child jobs have completed. This can be a character vector that includes multiple
+    #'    R statements or an expression object containing the R code to be evaluated. Only relevant if wait_for_children = TRUE
+    post_children_r_code = NULL,
+
     #' @field r_packages The R packages to be loaded into the environment before job execution. These are loaded by
     #'    pacman::p_load, which will install any missing packages before attempting to load
     r_packages = NULL,
@@ -260,12 +272,13 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param job_name The name of the job used in dependency specification and job scheduler naming
     #' @param n_nodes The number of compute nodes to be requested on the scheduler
     #' @param n_cpus The number of cpus to be requested on the scheduler
-    #' @param cpu_time The compute time requested on the cluster dd-HH:MM:SS
+    #' @param wall_time The compute time requested on the cluster dd-HH:MM:SS
     #' @param mem_per_cpu The amount of memory to be requested per cpu
     #' @param mem_total The total amount of memory to requested by the job
     #' @param batch_id The batch id (not currently used)
     #' @param r_code A character vector or expression containing R code to be executed
     #' @param r_script The path to an R script to be executed by the batch (mutually exclusive with \code{r_code}).
+    #' @param post_children_r_code A character vector of R code to be executed after waiting for child jobs finishes
     #' @param batch_code A character vector of code to be included in the batch script for job scheduling
     #' @param r_packages A character vector of R packages to be loaded when compute script runs
     #' @param scheduler The scheduler to be used for this compute. Options are 'slurm', 'torque', or 'local'.
@@ -277,8 +290,8 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param scheduler_options A character vector of scheduler options to be added to the header of the batch script
     #' @param repolling_interval The number of seconds to wait before rechecking whether parent jobs have completed
     initialize = function(batch_directory = NULL, parent_jobs = NULL, job_name = NULL, n_nodes = NULL, n_cpus = NULL,
-                          cpu_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL, r_script = NULL,
-                          batch_code = NULL, r_packages = NULL, scheduler = NULL, wait_for_children = NULL,
+                          wall_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL, r_script = NULL,
+                          post_children_r_code = NULL, batch_code = NULL, r_packages = NULL, scheduler = NULL, wait_for_children = NULL,
                           input_rdata_file = NULL, input_objects = NULL, output_rdata_file = NULL,
                           scheduler_options = NULL, repolling_interval = NULL) {
       if (!is.null(batch_directory)) self$batch_directory <- batch_directory
@@ -286,10 +299,10 @@ R_batch_job <- R6::R6Class("batch_job",
       if (!is.null(job_name)) self$job_name <- as.character(job_name)
       if (!is.null(n_nodes)) self$n_nodes <- as.character(n_nodes)
       if (!is.null(n_cpus)) self$n_cpus <- as.character(n_cpus)
-      if (is.null(cpu_time)) {
-        message("Using default cpu_time of: ", self$cpu_time)
+      if (is.null(wall_time)) {
+        message("Using default wall_time of: ", self$wall_time)
       } else {
-        self$cpu_time <- as.character(cpu_time)
+        self$wall_time <- as.character(wall_time)
       }
 
       if (!is.null(mem_per_cpu)) {
@@ -366,6 +379,12 @@ R_batch_job <- R6::R6Class("batch_job",
         checkmate::assert_logical(wait_for_children, len = 1L)
         self$wait_for_children <- wait_for_children
       }
+
+      if (!is.null(post_children_r_code)) {
+        stopifnot(wait_for_children == TRUE) # don't let the user try it
+        checkmate::assert_multi_class(post_children_r_code, c("expression", "character"))
+        self$post_children_r_code <- as.character(post_children_r_code)
+      }
     },
 
     #' @description Helper function that generates the batch and compute files for a job
@@ -435,16 +454,16 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param job_name The name of the job used in dependency specification and job scheduler naming
     #' @param n_nodes The number of compute nodes to be requested on the scheduler
     #' @param n_cpus The number of cpus to be requested on the scheduler
-    #' @param cpu_time The compute time requested on the cluster dd-HH:MM:SS
+    #' @param wall_time The compute time requested on the cluster dd-HH:MM:SS
     #' @param r_code A character vector or expression containing R code to be executed
-    copy = function(job_name=NULL, n_nodes=NULL, n_cpus=NULL, cpu_time=NULL, r_code=NULL) {
+    copy = function(job_name=NULL, n_nodes=NULL, n_cpus=NULL, wall_time=NULL, r_code=NULL) {
       cloned <- self$clone(deep = TRUE)
       cloned$reset_file_names()
 
       if (!is.null(job_name)) cloned$job_name <- as.character(job_name)
       if (!is.null(n_nodes)) cloned$n_nodes <- as.character(n_nodes)
       if (!is.null(n_cpus)) cloned$n_cpus <- as.character(n_cpus)
-      if (!is.null(cpu_time)) cloned$cpu_time <- as.character(cpu_time)
+      if (!is.null(wall_time)) cloned$wall_time <- as.character(wall_time)
       if (!is.null(r_code)) {
         checkmate::assert_multi_class(r_code, c("expression", "character"))
         cloned$r_code <- as.character(r_code)
