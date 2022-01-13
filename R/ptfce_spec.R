@@ -305,7 +305,8 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
         ptfce_calls,
         time_per_command = private$time_per_zstat,
         memgb_per_command = private$memgb_per_command, fork_jobs = TRUE,
-        scheduler = private$scheduler
+        scheduler = private$scheduler,
+        job_script_prefix='job_ptfce'
       )
       return(invisible(child_job_ids))
     },
