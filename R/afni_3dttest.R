@@ -54,7 +54,7 @@ simulate_null_3dttest <- R6::R6Class("simulate_null_3dttest",
         # code to combine permutations after the jobs complete
         post_children_r_code = c(
           glue("run_afni_command(paste(\"{combine_call}\", paste(job_output_files, collapse=' ')))"),
-          "unlink(job_output_files, sub('\\\\.nii\\\\.gz$', '.minmax.1D', job_output_files))" # job_output_files shuttled to batch job environment
+          "unlink(c(job_output_files, sub('\\\\.nii\\\\.gz$', '.minmax.1D', job_output_files)))" # job_output_files shuttled to batch job environment
         )
       )
 
@@ -196,6 +196,9 @@ simulate_null_3dttest <- R6::R6Class("simulate_null_3dttest",
     get_batch = function() {
       private$generate_batch()
       return(private$perm_batch)
+    },
+    get_use_sdat = function() {
+      private$use_sdat
     }
   )
 )

@@ -17,7 +17,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
     nopad = "",
     pthr = ".02 .01 .005 .002 .001 .0005 .0002 .0001",
     athr = ".05 .02 .01 .005 .002 .001 .0005 .0002 .0001",
-    iter = 10000L,
+    iter = 20000L,
     nodec = "",
     seed = 0,
     sim_string = "",
@@ -206,7 +206,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
           n_permutations = private$iter, njobs = private$residuals_njobs
         )
       }
-      
+
       if (!is.null(dxyz) || !is.null(nxyz)) {
         private$method <- "xyz"
         if (!is.null(dxyz)) {
@@ -302,7 +302,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         r_packages = "fmri.pipeline",
         r_code = c(
           "# refresh completeness of 3dFWHMx runs in case these were run by a preceding batch job",
-          "if (isTRUE(csim_obj$use_fwhmx_acf())) csim_obj$fwhmx_set$refresh()",
+          "csim_obj$refresh()", # any 3dFWHMx calculations or 3dttest++ permutations are now populated
           "setwd(csim_obj$get_out_dir())",
           "run_afni_command(csim_obj$get_call(), omp_num_threads = csim_obj$get_ncpus())"
         )
@@ -316,7 +316,6 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         clust_seq <- R_batch_sequence$new(fwhmx_batch, batch_obj)
         clust_seq$submit()
       } else if (isTRUE(private$method == "residuals") && isFALSE(self$null_3dttest_obj$is_complete())) {
-        browser()
         null_batch <- self$null_3dttest_obj$get_batch()
         batch_obj <- private$clustsim_batch
         batch_obj$depends_on_parents <- "run_3dttest"
@@ -351,6 +350,30 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
     },
     is_complete = function() {
       private$clustsim_complete
+    },
+    #' Simple method to refresh the clustsim_df, fwhmx files, and 3dttest++ permutation files
+    #' This is useful if the object needs to be updated just in time to determine whether permutations or ACF params
+    #' are available
+    refresh = function() {
+      # read clustsim output files, if available
+      private$build_df()
+      if (isTRUE(self$use_fwhmx_acf())) {
+        self$fwhmx_set$refresh()
+      }
+
+      # if 3dttest++ permutations completed, switch method from residuals to insdat and populate files
+      if (isTRUE(self$null_3dttest_obj$is_complete())) {
+        if (isTRUE(self$null_3dttest_obj$get_use_sdat())) {
+          private$method <- "insdat"
+          ofiles <- self$null_3dttest_obj$get_permutation_files()
+          self$insdat_file <- ofiles["permutation_file"]
+          self$insdat_mask_file <- ofiles["mask_file"]
+        } else {
+          stop("Not supported yet...")
+          # need to switch to -inset files
+        }
+      }
+
     }
 
   )
