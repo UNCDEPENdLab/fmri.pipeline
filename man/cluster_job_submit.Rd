@@ -29,7 +29,7 @@ and 'slurm'. The scheduler 'sh' does not submit to any scheduler at all, but ins
 immediately via sh.}
 
 \item{sched_args}{A character vector of arguments to be included in the scheduling command. On TORQUE, these
-will typically begin with '-l' such as '-l walltime=10:00:00'.}
+will typically begin with '-l' such as '-l wall_time=10:00:00'.}
 
 \item{env_variables}{A named character vector containing environment variables and their values to be passed
 to the \code{script} at execution time. This is handled by the '-v' directive on TORQUE clusters and

@@ -23,7 +23,7 @@ status queries on a job scheduler}
 \item{\code{wait_for_children}}{if TRUE, code will be inserted to wait for all jobs in a vector called
 \code{child_job_ids} to finish before the batch exits. It's up to your code to use this variable name}
 
-\item{\code{cpu_time}}{The amount of time requested on the job scheduler, following d-hh:mm:ss format. Defaults to
+\item{\code{wall_time}}{The amount of time requested on the job scheduler, following d-hh:mm:ss format. Defaults to
 "4:00:00", which is 4 hours.}
 
 \item{\code{n_nodes}}{The number of nodes to be requested on the job scheduler}
@@ -53,6 +53,9 @@ module load statements, environment variable exports, etc.}
 
 \item{\code{r_code}}{The R code to be executed by the scheduler. This can be a character vector that includes multiple
 R statements or an expression object containing the R code to be evaluated}
+
+\item{\code{r_code}}{The R code to be executed after child jobs have completed. This can be a character vector that includes multiple
+R statements or an expression object containing the R code to be evaluated. Only relevant if wait_for_children = TRUE}
 
 \item{\code{r_packages}}{The R packages to be loaded into the environment before job execution. These are loaded by
 pacman::p_load, which will install any missing packages before attempting to load}
@@ -93,12 +96,13 @@ Create a new R_batch_job object for execution on an HPC cluster
   job_name = NULL,
   n_nodes = NULL,
   n_cpus = NULL,
-  cpu_time = NULL,
+  wall_time = NULL,
   mem_per_cpu = NULL,
   mem_total = NULL,
   batch_id = NULL,
   r_code = NULL,
   r_script = NULL,
+  post_children_r_code = NULL,
   batch_code = NULL,
   r_packages = NULL,
   scheduler = NULL,
@@ -126,7 +130,7 @@ job begins.}
 
 \item{\code{n_cpus}}{The number of cpus to be requested on the scheduler}
 
-\item{\code{cpu_time}}{The compute time requested on the cluster dd-HH:MM:SS}
+\item{\code{wall_time}}{The compute time requested on the cluster dd-HH:MM:SS}
 
 \item{\code{mem_per_cpu}}{The amount of memory to be requested per cpu}
 
@@ -137,6 +141,8 @@ job begins.}
 \item{\code{r_code}}{A character vector or expression containing R code to be executed}
 
 \item{\code{r_script}}{The path to an R script to be executed by the batch (mutually exclusive with \code{r_code}).}
+
+\item{\code{post_children_r_code}}{A character vector of R code to be executed after waiting for child jobs finishes}
 
 \item{\code{batch_code}}{A character vector of code to be included in the batch script for job scheduling}
 
@@ -195,7 +201,7 @@ Function to create a deep copy of a batch job
   job_name = NULL,
   n_nodes = NULL,
   n_cpus = NULL,
-  cpu_time = NULL,
+  wall_time = NULL,
   r_code = NULL
 )}\if{html}{\out{</div>}}
 }
@@ -209,7 +215,7 @@ Function to create a deep copy of a batch job
 
 \item{\code{n_cpus}}{The number of cpus to be requested on the scheduler}
 
-\item{\code{cpu_time}}{The compute time requested on the cluster dd-HH:MM:SS}
+\item{\code{wall_time}}{The compute time requested on the cluster dd-HH:MM:SS}
 
 \item{\code{r_code}}{A character vector or expression containing R code to be executed}
 }

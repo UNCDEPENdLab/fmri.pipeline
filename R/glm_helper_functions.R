@@ -1407,3 +1407,26 @@ choose_glm_models <- function(gpa, model_names, level, lg=NULL) {
   }
   return(chosen_models)
 }
+
+
+#' helper function to validate numbers in an input string or vector
+#' @param inp A string, character vector, or numeric vector
+#' @param lower The lowest valid value for each number
+#' @param upper The highest valid value for each number
+#' @param as_string If TRUE, return numbers as a space-separated string. If FALSE,
+#'   return the validated numeric vector itself.
+#' @keywords internal
+check_nums <- function(inp, lower = 0, upper = 1e10, as_string = TRUE) {
+  inp_name <- deparse(substitute(inp)) # get name of object passed in
+  if (checkmate::test_string(inp)) {
+    inp <- suppressWarnings(as.numeric(strsplit(inp, "[\\s,;]+", perl=TRUE)[[1]]))
+  } else if (checkmate::test_character(inp)) {
+    inp <- suppressWarnings(as.numeric(inp))
+  }
+
+  if (checkmate::test_numeric(inp, lower = lower, upper = upper, any.missing = FALSE)) {
+    return(paste(inp, collapse = " "))
+  } else {
+    stop("Problem with ", inp_name, " specification: ", paste(inp, collapse = " "))
+  }
+}

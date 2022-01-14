@@ -15,6 +15,27 @@ R6 class for 3dClustSim automation
 \item{\code{fwhmx_set}}{A fwhmx_set_spec object containing 3dFWHMx information for all fwhmx_input_files}
 
 \item{\code{inset_files}}{A character vector of files to use directly as volumes to threshold and clusterize}
+
+\item{\code{insdat_file}}{An sdat file containing permutations to be passed to 3dClustSim through -insdat}
+
+\item{\code{insdat_file}}{A mask file corresponding to the insdat_file data that indicates where each value is in space}
+
+\item{\code{only}}{used if residuals_file is passed in, this contains the object for running the permutations
+return TRUE/FALSE for whether this clustsim relies on the ACF estimates from 3dFWHMx
+Simple method to refresh the clustsim_df, fwhmx files, and 3dttest++ permutation files
+This is useful if the object needs to be updated just in time to determine whether permutations or ACF params
+are available}
+}
+\if{html}{\out{</div>}}
+}
+\section{Active bindings}{
+\if{html}{\out{<div class="r6-active-bindings">}}
+\describe{
+\item{\code{only}}{used if residuals_file is passed in, this contains the object for running the permutations
+return TRUE/FALSE for whether this clustsim relies on the ACF estimates from 3dFWHMx
+Simple method to refresh the clustsim_df, fwhmx files, and 3dttest++ permutation files
+This is useful if the object needs to be updated just in time to determine whether permutations or ACF params
+are available}
 }
 \if{html}{\out{</div>}}
 }
@@ -22,12 +43,15 @@ R6 class for 3dClustSim automation
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-new}{\code{clustsim_spec$new()}}
-\item \href{#method-run}{\code{clustsim_spec$run()}}
+\item \href{#method-submit}{\code{clustsim_spec$submit()}}
 \item \href{#method-get_clustsim_df}{\code{clustsim_spec$get_clustsim_df()}}
+\item \href{#method-get_clustsim_output_files}{\code{clustsim_spec$get_clustsim_output_files()}}
 \item \href{#method-get_call}{\code{clustsim_spec$get_call()}}
 \item \href{#method-get_out_dir}{\code{clustsim_spec$get_out_dir()}}
 \item \href{#method-get_ncpus}{\code{clustsim_spec$get_ncpus()}}
-\item \href{#method-get_use_fwhmx_acf}{\code{clustsim_spec$get_use_fwhmx_acf()}}
+\item \href{#method-use_fwhmx_acf}{\code{clustsim_spec$use_fwhmx_acf()}}
+\item \href{#method-is_complete}{\code{clustsim_spec$is_complete()}}
+\item \href{#method-refresh}{\code{clustsim_spec$refresh()}}
 \item \href{#method-clone}{\code{clustsim_spec$clone()}}
 }
 }
@@ -41,7 +65,12 @@ R6 class for 3dClustSim automation
   prefix = NULL,
   fwhmx_input_files = NULL,
   fwhmx_mask_files = NULL,
+  residuals_file = NULL,
+  residuals_mask_file = NULL,
+  residuals_njobs = NULL,
   inset_files = NULL,
+  insdat_file = NULL,
+  insdat_mask_file = NULL,
   dxyz = NULL,
   nxyz = NULL,
   clustsim_mask = NULL,
@@ -59,11 +88,11 @@ R6 class for 3dClustSim automation
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-run"></a>}}
-\if{latex}{\out{\hypertarget{method-run}{}}}
-\subsection{Method \code{run()}}{
+\if{html}{\out{<a id="method-submit"></a>}}
+\if{latex}{\out{\hypertarget{method-submit}{}}}
+\subsection{Method \code{submit()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{clustsim_spec$run(force = FALSE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{clustsim_spec$submit(force = FALSE)}\if{html}{\out{</div>}}
 }
 
 }
@@ -73,6 +102,15 @@ R6 class for 3dClustSim automation
 \subsection{Method \code{get_clustsim_df()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{clustsim_spec$get_clustsim_df()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-get_clustsim_output_files"></a>}}
+\if{latex}{\out{\hypertarget{method-get_clustsim_output_files}{}}}
+\subsection{Method \code{get_clustsim_output_files()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{clustsim_spec$get_clustsim_output_files()}\if{html}{\out{</div>}}
 }
 
 }
@@ -104,11 +142,29 @@ R6 class for 3dClustSim automation
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_use_fwhmx_acf"></a>}}
-\if{latex}{\out{\hypertarget{method-get_use_fwhmx_acf}{}}}
-\subsection{Method \code{get_use_fwhmx_acf()}}{
+\if{html}{\out{<a id="method-use_fwhmx_acf"></a>}}
+\if{latex}{\out{\hypertarget{method-use_fwhmx_acf}{}}}
+\subsection{Method \code{use_fwhmx_acf()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{clustsim_spec$get_use_fwhmx_acf()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{clustsim_spec$use_fwhmx_acf()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-is_complete"></a>}}
+\if{latex}{\out{\hypertarget{method-is_complete}{}}}
+\subsection{Method \code{is_complete()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{clustsim_spec$is_complete()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-refresh"></a>}}
+\if{latex}{\out{\hypertarget{method-refresh}{}}}
+\subsection{Method \code{refresh()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{clustsim_spec$refresh()}\if{html}{\out{</div>}}
 }
 
 }

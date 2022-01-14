@@ -15,14 +15,14 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
     clustsim_complete = FALSE,
     method = NULL, # or 'inset' for 3dttest++ approach or 'xyz' for voxel + matrix approach
     nopad = "",
-    pthr = ".02 .01 .005 .002 .001 .0005 .0002 .0001",
+    pthr = ".01 .005 .002 .001 .0005 .0002 .0001",
     athr = ".05 .02 .01 .005 .002 .001 .0005 .0002 .0001",
-    iter = 20000L,
+    iter = 30000L,
     nodec = "",
     seed = 0,
     sim_string = "",
     scheduler = "slurm",
-    ncpus = 1L,
+    ncpus = 8L,
     residuals_file = NULL,
     residuals_mask_file = NULL,
     residuals_njobs = 32, # split iter into this many jobs for permutations
@@ -73,7 +73,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
 
       clustsim_files <- self$get_clustsim_output_files()
       if (length(clustsim_files) == 0L) {
-        # most likely, the $run method has not completed yet.
+        # most likely, the $submit method has not completed yet.
         return(invisible(NULL))
       } else if (length(clustsim_files) == 9L) {
         private$clustsim_complete <- TRUE
@@ -239,21 +239,6 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
         if (isTRUE(nopad)) private$nopad <- " -nopad"
       }
 
-      check_nums <- function(inp, lower = 0, upper = 1e10) {
-        inp_name <- deparse(substitute(inp)) # get name of object passed in
-        if (checkmate::test_string(inp)) {
-          inp <- suppressWarnings(as.numeric(strsplit(inp, "\\s+")[[1]]))
-        } else if (checkmate::test_character(inp)) {
-          inp <- suppressWarnings(as.numeric(inp))
-        }
-
-        if (checkmate::test_numeric(inp, lower = lower, upper = upper, any.missing = FALSE)) {
-          return(paste(inp, collapse = " "))
-        } else {
-          stop("Problem with ", inp_name, " specification: ", paste(inp, collapse = " "))
-        }
-      }
-
       if (!is.null(pthr)) {
         private$pthr <- check_nums(pthr, lower = 1e-10, upper = .999)
       }
@@ -278,7 +263,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
       }
 
       if (!is.null(ncpus)) {
-        checkmate::assert_integerish(ncpus, lower = 1, len = 1)
+        checkmate::assert_integerish(ncpus, lower = 1, upper = 1e3, len = 1)
         private$ncpus <- ncpus
       }
 
@@ -287,10 +272,14 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
 
       # populate 3dClustSim object at initialization (if output files are cached already)
       private$build_df()
+
+      # always refresh the object at initialization so that if the underlying 3dFWHMx or 3dttest++ files are complete,
+      # these are current in the created clustsim object.
+      self$refresh()
     },
-    run = function(force=FALSE) {
+    submit = function(force=FALSE) {
       if (isTRUE(private$clustsim_complete) && isFALSE(force)) {
-        message("3dClustSim already finished for these inputs. Use $run(force=TRUE) to re-run or $get_clustsim_df() to retrieve results.")
+        message("3dClustSim already finished for these inputs. Use $submit(force=TRUE) to re-run or $get_clustsim_df() to retrieve results.")
         return(invisible(NULL))
       }
 
@@ -305,7 +294,8 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
           "csim_obj$refresh()", # any 3dFWHMx calculations or 3dttest++ permutations are now populated
           "setwd(csim_obj$get_out_dir())",
           "run_afni_command(csim_obj$get_call(), omp_num_threads = csim_obj$get_ncpus())"
-        )
+        ),
+        batch_directory = private$out_dir
       )
 
       # need to run 3dFWHMx before 3dClustSim can run
@@ -396,14 +386,49 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
 #   scheduler = "slurm", prefix = "test_sdat", out_dir = "/proj/mnhallqlab/users/michael/fmri.pipeline/local",
 #   clustsim_mask = "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask_2.3mm.nii", ncpus = 8
 # )
-# mytest$run()
+# mytest$submit()
 
 
-mytest <- clustsim_spec$new(
-  residuals_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/res4d.nii.gz",
-  residuals_mask_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/mask.nii.gz",
-  residuals_njobs = 32,
-  scheduler = "slurm", prefix = "test_sdat", out_dir = "/proj/mnhallqlab/users/michael/fmri.pipeline/local",
-  clustsim_mask = "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask_2.3mm.nii", ncpus = 8
+# mytest <- clustsim_spec$new(
+#   residuals_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/res4d.nii.gz",
+#   residuals_mask_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/mask.nii.gz",
+#   residuals_njobs = 32,
+#   scheduler = "slurm", prefix = "test_sdat", out_dir = "/proj/mnhallqlab/users/michael/fmri.pipeline/local",
+#   clustsim_mask = "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask_2.3mm.nii", ncpus = 8
+# )
+# mytest$submit()
+
+#' R6 class for a list of 3dClustSim runs
+#' @keywords internal
+#' @importFrom tibble tibble
+clustsim_list_spec <- R6::R6Class("clustsim_list_spec",
+  private = list(
+    clustsim_objs = NULL
+  ),
+  public = list(
+    initialize = function(obj_list=NULL, ...) {
+      if (is.null(obj_list)) {
+        # assume the ... contains a set of clustsim_spec objects
+        obj_list <- list(...)
+      }
+
+      class_match <- sapply(obj_list, function(x) {
+        checkmate::test_class(x, "clustsim_spec")
+      })
+
+      if (!all(class_match == TRUE)) {
+        stop("At least one input is not a clustsim_spec object.")
+      }
+      
+      private$clustsim_objs <- obj_list
+    },
+    #' submit all jobs in this list
+    submit = function(force = FALSE) {
+      lapply(private$clustsim_objs, function(x) { x$submit(force = force) })
+      return(invisible(self))
+    },
+    get_objs = function() {
+      private$clustsim_objs
+    }
+  )
 )
-mytest$run()
