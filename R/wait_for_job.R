@@ -173,8 +173,8 @@ slurm_job_status <- function(job_ids = NULL, user = NULL,
   # -X avoids printing subsidiary jobs within each job id
   #cmd <- paste("sacct", jstring, ustring, "-X -P -o", sacct_format)
   cmd <- paste(jstring, ustring, "-X -P -o", sacct_format)
-  #cat(cmd, "\n")
-  res <- system2("sacct", args=cmd, stdout=TRUE)
+  # cat(cmd, "\n")
+  res <- system2("sacct", args = cmd, stdout = TRUE)
   
   df_base <- data.frame(JobID = job_ids)
   df_empty <- df_base %>%

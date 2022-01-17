@@ -18,3 +18,6 @@ create_fwe_spec(gpa, level = level, lg = NULL)
 helper function to create an FWE object that specifies the type of FWE correction and the 
   model outputs to which it is applied
 }
+\details{
+note that this only works for level = 3 for now
+}

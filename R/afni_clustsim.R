@@ -339,6 +339,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
       private$pvt_use_fwhmx_acf
     },
     is_complete = function() {
+      self$refresh() # always refresh object status in case it completed through a scheduled job
       private$clustsim_complete
     },
     #' Simple method to refresh the clustsim_df, fwhmx files, and 3dttest++ permutation files
@@ -419,7 +420,7 @@ clustsim_list_spec <- R6::R6Class("clustsim_list_spec",
       if (!all(class_match == TRUE)) {
         stop("At least one input is not a clustsim_spec object.")
       }
-      
+
       private$clustsim_objs <- obj_list
     },
     #' submit all jobs in this list
