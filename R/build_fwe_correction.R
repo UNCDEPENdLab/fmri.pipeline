@@ -3,7 +3,7 @@
 #' @param gpa a \code{glm_pipeline_arguments} object that already contains model output information in $l3_model_setup$fsl
 #' @param level an integer indicating what modeling level this FWE correction applies to (1, 2, or 3)
 #' @param lg a logger object for logging messages
-#' @detail note that this only works for level = 3 for now
+#' @details note that this only works for level = 3 for now
 create_fwe_spec <- function(gpa, level = level, lg = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_integerish(level, lower = 1, upper = 3)
@@ -237,7 +237,7 @@ build_3dclustsim_permutation <- function(to_fwe) {
       }
     }
 
-    # TODO: It would be elegant to have gfeat_dir inputs to clustsim_spec, mirroring pTFCE... but it's not a priority at the moment.
+    # TODO: It would be elegant to have gfeat_dir inputs to afni_3dclustsim, mirroring pTFCE... but it's not a priority at the moment.
     gfeat_list <- lapply(to_fwe$feat_dir, read_gfeat_dir)
 
     # every .gfeat folder may have multiple .feat subfolders (per cope)
@@ -250,7 +250,7 @@ build_3dclustsim_permutation <- function(to_fwe) {
           clustsim_mask <- cc$mask_file
         }
 
-        clustsim_spec$new(
+        afni_3dclustsim$new(
           residuals_file = cc$aux_files$res4d,
           residuals_mask_file = cc$mask_file,
           residuals_njobs = residual_njobs,
@@ -266,7 +266,8 @@ build_3dclustsim_permutation <- function(to_fwe) {
     # unnest the .gfeat/.feat structure to just have a 1D list of clustsim objects
     fwe_list <- rlang::flatten(fwe_list)
 
-    clustsim_list <- clustsim_list_spec$new(obj_list = fwe_list)
+    # build the clustsim objects into a list object that supports the $submit method (on all)
+    clustsim_list <- afni_3dclustsim_list$new(obj_list = fwe_list)
 
     return(clustsim_list)
 }
@@ -383,4 +384,14 @@ build_fwe_correction <- function(gpa, lg = NULL) {
   }
 
   return(gpa)
+}
+
+extract_glm_betas <- function(gpa) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  if (is.null(gpa$fwe_correction)) {
+    warning("Cannot extract betas from GLMs using voxelwise thresholds because $fwe_correction is absent. Run build_fwe_correction() and run_fwe_correction() first!")
+    return(invisible(NULL))
+  }
+
+
 }

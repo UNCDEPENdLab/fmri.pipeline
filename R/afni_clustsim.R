@@ -1,7 +1,7 @@
 #' R6 class for 3dClustSim automation
 #' @keywords internal
 #' @importFrom tibble tibble
-clustsim_spec <- R6::R6Class("clustsim_spec",
+afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
   private = list(
     out_dir = getwd(),
     clustsim_df = tibble::tibble(),
@@ -103,7 +103,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
     }
   ),
   public = list(
-    #' @field fwhmx_set A fwhmx_set_spec object containing 3dFWHMx information for all fwhmx_input_files
+    #' @field fwhmx_set A afni_3dfwhmx_list object containing 3dFWHMx information for all fwhmx_input_files
     fwhmx_set = NULL,
 
     #' @field inset_files A character vector of files to use directly as volumes to threshold and clusterize
@@ -156,7 +156,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
 
       if (!is.null(fwhmx_input_files)) {
         private$pvt_use_fwhmx_acf <- TRUE
-        self$fwhmx_set <- fwhmx_set_spec$new(input_files = fwhmx_input_files, mask_files = fwhmx_mask_files, scheduler=scheduler)
+        self$fwhmx_set <- afni_3dfwhmx_list$new(input_files = fwhmx_input_files, mask_files = fwhmx_mask_files, scheduler=scheduler)
         if (!is.null(acf_params)) {
           stop("Cannot pass fwhmx_input_files and acf_params since the ACF parameters are calculated by 3dFWHMx!")
         }
@@ -382,7 +382,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
 # x$get_permutation_files()
 
 
-# mytest <- clustsim_spec$new(
+# mytest <- afni_3dclustsim$new(
 #   insdat_file = x$get_permutation_files()["permutation_file"], insdat_mask_file = x$get_permutation_files()["mask_file"],
 #   scheduler = "slurm", prefix = "test_sdat", out_dir = "/proj/mnhallqlab/users/michael/fmri.pipeline/local",
 #   clustsim_mask = "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask_2.3mm.nii", ncpus = 8
@@ -390,7 +390,7 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
 # mytest$submit()
 
 
-# mytest <- clustsim_spec$new(
+# mytest <- afni_3dclustsim$new(
 #   residuals_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/res4d.nii.gz",
 #   residuals_mask_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/mask.nii.gz",
 #   residuals_njobs = 32,
@@ -402,23 +402,23 @@ clustsim_spec <- R6::R6Class("clustsim_spec",
 #' R6 class for a list of 3dClustSim runs
 #' @keywords internal
 #' @importFrom tibble tibble
-clustsim_list_spec <- R6::R6Class("clustsim_list_spec",
+afni_3dclustsim_list <- R6::R6Class("afni_3dclustsim_list",
   private = list(
     clustsim_objs = NULL
   ),
   public = list(
     initialize = function(obj_list=NULL, ...) {
       if (is.null(obj_list)) {
-        # assume the ... contains a set of clustsim_spec objects
+        # assume the ... contains a set of afni_3dclustsim objects
         obj_list <- list(...)
       }
 
       class_match <- sapply(obj_list, function(x) {
-        checkmate::test_class(x, "clustsim_spec")
+        checkmate::test_class(x, "afni_3dclustsim")
       })
 
       if (!all(class_match == TRUE)) {
-        stop("At least one input is not a clustsim_spec object.")
+        stop("At least one input is not a afni_3dclustsim object.")
       }
 
       private$clustsim_objs <- obj_list

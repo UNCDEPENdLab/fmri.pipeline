@@ -3,7 +3,7 @@
 #' @importFrom R6 R6Class
 #' @details N.B. This class doesn't even expose the Gaussian ACF options given false positive problems
 #' @export
-fwhmx <- R6::R6Class("fwhmx",
+afni_3dfwhmx <- R6::R6Class("afni_3dfwhmx",
   private = list(
     input_file = NULL,
     mask_file = NULL,
@@ -24,10 +24,14 @@ fwhmx <- R6::R6Class("fwhmx",
       } else {
         mask_string <- glue::glue("-mask {private$mask_file}")
       }
+
+      demed_string <- ifelse(isTRUE(private$demed), "-demed", "")
+      unif_string <- ifelse(isTRUE(private$unif), "-unif", "")
+
       private$call <- glue::glue(
         "3dFWHMx -overwrite -acf {private$out_detailed}",
         " -out {private$out_by_subbrik}",
-        " -input {private$input_file} {mask_string} {private$average}",
+        " -input {private$input_file} {mask_string} {private$average} {demed_string} {unif_string}",
         " > {private$out_summary}"
       )
     },
@@ -55,6 +59,11 @@ fwhmx <- R6::R6Class("fwhmx",
     }
   ),
   public = list(
+    #' @param input_file The input dataset whose smoothness should be calculated (often first-level GLM residuals)
+    #' @param mask_file Only compute smoothness within this mask (if not provided, -automask will be used)
+    #' @param out_dir The output directory for fwhmx files
+    #' @param demed
+    #' 
     initialize = function(input_file = NULL, mask_file = NULL, out_dir = NULL, demed = NULL, unif = NULL, average = "geometric") {
       if (is.null(input_file)) {
         stop("Cannot run 3dFWHMx without -input dataset.")

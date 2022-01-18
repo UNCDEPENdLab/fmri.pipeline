@@ -1,6 +1,6 @@
 #' wrapper class for 3dClusterize
 #' @export
-clusterize_spec <- R6::R6Class("clusterize_spec",
+afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
   private = list(
 
     # private fields
@@ -373,7 +373,7 @@ clusterize_spec <- R6::R6Class("clusterize_spec",
   )
 )
 
-# x <- clusterize_spec$new(
+# x <- afni_3dclusterize$new(
 #   threshold_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/stats/zstat6.nii.gz",
 #   lower_thresh = -3, upper_thresh = 3, bisided = TRUE, NN = 1, clust_nvox = 35, pref_map = "zstat_clusterize.nii.gz"
 # )
