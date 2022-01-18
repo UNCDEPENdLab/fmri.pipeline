@@ -355,12 +355,84 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       }
 
       clust_df <- read.table(private$pvt_clusterize_output_file)
-      clust_lines <- readLines(private$pvt_clusterize_output_file)
-      comment_lines <- grep("^\\s*#", clust_lines, perl = TRUE)
+      clust_txt <- readLines(private$pvt_clusterize_output_file)
+      comment_lines <- grep("^\\s*#", clust_txt, perl = TRUE)
+      table_lines <- grep("^\\s*#", clust_txt, perl = TRUE, invert = TRUE)
 
-      # header 
-      cols <- 
-      browser()
+      # header
+      cols <- clust_txt[min(table_lines) - 2L] # header is 2 lines before table starts
+      cols <- make.names(strsplit(sub("^#", "", cols), "\\s{2,}")[[1L]]) # columns are separated by 2+ spaces
+      stopifnot(length(cols) == ncol(clust_df))
+      names(clust_df) <- cols
+
+      parse_header_rows <- function(lines, clust_df) {
+        attrib <- lapply(lines, function(x) {
+          # don't allow errant lines that lack the comment #; also only parse lines with key - value pairing (separated by =)
+          if (!grepl("^#", x) || !grepl("=", x, fixed=TRUE)) {
+            return(NULL)
+          } else {
+            keyval_split <- strsplit(x, "=", fixed = TRUE)[[1L]]
+            if (length(keyval_split) != 2) {
+              #warning("Cannot sort out how to parse line: ", x)
+              return(NULL)
+            } else {
+              key <- trimws(sub("^\\s*#\\s*\\[\\s*(.+)", "\\1", keyval_split[[1]], perl = TRUE))
+              value <- trimws(sub("\\s*(.*)\\]\\s*$", "\\1", keyval_split[[2]], perl = TRUE))
+              return(value %>% setNames(key))
+            }
+          }
+        })
+
+        for (aa in attrib) {
+          if (!is.null(aa)) {
+            attr(clust_df, names(aa)) <- aa
+          }
+        }
+
+        #attr(clust_df, key) <- value
+        return(clust_df)
+      }
+
+      comment_txt <- clust_txt[comment_lines]
+
+      # There are a couple of weird lines for threshold value and nvoxel threshold. These allow for multiple = signs in the values.
+      eq_lens <- sapply(gregexpr("=", text = comment_txt, fixed = TRUE), length)
+      if (any(eq_lens > 1L)) {
+        mult_eq_txt <- comment_txt[eq_lens > 1]
+
+        # remove these lines from comment_txt (will be replaced momentarily by expanded copies)
+        comment_txt <- comment_txt[eq_lens == 1L]
+        for (line in mult_eq_txt) {
+          firsteq <- gregexpr("=", text = line, fixed = TRUE)[[1]][1]
+          stem <- trimws(substr(line, 1, firsteq - 1))
+          values <- substr(line, firsteq + 1, nchar(line))
+          values_split <- trimws(strsplit(values, ";", fixed = TRUE)[[1]])
+          has_subkeys <- all(grepl("=", values_split, fixed = TRUE)) # TRUE for lines like left-tail thr=-3.000;  right-tail thr=3.000
+          if (isTRUE(has_subkeys)) {
+            sub_split <- strsplit(values_split, "=", fixed=TRUE)
+            for (ii in seq_along(sub_split)) {
+              # combine overall stem with subkey-specific stem, separated by comma. Add " ]" for all items except the last (has it already)
+              comment_txt <- c(
+                comment_txt,
+                paste0(stem, ", ", sub_split[[ii]][1], " = ", sub_split[[ii]][2], ifelse(ii == length(sub_split), "", " ]"))
+              )
+            }
+          } else {
+            # really just two lines have been piled into one, like #[ Nvoxel threshold    = 35;  Volume threshold = 425.845 ]
+            # split these into two complete lines
+            for (ii in seq_along(values_split)) {
+              if (ii == 1L) { # for first split, key has been pulled into stem
+                comment_txt <- c(comment_txt, paste0(stem, " = ", values_split[ii], " ]"))
+              } else { # for other splits, key is still to the left of the equals sign
+                comment_txt <- c(comment_txt, paste0("#[ ", values_split[ii]))
+              }
+            }
+          }
+        }
+      }
+
+      clust_df <- parse_header_rows(comment_txt, clust_df)
+      return(clust_df)
 
     },
     get_clust_nifti = function() {
@@ -379,4 +451,5 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 # )
 
 # x$get_call()
-# x$get_clust_df()
+
+# vv <- x$get_clust_df()
