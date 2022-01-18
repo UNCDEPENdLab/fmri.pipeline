@@ -1327,6 +1327,12 @@ named_list <- function(...) {
   return(setNames(list(...), vnames))
 }
 
+# little helper function to create named list from objects
+named_vector <- function(...) {
+  vnames <- as.character(match.call())[-1]
+  return(setNames(c(...), vnames))
+}
+
 #' Helper function to create named data.frame from a set of objects
 #' 
 #' @details This function helps with the problem of having several vectors

@@ -4,6 +4,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
   private = list(
 
     # private fields
+    pvt_input_file = NULL, # internal record of the input file to be passed as -inset to 3dClusterize
     pvt_inset_file = NULL,
     pvt_mask = NULL,
     pvt_sided = "bi", # default to bi-sided (i.e., adjacent positive and negative clusters cannot merge)
@@ -21,13 +22,14 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     pvt_clust_nvox = 10, # very loose lower bound by default (tiny clusters)
     pvt_pref_map = NULL,
     pvt_pref_dat = NULL,
-    pvt_1Dformat = TRUE,
+    pvt_1Dformat = TRUE, # currently not used since parser depends on 1D format
     pvt_quiet = NULL,
     pvt_orient = "LPI", #AFNI default is RAI, which seems like a silly default to me
     pvt_binary = FALSE,
+    pvt_combine_call = NULL, # If needed, the 3dTcat call for combining pvt_threshold_file and pvt_data_file
     pvt_clusterize_call = NULL,
     pvt_clusterize_output_file = "clusters.1D",
-    pvt_dirty = FALSE, # whether object fields have changed since last build_call
+    pvt_dirty_call = FALSE, # whether object fields have changed since last build_call
 
     # private methods
     set_sided = function(val) {
@@ -39,7 +41,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         val <- "two"
       }
       private$pvt_sided <- val
-      private$pvt_dirty <- TRUE # will rebuild call
+      private$pvt_dirty_call <- TRUE # will rebuild call
     },
     set_NN = function(val) {
       if (checkmate::test_string(val)) {
@@ -48,7 +50,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
       checkmate::assert_integerish(val, lower = 1, upper = 3, len = 1L, any.missing = FALSE)
       private$pvt_NN <- as.integer(val)
-      private$pvt_dirty <- TRUE # will rebuild call
+      private$pvt_dirty_call <- TRUE # will rebuild call
     },
     set_clust_nvox = function(val) {
       if (checkmate::test_string(val)) {
@@ -61,7 +63,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         message("Resetting clust_nvol to NULL because clust_nvox was set.")
         private$pvt_clust_nvol <- NULL
       }
-      private$pvt_dirty <- TRUE # will rebuild call
+      private$pvt_dirty_call <- TRUE # will rebuild call
     },
     set_clust_nvol = function(val) {
       if (checkmate::test_string(val)) {
@@ -74,31 +76,24 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         message("Resetting clust_nvox to NULL because clust_nvol was set.")
         private$pvt_clust_nvox <- NULL
       }
-      private$pvt_dirty <- TRUE # will rebuild call
+      private$pvt_dirty_call <- TRUE # will rebuild call
+    },
+    get_combine_call = function() {
+
     },
     build_call = function() {
-      if (isFALSE(private$pvt_dirty)) return(invisible(NULL)) # no need to rebuild call
-      combine_call <- NULL
-      if (!is.null(private$pvt_threshold_file)) {
-        if (is.null(private$pvt_data_file)) {
-          in_file <- private$pvt_threshold_file # 3D input to clusterize
-        } else {
-          # build tmp dataset that combined threshold and data file
-          in_file <- tempfile(pattern = "clustinput", fileext = ".nii.gz")
-          combine_call <- glue("3dTcat -output {in_file} {private$pvt_threshold_file} {private$pvt_data_file}")
-        }
-      } else {
-        in_file <- private$pvt_inset_file
+      if (isFALSE(private$pvt_dirty_call)) return(invisible(NULL)) # no need to rebuild call
+      
+      if (!is.null()) {
+
       }
 
-      # if output file is provided without any path specification, use the directory of the input file
-      private$pvt_clusterize_output_file <- R.utils::getAbsolutePath(private$pvt_clusterize_output_file, workDirectory = dirname(in_file))
 
-      str <- glue("3dClusterize -inset {in_file} -ithr {private$pvt_ithr} -NN {private$pvt_NN}")
+      str <- glue("3dClusterize -overwrite -inset {private$pvt_input_file} -ithr {private$pvt_ithr} -NN {private$pvt_NN} -1Dformat")
       if (!is.null(private$pvt_mask)) str <- glue("{str} -mask {private$pvt_mask}")
       if (isTRUE(private$pvt_mask_from_hdr)) str <- glue("{str} -mask_from_hdr")
       if (!is.null(private$pvt_out_mask)) str <- glue("{str} -out_mask {private$pvt_out_mask}")
-      
+
       # I do not support -within_range yet...
 
       if (!is.null(private$pvt_idat)) str <- glue("{str} -idat {private$pvt_idat}")
@@ -120,22 +115,13 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
       if (!is.null(private$pvt_pref_map)) str <- glue("{str} -pref_map {private$pvt_pref_map}")
       if (!is.null(private$pvt_pref_dat)) str <- glue("{str} -pref_dat {private$pvt_pref_dat}")
-
-      # I may need to just fix this to TRUE for parsing to go smoothly.
-      if (isTRUE(private$pvt_1Dformat)) {
-        str <- glue("{str} -1Dformat")
-      } else {
-        str <- glue("{str} -no_1Dformat")
-      }
-
       if (isTRUE(private$pvt_quiet)) str <- glue("{str} -quiet")
       if (!is.null(private$pvt_orient)) str <- glue("{str} -orient {private$pvt_orient}")
       if (isTRUE(private$pvt_binary)) str <- glue("{str} -binary")
 
       str <- glue(str, " > {private$pvt_clusterize_output_file}")
 
-      private$pvt_clusterize_call <- c(combine = combine_call, clusterize = str)
-
+      private$pvt_clusterize_call <- str
     }
   ),
 
@@ -171,21 +157,21 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       }
     }
   ),
+
+  #' @description initialization function for a new afni_3dclusterize object. Arguments largely mirror the 3dClusterize parameters.
   #' @param inset A 4D dataset containing the statistic to use for thresholding (ithr) and, optionally, the data value to output/retain
   #' @param mask If specified, the volume will be masked by \code{mask} prior to clusterizing
   #' @param threshold_file A 3D dataset containing the statistic to use for thresholding. Mutually exclusive with \code{inset}
   #'   If passed, \code{ithr} and \code{idat} are ignored because the \code{inset} file is generated internally.
   #' @param data_file A 3D dataset containing the data value to be retained in clusters post-thresholding. 
   #'   Must be passed with \code{threshold_file} and will be stitched together with it internally. Mutually exclusive with \code{inset}.
-  #' 
   public = list(
     initialize = function(inset = NULL, mask = NULL, threshold_file = NULL, data_file = NULL, mask_from_hdr = NULL, out_mask = NULL, 
       ithr = NULL, idat = NULL, onesided = NULL, twosided = NULL, bisided = NULL, 
       lower_thresh = NULL, upper_thresh = NULL, one_thresh = NULL, one_tail = NULL,
-      NN = NULL, clust_nvox = NULL,
-      clust_nvol = NULL, pref_map = NULL, pref_dat = NULL, x1Dformat = NULL, no_1Dformat = NULL, 
+      NN = NULL, clust_nvox = NULL, clust_nvol = NULL, pref_map = NULL, pref_dat = NULL,
       quiet = NULL, orient = NULL, binary = NULL, clusterize_output_file = NULL) {
-      
+
       if (!is.null(inset)) {
         checkmate::assert_file_exists(inset)
         private$pvt_inset_file <- normalizePath(inset)
@@ -311,17 +297,6 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$pvt_pref_dat <- pref_dat
       }
 
-      if (!is.null(x1Dformat)) {
-        if (!is.null(no_1Dformat)) {
-          stop("Cannot specify both x1Dformat and no_1Dformat!")
-        }
-        checkmate::assert_logical(x1Dformat, len = 1L)
-        private$pvt_1Dformat <- TRUE
-      } else if (!is.null(no_1Dformat)) {
-        checkmate::assert_logical(no_1Dformat, len = 1L)
-        private$pvt_1Dformat <- !no_1Dformat
-      }
-
       if (!is.null(quiet)) {
         checkmate::assert_logical(quiet, len = 1L)
         private$pvt_quiet <- quiet
@@ -343,14 +318,45 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$pvt_clusterize_output_file <- clusterize_output_file
       }
 
+      # sort out the -inset to be used in the 3dClusterize call (if a threshold and data file are passed)
+      if (!is.null(private$pvt_threshold_file)) {
+        default_wd <- dirname(private$pvt_threshold_file)
+        if (is.null(private$pvt_data_file)) {
+          private$pvt_input_file <- private$pvt_threshold_file # 3D input to clusterize
+        } else {
+          # build tmp dataset that combined threshold and data file
+          private$pvt_input_file <- tempfile(pattern = "clustinput", fileext = ".nii.gz")
+          private$pvt_combine_call <- glue("3dTcat -output {private$pvt_input_file} {private$pvt_threshold_file} {private$pvt_data_file}")
+        }
+      } else {
+        default_wd <- dirname(private$pvt_inset_file)
+        private$pvt_input_file <- private$pvt_inset_file
+      }
+
+      # if output files are provided without any path specification, use the directory of the input file
+      private$pvt_clusterize_output_file <- R.utils::getAbsolutePath(private$pvt_clusterize_output_file,
+        workDirectory = default_wd
+      )
+
+      if (!is.null(private$pvt_pref_map)) {
+        private$pvt_pref_map <- R.utils::getAbsolutePath(private$pvt_pref_map, workDirectory = default_wd)
+      }
+
+      if (!is.null(private$pvt_pref_dat)) {
+        private$pvt_pref_dat <- R.utils::getAbsolutePath(private$pvt_pref_dat, workDirectory = default_wd)
+      }
+
     },
     run = function() {
       private$build_call()
       run_afni_command(private$pvt_clusterize_call)
     },
+
+    #' @description return the 3dClusterize table of clusters as a data.frame
+    #' @details This function will return an empty data.frame if the 3dClusterize output file cannot be found.
     get_clust_df = function() {
       if (!checkmate::test_file_exists(private$pvt_clusterize_output_file)) {
-        warning(glue("The expectected 3dClusterize output does not exist: {private$pvt_clusterize_output_file}"))
+        warning(glue("The expected 3dClusterize output does not exist: {private$pvt_clusterize_output_file}"))
         return(invisible(data.frame()))
       }
 
@@ -373,7 +379,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
           } else {
             keyval_split <- strsplit(x, "=", fixed = TRUE)[[1L]]
             if (length(keyval_split) != 2) {
-              #warning("Cannot sort out how to parse line: ", x)
+              warning("Cannot sort out how to parse 3dClusterize header line: ", x)
               return(NULL)
             } else {
               key <- trimws(sub("^\\s*#\\s*\\[\\s*(.+)", "\\1", keyval_split[[1]], perl = TRUE))
@@ -383,6 +389,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
           }
         })
 
+        # add each attribute to the data.frame
         for (aa in attrib) {
           if (!is.null(aa)) {
             attr(clust_df, names(aa)) <- aa
@@ -396,6 +403,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       comment_txt <- clust_txt[comment_lines]
 
       # There are a couple of weird lines for threshold value and nvoxel threshold. These allow for multiple = signs in the values.
+      # Here, we pre-parse these lines and make them into single key-value pairs per line by adding one line for each.
       eq_lens <- sapply(gregexpr("=", text = comment_txt, fixed = TRUE), length)
       if (any(eq_lens > 1L)) {
         mult_eq_txt <- comment_txt[eq_lens > 1]
@@ -431,16 +439,45 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         }
       }
 
+      # add header row information as attributes to data.frame
       clust_df <- parse_header_rows(comment_txt, clust_df)
       return(clust_df)
 
     },
-    get_clust_nifti = function() {
 
+    #' @description method to read and return the integer-valued clusterized mask (aka -pref_map) as an oro.nifti object
+    #' @return an oro.nifti object containing the clusterized mask from 3dClusterize
+    get_cluster_map_nifti = function() {
+      if (checkmate::test_file_exists(private$pvt_pref_map)) {
+        oro.nifti::readNIfTI(private$pvt_pref_map, reorient=FALSE)
+      } else {
+        NULL # return NULL if file is missing
+      }
     },
+
+    #' @description returns the 3dClusterize call for this specification
     get_call = function() {
       private$build_call()
       return(private$pvt_clusterize_call)
+    },
+
+    #' @description Provides a vector of expected output files that correspond to this 3dClusterize setup
+    #' @param exclude_missing if TRUE (default), any output file that cannot be found will be returned as NA.
+    #' @return a named vector of output files related to this 3dClusterize setup
+    get_output_files = function(exclude_missing = TRUE) {
+
+      cluster_map <- private$pvt_pref_map
+      cluster_masked_data <- private$pvt_pref_dat
+      cluster_table <- private$pvt_clusterize_output_file
+
+      if (isTRUE(exclude_missing)) {
+        if (!checkmate::test_file_exists(private$pvt_pref_map)) cluster_map <- NA_character_
+        if (!checkmate::test_file_exists(private$pvt_pref_dat)) cluster_masked_data <- NA_character_
+        if (!checkmate::test_file_exists(private$pvt_clusterize_output_file)) cluster_table <- NA_character_
+      }
+
+      named_vector(cluster_table, cluster_map, cluster_masked_data)
+
     }
   )
 )
@@ -453,3 +490,6 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 # x$get_call()
 
 # vv <- x$get_clust_df()
+# x$get_output_files()
+# yy <- x$get_cluster_map_nifti()
+
