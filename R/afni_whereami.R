@@ -230,6 +230,8 @@ afni_whereami <- R6::R6Class("afni_whereami",
         return(invisible(NULL))
       }
 
+      result <- 0
+
       if (isFALSE(outfile_exists)) {
         result <- run_afni_command(private$pvt_call, afnidir = private$pvt_afnidir, stderr = "/dev/null")
 

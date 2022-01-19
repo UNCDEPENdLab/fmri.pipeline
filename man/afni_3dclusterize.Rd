@@ -111,9 +111,16 @@ Passes through as -pref_map.}
 \subsection{Method \code{run()}}{
 run the 3dClusterize command relevant to this object
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$run()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$run(force = FALSE)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{force}}{if TRUE, 3dClusterize will be re-run}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-get_clust_df"></a>}}

@@ -1,3 +1,5 @@
+#' helper class to generate 3dttest++ null datasets using -randomsign
+#' @keywords internal
 simulate_null_3dttest <- R6::R6Class("simulate_null_3dttest",
   private = list(
     residuals_file = NULL,

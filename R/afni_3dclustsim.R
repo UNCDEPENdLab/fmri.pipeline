@@ -1,6 +1,6 @@
 #' R6 class for 3dClustSim automation
-#' @keywords internal
 #' @importFrom tibble tibble
+#' @export
 afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
   private = list(
     out_dir = getwd(),
@@ -400,8 +400,8 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
 # mytest$submit()
 
 #' R6 class for a list of 3dClustSim runs
-#' @keywords internal
 #' @importFrom tibble tibble
+#' @keywords internal
 afni_3dclustsim_list <- R6::R6Class("afni_3dclustsim_list",
   private = list(
     clustsim_objs = NULL

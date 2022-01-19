@@ -356,7 +356,13 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     },
 
     #' @description run the 3dClusterize command relevant to this object
-    run = function() {
+    #' @param force if TRUE, 3dClusterize will be re-run
+    run = function(force = FALSE) {
+      if (self$is_complete() && isFALSE(force)) {
+        message("We will not re-run 3dClusterize because it is already complete. Use $run(force = TRUE) to re-run.")
+        return(invisible(NULL))
+      }
+      
       private$build_call()
       run_afni_command(private$pvt_clusterize_call)
     },
@@ -509,7 +515,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$pvt_whereami <- afni_whereami$new(
           afni_3dclusterize_obj = self
         )
-        private$pvt_whereami$run()
+        private$pvt_whereami$run(force = TRUE)
       }
     },
 
@@ -526,22 +532,22 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         return(invisible(NULL))
       } else {
         private$pvt_whereami
-      }      
+      }
     }
   )
 )
 
-# x <- afni_3dclusterize$new(
+# cobj <- afni_3dclusterize$new(
 #   threshold_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/stats/zstat6.nii.gz",
-#   lower_thresh = -3, upper_thresh = 3, bisided = TRUE, NN = 1, clust_nvox = 35, pref_map = "zstat_clusterize.nii.gz"
+#   lower_thresh = -3, upper_thresh = 3, bisided = TRUE, NN = 1, clust_nvox = 35, pref_map = "zstat6_clusterized.nii.gz"
 # )
 
-# x$get_call()
-# x$is_complete()
-# vv <- x$get_clust_df()
-# x$add_whereami()
-# x$whereami()$get_whereami_df()
+# cobj$get_call() # shows command line for this 3dClusterize operation
+# cobj$run() # execute 3dClusterize (use force = TRUE to force re-estimation)
+# cobj$is_complete() # TRUE if 3dClusterize is already done
+# cobj$get_output_files() # vector of output filenames from 3dClusterize
+# clust_nifti <- cobj$get_cluster_map_nifti() # nifti object with clusters.
 
-# x$get_output_files()
-# yy <- x$get_cluster_map_nifti()
-
+# vv <- cobj$get_clust_df() # return the clusters as a data.frame (see attributes )
+# cobj$add_whereami() # add a whereami objet to this clusterize and run whereami with the calculated clusters
+# ww <- cobj$whereami()$get_whereami_df() # data.frame with anatomical labels, roi_num matches vv
