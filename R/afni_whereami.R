@@ -1,23 +1,43 @@
 #' wrapper class for AFNI whereami
+#' @importFrom tidyselect everything
+#' @importFrom dplyr select
 #' @export
 afni_whereami <- R6::R6Class("afni_whereami",
   private = list(
+    pvt_method = "coord_file", # coord_file or coord_vector
+    pvt_coord_file = NULL,
+    pvt_coord_file_columns = NULL,
+    pvt_coord_vector = NULL,
     pvt_atlases = c("MNI_Glasser_HCP_v1.0", "Brainnetome_1.0", "CA_ML_18_MNI"),
-    pvt_whereami_call = NULL,
+    pvt_omask = NULL,
+    pvt_orient = "LPI",
+    pvt_space = "MNI",
+    pvt_call = NULL,
+    pvt_call_omask = NULL,
+    pvt_output_file = "whereami.txt",
+    pvt_omask_output_file = "whereami_omask.txt",
+    pvt_afnidir = NULL,
+    pvt_whereami_df = NULL,
+
     parse_whereami_output = function(txt) {
+      if (!is.null(private$pvt_whereami_df) && nrow(private$pvt_whereami_df) > 0L) {
+        # data have already been parsed... may need a mechanism for forced reparsing?
+        return(private$pvt_whereami_df)
+      }
+
       # This row demarcates a new region in the output. Split on this basis
-      section_map <- grep("+++++++ nearby Atlas structures +++++++", lookup, fixed = TRUE)
+      section_map <- grep("+++++++ nearby Atlas structures +++++++", txt, fixed = TRUE)
 
       # Trim off any lines that precede the first region, then adjust the section boundaries accordingly
-      lookup <- lookup[min(section_map):length(lookup)]
+      txt <- txt[min(section_map):length(txt)]
       section_map <- section_map - min(section_map) + 1
 
       # Create an integer marker for each section, used for splitting into a list
-      section_split <- rep.int(seq_along(section_map), times = diff(c(section_map, length(lookup) + 1)))
-      lookup_split <- split(lookup, section_split)
+      section_split <- rep.int(seq_along(section_map), times = diff(c(section_map, length(txt) + 1)))
+      txt_split <- split(txt, section_split)
 
-      roi_lookup <- sapply(seq_along(lookup_split), function(ii) {
-        sec <- lookup_split[[ii]]
+      roi_list <- sapply(seq_along(txt_split), function(ii) {
+        sec <- txt_split[[ii]]
         atlas_lines <- grep("^Atlas .*", sec, perl = TRUE)
         nomatch <- grep("***** Not near any region stored in databases *****", sec, fixed = TRUE)
         if (length(nomatch) > 0L) {
@@ -34,46 +54,233 @@ afni_whereami <- R6::R6Class("afni_whereami",
       })
 
       # create a data.frame where each ROI has one row and the columns are the best labels from each atlas specified
-      lookup_df <- bind_rows(roi_lookup)
+      roi_df <- bind_rows(roi_list)
 
-      coordlines <- grep("Focus point (LPI)=", lookup, fixed = TRUE)
-      coords <- lookup[coordlines + 2] # first line after header is TLRC, second is MNI
+      coordlines <- grep("Focus point (LPI)=", txt, fixed = TRUE)
+      if (length(coordlines) == 0L) {
+        stop("Parser cannot find focus point lines in output. Cannot continue.")
+      }
+
+      coords <- txt[coordlines + 2] # first line after header is TLRC, second is MNI
       # coords <- sub("<a href=.*$", "", coords, perl=TRUE)
       coords <- sub("^\\s*(-?\\d+\\s*mm.*\\{MNI\\})\\s*<a href=.*$", "\\1", coords, perl = TRUE)
 
       coords_l <- as.numeric(sub("^\\s*(-*\\d+) mm.*", "\\1", coords, perl = TRUE))
       coords_p <- as.numeric(sub("^\\s*(-*\\d+) mm \\[(?:L|R)\\],\\s+(-*\\d+) mm.*", "\\2", coords, perl = TRUE))
       coords_i <- as.numeric(sub("^\\s*(-*\\d+) mm \\[(?:L|R)\\],\\s+(-*\\d+) mm \\[(?:A|P)\\],\\s+(-*\\d+) mm.*", "\\3", coords, perl = TRUE))
+
+      stopifnot(length(coords) == nrow(roi_df)) # cannot continue if these don't match.
+
+      roi_df <- roi_df %>%
+        dplyr::mutate(x = coords_l, y = coords_p, z = coords_i) %>%
+        dplyr::select(roi_num, x, y, z, everything())
+
+      return(roi_df)
     },
-    parse_whereami_bset_output = function(txt) {
+    parse_whereami_bmask_output = function(txt) {
 
     },
     build_call = function() {
+      orient_str <- ifelse(private$pvt_orient == "LPI", "-lpi", "-rai")
+      atlas_str <- paste("-atlas", private$pvt_atlases, collapse=" ")
+
+      if (private$pvt_method == "coord_file") {
+        input_str <- glue("-coord_file {private$pvt_coord_file}'[{paste(private$pvt_coord_file_columns, collapse=',')}]'")
+      } else if (private$pvt_method == "coord_vector") {
+        input_str <- paste(private$pvt_coord_vector, collapse=" ")
+      }
+
+      str <- glue("whereami {input_str} {atlas_str} {orient_str} -space {private$pvt_space} > {private$pvt_output_file}")
+
+      private$pvt_call <- str
+
+      # also build omask call
+      if (!is.null(private$pvt_omask)) {
+        omask_str <- glue("whereami -omask {private$pvt_omask} {atlas_str} {orient_str} -space {private$pvt_space} > {private$pvt_omask_output_file}")
+        private$pvt_call_omask <- omask_str
+      }
 
     }
   ),
   public = list(
-    initialize = function(afni_3dclusterize_obj = NULL, coord_file = NULL, coord_file_columns = NULL,
-                          coords_vector = NULL, atlases = NULL) {
+    initialize = function(afni_3dclusterize_obj = NULL, omask = NULL, coord_file = NULL, coord_file_columns = NULL,
+                          coord_vector = NULL, atlases = NULL, coord_orientation = NULL, coord_space = NULL, 
+                          output_file = NULL, omask_output_file = NULL, afnidir = NULL) {
+
+      if (!is.null(afni_3dclusterize_obj)) {
+        checkmate::assert_class(afni_3dclusterize_obj, "afni_3dclusterize")
+        coord_orientation <- afni_3dclusterize_obj$get_orient()
+        ofiles <- afni_3dclusterize_obj$get_output_files()
+        omask <- ofiles["cluster_map"] # file containing integer-valued clusters
+        coord_file <- ofiles["cluster_table"]
+        coord_file_columns <- 1:3 # 0-based indexing in AFNI 1D parser, so this should be CM LR, CM PA, and CM IS
+      }
+
+      if (!is.null(coord_file)) {
+        checkmate::assert_file_exists(coord_file)
+        private$pvt_coord_file <- coord_file
+        private$pvt_method <- "coord_file"
+
+        if (is.null(coord_file_columns)) {
+          stop("If a coord_file is provided, you must also provide the coord_file_columns corresponding to X, Y, Z coordinates.")
+        } else {
+          checkmate::assert_integerish(coord_file_columns, lower = 0, upper = 1e5, any.missing = FALSE, len = 3L)
+          private$pvt_coord_file_columns <- as.integer(coord_file_columns)
+        }
+      }
+
+      # use a triplet of X, Y, Z coordinates as input (rather than a -coord_file)
+      if (!is.null(coord_vector)) {
+        checkmate::assert_numeric(coord_vector, lower = -1e3, upper = 1e3, any.missing = FALSE, len = 3L)
+        private$pvt_method <- "coord_vector"
+        private$pvt_coord_vector <- coord_vector
+      }
+
+      if (!is.null(coord_orientation)) {
+        checkmate::assert_string(coord_orientation)
+        coord_orientation <- toupper(coord_orientation)
+        checkmate::assert_subset(coord_orientation, c("LPI", "RAI"))
+        private$pvt_orient <- coord_orientation
+      }
+
+      if (!is.null(atlases)) {
+        checkmate::assert_character(atlases, all.missing = FALSE)
+        # should probably validate them... but for now, let AFNI sort it
+        private$pvt_atlases <- atlases
+      }
+
+      if (!is.null(omask)) {
+        checkmate::assert_file_exists(omask)
+        private$pvt_omask <- omask
+
+        # location of whereami output for omask
+        if (!is.null(omask_output_file)) {
+          checkmate::assert_string(omask_output_file)
+          private$pvt_omask_output_file <- omask_output_file
+        }
+
+        # convert output file to absolute path, using location of omask if user doesn't provide absolute path.
+        private$pvt_omask_output_file <- R.utils::getAbsolutePath(private$pvt_omask_output_file, workDirectory = dirname(private$pvt_omask))
+      }
+
+      if (!is.null(output_file)) {
+        checkmate::assert_string(output_file)
+        private$pvt_output_file <- output_file
+      }
+
+      # convert output file to absolute path, using location of coord_file if user doesn't provide absolute path.
+      if (private$pvt_method == "coord_file") {
+        wd <- dirname(private$pvt_coord_file)
+      } else {
+        wd <- getwd()
+      }
+
+      private$pvt_output_file <- R.utils::getAbsolutePath(private$pvt_output_file, workDirectory = wd)
+
+      if (!is.null(coord_space)) {
+        checkmate::assert_string(coord_space)
+        coord_space <- toupper(coord_space)
+        checkmate::assert_subset(coord_space, c("MNI", "MNI_ANAT", "TLRC"))
+        private$pvt_space <- coord_space
+      }
+
+      if (!is.null(afnidir)) {
+        checkmate::assert_directory_exists(afnidir)
+        private$pvt_afnidir <- afnidir
+      }
 
     },
     get_call = function() {
+      private$build_call()
+      private$pvt_call
+    },
+    get_omask_call = function() {
+      private$build_call()
+      private$pvt_call_omask
+    },
+    get_whereami_df = function() {
+      if (!checkmate::test_file_exists(private$pvt_output_file)) {
+        warning("Expected whereami output directory does not exist. Cannot return data! ", private$pvt_output_file)
+      }
+
+      txt <- readLines(private$pvt_output_file)
+      return(private$parse_whereami_output(txt))
+    },
+    get_omask_df = function() {
 
     },
-    run = function() {
+    get_output_files = function(exclude_missing = TRUE) {
+      whereami_from_coords <- private$pvt_output_file
+      whereami_omask_overlap <- private$pvt_omask_output_file
 
-      # get coordinates and names of regions
-      lookup <- runAFNICommand(paste0("whereami -coord_file ", clust_1d, "'[1,2,3]' -space MNI -lpi -atlas CA_ML_18_MNIA"),
-        stderr = "/dev/null", intern = TRUE
-      )
+      if (isTRUE(exclude_missing)) {
+        if (!checkmate::test_file_exists(whereami_from_coords)) whereami_from_coords <- NA_character_
+        if (!checkmate::test_file_exists(whereami_omask_overlap)) whereami_omask_overlap <- NA_character_
+      }
 
-      lookup <- readLines("/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/mtest")
+      named_vector(whereami_from_coords, whereami_omask_overlap)
+    },
+    run = function(force = FALSE) {
+      private$build_call()
+      outfile_exists <- checkmate::test_file_exists(private$pvt_output_file)
+      omaskfile_exists <- ifelse(is.null(private$pvt_omask), NULL, checkmate::test_file_exists(private$pvt_omask_output_file))
 
-      exitstatus <- attr(lookup, "status")
-      if (!is.null(exitstatus) && exitstatus != 0) next # whereami failed, which occurs when there are no clusters. Skip to next tbrik
+      if (isFALSE(force) && isTRUE(outfile_exists) && isTRUE(omaskfile_exists)) {
+        message("whereami output file already exists: ", private$pvt_output_file, ". Use $run(force=TRUE) if you want to regenerate this file.")
+        return(invisible(NULL))
+      }
 
-      # get voxel sizes of clusters
-      vsizes <- read.table(clust_1d)$V1
+      if (isFALSE(outfile_exists)) {
+        result <- run_afni_command(private$pvt_call, afnidir = private$pvt_afnidir, stderr = "/dev/null")
+
+        if (result != 0) {
+          warning("whereami returned an exit status of: ", result)
+        }
+      }
+
+      if (isFALSE(omaskfile_exists)) {
+        result <- run_afni_command(private$pvt_call_omask, afnidir = private$pvt_afnidir, stderr = "/dev/null")
+
+        if (result != 0) {
+          warning("whereami returned an exit status of: ", result)
+        }
+      }
+
+      return(invisible(result))
     }
   ),
 )
+
+# where_test <- afni_whereami$new(
+#   coord_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/stats/clusters.1D",
+#   coord_file_columns = 1:3,
+#   coord_space = "MNI",
+#   coord_orientation = "LPI",
+#   atlases = c("CA_ML_18_MNI", "Brainnetome_1.0", "CA_N27_LR"),
+#   omask = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/stats/zstat_clusterize.nii.gz"
+# )
+
+# where_test$get_call()
+# where_test$run()
+# where_test$get_whereami_df()
+
+
+
+# test from 3dClusterize input objet 
+where_test_fromobj <- afni_whereami$new(
+  afni_3dclusterize_obj = x,
+  atlases = c("CA_ML_18_MNI", "Brainnetome_1.0", "CA_N27_LR")
+)
+
+where_test_fromobj$get_call()
+where_test_fromobj$run()
+where_test_fromobj$get_whereami_df()
+
+where_test_fromobj$get_omask_call()
+
+ 
+#  -coord_file /proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/stats/clusters.1D'[1,2,3]'  
+ 
+#  -lpi -space MNI 
+#  -atlas CA_ML_18_MNI -atlas Brainnetome_1.0 -atlas CA_N27_LR  
+#  -omask /proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/stats/zstat_clusterize.nii.gz -tab 

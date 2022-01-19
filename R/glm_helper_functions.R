@@ -1330,7 +1330,19 @@ named_list <- function(...) {
 # little helper function to create named list from objects
 named_vector <- function(...) {
   vnames <- as.character(match.call())[-1]
-  return(setNames(c(...), vnames))
+  vec <- list(...)
+  nulls <- sapply(vec, is.null) # NULL will drop from vector
+  vec[nulls] <- NULL
+  vnames <- vnames[!nulls]
+
+  # for now, all inputs must be length 1 atomic values or 0-length NULL/character(0) etc.
+  sapply(vec, checkmate::assert_atomic, len = 1L)
+  classes <- sapply(vec, class)
+  if (length(unique(classes)) > 1L) {
+    stop("All inputs must be of the same data type.")
+  }
+  
+  return(setNames(do.call(c, vec), vnames))
 }
 
 #' Helper function to create named data.frame from a set of objects

@@ -30,6 +30,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     pvt_clusterize_call = NULL,
     pvt_clusterize_output_file = "clusters.1D",
     pvt_dirty_call = FALSE, # whether object fields have changed since last build_call
+    pvt_whereami = NULL,
 
     # private methods
     set_sided = function(val) {
@@ -84,11 +85,6 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     build_call = function() {
       if (isFALSE(private$pvt_dirty_call)) return(invisible(NULL)) # no need to rebuild call
       
-      if (!is.null()) {
-
-      }
-
-
       str <- glue("3dClusterize -overwrite -inset {private$pvt_input_file} -ithr {private$pvt_ithr} -NN {private$pvt_NN} -1Dformat")
       if (!is.null(private$pvt_mask)) str <- glue("{str} -mask {private$pvt_mask}")
       if (isTRUE(private$pvt_mask_from_hdr)) str <- glue("{str} -mask_from_hdr")
@@ -309,6 +305,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
       if (!is.null(orient)) {
         checkmate::assert_string(orient)
+        orient <- toupper(orient)
+        checkmate::assert_subset(orient, c("LPI", "RAI"))
         # should probably check LPI, RAI, etc.
         private$pvt_orient <- orient
       }
@@ -370,6 +368,9 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       cols <- make.names(strsplit(sub("^#", "", cols), "\\s{2,}")[[1L]]) # columns are separated by 2+ spaces
       stopifnot(length(cols) == ncol(clust_df))
       names(clust_df) <- cols
+
+      clust_df$roi_num <- seq_len(nrow(clust_df))
+      clust_df <- clust_df %>% dplyr::select(roi_num, everything()) # place roi_num first
 
       parse_header_rows <- function(lines, clust_df) {
         attrib <- lapply(lines, function(x) {
@@ -471,13 +472,35 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       cluster_table <- private$pvt_clusterize_output_file
 
       if (isTRUE(exclude_missing)) {
-        if (!checkmate::test_file_exists(private$pvt_pref_map)) cluster_map <- NA_character_
-        if (!checkmate::test_file_exists(private$pvt_pref_dat)) cluster_masked_data <- NA_character_
-        if (!checkmate::test_file_exists(private$pvt_clusterize_output_file)) cluster_table <- NA_character_
+        if (!checkmate::test_file_exists(cluster_map)) cluster_map <- NA_character_
+        if (!checkmate::test_file_exists(cluster_masked_data)) cluster_masked_data <- NA_character_
+        if (!checkmate::test_file_exists(cluster_table)) cluster_table <- NA_character_
       }
 
       named_vector(cluster_table, cluster_map, cluster_masked_data)
 
+    },
+    get_orient = function() {
+      private$pvt_orient
+    },
+    add_whereami = function() {
+      if (!is.null(private$pvt_whereami) && inherits(private$pvt_whereami, "afni_whereami")) {
+        message("whereami object already added to this clusterize object. Use $whereami() to access it.")
+      } else if (!self$is_complete()) {
+        message("Cannot add whereami to 3dclusterize object until clusterization is run!")
+      } else {
+        private$pvt_whereami <- afni_whereami$new(
+          afni_3dclusterize_obj = self
+        )
+        private$pvt_whereami$run()
+      }
+    },
+    is_complete = function() {
+      expect_files <- self$get_output_files(exclude_missing = FALSE)
+      all(sapply(expect_files, checkmate::test_file_exists))
+    },
+    whereami = function() { # expose nested object
+      private$pvt_whereami
     }
   )
 )
@@ -488,8 +511,11 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 # )
 
 # x$get_call()
-
+# x$is_complete()
 # vv <- x$get_clust_df()
+# x$add_whereami()
+# x$whereami()$get_whereami_df()
+
 # x$get_output_files()
 # yy <- x$get_cluster_map_nifti()
 
