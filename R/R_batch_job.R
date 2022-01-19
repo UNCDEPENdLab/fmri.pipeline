@@ -244,8 +244,8 @@ R_batch_job <- R6::R6Class("batch_job",
     #'    R statements or an expression object containing the R code to be evaluated
     r_code = NULL,
 
-    #' @field r_code The R code to be executed after child jobs have completed. This can be a character vector that includes multiple
-    #'    R statements or an expression object containing the R code to be evaluated. Only relevant if wait_for_children = TRUE
+    #' @field post_children_r_code The R code to be executed after child jobs have completed. This can be a character vector that includes
+    #'   multiple R statements or an expression object containing the R code to be evaluated. Only relevant if wait_for_children = TRUE
     post_children_r_code = NULL,
 
     #' @field r_packages The R packages to be loaded into the environment before job execution. These are loaded by
@@ -388,7 +388,7 @@ R_batch_job <- R6::R6Class("batch_job",
     },
 
     #' @description Helper function that generates the batch and compute files for a job
-    #'
+    #' @param force if TRUE, the RData, batch, and compute will be regenerated/rewritten
     #' @details this is called by \code{$submit} when a job is submitted and is provided
     #'   here in case the user wants to generate the batch files without executing them
     generate = function(force = FALSE) {
@@ -550,6 +550,8 @@ R_batch_sequence <- R6::R6Class("batch_sequence",
       }
       return(self)
     },
+
+    #' @description Calls each job's $generate() method so that scripts can be examined without running the sequence
     generate = function() {
       # call generation steps for each job (mostly for testing)
       lapply(private$sequence_jobs, function(x) x$generate())

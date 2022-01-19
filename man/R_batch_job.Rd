@@ -54,8 +54,8 @@ module load statements, environment variable exports, etc.}
 \item{\code{r_code}}{The R code to be executed by the scheduler. This can be a character vector that includes multiple
 R statements or an expression object containing the R code to be evaluated}
 
-\item{\code{r_code}}{The R code to be executed after child jobs have completed. This can be a character vector that includes multiple
-R statements or an expression object containing the R code to be evaluated. Only relevant if wait_for_children = TRUE}
+\item{\code{post_children_r_code}}{The R code to be executed after child jobs have completed. This can be a character vector that includes
+multiple R statements or an expression object containing the R code to be evaluated. Only relevant if wait_for_children = TRUE}
 
 \item{\code{r_packages}}{The R packages to be loaded into the environment before job execution. These are loaded by
 pacman::p_load, which will install any missing packages before attempting to load}
@@ -175,6 +175,13 @@ Helper function that generates the batch and compute files for a job
 \if{html}{\out{<div class="r">}}\preformatted{R_batch_job$generate(force = FALSE)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{force}}{if TRUE, the RData, batch, and compute will be regenerated/rewritten}
+}
+\if{html}{\out{</div>}}
+}
 \subsection{Details}{
 this is called by \code{$submit} when a job is submitted and is provided
   here in case the user wants to generate the batch files without executing them

@@ -267,16 +267,17 @@ afni_whereami <- R6::R6Class("afni_whereami",
 
 
 # test from 3dClusterize input objet 
-where_test_fromobj <- afni_whereami$new(
-  afni_3dclusterize_obj = x,
-  atlases = c("CA_ML_18_MNI", "Brainnetome_1.0", "CA_N27_LR")
-)
+# where_test_fromobj <- afni_whereami$new(
+#   afni_3dclusterize_obj = x,
+#   atlases = c("CA_ML_18_MNI", "Brainnetome_1.0", "CA_N27_LR")
+# )
 
-where_test_fromobj$get_call()
-where_test_fromobj$run()
-where_test_fromobj$get_whereami_df()
+# where_test_fromobj$get_call()
+# where_test_fromobj$run()
+# where_test_fromobj$get_whereami_df()
 
-where_test_fromobj$get_omask_call()
+# where_test_fromobj$get_omask_call()
+# where_test_fromobj$get_output_files()
 
  
 #  -coord_file /proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/stats/clusters.1D'[1,2,3]'  

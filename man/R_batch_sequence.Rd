@@ -68,6 +68,7 @@ submit the job sequence to the scheduler or local compute
 \if{html}{\out{<a id="method-generate"></a>}}
 \if{latex}{\out{\hypertarget{method-generate}{}}}
 \subsection{Method \code{generate()}}{
+Calls each job's $generate() method so that scripts can be examined without running the sequence
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$generate()}\if{html}{\out{</div>}}
 }

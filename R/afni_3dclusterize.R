@@ -161,6 +161,15 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
   #'   If passed, \code{ithr} and \code{idat} are ignored because the \code{inset} file is generated internally.
   #' @param data_file A 3D dataset containing the data value to be retained in clusters post-thresholding. 
   #'   Must be passed with \code{threshold_file} and will be stitched together with it internally. Mutually exclusive with \code{inset}.
+  #' @param mask_from_hdr passes through as -mask_from_hdr
+  #' @param out_mask passes through as -out_mask
+  #' @param ithr sub-brik number for the voxelwise threshold. Passes through as -ithr
+  #' @param onesided if TRUE, clusterizing will be conducted on one tail of the statistic distribution (-ithr)
+  #' @param twosided if TRUE, clusterizing will be conducted on both tails of the statistic distribution (-ithr)
+  #' @param pref_map File name for the integer-valued mask containing each cluster, ordered by descending voxel size. 
+  #'   Passes through as -pref_map.
+  #' @param NN 1, 2, 3. Default: 1. Passes through as -NN.
+  #' @param quiet passes through as -quiet.
   public = list(
     initialize = function(inset = NULL, mask = NULL, threshold_file = NULL, data_file = NULL, mask_from_hdr = NULL, out_mask = NULL, 
       ithr = NULL, idat = NULL, onesided = NULL, twosided = NULL, bisided = NULL, 
@@ -345,6 +354,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       }
 
     },
+
+    #' @description run the 3dClusterize command relevant to this object
     run = function() {
       private$build_call()
       run_afni_command(private$pvt_clusterize_call)
@@ -480,9 +491,15 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       named_vector(cluster_table, cluster_map, cluster_masked_data)
 
     },
+
+    #' @description returns the orientation code for this 3dClusterize call (LPI or RAI)
     get_orient = function() {
       private$pvt_orient
     },
+
+    #' @description Add's an afni_whereami object to this class in the $whereami slot. The corresponding
+    #'   whereami command is also run when this is added so that coordinates and labels can be obtained
+    #'   immediately. To access the whereami object and its methods, use $whereami()
     add_whereami = function() {
       if (!is.null(private$pvt_whereami) && inherits(private$pvt_whereami, "afni_whereami")) {
         message("whereami object already added to this clusterize object. Use $whereami() to access it.")
@@ -495,12 +512,21 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$pvt_whereami$run()
       }
     },
+
+    #' @description returns TRUE if all expected output files exist for this 3dClusterize call
     is_complete = function() {
       expect_files <- self$get_output_files(exclude_missing = FALSE)
       all(sapply(expect_files, checkmate::test_file_exists))
     },
+
+    #' @description passthrough access to whereami object if that has been 
     whereami = function() { # expose nested object
-      private$pvt_whereami
+      if (is.null(private$pvt_whereami)) {
+        message("No whereami has been added to this object yet. Use $add_whereami() to do so.")
+        return(invisible(NULL))
+      } else {
+        private$pvt_whereami
+      }      
     }
   )
 )
