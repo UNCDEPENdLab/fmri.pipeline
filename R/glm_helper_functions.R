@@ -1448,3 +1448,54 @@ check_nums <- function(inp, lower = 0, upper = 1e10, as_string = TRUE) {
     stop("Problem with ", inp_name, " specification: ", paste(inp, collapse = " "))
   }
 }
+
+#' this helper function replaces matching rows of a current data.frame with rows in a new data.frame
+#' 
+#' @param current The current data.frame that may contains rows matching the new data.frame
+#' @param new A data.frame containing new data that should be added to the current data.frame
+#' @param id_cols A character vector of columns names that must exist in both the current
+#'   and new data.frames. These are used to determine which rows match in the two datasets.
+#' @details The goal here is to keep records in the current data.frame that don't overlap with
+#'   the new data.frame and replace overlapping records with those in the new data.frame. This is helpful
+#'   when you want to update a master data.frame with new records that may overlap current records or may
+#'   be truly new. If there is no overlap in the datasets, this function basically just binds them
+#'   together using dplyr::bind_rows.
+#' @importFrom dplyr bind_rows across
+#' @importFrom tidyselect all_of
+#' @keywords internal
+update_df <- function(current = NULL, new = NULL, id_cols = NULL, sort = TRUE) {
+  checkmate::assert_character(id_cols, any.missing = FALSE)
+  checkmate::assert_data_frame(new)
+
+  has_current <- !(is.null(current) || (is.data.frame(current) && nrow(current) == 0L))
+  if (has_current) {
+    checkmate::assert_data_frame(current)
+    checkmate::assert_subset(id_cols, names(current)) # enforce all id columns in current
+  } else {
+    # no current data.frame (nothing to append to)
+    return(new)
+  }
+
+  checkmate::assert_subset(id_cols, names(new)) # enforce all id columns in new
+
+  id_list <- as.list(id_cols) # to make do.call happy
+
+  # I wonder if there's a simple way to do an anti_join approach to the problem, but this string approach is efficient
+
+  # create unique strings for the combination of identifying columns in the current and new data
+  current_id <- do.call(paste, c(current[id_cols], sep = "-"))
+  new_id <- do.call(paste, c(new[id_cols], sep="-"))
+
+  to_replace <- current_id %in% new_id
+  if (any(to_replace)) {
+    ret <- current[!to_replace, , drop = F] %>% dplyr::bind_rows(new)
+  } else {
+    ret <- current %>% dplyr::bind_rows(new) # no overlap, so just rbind
+  }
+
+  if (isTRUE(sort)) {
+    ret <- ret %>% dplyr::arrange(across(all_of(id_cols)))
+  }
+
+  return(ret)
+}

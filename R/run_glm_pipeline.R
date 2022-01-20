@@ -110,7 +110,8 @@ l3_model_names = "prompt", glm_software = NULL) {
       job_name = "setup_run_l3", n_cpus = gpa$parallel$l2_setup_cores,
       wall_time = gpa$parallel$l3_setup_run_time,
       r_code = c(
-        "gpa <- setup_l3_models(gpa)",
+        #"gpa <- setup_l3_models(gpa)", # doesn't pass forward subset
+        sprintf("gpa <- setup_l3_models(gpa, l3_model_names=%s)", paste(deparse(model_list$l3_model_name), collapse = "")),
         "child_job_ids <- run_feat_sepjobs(gpa, level = 3L)"
       )
     )

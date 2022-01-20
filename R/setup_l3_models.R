@@ -205,6 +205,20 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
 
   class(all_subj_l3_combined) <- c("list", "l3_setup")
 
+  # Combine the generated l3_model_setup with any existing l3_model_setup information
+  # This is important so that if a user requests a model subset (using input arguments, and from run_glm_pipeline),
+  # we don't clear out information about many other models that may have already completed
+
+  
+  # Look for existing models in l3_model_setup that are identical to models that were just setup
+  # Replace the rows corresponding to new models
+  if (!is.null(gpa$l3_model_setup) && inherits(gpa$l3_model_setup, "l3_set")) {
+    all_subj_l3_combined$fsl <- update_df(
+      current = gpa$l3_model_setup$fsl, new = all_subj_l3_combined$fsl,
+      id_cols = c("l1_model", "l1_cope_name", "l2_model", "l2_cope_name", "l3_model")
+    )
+  }
+
   # append l3 setup to gpa
   gpa$l3_model_setup <- all_subj_l3_combined
 
