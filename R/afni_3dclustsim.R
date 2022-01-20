@@ -394,12 +394,9 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
         twosided <- TRUE
       }
 
-      if (bisided || twosided) {
-        test_p <- pthr / 2 # divide alpha by 2 (both tails)
-      } else {
-        test_p
-      }
-
+      # for bisided and twosided, divide threshold alpha by 2 (both tails)
+      test_p <- ifelse(bisided || twosided, pthr / 2, pthr)
+      
       df <- self$get_clustsim_df()
       if (is.null(df)) {
         warning("Cannot apply 3dClustSim results because $get_clustsim_df() returns NULL. Has the $submit() method been called yet and did it complete successfully?")
