@@ -149,6 +149,9 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         if (file.exists(bdm_out_file)) {
           lg$info("Loading BDM info from extant file: %s", bdm_out_file)
           load(bdm_out_file)
+          if ("run_4d_files" %in% names(d_obj)) { # older nomenclature ca. mid 2021
+            d_obj$run_nifti <- d_obj$run_4d_files
+          }
         } else {
           t_out <- gpa$glm_software
           if (isTRUE(gpa$use_preconvolve)) { t_out <- c("convolved", t_out) } #compute preconvolved regressors
@@ -175,8 +178,8 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         }
 
         if ("fsl" %in% gpa$glm_software) {
-          #Setup FSL run-level models for each combination of signals
-          #Returns a data.frame of feat l1 inputs and the fsf file
+          # Setup FSL run-level models for each combination of signals
+          # Returns a data.frame of feat l1 inputs and the fsf file
           feat_l1_df <- tryCatch(
             {
               fsl_l1_model(

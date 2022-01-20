@@ -1023,7 +1023,7 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
   if (nrow(miss_data) > 0L) {
     lg$warn("Model data contain missing values for one or more covariates.")
     lg$warn("These observations will be dropped from model outputs!")
-    lg$warn("%s", capture.output(print(miss_data)))
+    lg$warn("%s", capture.output(print(miss_data %>% dplyr::select(-dummy))))
   }
 
   # fit model and populate model information

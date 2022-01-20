@@ -82,6 +82,13 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   if (is.null(fail_action)) fail_action <- "delete" #should be populated in finalize step, but just in case
   if (is.null(incomplete_action)) incomplete_action <- "delete"
 
+  if (!"feat_fsf" %in% names(feat_queue)) {
+    stop(paste0(
+      "Fatal error with queue of feat jobs to be run. There is no feat_fsf column in gpa$l",
+      level, "_model_setup$fsl. Make sure that the setup step has been run successfully first."
+    ))
+  }
+
   feat_job_df <- feat_queue %>%
     dplyr::select(feat_fsf, feat_dir, feat_complete, feat_failed, to_run)
 
