@@ -4,7 +4,7 @@
 #'   that identify the model.
 #' @param gpa a \code{glm_pipeline_arguments} object containing model specification
 #'
-#' @importFrom dplyr mutate filter select left_join pull
+#' @importFrom dplyr mutate filter select left_join inner_join pull
 #' @author Michael Hallquist
 #' @keywords internal
 fsl_l3_model <- function(l3_df=NULL, gpa) {
@@ -41,7 +41,6 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   }
 
   # elements of metadata for l3
-  id <- l3_df$id[1L]
   session <- l3_df$session[1L]
   l1_model <- l3_df$l1_model[1L]
   l2_model <- l3_df$l2_model[1L]
@@ -60,6 +59,9 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   # l3_df should contain FEAT copes that have been vetted in setup_l3_models.R to exist and be complete
   # handle model respecification based on available data (e.g., if some subjects failed to run)
   mobj <- respecify_l3_model(gpa$l3_models$models[[l3_model]], new_data=l3_df)
+
+  # now make sure that the l3_df aligns perfectly with the data being modeled (mostly dropping copes in l3_df that aren't in model)
+  l3_df <- l3_df %>% dplyr::inner_join(mobj$metadata, by=c("id", "session"))
 
   # generate FSL EV syntax for these regressors
   ev_syntax <- generate_fsf_ev_syntax(inputs = l3_df$cope_file, dmat = mobj$model_matrix)

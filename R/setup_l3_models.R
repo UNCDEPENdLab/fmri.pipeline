@@ -169,7 +169,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
       if (nrow(model_info) <= 3) {
         lg$warn(
           "Fewer than 4 complete feat input directories for l1 model %s, l2 model %s, l3 model %s",
-          model_info$l1_model, model_info$l2_model, model_info$l3_model
+          model_info$l1_model[1L], model_info$l2_model[1L], model_info$l3_model[1L]
         )
         l3_file_setup$fsl <- NULL
       }
@@ -179,7 +179,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
         error = function(e) {
           lg$error(
             "Problem with fsl_l3_model. L1 Model: %s, L2 Model: %s, L3 model %s",
-            model_info$l1_model, model_info$l2_model, model_info$l3_model
+            model_info$l1_model[1L], model_info$l2_model[1L], model_info$l3_model[1L]
           )
           lg$error("Error message: %s", as.character(e))
           return(NULL)
