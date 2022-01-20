@@ -364,9 +364,107 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
           # need to switch to -inset files
         }
       }
+    },
 
+    #' @description method to apply 3dClustSim results to a statistic image to create an integer-valued cluster mask and/or a thresholded
+    #'   statistic image
+    #' @param statistic_nifti A filename to a NIfTI image containing voxelwise statistics that should be used to calculate the threshold for pthr
+    #' @param NN The cluster definition from 3dClustSim to be applied when thresholding the image (1, 2, or 3)
+    #' @param sided Whether to apply the cluster threshold for one-sided, two-sided, or bi-sided tests ('1', '2', or 'bi')
+    #' @param athr The clusterwise p-value to be applied. Default: .05
+    #' @param pthr The voxelwise
+    apply_clustsim = function(statistic_nifti = NULL, NN = 1, sided = "bi", athr = .05, pthr = .001, 
+      voxelwise_stat = list(stat_type = "z"), output_cluster_mask = TRUE, output_thresholded_image = FALSE) {
+      # eventually, would be nice to allow for multiple rows to be tolerated in sim_calc and to apply each to the data
+      checkmate::test_file_exists(statistic_nifti)
+      statistic_nifti <- normalizePath(statistic_nifti) #make sure it's a clear absolute path
+      checkmate::assert_integerish(NN, len = 1L, lower = 1, upper = 3)
+
+      bisided <- onesided <- twosided <- FALSE
+
+      checkmate::assert_string(sided)
+      sided <- recode(tolower(sided), "one" = "1", "two" = "2") # consistent nomenclature
+      checkmate::assert_subset(sided, c("1", "2", "bi"))
+
+      if (sided == "bi") {
+        bisided <- TRUE
+      } else if (sided == "1") {
+        onesided <- TRUE
+      } else if (sided == "2") {
+        twosided <- TRUE
+      }
+
+      if (bisided || twosided) {
+        test_p <- pthr / 2 # divide alpha by 2 (both tails)
+      } else {
+        test_p
+      }
+
+      df <- self$get_clustsim_df()
+      if (is.null(df)) {
+        warning("Cannot apply 3dClustSim results because $get_clustsim_df() returns NULL. Has the $submit() method been called yet and did it complete successfully?")
+        return(invisible(NULL))
+      }
+
+      if (min(athr - df$athr) > 1e-6) { stop("Specified athr: ", athr, " not found in 3dClustSim results") }
+      if (min(pthr - df$pthr) > 1e-6) { stop("Specified pthr: ", pthr, " not found in 3dClustSim results") }
+
+      sim_calc <- df %>% dplyr::filter(nn == !!NN & sided == !!sided & athr == !!athr & pthr == !!pthr)
+      if (nrow(sim_calc) == 0L) {
+        stop("could not find")
+      } else if (nrow(sim_calc) > 1L) {
+        print(sim_calc)
+        stop("More than one threshold found for this combination of settings")
+      }
+
+      # calculate the threshold value based on the statistic type
+      if (voxelwise_stat$stat_type == "z") {
+        thresh_val <- qnorm(test_p, lower.tail = FALSE)
+      } else if (voxelwise_stat$stat_type == "p") {
+        thresh_val <- test_p
+      } else if (voxelwise_stat$stat_type == "t") {
+        thresh_val <- qt(test_p, df = voxelwise_stat$df, lower.tail = FALSE)
+      } else {
+        stop("Cannot interpret stat_type ", voxelwise_stat$stat_type)
+      }
+
+      if (bisided || twosided) {
+        lower_thresh <- -1 * thresh_val
+        upper_thresh <- thresh_val
+
+        # not sure this really makes sense... like do we really want the most non-significant p-values?
+        if (voxelwise_stat$stat_type == "p") lower_thresh <- 1 + lower_thresh
+      } else {
+        one_thresh <- thresh_val
+      }
+
+      clusters_file <- NULL
+      if (isTRUE(output_cluster_mask)) {
+        clusters_file <- paste0(file_sans_ext(statistic_nifti), glue("_3dC_clustmask_voxp{pthr}_clusp{athr}_NN{NN}_{sided}sided.nii.gz"))
+      }
+
+      thresholded_stat_file <- NULL
+      if (isTRUE(output_cluster_mask)) {
+        thresholded_stat_file <- paste0(file_sans_ext(statistic_nifti), glue("_3dC_thresholded_voxp{pthr}_clusp{athr}_NN{NN}_{sided}sided.nii.gz"))
+      }
+
+      arg_list <- list(
+          threshold_file = statistic_nifti, bisided = bisided, onesided = onesided, twosided = twosided,
+          NN = NN, clust_nvox = sim_calc %>% pull(nvoxels) %>% ceiling(), pref_map = clusters_file, pref_dat = thresholded_stat_file
+      )
+
+      if (bisided || twosided) {
+        arg_list[["lower_thresh"]] <- lower_thresh
+        arg_list[["upper_thresh"]] <- upper_thresh
+      } else {
+        arg_list[["one_thresh"]] <- one_thresh
+      }
+
+      cobj <- do.call(afni_3dclusterize$new, arg_list)
+      cobj$run()
+
+      return(cobj)
     }
-
   )
 )
 
@@ -397,6 +495,19 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
 #   scheduler = "slurm", prefix = "test_sdat", out_dir = "/proj/mnhallqlab/users/michael/fmri.pipeline/local",
 #   clustsim_mask = "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask_2.3mm.nii", ncpus = 8
 # )
+
+# cobj <- mytest$apply_clustsim(
+#   statistic_nifti = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/zstat1.nii.gz"
+# )
+
+# cobj$get_clust_df()
+
+# cobj2 <- mytest$apply_clustsim(
+#   statistic_nifti = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-age_sex/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/zstat3.nii.gz"
+# )
+
+# cobj2$get_clust_df()
+
 # mytest$submit()
 
 #' R6 class for a list of 3dClustSim runs

@@ -28,7 +28,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     pvt_binary = FALSE,
     pvt_combine_call = NULL, # If needed, the 3dTcat call for combining pvt_threshold_file and pvt_data_file
     pvt_clusterize_call = NULL,
-    pvt_clusterize_output_file = "clusters.1D",
+    pvt_clusterize_output_file = NULL,
     pvt_dirty_call = FALSE, # whether object fields have changed since last build_call
     pvt_whereami = NULL,
 
@@ -220,10 +220,10 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$pvt_idat <- idat
       }
 
-      n_sided <- sum(sapply(list(onesided, twosided, bisided), function(x) !is.null(x)))
+      n_sided <- sum(sapply(list(onesided, twosided, bisided), function(x) isTRUE(x)))
       if (n_sided > 1L) {
         stop("Only one 'sided' option can be specified: onesided, twosided, or bisided.")
-      } else if (!is.null(onesided)) {
+      } else if (isTRUE(onesided)) {
         checkmate::assert_logical(onesided, len = 1L)
         private$set_sided("one")
         if (is.null(one_thresh)) {
@@ -239,10 +239,10 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
           checkmate::assert_subset(one_tail, c("LEFT", "RIGHT", "LEFT_TAIL", "RIGHT_TAIL"), empty.ok = FALSE)
           private$pvt_one_tail <- one_tail
         }
-      } else if (!is.null(twosided)) {
+      } else if (isTRUE(twosided)) {
         checkmate::assert_logical(twosided, len = 1L)
         private$set_sided("two")
-      } else if (!is.null(bisided)) {
+      } else if (isTRUE(bisided)) {
         checkmate::assert_logical(bisided, len = 1L)
         private$set_sided("bi")
       }
@@ -287,7 +287,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       # set the data output, masked by the clusterize result
       if (!is.null(pref_dat)) {
         if (is.null(private$pvt_idat)) {
-          stop("Asking for pref_dat requires that you also specify ithr")
+          # no specific data sub-brik provided for the -pref_dat. Assume that it should be the same sub-brik as the threshold (-ithr).
+          private$pvt_idat <- private$pvt_ithr
         }
 
         checkmate::assert_string(pref_dat)
@@ -340,6 +341,11 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$pvt_input_file <- private$pvt_inset_file
       }
 
+      # default to naming clusters file according to the inset file
+      if (is.null(private$pvt_clusterize_output_file)) {
+        private$pvt_clusterize_output_file <- paste0(basename(file_sans_ext(private$pvt_input_file)), "_clusters.1D")
+      }
+
       # if output files are provided without any path specification, use the directory of the input file
       private$pvt_clusterize_output_file <- R.utils::getAbsolutePath(private$pvt_clusterize_output_file,
         workDirectory = default_wd
@@ -375,8 +381,13 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         return(invisible(data.frame()))
       }
 
-      clust_df <- read.table(private$pvt_clusterize_output_file)
       clust_txt <- readLines(private$pvt_clusterize_output_file)
+      if (grepl("#** NO CLUSTERS FOUND ***", clust_txt[1L], fixed = TRUE)) {
+        warning("No clusters found by 3dClusterize")
+        return(data.frame())
+      }
+
+      clust_df <- read.table(private$pvt_clusterize_output_file)
       comment_lines <- grep("^\\s*#", clust_txt, perl = TRUE)
       table_lines <- grep("^\\s*#", clust_txt, perl = TRUE, invert = TRUE)
 
@@ -521,8 +532,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
     #' @description returns TRUE if all expected output files exist for this 3dClusterize call
     is_complete = function() {
-      expect_files <- self$get_output_files(exclude_missing = FALSE)
-      all(sapply(expect_files, checkmate::test_file_exists))
+      expect_file <- self$get_output_files(exclude_missing = FALSE)["cluster_table"]
+      checkmate::test_file_exists(expect_file)
     },
 
     #' @description passthrough access to whereami object if that has been 
