@@ -25,6 +25,7 @@
 run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo = TRUE, omp_num_threads=1L, ...) {
   checkmate::assert_string(args, null.ok = FALSE)
   checkmate::assert_string(afnidir, null.ok = TRUE)
+  checkmate::assert_logical(echo, len = 1L)
   if (!is.null(afnidir)) checkmate::assert_directory_exists(afnidir)
   checkmate::assert_integerish(omp_num_threads, lower=1, len=1)
   #look for AFNIDIR in system environment if not passed in
@@ -40,6 +41,7 @@ run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo 
 
   cur_threads <- Sys.getenv("OMP_NUM_THREADS")
   if (omp_num_threads > 1L) {
+    if (isTRUE(echo)) { cat("Setting OMP_NUM_THREADS to:", omp_num_threads, "\n") }
     Sys.setenv(OMP_NUM_THREADS = omp_num_threads) # setup OMP threads
   }
   Sys.setenv(AFNIDIR=afnidir) #export to R environment
@@ -47,7 +49,7 @@ run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo 
   afnicmd  <- paste0(afnisetup, args)
   if (!is.null(stdout)) { afnicmd <- paste(afnicmd, ">", stdout) }
   if (!is.null(stderr)) { afnicmd <- paste(afnicmd, "2>", stderr) }
-  if (echo) { cat("AFNI command: ", afnicmd, "\n") }
+  if (echo) { cat("AFNI command:", afnicmd, "\n") }
   retcode <- system(afnicmd, ...)
   if (omp_num_threads > 1L && cur_threads != "") {
     Sys.setenv(OMP_NUM_THREADS = cur_threads) # reset threads
