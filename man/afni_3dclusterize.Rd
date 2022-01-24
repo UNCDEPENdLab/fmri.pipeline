@@ -128,9 +128,17 @@ run the 3dClusterize command relevant to this object
 \subsection{Method \code{get_clust_df()}}{
 return the 3dClusterize table of clusters as a data.frame
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$get_clust_df()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$get_clust_df(include_whereami = TRUE)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{include_whereami}}{If TRUE and if $add_whereami() is already complete, merge the whereami data
+into the cluster data.frame that is returned by this function.}
+}
+\if{html}{\out{</div>}}
+}
 \subsection{Details}{
 This function will return an empty data.frame if the 3dClusterize output file cannot be found.
 }

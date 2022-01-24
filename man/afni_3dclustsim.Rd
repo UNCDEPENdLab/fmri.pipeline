@@ -51,6 +51,7 @@ are available}
 \item \href{#method-use_fwhmx_acf}{\code{afni_3dclustsim$use_fwhmx_acf()}}
 \item \href{#method-is_complete}{\code{afni_3dclustsim$is_complete()}}
 \item \href{#method-refresh}{\code{afni_3dclustsim$refresh()}}
+\item \href{#method-apply_clustsim}{\code{afni_3dclustsim$apply_clustsim()}}
 \item \href{#method-clone}{\code{afni_3dclustsim$clone()}}
 }
 }
@@ -166,6 +167,52 @@ are available}
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$refresh()}\if{html}{\out{</div>}}
 }
 
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-apply_clustsim"></a>}}
+\if{latex}{\out{\hypertarget{method-apply_clustsim}{}}}
+\subsection{Method \code{apply_clustsim()}}{
+method to apply 3dClustSim results to a statistic image to create an integer-valued cluster mask and/or a thresholded
+  statistic image
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$apply_clustsim(
+  statistic_nifti = NULL,
+  NN = 1,
+  sided = "bi",
+  athr = 0.05,
+  pthr = 0.001,
+  voxelwise_stat = list(stat_type = "z"),
+  output_cluster_mask = TRUE,
+  output_thresholded_image = FALSE,
+  add_whereami = TRUE
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{statistic_nifti}}{A filename to a NIfTI image containing voxelwise statistics that should be used to calculate the threshold for pthr}
+
+\item{\code{NN}}{The cluster definition from 3dClustSim to be applied when thresholding the image (1, 2, or 3)}
+
+\item{\code{sided}}{Whether to apply the cluster threshold for one-sided, two-sided, or bi-sided tests ('1', '2', or 'bi')}
+
+\item{\code{athr}}{The clusterwise p-value to be applied. Default: .05}
+
+\item{\code{pthr}}{The voxelwise threshold to be applied to the statistic_file. Default: .001.}
+
+\item{\code{voxelwise_stat}}{A list object specifying the statistic contained in the \code{statistic_nifti}.
+At present, this consists of the \code{stat_type}: 'z', 't', or 'p'. If a 't' statistic is passed,
+also include $df in the list specifying the degrees of freedom.}
+
+\item{\code{output_cluster_mask}}{If \code{TRUE}, output an integer-valued mask containing any whole brain-significant clusters
+(calculated by 3dClusterize).}
+
+\item{\code{output_thresholded_image}}{If \code{TRUE}, output a copy of \code{statistic_nifti} that has been thresholded
+according to the settings specified here.}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}

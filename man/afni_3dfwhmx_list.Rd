@@ -13,12 +13,12 @@ R6 class for running 3dFWHMx on a group of input files using a scheduler/cluster
 \itemize{
 \item \href{#method-new}{\code{afni_3dfwhmx_list$new()}}
 \item \href{#method-refresh}{\code{afni_3dfwhmx_list$refresh()}}
-\item \href{#method-run}{\code{afni_3dfwhmx_list$run()}}
+\item \href{#method-submit}{\code{afni_3dfwhmx_list$submit()}}
 \item \href{#method-get_batch}{\code{afni_3dfwhmx_list$get_batch()}}
 \item \href{#method-get_acf_average}{\code{afni_3dfwhmx_list$get_acf_average()}}
 \item \href{#method-get_acf_df}{\code{afni_3dfwhmx_list$get_acf_df()}}
 \item \href{#method-get_effective_fwhm}{\code{afni_3dfwhmx_list$get_effective_fwhm()}}
-\item \href{#method-is_fwhmx_complete}{\code{afni_3dfwhmx_list$is_fwhmx_complete()}}
+\item \href{#method-is_complete}{\code{afni_3dfwhmx_list$is_complete()}}
 \item \href{#method-clone}{\code{afni_3dfwhmx_list$clone()}}
 }
 }
@@ -52,12 +52,12 @@ useful for updating job status and ACF params after a run completes
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-run"></a>}}
-\if{latex}{\out{\hypertarget{method-run}{}}}
-\subsection{Method \code{run()}}{
-Run the 3dFWHMx batch for all inputs
+\if{html}{\out{<a id="method-submit"></a>}}
+\if{latex}{\out{\hypertarget{method-submit}{}}}
+\subsection{Method \code{submit()}}{
+Submit the 3dFWHMx batch for all inputs to the scheduler
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dfwhmx_list$run(force = FALSE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dfwhmx_list$submit(force = FALSE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -72,7 +72,7 @@ Run the 3dFWHMx batch for all inputs
 \if{html}{\out{<a id="method-get_batch"></a>}}
 \if{latex}{\out{\hypertarget{method-get_batch}{}}}
 \subsection{Method \code{get_batch()}}{
-Return R_batch_job objects used to run 3dFWHMx for all inputs
+Return R_batch_job objects used to submit 3dFWHMx for all inputs
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dfwhmx_list$get_batch(include_complete = FALSE)}\if{html}{\out{</div>}}
 }
@@ -89,15 +89,28 @@ Return R_batch_job objects used to run 3dFWHMx for all inputs
 \if{html}{\out{<a id="method-get_acf_average"></a>}}
 \if{latex}{\out{\hypertarget{method-get_acf_average}{}}}
 \subsection{Method \code{get_acf_average()}}{
+method to calculate the overall ACF average across all input datasets
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dfwhmx_list$get_acf_average(allow_incomplete_fwhmx = FALSE)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{allow_incomplete_fwhmx}}{If \code{TRUE}, the average will be calculated even if some datasets
+do not have 3dFWHMx parameter estimates (e.g., if they crashed or were never run). Default. \code{FALSE}.}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a three-element vector containing the ACF estimates averaged across all datasets
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-get_acf_df"></a>}}
 \if{latex}{\out{\hypertarget{method-get_acf_df}{}}}
 \subsection{Method \code{get_acf_df()}}{
+return the 3dFWHMx results as a data.frame
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dfwhmx_list$get_acf_df()}\if{html}{\out{</div>}}
 }
@@ -107,20 +120,24 @@ Return R_batch_job objects used to run 3dFWHMx for all inputs
 \if{html}{\out{<a id="method-get_effective_fwhm"></a>}}
 \if{latex}{\out{\hypertarget{method-get_effective_fwhm}{}}}
 \subsection{Method \code{get_effective_fwhm()}}{
+return the effective FWHM estimated by 3dFWHMx -ACF
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dfwhmx_list$get_effective_fwhm()}\if{html}{\out{</div>}}
 }
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-is_fwhmx_complete"></a>}}
-\if{latex}{\out{\hypertarget{method-is_fwhmx_complete}{}}}
-\subsection{Method \code{is_fwhmx_complete()}}{
+\if{html}{\out{<a id="method-is_complete"></a>}}
+\if{latex}{\out{\hypertarget{method-is_complete}{}}}
+\subsection{Method \code{is_complete()}}{
 Simple method to return whether 3dFWHMx is complete for all input files
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dfwhmx_list$is_fwhmx_complete()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dfwhmx_list$is_complete()}\if{html}{\out{</div>}}
 }
 
+\subsection{Returns}{
+returns \code{TRUE} if 3dFWHMx has completed for all runs
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
