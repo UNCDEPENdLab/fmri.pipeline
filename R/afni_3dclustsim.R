@@ -1,5 +1,6 @@
 #' R6 class for 3dClustSim automation
 #' @importFrom tibble tibble
+#' @importFrom stats qnorm qt
 #' @export
 afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
   private = list(
@@ -51,7 +52,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       if (private$method %in% c("inset", "insdat")) {
         acf_string <- "" # irrelevant
       } else if (isTRUE(private$pvt_use_fwhmx_acf)) {
-        if (isFALSE(self$fwhmx_set$is_fwhmx_complete())) {
+        if (isFALSE(self$fwhmx_set$is_complete())) {
           warning("Cannot build 3dClustSim call because some 3dFWHMx runs are incomplete.")
           return(invisible(NULL))
         }
@@ -186,7 +187,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       # if a residuals file is provided, we pass it to 3dttest++ for permutation testing
       if (!is.null(residuals_file)) {
         checkmate::assert_file_exists(residuals_file)
-        private$residuals_file <- residuals_file
+        private$residuals_file <- normalizePath(residuals_file)
         private$method <- "residuals"
         if (is.null(residuals_mask_file)) {
           stop("At present, a residuals_mask_file must be passed with the residuals_file.")
@@ -198,6 +199,11 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
         if (!is.null(residuals_njobs)) {
           checkmate::assert_integerish(residuals_njobs, lower = 1, upper = 1e5)
           private$residuals_njobs <- as.integer(residuals_njobs)
+        }
+
+        # if out_dir is not provided, default to same directory as residuals file
+        if (is.null(out_dir)) {
+          private$out_dir <- dirname(private$residuals_file)
         }
 
         # note that the number of permutations should always equal the number of iterations of 3dClustSim (AFNI resets this internally anyhow)
@@ -299,7 +305,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       )
 
       # need to run 3dFWHMx before 3dClustSim can run
-      if (isTRUE(private$pvt_use_fwhmx_acf) && isFALSE(self$fwhmx_set$is_fwhmx_complete())) {
+      if (isTRUE(private$pvt_use_fwhmx_acf) && isFALSE(self$fwhmx_set$is_complete())) {
         fwhmx_batch <- self$fwhmx_set$get_batch()
         batch_obj <- private$clustsim_batch
         batch_obj$depends_on_parents <- "run_3dfwhmx"
@@ -372,9 +378,17 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
     #' @param NN The cluster definition from 3dClustSim to be applied when thresholding the image (1, 2, or 3)
     #' @param sided Whether to apply the cluster threshold for one-sided, two-sided, or bi-sided tests ('1', '2', or 'bi')
     #' @param athr The clusterwise p-value to be applied. Default: .05
-    #' @param pthr The voxelwise
-    apply_clustsim = function(statistic_nifti = NULL, NN = 1, sided = "bi", athr = .05, pthr = .001, 
-      voxelwise_stat = list(stat_type = "z"), output_cluster_mask = TRUE, output_thresholded_image = FALSE) {
+    #' @param pthr The voxelwise threshold to be applied to the statistic_file. Default: .001.
+    #' @param voxelwise_stat A list object specifying the statistic contained in the \code{statistic_nifti}.
+    #'   At present, this consists of the \code{stat_type}: 'z', 't', or 'p'. If a 't' statistic is passed,
+    #'   also include $df in the list specifying the degrees of freedom.
+    #' @param output_cluster_mask If \code{TRUE}, output an integer-valued mask containing any whole brain-significant clusters
+    #'   (calculated by 3dClusterize).
+    #' @param output_thresholded_image If \code{TRUE}, output a copy of \code{statistic_nifti} that has been thresholded
+    #'   according to the settings specified here.
+    apply_clustsim = function(statistic_nifti = NULL, NN = 1, sided = "bi", athr = .05, pthr = .001,
+      voxelwise_stat = list(stat_type = "z"), output_cluster_mask = TRUE, output_thresholded_image = FALSE,
+      add_whereami = TRUE) {
       # eventually, would be nice to allow for multiple rows to be tolerated in sim_calc and to apply each to the data
       checkmate::test_file_exists(statistic_nifti)
       statistic_nifti <- normalizePath(statistic_nifti) #make sure it's a clear absolute path
@@ -396,6 +410,10 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
 
       # for bisided and twosided, divide threshold alpha by 2 (both tails)
       test_p <- ifelse(bisided || twosided, pthr / 2, pthr)
+
+      if (!self$is_complete()) {
+        stop("Cannot use $apply_clustsim() method because 3dClustSim is not complete. Need to use $submit() first and for this to finish!")
+      }
 
       df <- self$get_clustsim_df()
       if (is.null(df)) {
@@ -437,12 +455,18 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
 
       clusters_file <- NULL
       if (isTRUE(output_cluster_mask)) {
-        clusters_file <- paste0(file_sans_ext(statistic_nifti), glue("_3dC_clustmask_voxp{pthr}_clusp{athr}_NN{NN}_{sided}sided.nii.gz"))
+        clusters_file <- paste0(
+          file_sans_ext(statistic_nifti),
+          glue::glue("_3dC_clustmask_voxp{pthr}_clusp{athr}_NN{NN}_{sided}sided.nii.gz")
+        )
       }
 
       thresholded_stat_file <- NULL
       if (isTRUE(output_cluster_mask)) {
-        thresholded_stat_file <- paste0(file_sans_ext(statistic_nifti), glue("_3dC_thresholded_voxp{pthr}_clusp{athr}_NN{NN}_{sided}sided.nii.gz"))
+        thresholded_stat_file <- paste0(
+          file_sans_ext(statistic_nifti),
+          glue::glue("_3dC_thresholded_voxp{pthr}_clusp{athr}_NN{NN}_{sided}sided.nii.gz")
+        )
       }
 
       arg_list <- list(
@@ -458,7 +482,13 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       }
 
       cobj <- do.call(afni_3dclusterize$new, arg_list)
-      cobj$run()
+      if (!cobj$is_complete()) {
+        cobj$run() # run 3dClusterize if needed
+      }
+
+      if (isTRUE(add_whereami)) {
+        cobj$add_whereami()
+      }
 
       return(cobj)
     }
@@ -486,12 +516,12 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
 
 
 # mytest <- afni_3dclustsim$new(
-#   residuals_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/res4d.nii.gz",
-#   residuals_mask_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/mask.nii.gz",
-#   residuals_njobs = 32,
-#   scheduler = "slurm", prefix = "test_sdat", out_dir = "/proj/mnhallqlab/users/michael/fmri.pipeline/local",
+#   residuals_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/stats/res4d.nii.gz",
+#   residuals_mask_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/mask.nii.gz",
+#   residuals_njobs = 32,  scheduler = "slurm", prefix = "res4d",
 #   clustsim_mask = "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask_2.3mm.nii", ncpus = 8
 # )
+
 
 # cobj <- mytest$apply_clustsim(
 #   statistic_nifti = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/zstat1.nii.gz"
@@ -499,9 +529,12 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
 
 # cobj$get_clust_df()
 
-# cobj2 <- mytest$apply_clustsim(
-#   statistic_nifti = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-age_sex/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/zstat3.nii.gz"
+# cobj2 <- mytest$apply_clustsim(athr = .05, pthr = .001, NN = 1, 
+#   statistic_nifti = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-age_sex/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/tstat3.nii.gz",
+#   output_cluster_mask = TRUE, output_thresholded_image = FALSE
 # )
+
+
 
 # cobj2$get_clust_df()
 

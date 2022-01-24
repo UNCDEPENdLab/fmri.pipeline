@@ -386,7 +386,7 @@ build_fwe_correction <- function(gpa, lg = NULL) {
   return(gpa)
 }
 
-extract_glm_betas <- function(gpa) {
+extract_glm_betas <- function(gpa, beta_definition = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   if (is.null(gpa$fwe_correction)) {
     warning("Cannot extract betas from GLMs using voxelwise thresholds because $fwe_correction is absent. Run build_fwe_correction() and run_fwe_correction() first!")

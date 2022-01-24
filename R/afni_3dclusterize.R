@@ -33,6 +33,12 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     pvt_whereami = NULL,
 
     # private methods
+    # ---------------
+    
+    # whether a whereami object has already been added to this object
+    has_whereami = function() {
+      !is.null(private$pvt_whereami) && inherits(private$pvt_whereami, "afni_whereami")
+    },
     set_sided = function(val) {
       checkmate::assert_string(val)
       checkmate::assert_subset(val, c("1", "one", "2", "two", "bi"))
@@ -84,7 +90,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     },
     build_call = function() {
       if (isFALSE(private$pvt_dirty_call)) return(invisible(NULL)) # no need to rebuild call
-      
+
       str <- glue("3dClusterize -overwrite -inset {private$pvt_input_file} -ithr {private$pvt_ithr} -NN {private$pvt_NN} -1Dformat")
       if (!is.null(private$pvt_mask)) str <- glue("{str} -mask {private$pvt_mask}")
       if (isTRUE(private$pvt_mask_from_hdr)) str <- glue("{str} -mask_from_hdr")
@@ -368,14 +374,16 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         message("We will not re-run 3dClusterize because it is already complete. Use $run(force = TRUE) to re-run.")
         return(invisible(NULL))
       }
-      
+
       private$build_call()
       run_afni_command(private$pvt_clusterize_call)
     },
 
     #' @description return the 3dClusterize table of clusters as a data.frame
     #' @details This function will return an empty data.frame if the 3dClusterize output file cannot be found.
-    get_clust_df = function() {
+    #' @param include_whereami If TRUE and if $add_whereami() is already complete, merge the whereami data
+    #'   into the cluster data.frame that is returned by this function.
+    get_clust_df = function(include_whereami = TRUE) {
       if (!checkmate::test_file_exists(private$pvt_clusterize_output_file)) {
         warning(glue("The expected 3dClusterize output does not exist: {private$pvt_clusterize_output_file}"))
         return(invisible(data.frame()))
@@ -470,8 +478,12 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
       # add header row information as attributes to data.frame
       clust_df <- parse_header_rows(comment_txt, clust_df)
-      return(clust_df)
+      
+      if (isTRUE(include_whereami) && private$has_whereami()) {
+        clust_df <- clust_df %>% dplyr::left_join(self$whereami()$get_whereami_df(), by = "roi_num")
+      }
 
+      return(clust_df)
     },
 
     #' @description method to read and return the integer-valued clusterized mask (aka -pref_map) as an oro.nifti object
@@ -518,7 +530,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #'   whereami command is also run when this is added so that coordinates and labels can be obtained
     #'   immediately. To access the whereami object and its methods, use $whereami()
     add_whereami = function() {
-      if (!is.null(private$pvt_whereami) && inherits(private$pvt_whereami, "afni_whereami")) {
+      if (private$has_whereami()) {
         message("whereami object already added to this clusterize object. Use $whereami() to access it.")
       } else if (!self$is_complete()) {
         message("Cannot add whereami to 3dclusterize object until clusterization is run!")
@@ -548,6 +560,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
   )
 )
 
+
 # cobj <- afni_3dclusterize$new(
 #   threshold_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/stats/zstat6.nii.gz",
 #   lower_thresh = -3, upper_thresh = 3, bisided = TRUE, NN = 1, clust_nvox = 35, pref_map = "zstat6_clusterized.nii.gz"
@@ -562,3 +575,5 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 # vv <- cobj$get_clust_df() # return the clusters as a data.frame (see attributes )
 # cobj$add_whereami() # add a whereami objet to this clusterize and run whereami with the calculated clusters
 # ww <- cobj$whereami()$get_whereami_df() # data.frame with anatomical labels, roi_num matches vv
+# cobj$get_clust_df(include_whereami = FALSE)
+
