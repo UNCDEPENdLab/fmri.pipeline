@@ -559,21 +559,3 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     }
   )
 )
-
-
-# cobj <- afni_3dclusterize$new(
-#   threshold_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/stats/zstat6.nii.gz",
-#   lower_thresh = -3, upper_thresh = 3, bisided = TRUE, NN = 1, clust_nvox = 35, pref_map = "zstat6_clusterized.nii.gz"
-# )
-
-# cobj$get_call() # shows command line for this 3dClusterize operation
-# cobj$run() # execute 3dClusterize (use force = TRUE to force re-estimation)
-# cobj$is_complete() # TRUE if 3dClusterize is already done
-# cobj$get_output_files() # vector of output filenames from 3dClusterize
-# clust_nifti <- cobj$get_cluster_map_nifti() # nifti object with clusters.
-
-# vv <- cobj$get_clust_df() # return the clusters as a data.frame (see attributes )
-# cobj$add_whereami() # add a whereami objet to this clusterize and run whereami with the calculated clusters
-# ww <- cobj$whereami()$get_whereami_df() # data.frame with anatomical labels, roi_num matches vv
-# cobj$get_clust_df(include_whereami = FALSE)
-

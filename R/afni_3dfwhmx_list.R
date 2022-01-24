@@ -171,16 +171,24 @@ afni_3dfwhmx_list <- R6::R6Class("afni_3dfwhmx_list",
 )
 
 # # get ACF parameters for 8 first-level residual files for testing
-# path <- "/proj/mnhallqlab/studies/MMClock/MR_Proc/10637_20140304/mni_5mm_aroma/sceptic_vchosen_ventropy_dauc_pemax_vtime_preconvolve"
-# res4d_files <- list.files(pattern = "res4d.nii.gz", path = path, full.names = T, recursive = T)
-# fwhmx_mask_files <- list.files(pattern = "mask.nii.gz", path = path, full.names = T, recursive = T)
-# test <- afni_3dfwhmx_list$new(input_files = res4d_files, mask_files = fwhmx_mask_files, scheduler = "slurm")
+path <- "/proj/mnhallqlab/studies/MMClock/MR_Proc/10637_20140304/mni_5mm_aroma/sceptic_vchosen_ventropy_dauc_pemax_vtime_preconvolve"
+res4d_files <- list.files(pattern = "res4d.nii.gz", path = path, full.names = T, recursive = T)
+fwhmx_mask_files <- list.files(pattern = "mask.nii.gz", path = path, full.names = T, recursive = T)
+test <- afni_3dfwhmx_list$new(input_files = res4d_files, mask_files = fwhmx_mask_files, scheduler = "slurm")
 
-# # average a, b, c parameters across datasets
+# # submit 3dFWHMx jobs to cluster -- the object will divide the list into smaller jobs if needed
+# # if 3dFWHMx has completed for all inputs already, the $submit method will just return immediately and note
+# # that there is nothing to submit. If you want to force re-estimation, use $submit(force = TRUE).
+# test$submit()
+
+# # has 3dFWHMx completed for all datasets provided to the list?
+# test$is_complete()
+
+# # average a, b, c parameters across datasets -- good for input to 3dClustSim -acf
 # test$get_acf_average()
 
 # # average effective FWHM estimate using -ACF
 # test$get_effective_fwhm()
 
-# # per-dataset ACF summary
+# # per-dataset ACF summary if you want to see what got averaged
 # test$get_acf_df()

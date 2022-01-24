@@ -495,51 +495,6 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
   )
 )
 
-# for testing
-# x <- simulate_null_3dttest$new(
-#   residuals_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/res4d.nii.gz",
-#   mask_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/mask.nii.gz",
-#   n_permutations = 100000,
-#   njobs = 32
-# )
-# x$get_3dttest_calls(include_complete = TRUE)
-# x$submit()
-# x$get_permutation_files()
-
-
-# mytest <- afni_3dclustsim$new(
-#   insdat_file = x$get_permutation_files()["permutation_file"], insdat_mask_file = x$get_permutation_files()["mask_file"],
-#   scheduler = "slurm", prefix = "test_sdat", out_dir = "/proj/mnhallqlab/users/michael/fmri.pipeline/local",
-#   clustsim_mask = "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask_2.3mm.nii", ncpus = 8
-# )
-# mytest$submit()
-
-
-# mytest <- afni_3dclustsim$new(
-#   residuals_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/stats/res4d.nii.gz",
-#   residuals_mask_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-pe/L2m-l2_l2c-emotion.happy/L3m-age_sex/FEAT_l1c-EV_pe.gfeat/cope1.feat/mask.nii.gz",
-#   residuals_njobs = 32,  scheduler = "slurm", prefix = "res4d",
-#   clustsim_mask = "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask_2.3mm.nii", ncpus = 8
-# )
-
-
-# cobj <- mytest$apply_clustsim(
-#   statistic_nifti = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/zstat1.nii.gz"
-# )
-
-# cobj$get_clust_df()
-
-# cobj2 <- mytest$apply_clustsim(athr = .05, pthr = .001, NN = 1, 
-#   statistic_nifti = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-age_sex/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/tstat3.nii.gz",
-#   output_cluster_mask = TRUE, output_thresholded_image = FALSE
-# )
-
-
-
-# cobj2$get_clust_df()
-
-# mytest$submit()
-
 #' R6 class for a list of 3dClustSim runs
 #' @importFrom tibble tibble
 #' @keywords internal

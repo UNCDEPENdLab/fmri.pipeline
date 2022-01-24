@@ -78,6 +78,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     }
   ),
   public = list(
+    #' @description Create a new ptfce_spec object
     #' @param gfeat_dir One or more .gfeat folders containing a higher-level FSL analysis. These will be used for zstat images,
     #'   mask files, and fsl residual smoothness estimates.
     #' @param zstat_numbers if a \code{gfeat_dir} is used, a vector of zstat numbers can also be provided to
@@ -227,7 +228,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
 
     },
 
-    #' method to return calls to external ptfce_zstat.R script for each zstat
+    #' @description method to return calls to external ptfce_zstat.R script for each zstat
     #' @param include_complete if TRUE, return calls for zstats that already appear to have
     #'   pTFCE-corrected images in place. Default: FALSE.
     get_ptfce_calls = function(include_complete = FALSE) {
@@ -275,9 +276,14 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
 
       return(na.omit(calls))
     },
+
+    #' @description return the vector of expected output files
     get_expected_files = function() {
       private$expect_list
     },
+
+    #' @description Run pTFCE in this compute environment. This is not supported at present!
+    #' @param force if TRUE, re-run pTFCE on an existing output
     run = function(force = FALSE) {
       # run pTFCE right here
       require(pTFCE)
@@ -288,14 +294,14 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     #' @param force if TRUE, re-run pTFCE for zstat images that already appear to have pTFCE-corrected outputs in place
     submit = function(force = FALSE) {
       checkmate::assert_logical(force, len=1L)
-      if (isTRUE(self$all_expected_exist()) && isFALSE(force)) {
+      if (isTRUE(self$is_complete()) && isFALSE(force)) {
         message("All expected pTFCE outputs exist. No jobs to submit.")
         return(invisible(character(0)))
       }
 
       # lookup ptfce calls for all inputs
       ptfce_calls <- self$get_ptfce_calls(include_complete = force)
-      if (length(ptfce_calls) == 0L) { # this is unlikely given the all_expected_exist() check above, but still
+      if (length(ptfce_calls) == 0L) { # this is unlikely given the is_complete() check above, but still
         message("No pTFCE jobs need to be run for this input. If you want to recalculate completed outputs, use force=TRUE")
         return(invisible(character(0)))
       }
@@ -310,33 +316,15 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
       )
       return(invisible(child_job_ids))
     },
-    all_expected_exist = function() {
+
+    #' @description returns \code{TRUE} if all expected pTFCE output files exist, \code{FALSE} if any output is missing
+    is_complete = function() {
       checkmate::test_file_exists(unlist(private$expect_list))
+    },
+
+    get_cluster_mask = function() {
+
     }
   )
 
 )
-
-# for testing
-# zf <- list.files(
-#   pattern = "zstat[0-9]+\\.nii\\.gz", path = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-age_sex/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats",
-#   full.names = TRUE
-# )
-
-# x <- ptfce_spec$new(
-#   #z_files = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/zstat1.nii.gz",
-#   z_files = zf,
-#   mask_files = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/mask.nii.gz",
-#   fsl_smoothest_file = "/proj/mnhallqlab/users/michael/mmclock_pe/mmclock_nov2021/feat_l3/L1m-abspe/L2m-l2_l2c-overall/L3m-int_only/FEAT_l1c-EV_abspe.gfeat/cope1.feat/stats/smoothness",
-#   fwe_p = c(.05, .01)
-# )
-
-# y <- ptfce_spec$new(
-#   gfeat_dir = c(
-#     "/proj/mnhallqlab/studies/MMClock/group_analyses/MMClock_aroma_preconvolve_fse_groupfixed/sceptic-clock-feedback-v_entropy-preconvolve_fse_groupfixed/v_entropy/v_entropy-Intercept-Age.gfeat"
-#     #"/proj/mnhallqlab/studies/MMClock/group_analyses/MMClock_aroma_preconvolve_fse_groupfixed/sceptic-clock-feedback-v_entropy-preconvolve_fse_groupfixed/v_entropy/v_entropy-Intercept.gfeat"
-#   )
-#   ,
-#   fwe_p = c(.05, .01)
-# )
-# y$submit()

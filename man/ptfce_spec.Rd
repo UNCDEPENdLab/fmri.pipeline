@@ -23,7 +23,8 @@ R6 class for pTFCE specification for one or more z-statistic images
 \item \href{#method-get_expected_files}{\code{ptfce_spec$get_expected_files()}}
 \item \href{#method-run}{\code{ptfce_spec$run()}}
 \item \href{#method-submit}{\code{ptfce_spec$submit()}}
-\item \href{#method-all_expected_exist}{\code{ptfce_spec$all_expected_exist()}}
+\item \href{#method-is_complete}{\code{ptfce_spec$is_complete()}}
+\item \href{#method-get_cluster_mask}{\code{ptfce_spec$get_cluster_mask()}}
 \item \href{#method-clone}{\code{ptfce_spec$clone()}}
 }
 }
@@ -31,6 +32,7 @@ R6 class for pTFCE specification for one or more z-statistic images
 \if{html}{\out{<a id="method-new"></a>}}
 \if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
+Create a new ptfce_spec object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ptfce_spec$new(
   gfeat_dir = NULL,
@@ -74,8 +76,7 @@ to the same folder as the z-statistic. These thresholded files let you look at t
 \item{\code{scheduler}}{Which scheduler to use for submitting jobs. Options are 'local', 'slurm', and 'torque'.}
 
 \item{\code{time_per_zstat}}{The amount of time to budget for each zstat to run through pTFCE in dd-hh:mm:ss format.
-  Default is 10:00 (10 minutes).
-method to return calls to external ptfce_zstat.R script for each zstat}
+Default is 10:00 (10 minutes).}
 }
 \if{html}{\out{</div>}}
 }
@@ -84,6 +85,7 @@ method to return calls to external ptfce_zstat.R script for each zstat}
 \if{html}{\out{<a id="method-get_ptfce_calls"></a>}}
 \if{latex}{\out{\hypertarget{method-get_ptfce_calls}{}}}
 \subsection{Method \code{get_ptfce_calls()}}{
+method to return calls to external ptfce_zstat.R script for each zstat
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ptfce_spec$get_ptfce_calls(include_complete = FALSE)}\if{html}{\out{</div>}}
 }
@@ -92,8 +94,7 @@ method to return calls to external ptfce_zstat.R script for each zstat}
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{include_complete}}{if TRUE, return calls for zstats that already appear to have
-  pTFCE-corrected images in place. Default: FALSE.
-method to submit all ptfce_zstat.R calls to a cluster based on the scheduler specified}
+pTFCE-corrected images in place. Default: FALSE.}
 }
 \if{html}{\out{</div>}}
 }
@@ -102,6 +103,7 @@ method to submit all ptfce_zstat.R calls to a cluster based on the scheduler spe
 \if{html}{\out{<a id="method-get_expected_files"></a>}}
 \if{latex}{\out{\hypertarget{method-get_expected_files}{}}}
 \subsection{Method \code{get_expected_files()}}{
+return the vector of expected output files
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ptfce_spec$get_expected_files()}\if{html}{\out{</div>}}
 }
@@ -111,10 +113,19 @@ method to submit all ptfce_zstat.R calls to a cluster based on the scheduler spe
 \if{html}{\out{<a id="method-run"></a>}}
 \if{latex}{\out{\hypertarget{method-run}{}}}
 \subsection{Method \code{run()}}{
+Run pTFCE in this compute environment. This is not supported at present!
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ptfce_spec$run(force = FALSE)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{force}}{if TRUE, re-run pTFCE on an existing output
+method to submit all ptfce_zstat.R calls to a cluster based on the scheduler specified}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-submit"></a>}}
@@ -133,11 +144,21 @@ method to submit all ptfce_zstat.R calls to a cluster based on the scheduler spe
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-all_expected_exist"></a>}}
-\if{latex}{\out{\hypertarget{method-all_expected_exist}{}}}
-\subsection{Method \code{all_expected_exist()}}{
+\if{html}{\out{<a id="method-is_complete"></a>}}
+\if{latex}{\out{\hypertarget{method-is_complete}{}}}
+\subsection{Method \code{is_complete()}}{
+returns \code{TRUE} if all expected pTFCE output files exist, \code{FALSE} if any output is missing
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{ptfce_spec$all_expected_exist()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{ptfce_spec$is_complete()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-get_cluster_mask"></a>}}
+\if{latex}{\out{\hypertarget{method-get_cluster_mask}{}}}
+\subsection{Method \code{get_cluster_mask()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ptfce_spec$get_cluster_mask()}\if{html}{\out{</div>}}
 }
 
 }
