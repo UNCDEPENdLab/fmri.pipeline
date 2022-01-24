@@ -347,7 +347,7 @@ read_feat_dir <- function(feat_dir) {
   mask_file <- get_file("mask.nii.gz")
   smoothness_file <- get_file("stats/smoothness")
   dof_file <- get_file("stats/dof")
-  
+
   aux_files <- sapply(
     c(
       "sigmasquareds", "threshac1", "res4d",
