@@ -115,6 +115,10 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   # handle custom L3 FSF syntax
   l3_fsf_syntax <- add_custom_feat_syntax(l3_fsf_syntax, gpa$additional$feat_l3_args, lg)
 
+  # handle outlier deweighting flag (ifelse won't keep list names...)
+  deweight <- if(isTRUE(mobj$fsl_outlier_deweighting)) list(robust_yn = 1) else list(robust_yn = 0)
+  l3_fsf_syntax <- add_custom_feat_syntax(l3_fsf_syntax, deweight, lg)
+
   # skip re-creation of FSF and do not run below unless force==TRUE
   if (!file.exists(l3_feat_fsf) || isTRUE(gpa$glm_settings$fsl$force_l3_creation)) {
     lg$info("Writing L3 FSF syntax to: %s", l3_feat_fsf)

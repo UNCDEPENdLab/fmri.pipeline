@@ -199,15 +199,6 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
   }
 }
 
-# helper function for printing current selections in case of NULL
-c_string <- function(vec, null_val="none") {
-  if (is.null(vec)) {
-    null_val
-  } else {
-    paste(vec, collapse = ", ")
-  }
-}
-
 #' Onset, duration, value column selection helper function
 #' @param l1_model_set an l1_model_set object containing onsets etc.
 #' @param trial_data a trial + subjects x events data.frame that contains potential onset columns

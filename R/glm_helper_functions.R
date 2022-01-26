@@ -1028,13 +1028,35 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
     lg$warn("%s", capture.output(print(miss_data %>% dplyr::select(-dummy))))
   }
 
+  # Add metadata, for merging model matrix against identifying columns
+  # This occurs before mean centering in case one of the id_cols is also in the model (e.g., run_number)
+  mobj$metadata <- data %>% dplyr::select(!!id_cols)
+
+  # apply just-in-time mean centering for requested variables
+  if (!is.null(mobj$covariate_transform)) {
+    for (cc in seq_along(mobj$covariate_transform)) {
+      cname <- names(mobj$covariate_transform)[cc]
+      ctype <- mobj$covariate_transform[cc]
+      if (ctype == "mean") {
+        data[[cname]] <- data[[cname]] - mean(data[[cname]], na.rm=TRUE)
+      } else if (ctype == "zscore") {
+        data[[cname]] <- as.vector(scale(data[[cname]])) # handles NAs automatically
+      } else if (ctype == "min") {
+        data[[cname]] <- data[[cname]] - min(data[[cname]], na.rm=TRUE)
+      } else if (ctype == "max") {
+        data[[cname]] <- data[[cname]] - max(data[[cname]], na.rm=TRUE)
+      }
+    }
+  }
+
+  # keep track of data used for fitting model for refitting in case of missing data
+  mobj$model_data <- data %>% dplyr::select(!!model_vars)
+
   # fit model and populate model information
   mobj$lmfit <- lm(model_formula, data)
   mobj$model_formula <- model_formula
   mobj$model_matrix <- model.matrix(mobj$lmfit)
   mobj$regressors <- colnames(mobj$model_matrix) # actual regressors after expanding categorical variables
-  mobj$metadata <- data %>% dplyr::select(!!id_cols) # for merging model matrix against identifying columns
-  mobj$model_data <- data %>% dplyr::select(!!model_vars) #keep track of data used for fitting model for refitting in case of missing data
 
   # handle coefficient aliasing
   al <- alias(mobj$lmfit)
@@ -1500,4 +1522,13 @@ update_df <- function(current = NULL, new = NULL, id_cols = NULL, sort = TRUE) {
   }
 
   return(ret)
+}
+
+# helper function for printing current selections in case of NULL
+c_string <- function(vec, null_val="none") {
+  if (is.null(vec)) {
+    null_val
+  } else {
+    paste(vec, collapse = ", ")
+  }
 }

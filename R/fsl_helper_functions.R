@@ -303,16 +303,23 @@ get_design_files <- function(dir) {
 
 #' helper function to look up core stats outputs from a .feat folder
 #' @param feat_dir a .feat folder containing the outputs of an FSL analysis
+#' @param what which parts of the .feat folder should be parsed. If "all", extract everything.
 #' @return a list containing sorted vectors of each stat output
 #' @importFrom glue glue
 #' @importFrom checkmate assert_directory_exists assert_file_exists test_directory_exists
 #' @importFrom readr read_delim
+#' @importFrom gsubfn strapply
 #' @export
-read_feat_dir <- function(feat_dir) {
+read_feat_dir <- function(feat_dir, what = "all") {
   if (!checkmate::test_directory_exists(feat_dir)) return(NULL)
   feat_dir <- normalizePath(feat_dir) # convert to absolute path
   stats_dir <- file.path(feat_dir, "stats")
   if (!checkmate::test_directory_exists(stats_dir)) return(NULL)
+
+  checkmate::assert_character(what)
+  if (what[1L] == "all") {
+    what <- c("stat_files", "aux_files", "parsed_txt")
+  }
 
   # inside the stats directory we will have pes, copes, varcopes, and zstats
   z_files <- list.files(path = stats_dir, pattern = "zstat[0-9]+\\.nii.*", full.names = TRUE)
@@ -363,7 +370,11 @@ read_feat_dir <- function(feat_dir) {
     }
   )
 
-  parsed_txt <- sapply(c("dof", "smoothness", "lmax_zstat", "cluster_zstat"), function(x) {
+  parsed_txt <- sapply(c("dof", "smoothness", "lmax_zstat", "cluster_zstat"), simplify = FALSE, FUN = function(x) {
+    if (!"parsed_txt" %in% what) {
+      return(list()) # return empty list if parsing not requested
+    }
+
     if (x == "lmax_zstat") {
       pat <- "lmax_zstat\\d+_std\\.txt"
     } else if (x == "cluster_zstat") {
@@ -584,7 +595,7 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
   # Note: in the current implementation of l3 analysis, the cope1.feat folder in the l3 .gfeat folder always corresponds
   # to the single lower-level cope that was fed forward for group analysis. This relates to the 'Inputs are lower-level
   # FEAT directories' (many .feat folders in .gfeat) versus 'Inputs are 3D cope images from FEAT directores' (one .feat folder).
-  l3_stats <- lapply(file.path(gpa$l3_model_setup$fsl$feat_dir, "cope1.feat"), read_feat_dir)
+  l3_stats <- lapply(file.path(gpa$l3_model_setup$fsl$feat_dir, "cope1.feat"), read_feat_dir, what = "stat_files") #don't parse text files
 
   if (isTRUE(gpa$multi_run)) {
     meta_df <- gpa$l3_model_setup$fsl %>% dplyr::select(l1_model, l1_cope_name, l2_model, l2_cope_name, l3_model, feat_dir)

@@ -127,6 +127,9 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     dir.create(output_directory, recursive = TRUE)
   }
 
+  # always use the full path internally
+  output_directory <- normalizePath(output_directory)
+
   # validate and fill in variable mapping vector (if user only passes some fields)
   default_vm <- c(
     id = "id", session = "session", trial = "trial", run_trial = "run_trial",

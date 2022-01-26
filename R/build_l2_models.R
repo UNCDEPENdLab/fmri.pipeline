@@ -119,7 +119,11 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
     })
   }
 
-  create_new_model <- function(data, to_modify = NULL) {
+  create_new_model <- function(data, to_modify = NULL, level = NULL) {
+    if (checkmate::test_data_table(data)) {
+      data <- as.data.frame(data) # make subsetting syntax in this function consistent with standard data.frame conventions
+    }
+
     checkmate::assert_class(to_modify, "hi_model_spec", null.ok = TRUE)
     if (is.null(to_modify)) {
       mobj <- list(level = level)
@@ -129,6 +133,8 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
       mobj <- to_modify
       modify <- TRUE
     }
+
+    checkmate::assert_integerish(level, lower = 2, upper = 3, len = 1L)
 
     ### ------ model name ------
     if (isTRUE(modify)) {
@@ -178,7 +184,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
           "Use variable names in the dataset provided to this function.",
           "Note that this syntax follows standard R model syntax. See ?lm for details.",
           "Example: ~ emotion * wmload + run_number\n",
-          "For an intercept-only model, specify: ~1",
+          "For an intercept-only model, specify: ~1\n",
           "Available column names: \n"
         ), sep = "\n")
         cat(strwrap(paste(names(data), collapse = ", "), 70, exdent = 5), sep = "\n")
@@ -212,6 +218,12 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
       if (is.numeric(data[[vv]]) && checkmate::test_integerish(data[[vv]])) {
         data[[vv]] <- as.integer(data[[vv]])
       }
+
+      if (is.character(data[[vv]])) {
+        cat("Converting character variable to factor for model setup: ", vv, "\n", sep = "")
+        data[[vv]] <- as.factor(data[[vv]])
+      }
+
       if (is.integer(data[[vv]]) && length(unique(data[[vv]]) < 20)) {
         cat(
           "\n",
@@ -232,8 +244,68 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
 
     # need to build a model LM-style
     if (length(mobj$model_variables) > 0L) {
-      cat("Summary of variables included in model:\n")
+      cat("Summary of variables included in model:\n\n")
       print(summary(data[, mobj$model_variables]))
+
+      # handle mean centering and reference levels
+      cont_vars <- sapply(data[, mobj$model_variables], class) %in% c("integer", "numeric")
+      if (any(cont_vars)) {
+        cat(
+          "We will now ask you to indicate whether to transform any of the continuous covariates in the model.",
+          "The most common transformation, which is often a good default, is to mean-center the covariate.",
+          "Other options are to subtract the minimum (so that zero now represents the lowest covariate value),",
+          "subtract the maximum (so that zero represents the highest covariate value),",
+          "or to z-score/standardized the covariate to a mean of zero and standard deviation of one.", sep="\n  "
+        )
+        cont_vars <- mobj$model_variables[cont_vars == TRUE]
+        mobj$covariate_transform <- c() # reset any previous centering settings
+        for (cc in cont_vars) {
+          cat("\n")
+          resp <- menu(
+            c("Mean center", "Standardize/z-score", "Subtract minimum", "Subtract maximum", "No transformation"),
+            title = paste0("Transform ", cc, "?")
+          )
+          if (resp == 1L) {
+            cat(glue("\nMean centering {cc}. Mean centering is recomputed if runs or subjects are dropped in L2 or L3 analyses.\n", .trim = FALSE))
+            mobj$covariate_transform[cc] <- "mean"
+          } else if (resp == 2L) {
+            cat(glue("\nStandardizing {cc}. Standardization is recomputed if runs or subjects are dropped in L2 or L3 analyses.\n", .trim = FALSE))
+            mobj$covariate_transform[cc] <- "zscore"
+          } else if (resp == 3L) {
+            cat(glue("\nSubtracting minimum value of {cc}. This is recomputed if runs or subjects are dropped in L2 or L3 analyses.\n", .trim = FALSE))
+            mobj$covariate_transform[cc] <- "min"
+          } else if (resp == 4L) {
+            cat(glue("\nSubtracting maximum value of {cc}. This is recomputed if runs or subjects are dropped in L2 or L3 analyses.\n", .trim = FALSE))
+            mobj$covariate_transform[cc] <- "max"
+          }
+        }
+      }
+
+      # handle reference levels for factors
+      cat_vars <- sapply(data[, mobj$model_variables], class) %in% c("factor")
+      if (any(cat_vars)) {
+        cat_vars <- mobj$model_variables[cat_vars == TRUE]
+        cat(
+          "We will now ask you to choose the reference level for dummy coding factors in the model.",
+          "This affects how contrasts are coded by emmeans and it controls how you interpret the Intercept maps",
+          "at levels 2 and 3, if you look at these. In general, this choice should not make a big difference,",
+          "but we default to the factor level that is most common in the dataset.", sep="\n  "
+        )
+        for (cc in cat_vars) {
+          # default to cell with largest N
+          default_lev <- names(which.max(table(data[[cc]])))
+          levs <- levels(data[[cc]])
+          levs <- levs[c(which(levs == default_lev), which(levs != default_lev))]
+          labs <- levs
+          labs[1L] <- paste0("Recommended: ", labs[1])
+          which_lev <- menu(labs, title = glue("Choose the reference level for the {cc} factor."))
+          if (!exists("which_lev") || which_lev == 0L) {
+            which_lev <- 1L # choose default on cancel or ctrl+c
+          }
+          data[[cc]] <- relevel(data[[cc]], ref = levs[which_lev])
+        }
+
+      }
     }
 
     # fit linear model and populate model object
@@ -241,6 +313,23 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
 
     # walk through contrast generation for this model
     mobj <- specify_contrasts(mobj)
+
+    # ask about outlier deweighting
+    if (level == 3L) {
+      cat(
+        "Do you want to turn on outlier deweighting in FSL level 3 analysis? This is available for any mixed effects analysis,",
+        "most commonly FLAME1 or FLAME1+2. In general, this is a good idea, but we have seen it break down for some legitimate inputs,",
+        "generating many complaints about excessive outliers being detected. If you get those messages, you should probably disable this.",
+        sep = "\n  "
+      )
+      
+      res <- menu(c("No", "Yes"), title = "Turn on outlier deweighting?")
+      if (res == 2L) {
+        mobj$fsl_outlier_deweighting <- TRUE
+      } else {
+        mobj$fsl_outlier_deweighting <- FALSE
+      }
+    }
 
     return(mobj)
   }
@@ -255,7 +344,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
     )
 
     if (add_more == 1L) { # add
-      mobj <- create_new_model(data)
+      mobj <- create_new_model(data, level = level)
       if (mobj$name %in% names(model_set)) {
         warning("An model with the same name exists: ", mobj$name, ". Overwriting it.")
       }
@@ -268,7 +357,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
         while (res == 0L) {
           res <- menu(names(model_list), title = "Which model do you want to modify?")
         }
-        model_list[[res]] <- create_new_model(data, to_modify = model_list[[res]])
+        model_list[[res]] <- create_new_model(data, to_modify = model_list[[res]], level = level)
       }
     } else if (add_more == 3L) { # delete
       which_del <- menu(names(model_list), title = "Which model would you like to delete?")
