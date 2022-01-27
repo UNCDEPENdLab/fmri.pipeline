@@ -236,12 +236,13 @@ refresh_feat_status <- function(gpa, level = 1L, lg = NULL) {
 
 #' helper function to look up core stats outputs from a .gfeat folder
 #' @param gfeat_dir a .gfeat folder containing the outputs of an FSL analysis
+#' @param what What to parse in each folder. Currently just passed through to read_feat_dir
 #' @return a list containing sorted vectors of each stat output
 #' @importFrom glue glue
 #' @importFrom checkmate assert_directory_exists assert_file_exists test_directory_exists
 #' @importFrom readr read_delim
 #' @export
-read_gfeat_dir <- function(gfeat_dir) {
+read_gfeat_dir <- function(gfeat_dir, what = "all") {
   gfeat_dir <- normalizePath(gfeat_dir) # convert to absolute path
 
   mask_file <- file.path(gfeat_dir, "mask.nii.gz")
@@ -256,7 +257,7 @@ read_gfeat_dir <- function(gfeat_dir) {
   cope_nums <- as.numeric(sub(".*/cope(\\d+).feat", "\\1", cope_dirs, perl = TRUE))
   cope_dirs <- cope_dirs[order(cope_nums)]
 
-  cope_list <- lapply(cope_dirs, read_feat_dir)
+  cope_list <- lapply(cope_dirs, read_feat_dir, what = what)
   names(cope_list) <- basename(cope_dirs)
   ret_list <- list(cope_dirs = cope_list, design_files = get_design_files(gfeat_dir), mask_file = mask_file)
   class(ret_list) <- c("list", "gfeat_info")

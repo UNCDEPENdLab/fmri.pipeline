@@ -7,14 +7,20 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
     out_dir = getwd(),
     clustsim_df = tibble::tibble(),
     out_files = NULL,
-    prefix = "clustsim_",
+    prefix = "3dclustsim",
     pvt_use_fwhmx_acf = FALSE,
     acf_params = setNames(rep(NA_real_, 3), c("a", "b", "c")),
     clustsim_batch = NULL,
     clustsim_call = NULL,
     clustsim_mask = NULL,
     clustsim_complete = FALSE,
-    method = NULL, # or 'inset' for 3dttest++ approach or 'xyz' for voxel + matrix approach
+
+    # controls the volume over which the 3dClustSim simulation occurs (see AFNI help)
+    # 'mask': Uses the -mask dataset to specify the spatial extent of the simulation
+    # 'inset': use 3dttest++ null datasets in BRIK/HEAD form as input to 3dClustsim
+    # 'insdat': 3dttest++ null datasets in sdat form as input to 3dClustsim
+    # 'xyz': Use the spatial extent specified by the xyz matrix size and the voxel size
+    volume_method = NULL,
     nopad = "",
     pthr = ".01 .005 .002 .001 .0005 .0002 .0001",
     athr = ".05 .02 .01 .005 .002 .001 .0005 .0002 .0001",
@@ -28,12 +34,12 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
     residuals_mask_file = NULL,
     residuals_njobs = 32, # split iter into this many jobs for permutations
     which_sim = function() {
-      if (private$method == "inset") {
+      if (private$volume_method == "inset") {
         private$sim_string <- glue::glue("-inset {paste(self$inset_files, collapse=' ')}")
         if (!is.null(private$clustsim_mask)) {
           private$sim_string <- paste(private$sim_string, glue::glue("-mask {private$clustsim_mask}")) # -mask compatible with -inset
         }
-      } else if (private$method == "insdat") {
+      } else if (private$volume_method == "insdat") {
         private$sim_string <- glue::glue("-insdat {self$insdat_mask_file} {self$insdat_file}")
 
         # note that the clustsim mask controls the bounds of the simulation for FWE, 
@@ -41,15 +47,17 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
         if (!is.null(private$clustsim_mask)) {
           private$sim_string <- paste(private$sim_string, glue::glue("-mask {private$clustsim_mask}")) # -mask compatible with -inset
         }
-      } else if (!is.null(private$clustsim_mask)) {
+      } else if (private$volume_method == "mask") {
         private$sim_string <- glue::glue("-mask {private$clustsim_mask}")
-      } else {
+      } else if (private$volume_method == "xyz") {
         # use voxel size and matrix size
         private$sim_string <- glue::glue("-nxyz {paste(private$nxyz, collapse=' ')} -dxyz {paste(private$dxyz, collapse=' ')}")
+      } else {
+        stop("Cannot sort out how to setup 3dClustSim volume based on method:", private$volume_method)
       }
     },
     build_call = function() {
-      if (private$method %in% c("inset", "insdat")) {
+      if (private$volume_method %in% c("inset", "insdat")) {
         acf_string <- "" # irrelevant
       } else if (isTRUE(private$pvt_use_fwhmx_acf)) {
         if (isFALSE(self$fwhmx_set$is_complete())) {
@@ -57,10 +65,11 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
           return(invisible(NULL))
         }
         acf_string <- glue::glue("-acf {paste(self$fwhmx_set$get_acf_average(), collapse=' ')}")
-      } else {
+      } else { # assuming user passed acf params in manually
         acf_string <- glue::glue("-acf {paste(private$acf_params, collapse=' ')}")
       }
 
+      # setup the simulation volume string specification
       private$which_sim()
       private$clustsim_call <- glue::glue(
         "3dClustSim {private$sim_string} -iter {private$iter} {acf_string} -prefix {private$prefix}",
@@ -120,7 +129,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
     null_3dttest_obj = NULL,
 
     initialize = function(out_dir = NULL, prefix=NULL,
-                          fwhmx_input_files = NULL, fwhmx_mask_files = NULL, 
+                          fwhmx_input_files = NULL, fwhmx_mask_files = NULL,
                           residuals_file = NULL, residuals_mask_file = NULL, residuals_njobs = NULL,
                           inset_files = NULL, insdat_file = NULL, insdat_mask_file = NULL,
                           dxyz = NULL, nxyz = NULL,
@@ -168,13 +177,13 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
           stop("Cannot specify both inset_files and fwhmx_input_files. See 3dClustSim documentation!")
         }
 
-        private$method <- "inset"
+        private$volume_method <- "inset"
         checkmate::assert_file_exists(inset_files)
         self$inset_files <- inset_files
       }
 
       if (!is.null(insdat_file)) {
-        private$method <- "insdat"
+        private$volume_method <- "insdat"
         checkmate::assert_string(insdat_file)
         checkmate::assert_file_exists(insdat_file)
 
@@ -188,7 +197,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       if (!is.null(residuals_file)) {
         checkmate::assert_file_exists(residuals_file)
         private$residuals_file <- normalizePath(residuals_file)
-        private$method <- "residuals"
+        private$volume_method <- "residuals"
         if (is.null(residuals_mask_file)) {
           stop("At present, a residuals_mask_file must be passed with the residuals_file.")
         } else {
@@ -214,7 +223,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       }
 
       if (!is.null(dxyz) || !is.null(nxyz)) {
-        private$method <- "xyz"
+        private$volume_method <- "xyz"
         if (!is.null(dxyz)) {
           private$dxyz <- check_nums(dxyz, lower = .01, upper = 100) # millimeters
         } else {
@@ -232,10 +241,17 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
         checkmate::assert_string(clustsim_mask)
         checkmate::assert_file_exists(clustsim_mask)
         private$clustsim_mask <- clustsim_mask
+
+        # if inputs have not triggered a method setting of inset, insdat, residuals, or xyz above, we must be
+        # using the specified mask as the volume over which to simulate.
+        if (is.null(private$volume_method)) {
+          private$volume_method <- "mask"
+        }
       } else {
         message("No clustsim_mask argument received. All voxels in volume will be used for cluster simulations!")
       }
 
+      # user specification of ACF params (e.g., if 3dFWHMx done externally)
       if (!is.null(acf_params)) {
         checkmate::assert_numeric(acf_params, len=3)
       }
@@ -274,7 +290,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       }
 
       # always put the clustsim method in the filename for clarity
-      private$prefix <- paste(private$prefix, private$method, sep = "_")
+      private$prefix <- paste(private$prefix, private$volume_method, sep = "_")
 
       # populate 3dClustSim object at initialization (if output files are cached already)
       private$build_df()
@@ -283,6 +299,12 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       # these are current in the created clustsim object.
       self$refresh()
     },
+
+    #' @description submit the 3dClustSim compute job to the cluster
+    #' @param force if TRUE, re-estimate 3dClustSim even though its output files already exist
+    #' @details Note that if fwhmx_input_files are provided at the corresponding 3dFWHMx has not been run yet,
+    #'   this job will be submitted and serve as a dependency for the 3dClustsim job. Likewise, if a residuals_file is
+    #'   provided, then the 3dttest++ permutation step will be submitted as a job and 3dClustSim will be dependent on this finishing.
     submit = function(force=FALSE) {
       if (isTRUE(private$clustsim_complete) && isFALSE(force)) {
         message("3dClustSim already finished for these inputs. Use $submit(force=TRUE) to re-run or $get_clustsim_df() to retrieve results.")
@@ -311,46 +333,64 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
         batch_obj$depends_on_parents <- "run_3dfwhmx"
         clust_seq <- R_batch_sequence$new(fwhmx_batch, batch_obj)
         clust_seq$submit()
-      } else if (isTRUE(private$method == "residuals") && isFALSE(self$null_3dttest_obj$is_complete())) {
+
+      # the volume method of 'residuals' specifies that we need to run 3dtest++ first before 3dClustSim
+      } else if (isTRUE(private$volume_method == "residuals") && isFALSE(self$null_3dttest_obj$is_complete())) {
         null_batch <- self$null_3dttest_obj$get_batch()
         batch_obj <- private$clustsim_batch
         batch_obj$depends_on_parents <- "run_3dttest"
         clust_seq <- R_batch_sequence$new(null_batch, batch_obj)
         clust_seq$submit()
+
+      # only 3dClustSim needs to run
       } else {
         private$clustsim_batch$submit()
       }
 
       return(invisible(self))
     },
+
+    #' @description return a data.frame containing the results of the 3dClustSim for all NN levels and sidedness.
     get_clustsim_df = function() {
       private$build_df()
       private$clustsim_df
     },
+
+    #' @description return a character vector of output text files generated by 3dClustSim
     get_clustsim_output_files = function() {
       list.files(path = private$out_dir, pattern = glue::glue("{private$prefix}.*sided\\.1D"), full.names = TRUE)
     },
+
+    #' @description return the 3dClustSim call related to these inputs. This is what will be passed to the scheduler.
     get_call = function() {
       private$build_call()
       private$clustsim_call
     },
+
+    #' @description return the output directory for 3dClustSim files
     get_out_dir = function() {
       private$out_dir
     },
+
+    #' @description return the number of cpus (cores) to be used by 3dClustsim (via OMP_NUM_THREADS)
     get_ncpus = function() {
       private$ncpus
     },
-    #' return TRUE/FALSE for whether this clustsim relies on the ACF estimates from 3dFWHMx
+
+    #' @description return TRUE/FALSE for whether this clustsim relies on the ACF estimates from 3dFWHMx
     use_fwhmx_acf = function() {
       private$pvt_use_fwhmx_acf
     },
+
+    #' @description return whether 3dClustSim has completed for this input
     is_complete = function() {
       self$refresh() # always refresh object status in case it completed through a scheduled job
       private$clustsim_complete
     },
-    #' Simple method to refresh the clustsim_df, fwhmx files, and 3dttest++ permutation files
-    #' This is useful if the object needs to be updated just in time to determine whether permutations or ACF params
-    #' are available
+
+    #' @description Simple method to refresh the clustsim_df, fwhmx files, and 3dttest++ permutation files
+    #' @details The refresh is useful if the object needs to be updated just in time to determine whether permutations 
+    #'   or ACF params are available.
     refresh = function() {
       # read clustsim output files, if available
       private$build_df()
@@ -359,9 +399,9 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       }
 
       # if 3dttest++ permutations completed, switch method from residuals to insdat and populate files
-      if (isTRUE(self$null_3dttest_obj$is_complete())) {
+      if (private$volume_method == "residuals" && isTRUE(self$null_3dttest_obj$is_complete())) {
         if (isTRUE(self$null_3dttest_obj$get_use_sdat())) {
-          private$method <- "insdat"
+          private$volume_method <- "insdat"
           ofiles <- self$null_3dttest_obj$get_permutation_files()
           self$insdat_file <- ofiles["permutation_file"]
           self$insdat_mask_file <- ofiles["mask_file"]
@@ -386,9 +426,13 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
     #'   (calculated by 3dClusterize).
     #' @param output_thresholded_image If \code{TRUE}, output a copy of \code{statistic_nifti} that has been thresholded
     #'   according to the settings specified here.
+    #' @param add_whereami Whether to also call AFNI whereami to get anatomical landmarks of interest. Default: TRUE
+    #' @param whereami_atlases An optional character vector of atlases to be requested in whereami.
+    #' @return an afni_3dclusterize object containing clusters in \code{statistic_nifti} that survive the 3dClustSim
+    #'   correction requested.
     apply_clustsim = function(statistic_nifti = NULL, NN = 1, sided = "bi", athr = .05, pthr = .001,
       voxelwise_stat = list(stat_type = "z"), output_cluster_mask = TRUE, output_thresholded_image = FALSE,
-      add_whereami = TRUE) {
+      add_whereami = TRUE, whereami_atlases = NULL) {
       # eventually, would be nice to allow for multiple rows to be tolerated in sim_calc and to apply each to the data
       checkmate::test_file_exists(statistic_nifti)
       statistic_nifti <- normalizePath(statistic_nifti) #make sure it's a clear absolute path
@@ -482,12 +526,10 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       }
 
       cobj <- do.call(afni_3dclusterize$new, arg_list)
-      if (!cobj$is_complete()) {
-        cobj$run() # run 3dClusterize if needed
-      }
-
+      cobj$run(quiet = TRUE) # run 3dClusterize if needed
+      
       if (isTRUE(add_whereami)) {
-        cobj$add_whereami()
+        cobj$add_whereami(atlases = whereami_atlases)
       }
 
       return(cobj)

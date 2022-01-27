@@ -1,5 +1,5 @@
 #' R6 class for pTFCE specification for one or more z-statistic images
-#' 
+#'
 #' @importFrom R6 R6Class
 #' @importFrom checkmate assert_directory_exists assert_subset assert_string
 #' @export
@@ -19,6 +19,8 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     scheduler = "slurm",
     time_per_zstat = "12:00", # 12 minutes for one run of pTFCE (at 2.3mm, takes about 2.5 mins for me)
     memgb_per_command = 8, # 8 GB requested for every ptfce run
+    pvt_cluster_objs = NULL,
+    all_cope_df = NULL, # if gfeats are passed in, keep the contrast info for all z's as a data.frame
     set_fwep = function(vec) {
       checkmate::assert_numeric(vec, lower = 1e-10, upper = .9999, any.missing = FALSE, unique = TRUE, null.ok = FALSE)
       private$pvt_fwe_p <- vec
@@ -27,7 +29,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
       checkmate::assert_logical(val, len = 1L, null.ok = FALSE)
       private$pvt_two_sided <- val
     },
-    ptfce_outfile_from_zstat = function(z_file, what="ptfce", fwe_p = NULL) {
+    ptfce_outfile_from_zstat = function(z_file, what = "ptfce", fwe_p = NULL) {
       z_dir <- normalizePath(dirname(z_file))
       ext <- sub(".*(\\.nii(\\.gz)?)$", "\\1", z_file, perl = TRUE)
       base <- sub(ext, "", basename(z_file), fixed = TRUE)
@@ -47,8 +49,8 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
       for (ii in seq_along(private$z_files)) {
         this_z <- private$z_files[ii]
         f_list[[ii]] <- list(
-          #z_input = this_z,
-          #mask_input = private$mask_files[ii],
+          # z_input = this_z,
+          # mask_input = private$mask_files[ii],
           z_ptfce = private$ptfce_outfile_from_zstat(this_z),
           z_csv = private$ptfce_outfile_from_zstat(this_z, what = "csv")
         )
@@ -95,16 +97,19 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     #' @param time_per_zstat The amount of time to budget for each zstat to run through pTFCE in dd-hh:mm:ss format.
     #'   Default is 10:00 (10 minutes).
     initialize = function(gfeat_dir = NULL, zstat_numbers = NULL, fsl_smoothest_file = NULL, dof = NULL, residuals_file = NULL,
-      z_files = NULL, mask_files = NULL, fwe_p = .05, two_sided = TRUE, write_thresh_imgs = TRUE, 
-      scheduler = NULL, time_per_zstat = NULL, memgb_per_command = NULL) {
-
+                          z_files = NULL, mask_files = NULL, fwe_p = .05, two_sided = TRUE, write_thresh_imgs = TRUE,
+                          scheduler = NULL, time_per_zstat = NULL, memgb_per_command = NULL) {
       if (!is.null(gfeat_dir)) {
         if (!is.null(z_files)) {
           stop("Cannot provide both z_files and gfeat_dir as inputs")
         }
 
         checkmate::assert_directory_exists(gfeat_dir)
-        private$gfeat_info <- lapply(gfeat_dir, read_gfeat_dir)
+        private$gfeat_info <- lapply(gfeat_dir, read_gfeat_dir, what = "stat_files") # don't parse dof, smoothness, etc.
+
+        private$all_cope_df <- dplyr::bind_rows(rlang::flatten(lapply(private$gfeat_info, function(x) {
+          lapply(x$cope_dirs, "[[", "cope_df")
+        }))) %>% dplyr::select(cope_number, contrast_name, z)
 
         # TODO: need to support subsetting by cope number (e.g., cope3.feat) and zstat number (e.g., zstat1.nii.gz)
         # not currently supported (no high-priority use case)
@@ -140,7 +145,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
 
         # for now, if gfeat_dir is provided, just use smoothness file, which is computed by smoothest on the res4D
         # this is more efficient than having ptfce handle it internally
-        #dof <- rep(sapply(private$gfeat_info$cope_dirs, function(x) x$parsed_txt$dof), z_lens)
+        # dof <- rep(sapply(private$gfeat_info$cope_dirs, function(x) x$parsed_txt$dof), z_lens)
 
         # To support multiple L2 cope folders in an L3 gfeat folder, we need to allow for multiple stats/smoothness and dof files
         # these can vary by the .feat folder. Thus, build out logic that class has an fsl_smoothest element for every z_file
@@ -151,7 +156,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
         # DLH 0.137736
 
         private$z_files <- unname(do.call(c, z_list))
-      } else if (!is.null(z_files)) {        
+      } else if (!is.null(z_files)) {
         checkmate::assert_file_exists(z_files)
         private$z_files <- z_files
       } else {
@@ -225,7 +230,6 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
         checkmate::assert_number(memgb_per_command)
         private$memgb_per_command <- memgb_per_command
       }
-
     },
 
     #' @description method to return calls to external ptfce_zstat.R script for each zstat
@@ -254,7 +258,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
         if (isTRUE(include_complete)) {
           run_me <- TRUE
         } else {
-          #check whether all expected files for a given zstat input exist
+          # check whether all expected files for a given zstat input exist
           run_me <- !checkmate::test_file_exists(unlist(private$expect_list[[pp]]))
         }
 
@@ -270,7 +274,8 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
 
         calls[pp] <- glue(
           "{script_loc} --zstat {private$z_files[pp]} --mask {private$mask_files[pp]}",
-          "--fwep {paste(self$fwe_p, collapse=' ')} {method_string} {write_string} {side_string}", .sep=" "
+          "--fwep {paste(self$fwe_p, collapse=' ')} {method_string} {write_string} {side_string}",
+          .sep = " "
         )
       }
 
@@ -293,7 +298,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     #' method to submit all ptfce_zstat.R calls to a cluster based on the scheduler specified
     #' @param force if TRUE, re-run pTFCE for zstat images that already appear to have pTFCE-corrected outputs in place
     submit = function(force = FALSE) {
-      checkmate::assert_logical(force, len=1L)
+      checkmate::assert_logical(force, len = 1L)
       if (isTRUE(self$is_complete()) && isFALSE(force)) {
         message("All expected pTFCE outputs exist. No jobs to submit.")
         return(invisible(character(0)))
@@ -312,7 +317,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
         time_per_command = private$time_per_zstat,
         memgb_per_command = private$memgb_per_command, fork_jobs = TRUE,
         scheduler = private$scheduler,
-        job_script_prefix='job_ptfce'
+        job_script_prefix = "job_ptfce"
       )
       return(invisible(child_job_ids))
     },
@@ -322,9 +327,79 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
       checkmate::test_file_exists(unlist(private$expect_list))
     },
 
-    get_cluster_mask = function() {
+    #' @description for each input file, obtain 3dClusterize objects that reflect the pTFCE-corrected clusters
+    #' @param fwep the whole-brain familywise error rate to use (often .05)
+    #' @param clust_nvox The minimum number of voxels to allow in a given cluster
+    #' @param NN The cluster definition in AFNI terms. 1 = faces touch, 2 = edges touch, 3 = corners touch
+    #' @param add_whereami if TRUE, lookup labels for each cluster
+    #' @param whereami_atlases The atlases to request in the whereami lookup. If NULL, it uses the defaults
+    #' @details Note that even though pTFCE enhances clusters, you still see some very small clusters in some cases.
+    #'   Hence, there is no requirement to have clust_nvox > 1, but it may be a good idea for your sanity.
+    get_clusters = function(fwep = .05, clust_nvox = 10, NN = 1L, add_whereami = TRUE, whereami_atlases = NULL) {
+      if (!self$is_complete()) {
+        stop("Cannot use get_cluster_mask until pTFCE has completed for all inputs.")
+      }
 
+      checkmate::assert_number(fwep, lower = 1e-10, upper = .999)
+      checkmate::assert_integerish(clust_nvox, lower = 1, upper = 1e6)
+      checkmate::assert_integerish(NN, len = 1L, lower = 1L, upper = 3L)
+      checkmate::assert_logical(add_whereami, len = 1L)      
+      checkmate::assert_character(whereami_atlases, null.ok = TRUE)
+
+      # TODO: doesn't really handle the one-sided versus two-sided issue if we have to calculate the z
+      bisided <- TRUE
+      onesided <- FALSE
+      private$pvt_cluster_objs <- lapply(private$expect_list, function(input) {
+        fwep_csv <- read.csv(input$z_csv)
+        if (!any((fwep - fwep_csv$p_value) < 1e-4)) {
+          # need to calculate the threshold internally
+          z_thresh <- pTFCE::fwe.p2z(fwep_csv$number_of_resels[1L], FWEP = fwep)
+        } else {
+          this_z <- fwep_csv %>%
+            dplyr::filter(p_value == !!fwep)
+
+          if (nrow(this_z) != 1L) {
+            stop(glue("Could not find FWEp threshold in pTFCE file: {input$z_csv}"))
+          } else {
+            bisided <- as.logical(this_z$two_sided)
+            onesided <- !bisided
+            z_thresh <- this_z$z_ptfce
+          }
+        }
+
+        if (isTRUE(bisided)) {
+          lower_thresh <- -1*z_thresh
+          upper_thresh <- z_thresh
+        } else {
+          one_thresh <- z_thresh
+        }
+
+        cobj <- afni_3dclusterize$new(
+          threshold_file = input$z_ptfce, NN = NN, clust_nvox = clust_nvox,
+          bisided = bisided, onesided = onesided, lower_thresh = lower_thresh,
+          upper_thresh = upper_thresh, one_thresh = one_thresh
+        )
+        
+        #x <- afni_whereami$new(afni_3dclusterize_obj = cobj)
+
+        cobj$run(quiet = TRUE) # run 3dClusterize if needed
+        if (isTRUE(add_whereami)) {
+          cobj$add_whereami(atlases = whereami_atlases)
+        }
+        
+        return(cobj)
+      })
+
+      # name elements by the original input
+      names(private$pvt_cluster_objs) <- private$z_files
+
+      if (!is.null(private$all_cope_df)) {
+        tbl <- tibble(private$all_cope_df, cluster_obj = private$pvt_cluster_objs)
+      } else {
+        tbl <- tibble(cluster_obj = private$pvt_cluster_objs)
+      }
+      
+      return(tbl)
     }
   )
-
 )
