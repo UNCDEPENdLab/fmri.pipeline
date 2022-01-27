@@ -14,7 +14,7 @@ afni_whereami <- R6::R6Class("afni_whereami",
     pvt_space = "MNI",
     pvt_call = NULL,
     pvt_call_omask = NULL,
-    pvt_output_file = "whereami.txt",
+    pvt_output_file = NULL,
     pvt_omask_output_file = "whereami_omask.txt",
     pvt_afnidir = NULL,
     pvt_whereami_df = NULL,
@@ -36,7 +36,7 @@ afni_whereami <- R6::R6Class("afni_whereami",
       section_split <- rep.int(seq_along(section_map), times = diff(c(section_map, length(txt) + 1)))
       txt_split <- split(txt, section_split)
 
-      roi_list <- sapply(seq_along(txt_split), function(ii) {
+      roi_list <- lapply(seq_along(txt_split), function(ii) {
         sec <- txt_split[[ii]]
         atlas_lines <- grep("^Atlas .*", sec, perl = TRUE)
         nomatch <- grep("***** Not near any region stored in databases *****", sec, fixed = TRUE)
@@ -149,7 +149,7 @@ afni_whereami <- R6::R6Class("afni_whereami",
         private$pvt_atlases <- atlases
       }
 
-      if (!is.null(omask)) {
+      if (!is.null(omask) && !is.na(omask)) {
         checkmate::assert_file_exists(omask)
         private$pvt_omask <- omask
 
@@ -163,16 +163,25 @@ afni_whereami <- R6::R6Class("afni_whereami",
         private$pvt_omask_output_file <- R.utils::getAbsolutePath(private$pvt_omask_output_file, workDirectory = dirname(private$pvt_omask))
       }
 
-      if (!is.null(output_file)) {
-        checkmate::assert_string(output_file)
-        private$pvt_output_file <- output_file
-      }
-
       # convert output file to absolute path, using location of coord_file if user doesn't provide absolute path.
       if (private$pvt_method == "coord_file") {
         wd <- dirname(private$pvt_coord_file)
       } else {
         wd <- getwd()
+      }
+
+      if (!is.null(output_file)) {
+        checkmate::assert_string(output_file)
+        private$pvt_output_file <- output_file
+      }
+
+      # default to naming clusters file according to the inset file
+      if (is.null(private$pvt_output_file)) {
+        if (private$pvt_method == "coord_file") {
+          private$pvt_output_file <- paste0(basename(file_sans_ext(private$pvt_coord_file)), "_whereami.txt")
+        } else {
+          private$pvt_output_file <- "whereami.txt"
+        }
       }
 
       private$pvt_output_file <- R.utils::getAbsolutePath(private$pvt_output_file, workDirectory = wd)
@@ -223,7 +232,8 @@ afni_whereami <- R6::R6Class("afni_whereami",
     run = function(force = FALSE) {
       private$build_call()
       outfile_exists <- checkmate::test_file_exists(private$pvt_output_file)
-      omaskfile_exists <- ifelse(is.null(private$pvt_omask), NULL, checkmate::test_file_exists(private$pvt_omask_output_file))
+      # NULL means that omask is irrelevant, FALSE means we need to run it, TRUE means we already have the omask result
+      omaskfile_exists <- if (is.null(private$pvt_omask)) NULL else checkmate::test_file_exists(private$pvt_omask_output_file)
 
       if (isFALSE(force) && isTRUE(outfile_exists) && isTRUE(omaskfile_exists)) {
         message("whereami output file already exists: ", private$pvt_output_file, ". Use $run(force=TRUE) if you want to regenerate this file.")

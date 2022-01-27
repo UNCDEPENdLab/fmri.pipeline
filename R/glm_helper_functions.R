@@ -98,9 +98,9 @@ runFSLCommand <- function(args, fsldir=NULL, stdout=NULL, stderr=NULL) {
 #' @keywords internal
 file_ext <- function(file, withdot = TRUE) {
   file <- tolower(file)
-  matches <- grepl("^.*\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", file)
+  matches <- grepl("^.*\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json|1d)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", file)
   ext <- rep(NA, length = length(file)) # return NA for inputs that can't be parsed
-  ext[matches] <- sub("^(.*)\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", "\\2\\3", file[matches])
+  ext[matches] <- sub("^(.*)\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json|1d)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", "\\2\\3", file[matches])
   if (isTRUE(withdot)) ext[matches] <- paste0(".", ext[matches])
   return(ext)
 }
@@ -110,9 +110,9 @@ file_ext <- function(file, withdot = TRUE) {
 #' at present, it returns NA if no recognized extension is there
 #' @keywords internal
 file_sans_ext <- function(file, withdot = TRUE) {
-  matches <- grepl("^.*\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", file, ignore.case = TRUE)
+  matches <- grepl("^.*\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json|1d)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", file, ignore.case = TRUE)
   fout <- rep(NA, length=length(file)) # return NA for inputs that can't be parsed
-  fout[matches] <- sub("^(.*)\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", "\\1", file[matches], ignore.case = TRUE)
+  fout[matches] <- sub("^(.*)\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json|1d)(\\.gz|\\.bz2|\\.zip|\\.xz)*$", "\\1", file[matches], ignore.case = TRUE)
   return(fout)
 }
 

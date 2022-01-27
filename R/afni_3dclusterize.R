@@ -369,14 +369,20 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
     #' @description run the 3dClusterize command relevant to this object
     #' @param force if TRUE, 3dClusterize will be re-run
-    run = function(force = FALSE) {
+    #' @param quiet if TRUE, don't output messages as object is run or checked
+    run = function(force = FALSE, quiet = FALSE) {
+      checkmate::assert_logical(force, len = 1L)
+      checkmate::assert_logical(quiet, len = 1L)
+
       if (self$is_complete() && isFALSE(force)) {
-        message("We will not re-run 3dClusterize because it is already complete. Use $run(force = TRUE) to re-run.")
+        if (isFALSE(quiet)) {
+          message("We will not re-run 3dClusterize because it is already complete. Use $run(force = TRUE) to re-run.")
+        }
         return(invisible(NULL))
       }
 
       private$build_call()
-      run_afni_command(private$pvt_clusterize_call)
+      run_afni_command(private$pvt_clusterize_call, echo = !quiet)
     },
 
     #' @description return the 3dClusterize table of clusters as a data.frame
@@ -529,15 +535,17 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #' @description Add's an afni_whereami object to this class in the $whereami slot. The corresponding
     #'   whereami command is also run when this is added so that coordinates and labels can be obtained
     #'   immediately. To access the whereami object and its methods, use $whereami()
-    add_whereami = function() {
+    #' @param atlases An optional character vector of atlases to be requested in whereami.
+    add_whereami = function(atlases=NULL) {
       if (private$has_whereami()) {
         message("whereami object already added to this clusterize object. Use $whereami() to access it.")
       } else if (!self$is_complete()) {
         message("Cannot add whereami to 3dclusterize object until clusterization is run!")
       } else {
         private$pvt_whereami <- afni_whereami$new(
-          afni_3dclusterize_obj = self
+          afni_3dclusterize_obj = self, atlases = atlases
         )
+        
         private$pvt_whereami$run(force = TRUE)
       }
     },
