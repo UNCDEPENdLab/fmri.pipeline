@@ -564,6 +564,11 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       } else {
         private$pvt_whereami
       }
+    },
+
+    #' @description break up large clusters into subclusters
+    generate_subclusters = function(break_if_larger = 500, min_subclust = 50, max_subclust = 200, step_size = .1) {
+      
     }
   )
 )

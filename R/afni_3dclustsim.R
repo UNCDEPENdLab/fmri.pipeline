@@ -298,6 +298,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       # always refresh the object at initialization so that if the underlying 3dFWHMx or 3dttest++ files are complete,
       # these are current in the created clustsim object.
       self$refresh()
+
     },
 
     #' @description submit the 3dClustSim compute job to the cluster
@@ -513,10 +514,16 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
         )
       }
 
+      clust_nvox <- sim_calc %>%
+        pull(nvoxels) %>%
+        ceiling()
+      
       arg_list <- list(
           threshold_file = statistic_nifti, bisided = bisided, onesided = onesided, twosided = twosided,
-          NN = NN, clust_nvox = sim_calc %>% pull(nvoxels) %>% ceiling(), pref_map = clusters_file, pref_dat = thresholded_stat_file
+          NN = NN, clust_nvox = clust_nvox, pref_map = clusters_file, pref_dat = thresholded_stat_file
       )
+
+      cat(glue("{clust_nvox} voxels needed for a whole-brain FWE cluster at voxelwise p = {pthr}, cluster p = {athr}\n\n", .trim=FALSE))
 
       if (bisided || twosided) {
         arg_list[["lower_thresh"]] <- lower_thresh

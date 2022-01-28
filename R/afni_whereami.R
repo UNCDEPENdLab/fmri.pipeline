@@ -180,7 +180,7 @@ afni_whereami <- R6::R6Class("afni_whereami",
         if (private$pvt_method == "coord_file") {
           private$pvt_output_file <- paste0(basename(file_sans_ext(private$pvt_coord_file)), "_whereami.txt")
         } else {
-          private$pvt_output_file <- "whereami.txt"
+          private$pvt_output_file <- "whereami.txt" # a bit dangerous if you have many stats in the same folder (overwriting)
         }
       }
 
