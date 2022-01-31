@@ -125,9 +125,21 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
     #' @field insdat_file A mask file corresponding to the insdat_file data that indicates where each value is in space
     insdat_mask_file = NULL,
 
-    #' @field only used if residuals_file is passed in, this contains the object for running the permutations
+    #' @field null_3dttest_obj only used if residuals_file is passed in, this contains the object for running the permutations
     null_3dttest_obj = NULL,
 
+    #' @description Create a new afni_3dclustsim object
+    #' @param fwhmx_input_files A character vector of input files to be passed through 3dFWHMx (-ACF method)
+    #' @param fwhmx_mask_files A character vector of masks containing the volume over which to estimate the ACF in 3dFWHMx. 
+    #'   Must match 1:1 with \code{fwhmx_input_files}.
+    #' @param residuals_file The filename of the group residuals file to be used in null dataset generation (permutation approach).
+    #' @param residuals_mask_file The volume over which null datasets should be generated from teh residuals
+    #' @param clustsim_mask This controls the volume over which to correct for FWE using 3dClustSim. If you give a whole-brain mask,
+    #'   then your cluster thresholds reflect whole-brain FWE correction. If you give a smaller mask (e.g., a single region or network),
+    #'   you are correcting only over that volume (i.e., a small-volume correction).
+    #' @param scheduler The HPC scheduler to use. Can be 'local', 'slurm', or 'torque'.
+    #' @param ncpus The number of cores to use in the 3dClustSim job. This sets OMP_NUM_THREADS in the 3dClustSim job to 
+    #'   speed up computation.
     initialize = function(out_dir = NULL, prefix=NULL,
                           fwhmx_input_files = NULL, fwhmx_mask_files = NULL,
                           residuals_file = NULL, residuals_mask_file = NULL, residuals_njobs = NULL,

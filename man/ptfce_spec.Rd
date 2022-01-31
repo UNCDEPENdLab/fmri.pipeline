@@ -24,7 +24,7 @@ R6 class for pTFCE specification for one or more z-statistic images
 \item \href{#method-run}{\code{ptfce_spec$run()}}
 \item \href{#method-submit}{\code{ptfce_spec$submit()}}
 \item \href{#method-is_complete}{\code{ptfce_spec$is_complete()}}
-\item \href{#method-get_cluster_mask}{\code{ptfce_spec$get_cluster_mask()}}
+\item \href{#method-get_clusters}{\code{ptfce_spec$get_clusters()}}
 \item \href{#method-clone}{\code{ptfce_spec$clone()}}
 }
 }
@@ -154,11 +154,38 @@ returns \code{TRUE} if all expected pTFCE output files exist, \code{FALSE} if an
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_cluster_mask"></a>}}
-\if{latex}{\out{\hypertarget{method-get_cluster_mask}{}}}
-\subsection{Method \code{get_cluster_mask()}}{
+\if{html}{\out{<a id="method-get_clusters"></a>}}
+\if{latex}{\out{\hypertarget{method-get_clusters}{}}}
+\subsection{Method \code{get_clusters()}}{
+for each input file, obtain 3dClusterize objects that reflect the pTFCE-corrected clusters
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{ptfce_spec$get_cluster_mask()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{ptfce_spec$get_clusters(
+  fwep = 0.05,
+  clust_nvox = 10,
+  NN = 1L,
+  add_whereami = TRUE,
+  whereami_atlases = NULL
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{fwep}}{the whole-brain familywise error rate to use (often .05)}
+
+\item{\code{clust_nvox}}{The minimum number of voxels to allow in a given cluster}
+
+\item{\code{NN}}{The cluster definition in AFNI terms. 1 = faces touch, 2 = edges touch, 3 = corners touch}
+
+\item{\code{add_whereami}}{if TRUE, lookup labels for each cluster}
+
+\item{\code{whereami_atlases}}{The atlases to request in the whereami lookup. If NULL, it uses the defaults}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Details}{
+Note that even though pTFCE enhances clusters, you still see some very small clusters in some cases.
+  Hence, there is no requirement to have clust_nvox > 1, but it may be a good idea for your sanity.
 }
 
 }

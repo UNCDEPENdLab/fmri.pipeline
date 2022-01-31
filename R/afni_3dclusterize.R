@@ -1,4 +1,5 @@
 #' wrapper class for 3dClusterize
+#' @importFrom tidyselect everything
 #' @export
 afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
   private = list(
@@ -31,13 +32,29 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     pvt_clusterize_output_file = NULL,
     pvt_dirty_call = FALSE, # whether object fields have changed since last build_call
     pvt_whereami = NULL,
+    pvt_has_clusters = NULL, # cached TRUE/FALSE for whether 3dClusterize found clusters (NULL if no output)
+    pvt_clust_df = NULL, # cached data.frame of parsed 3dClusterize output
+    pvt_subclust_list = NULL, # cached list of afni_3dclusterize objects for each parent cluster larger than threshold
+    pvt_subclust_df = NULL, # cached data.frame of subcluster information
 
     # private methods
     # ---------------
-    
-    # whether a whereami object has already been added to this object
-    has_whereami = function() {
-      !is.null(private$pvt_whereami) && inherits(private$pvt_whereami, "afni_whereami")
+    # methods to set private fields (used by active bindings)
+    set_lower_thresh = function(val) {
+      checkmate::assert_number(val)
+      private$pvt_lower_thresh <- val
+    },
+    set_upper_thresh = function(val) {
+      checkmate::assert_number(val)
+      private$pvt_upper_thresh <- val
+    },
+    set_one_thresh = function(val) {
+      checkmate::assert_number(val)
+      private$pvt_one_thresh <- val
+    },
+    set_mask = function(mask_file) {
+      checkmate::assert_file_exists(mask_file)
+      private$pvt_mask <- mask_file
     },
     set_sided = function(val) {
       checkmate::assert_string(val)
@@ -66,25 +83,101 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
       checkmate::assert_integerish(val, lower = 1, upper = 1e5, len = 1L, any.missing = FALSE)
       private$pvt_clust_nvox <- as.integer(val)
-      if (!is.null(private$pvt_clust_nvol)) {
-        message("Resetting clust_nvol to NULL because clust_nvox was set.")
-        private$pvt_clust_nvol <- NULL
+      if (!is.null(private$pvt_clust_vol)) {
+        message("Resetting clust_vol to NULL because clust_nvox was set.")
+        private$pvt_clust_vol <- NULL
       }
       private$pvt_dirty_call <- TRUE # will rebuild call
     },
-    set_clust_nvol = function(val) {
+    set_clust_vol = function(val) {
       if (checkmate::test_string(val)) {
         val <- as.numeric(val)
       }
 
       checkmate::assert_numeric(val, lower = 0.5, upper = 1e6, len = 1L, any.missing = FALSE)
-      private$pvt_clust_nvol <- as.numeric(val)
+      private$pvt_clust_vol <- as.numeric(val)
       if (!is.null(private$pvt_clust_nvox)) {
-        message("Resetting clust_nvox to NULL because clust_nvol was set.")
+        message("Resetting clust_nvox to NULL because clust_vol was set.")
         private$pvt_clust_nvox <- NULL
       }
       private$pvt_dirty_call <- TRUE # will rebuild call
     },
+    set_clusterize_output_file = function(val) {
+      if (missing(val) || is.null(val)) { return(invisible(NULL)) } # nothing to do
+      checkmate::assert_string(val)
+      private$pvt_clusterize_output_file <- val
+    },
+    set_pref_map = function(val) {
+      if (is.null(val)) {
+        private$pvt_pref_map <- val
+      } else {
+        checkmate::assert_string(val)
+        ext <- file_ext(val)
+        if (is.na(ext)) {
+          val <- paste0(val, ".nii.gz") # force nifti output
+        } else if (grepl("(brik|head).*", ext)) {
+          message("Forcing -pref_map extension to .nii.gz for consistency")
+          val <- paste0(file_sans_ext(val), ".nii.gz") # force nifti output
+        }
+        private$pvt_pref_map <- val
+      }
+    },
+    set_pref_dat = function(val) {
+      if (is.null(val)) {
+        private$pvt_pref_dat <- val
+      } else {
+        checkmate::assert_string(val)
+        ext <- file_ext(val)
+        if (is.na(ext)) {
+          val <- paste0(val, ".nii.gz") # force nifti output
+        } else if (grepl("(brik|head).*", ext)) {
+          message("Forcing -pref_dat extension to .nii.gz for consistency")
+          val <- paste0(file_sans_ext(val), ".nii.gz") # force nifti output
+        }
+        private$pvt_pref_dat <- val
+      }
+    },
+
+    # merge clust_df against whereami and subcluster data
+    merge_aux_data = function(include_whereami = TRUE, include_subclusters = TRUE) {
+      if (isFALSE(self$is_complete)) { return(invisible(NULL)) } # fail gracefully
+
+      clust_df <- private$pvt_clust_df
+      if (isTRUE(include_whereami) && private$has_whereami()) {
+        clust_df <- clust_df %>% dplyr::left_join(self$whereami$get_whereami_df(), by = "roi_num")
+      }
+
+      if (isTRUE(include_subclusters) && is.data.frame(private$pvt_subclust_df) && "roi_num" %in% names(private$pvt_subclust_df)) {
+        clust_df <- clust_df %>%
+          dplyr::bind_rows(private$pvt_subclust_df) %>%
+          dplyr::select(roi_num, subroi_num, everything()) %>%
+          dplyr::arrange(roi_num, subroi_num)
+      }
+
+      return(clust_df)
+    },
+
+    # determine whether any clusters were found
+    check_for_clusters = function(quiet = FALSE) {
+      if (checkmate::test_file_exists(private$pvt_clusterize_output_file)) {
+        clust_txt <- readLines(private$pvt_clusterize_output_file, n = 3)
+        if (grepl("#** NO CLUSTERS FOUND ***", clust_txt[1L], fixed = TRUE)) {
+          if (!quiet) warning("No clusters found by 3dClusterize")
+          private$pvt_has_clusters <- FALSE
+          private$pvt_clust_df <- data.frame()
+        } else {
+          private$pvt_has_clusters <- TRUE
+        }
+      } else {
+        private$pvt_has_clusters <- NULL # output file not in place yet
+      }
+    },
+
+    # whether a whereami object has already been added to this object
+    has_whereami = function() {
+      !is.null(private$pvt_whereami) && inherits(private$pvt_whereami, "afni_whereami")
+    },
+
     get_combine_call = function() {
 
     },
@@ -109,10 +202,10 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
       if (!is.null(private$pvt_clust_nvox)) {
         str <- glue("{str} -clust_nvox {private$pvt_clust_nvox}")
-      } else if (!is.null(private$pvt_clust_nvol)) {
-        str <- glue("{str} -clust_nvol {private$pvt_clust_nvol}")
+      } else if (!is.null(private$pvt_clust_vol)) {
+        str <- glue("{str} -clust_vol {private$pvt_clust_vol}")
       } else {
-        stop("Both clust_nvox and clust_nvol are missing... This shouldn't happen!")
+        stop("Both clust_nvox and clust_vol are missing... This shouldn't happen!")
       }
 
       if (!is.null(private$pvt_pref_map)) str <- glue("{str} -pref_map {private$pvt_pref_map}")
@@ -151,36 +244,110 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_clust_nvox(val)
       }
     },
-    clust_nvol = function(val) {
+    clust_vol = function(val) {
       if (missing(val)) {
-        return(private$pvt_clust_nvol)
+        return(private$pvt_clust_vol)
       } else {
-        private$set_clust_nvol(val)
+        private$set_clust_vol(val)
+      }
+    },
+    lower_thresh = function(val) {
+      if (missing(val)) {
+        return(private$pvt_lower_thresh)
+      } else {
+        private$set_lower_thresh(val)
+      }
+    },
+    upper_thresh = function(val) {
+      if (missing(val)) {
+        return(private$pvt_upper_thresh)
+      } else {
+        private$set_upper_thresh(val)
+      }
+    },
+    one_thresh = function(val) {
+      if (missing(val)) {
+        return(private$pvt_one_thresh)
+      } else {
+        private$set_one_thresh(val)
+      }
+    },
+    mask = function(val) {
+      if (missing(val)) {
+        return(private$pvt_mask)
+      } else {
+        private$set_mask(val)
+      }
+    },
+    pref_map = function(val) {
+      if (missing(val)) {
+        return(private$pvt_pref_map)
+      } else {
+        private$set_pref_map(val)
+      }
+    },
+    pref_dat = function(val) {
+      if (missing(val)) {
+        return(private$pvt_pref_dat)
+      } else {
+        private$set_pref_dat(val)
+      }
+    },
+    clusterize_output_file = function(val) {
+      if (missing(val)) {
+        return(private$pvt_clusterize_output_file)
+      } else {
+        private$set_clusterize_output_file(val)
+      }
+    },
+
+    #' @description passthrough access to whereami object if that has been setup
+    whereami = function(val) {
+      if (missing(val)) {
+        if (is.null(private$pvt_whereami)) {
+          message("No whereami has been added to this object yet. Use $add_whereami() to do so.")
+          return(invisible(NULL))
+        } else {
+          private$pvt_whereami
+        }
+      } else {
+        checkmate::assert_class(val, "afni_whereami", null.ok = TRUE)
+        private$pvt_whereami <- val
       }
     }
+
   ),
 
-  #' @description initialization function for a new afni_3dclusterize object. Arguments largely mirror the 3dClusterize parameters.
-  #' @param inset A 4D dataset containing the statistic to use for thresholding (ithr) and, optionally, the data value to output/retain
-  #' @param mask If specified, the volume will be masked by \code{mask} prior to clusterizing
-  #' @param threshold_file A 3D dataset containing the statistic to use for thresholding. Mutually exclusive with \code{inset}
-  #'   If passed, \code{ithr} and \code{idat} are ignored because the \code{inset} file is generated internally.
-  #' @param data_file A 3D dataset containing the data value to be retained in clusters post-thresholding. 
-  #'   Must be passed with \code{threshold_file} and will be stitched together with it internally. Mutually exclusive with \code{inset}.
-  #' @param mask_from_hdr passes through as -mask_from_hdr
-  #' @param out_mask passes through as -out_mask
-  #' @param ithr sub-brik number for the voxelwise threshold. Passes through as -ithr
-  #' @param onesided if TRUE, clusterizing will be conducted on one tail of the statistic distribution (-ithr)
-  #' @param twosided if TRUE, clusterizing will be conducted on both tails of the statistic distribution (-ithr)
-  #' @param pref_map File name for the integer-valued mask containing each cluster, ordered by descending voxel size. 
-  #'   Passes through as -pref_map.
-  #' @param NN 1, 2, 3. Default: 1. Passes through as -NN.
-  #' @param quiet passes through as -quiet.
   public = list(
+    #' @description initialization function for a new afni_3dclusterize object. Arguments largely mirror the 3dClusterize parameters.
+    #' @param inset A 4D dataset containing the statistic to use for thresholding (ithr) and, optionally, the data value to output/retain
+    #' @param mask If specified, the volume will be masked by \code{mask} prior to clusterizing
+    #' @param threshold_file A 3D dataset containing the statistic to use for thresholding. Mutually exclusive with \code{inset}
+    #'   If passed, \code{ithr} and \code{idat} are ignored because the \code{inset} file is generated internally.
+    #' @param data_file A 3D dataset containing the data value to be retained in clusters post-thresholding.
+    #'   Must be passed with \code{threshold_file} and will be stitched together with it internally. Mutually exclusive with \code{inset}.
+    #' @param mask_from_hdr passes through as -mask_from_hdr
+    #' @param out_mask passes through as -out_mask
+    #' @param ithr sub-brik number for the voxelwise threshold. Passes through as -ithr
+    #' @param idat sub-brik number for the voxelwise data to be output in cluster table. Passes through as -idat
+    #' @param onesided if TRUE, clusterizing will be conducted on one tail of the statistic distribution (-ithr)
+    #' @param twosided if TRUE, clusterizing will be conducted on both tails of the statistic distribution (-ithr)
+    #' @param bisided if TRUE, clusterizing will be conducted on each tail of the distribution individually
+    #' @param lower_thresh the lower tail cutoff for two/bi-sided testing
+    #' @param upper_thresh the upper tail cutoff for two/bi-sided testing
+    #' @param one_thresh The threshold value for one-sided testing
+    #' @param clust_nvox The minimum number of voxels allowed in a cluster. Passes through as -clust_nvol
+    #' @param clust_vol The minimum volume in (microliters) allowed in a cluster (mutually exclusive with clust_nvox). 
+    #'   Passes through as -clust_vol
+    #' @param pref_map File name for the integer-valued mask containing each cluster, ordered by descending voxel size.
+    #'   Passes through as -pref_map.
+    #' @param pref_dat File name for the clusterized and thresholded data. Passes through as -pref_dat.
+    #' @param NN 1, 2, 3. Default: 1. Passes through as -NN.
+    #' @param quiet passes through as -quiet.
     initialize = function(inset = NULL, mask = NULL, threshold_file = NULL, data_file = NULL, mask_from_hdr = NULL, out_mask = NULL, 
       ithr = NULL, idat = NULL, onesided = NULL, twosided = NULL, bisided = NULL, 
       lower_thresh = NULL, upper_thresh = NULL, one_thresh = NULL, one_tail = NULL,
-      NN = NULL, clust_nvox = NULL, clust_nvol = NULL, pref_map = NULL, pref_dat = NULL,
+      NN = NULL, clust_nvox = NULL, clust_vol = NULL, pref_map = NULL, pref_dat = NULL,
       quiet = NULL, orient = NULL, binary = NULL, clusterize_output_file = NULL) {
 
       if (!is.null(inset)) {
@@ -254,10 +421,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       }
 
       if (private$pvt_sided %in% c("two", "bi")) {
-        checkmate::assert_number(lower_thresh)
-        checkmate::assert_number(upper_thresh)
-        private$pvt_lower_thresh <- lower_thresh
-        private$pvt_upper_thresh <- upper_thresh
+        private$set_lower_thresh(lower_thresh)
+        private$set_upper_thresh(upper_thresh)
       }
 
       # set NN active binding
@@ -266,28 +431,20 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       }
 
       # set clust_nvox active binding
-      if (is.null(clust_nvox) && is.null(clust_nvol)) {
-        stop("Both clust_nvox and clust_nvol were not provided. Cannot move forward with clusterize!")
+      if (is.null(clust_nvox) && is.null(clust_vol)) {
+        stop("Both clust_nvox and clust_vol were not provided. Cannot move forward with clusterize!")
       } else if (!is.null(clust_nvox)) {
         private$set_clust_nvox(clust_nvox)
-      } else if (!is.null(clust_nvol)) {
+      } else if (!is.null(clust_vol)) {
         if (!is.null(clust_nvox)) {
-          stop("Cannot pass both clust_nvox and clust_nvol!")
+          stop("Cannot pass both clust_nvox and clust_vol!")
         }
-        private$set_clust_nvol(clust_nvol)
+        private$set_clust_vol(clust_vol)
       }
 
       # set the integer-valued cluster mask output name
       if (!is.null(pref_map)) {
-        checkmate::assert_string(pref_map)
-        ext <- file_ext(pref_map)
-        if (is.na(ext)) {
-          pref_map <- paste0(pref_map, ".nii.gz") # force nifti output
-        } else if (grepl("(brik|head).*", ext)) {
-          message("Forcing -pref_map extension to .nii.gz for consistency")
-          pref_map <- paste0(file_sans_ext(pref_map), ".nii.gz") # force nifti output
-        }
-        private$pvt_pref_map <- pref_map
+        private$set_pref_map(pref_map)
       }
 
       # set the data output, masked by the clusterize result
@@ -296,17 +453,9 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
           # no specific data sub-brik provided for the -pref_dat. Assume that it should be the same sub-brik as the threshold (-ithr).
           private$pvt_idat <- private$pvt_ithr
         }
-
-        checkmate::assert_string(pref_dat)
-        ext <- file_ext(pref_dat)
-        if (is.na(ext)) {
-          pref_dat <- paste0(pref_dat, ".nii.gz") # force nifti output
-        } else if (grepl("(brik|head).*", ext)) {
-          message("Forcing -pref_dat extension to .nii.gz for consistency")
-          pref_dat <- paste0(file_sans_ext(pref_dat), ".nii.gz") # force nifti output
-        }
-
-        private$pvt_pref_dat <- pref_dat
+        
+        # assign value through active binding
+        self$pref_dat <- pref_dat
       }
 
       if (!is.null(quiet)) {
@@ -327,10 +476,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$pvt_orient <- orient
       }
 
-      if (!is.null(clusterize_output_file)) {
-        checkmate::assert_string(clusterize_output_file)
-        private$pvt_clusterize_output_file <- clusterize_output_file
-      }
+      # set output file for cluster table
+      self$clusterize_output_file <- clusterize_output_file
 
       # sort out the -inset to be used in the 3dClusterize call (if a threshold and data file are passed)
       if (!is.null(private$pvt_threshold_file)) {
@@ -346,6 +493,9 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         default_wd <- dirname(private$pvt_inset_file)
         private$pvt_input_file <- private$pvt_inset_file
       }
+
+      # set default working directory for outputs if not specified
+      # private$set_default_wd()
 
       # default to naming clusters file according to the inset file
       if (is.null(private$pvt_clusterize_output_file)) {
@@ -365,6 +515,9 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$pvt_pref_dat <- R.utils::getAbsolutePath(private$pvt_pref_dat, workDirectory = default_wd)
       }
 
+      # look at whether 3dClusterize has already run and, if so, populate whether clusters were found
+      private$check_for_clusters()
+
     },
 
     #' @description run the 3dClusterize command relevant to this object
@@ -382,25 +535,32 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       }
 
       private$build_call()
-      run_afni_command(private$pvt_clusterize_call, echo = !quiet)
+      run_afni_command(private$pvt_clusterize_call, echo = !quiet, ignore.stderr = quiet)
+      self$reset_cache() # if we have run 3dClusterize, nullify the cached whereami and clust_df objects so that these do not persist
     },
 
     #' @description return the 3dClusterize table of clusters as a data.frame
     #' @details This function will return an empty data.frame if the 3dClusterize output file cannot be found.
     #' @param include_whereami If TRUE and if $add_whereami() is already complete, merge the whereami data
     #'   into the cluster data.frame that is returned by this function.
-    get_clust_df = function(include_whereami = TRUE) {
+    #' @param include_subclusters If TRUE and if $generate_subclusters() is already complete, merge the subcluster
+    #'   data into the cluster data.frame that is returned by this function.
+    get_clust_df = function(include_whereami = TRUE, include_subclusters = TRUE) {
       if (!checkmate::test_file_exists(private$pvt_clusterize_output_file)) {
         warning(glue("The expected 3dClusterize output does not exist: {private$pvt_clusterize_output_file}"))
         return(invisible(data.frame()))
+      } else if (is.data.frame(private$pvt_clust_df)) { # use cached object
+        return(private$merge_aux_data(include_whereami, include_subclusters))
       }
 
-      clust_txt <- readLines(private$pvt_clusterize_output_file)
-      if (grepl("#** NO CLUSTERS FOUND ***", clust_txt[1L], fixed = TRUE)) {
-        warning("No clusters found by 3dClusterize")
+      # populate whether clusters exist based on output file
+      private$check_for_clusters()
+
+      if (isFALSE(private$pvt_has_clusters)) {
         return(data.frame())
       }
 
+      clust_txt <- readLines(private$pvt_clusterize_output_file)
       clust_df <- read.table(private$pvt_clusterize_output_file)
       comment_lines <- grep("^\\s*#", clust_txt, perl = TRUE)
       table_lines <- grep("^\\s*#", clust_txt, perl = TRUE, invert = TRUE)
@@ -412,7 +572,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       names(clust_df) <- cols
 
       clust_df$roi_num <- seq_len(nrow(clust_df))
-      clust_df <- clust_df %>% dplyr::select(roi_num, everything()) # place roi_num first
+      clust_df <- clust_df %>% dplyr::select(roi_num, tidyselect::everything()) # place roi_num first
 
       parse_header_rows <- function(lines, clust_df) {
         attrib <- lapply(lines, function(x) {
@@ -482,14 +642,10 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         }
       }
 
-      # add header row information as attributes to data.frame
-      clust_df <- parse_header_rows(comment_txt, clust_df)
-      
-      if (isTRUE(include_whereami) && private$has_whereami()) {
-        clust_df <- clust_df %>% dplyr::left_join(self$whereami()$get_whereami_df(), by = "roi_num")
-      }
+      # add header row information as attributes to data.frame, cache parsed data.frame object
+      private$pvt_clust_df <- parse_header_rows(comment_txt, clust_df)    
 
-      return(clust_df)
+      return(private$merge_aux_data(include_whereami, include_subclusters))
     },
 
     #' @description method to read and return the integer-valued clusterized mask (aka -pref_map) as an oro.nifti object
@@ -542,11 +698,11 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       } else if (!self$is_complete()) {
         message("Cannot add whereami to 3dclusterize object until clusterization is run!")
       } else {
-        private$pvt_whereami <- afni_whereami$new(
+        self$whereami <- afni_whereami$new(
           afni_3dclusterize_obj = self, atlases = atlases
         )
-        
-        private$pvt_whereami$run(force = TRUE)
+
+        self$whereami$run(force = TRUE)
       }
     },
 
@@ -556,19 +712,272 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       checkmate::test_file_exists(expect_file)
     },
 
-    #' @description passthrough access to whereami object if that has been 
-    whereami = function() { # expose nested object
-      if (is.null(private$pvt_whereami)) {
-        message("No whereami has been added to this object yet. Use $add_whereami() to do so.")
-        return(invisible(NULL))
-      } else {
-        private$pvt_whereami
+    #' @description break up large clusters into subclusters
+    #' @param break_nvox Break up any clusters larger than this value into subclusters. Default: 400
+    #' @param min_subclust_nvox The smallest number of voxels allowed in a subcluster. Default: 25.
+    #' @param max_subclust_nvox The largest numver of voxels allowed in a subcluster. If NULL, no upper limit is set.
+    #' @param min_n_subclust The smallest number of subclusters that will be allowed. Must be 2 or greater. Default: 2
+    #' @param max_n_subclust The maximum number of subclusters that will be allowed. If NULL, no upper limit is set.
+    #' @param step_size The step size used to change the threshold values in the test statistic map being clusterized. Default: 0.1.
+    #' @param add_whereami If TRUE, whereami will be run for each subcluster. Default: TRUE
+    #' @param whereami_atlases Passes through to afni_whereami for specifying which atlases to use in lookup
+    #' @param print_progress If TRUE, the user will see the thresholds being used to subcluster each region.
+    generate_subclusters = function(break_nvox = 400, min_subclust_nvox = 25, max_subclust_nvox = NULL,
+      min_n_subclust = 2, max_n_subclust = NULL, step_size = .1, add_whereami = TRUE, whereami_atlases = NULL, print_progress = FALSE) {
+
+      if (is.null(private$pvt_has_clusters)) {
+        warning("Did not find expected 3dClusterize output file to use for clusters. Have you used $run() yet?")
+        return(invisible(self))
+      } else if (isFALSE(private$pvt_has_clusters)) {
+        warning("No clusters were found for this object. Cannot create subclusters.")
+        return(invisible(self))
       }
+
+      if (is.null(max_subclust_nvox)) {
+        max_subclust_nvox <- Inf # no limit on subcluster size
+      }
+
+      checkmate::assert_integerish(break_nvox, lower = 10, upper = 1e5, len = 1L)
+      checkmate::assert_integerish(min_subclust_nvox, lower = 1, upper = 1e4, len = 1L)
+      if (!is.infinite(max_subclust_nvox)) checkmate::assert_integerish(max_subclust_nvox, lower = 5, upper = 1e6, len = 1L)
+
+      if (is.null(max_n_subclust)) {
+        max_n_subclust <- Inf # makes the upper limit unbounded
+      }
+
+      checkmate::assert_integerish(min_n_subclust, lower = 2L, upper = 1000L)
+      if (!is.infinite(max_n_subclust)) checkmate::assert_integerish(max_n_subclust, lower = 2L)
+
+      cdf <- self$get_clust_df(include_whereami = FALSE)
+      big_clusters <- cdf %>% dplyr::filter(Volume >= !!break_nvox)
+
+      if (nrow(big_clusters) > 0L) {
+        private$pvt_subclust_list <- lapply(seq_len(nrow(big_clusters)), function(ii) {
+
+          if (max_subclust_nvox > big_clusters$Volume[ii]) {
+            this_max_nvox <- big_clusters$Volume[ii]
+          } else {
+            this_max_nvox <- max_subclust_nvox
+          }
+
+          roi_val <- big_clusters$roi_num[ii]
+
+          # clone object to get same starting point on thresholds, NN, and the like
+          sobj <- self$clone(deep = TRUE)
+          sobj$reset_cache()
+
+          # create temp mask file that just contains statistics within the big ROI of interest
+          temp_mask <- tempfile(pattern = "tmpmask", fileext = ".nii.gz")
+          temp_clust_1d <- tempfile(pattern = "tmpclust", fileext = ".1D")
+          temp_clust_nii <- tempfile(pattern = "tmpclust", fileext = ".nii.gz")
+
+          runFSLCommand(glue("fslmaths {private$pvt_pref_map} -uthr {roi_val} -thr {roi_val} -bin {temp_mask}"))
+
+          # clusterize within mask
+          sobj$mask <- temp_mask
+          sobj$clusterize_output_file <- temp_clust_1d
+          sobj$pref_map <- temp_clust_nii
+          sobj$pref_dat <- NULL # not used for subclustering
+          sobj$whereami <- NULL # clear out
+
+          # run subclustering algorithm within this mask
+          best <- sobj$run_subclustering(
+            min_n_subclust, max_n_subclust, min_subclust_nvox, this_max_nvox, step_size
+          )
+
+          if (!is.null(best)) {
+            if (isTRUE(add_whereami) && best$has_clusters()) {
+              best$add_whereami(whereami_atlases)
+            }
+
+            cdf <- best$get_clust_df() %>%
+              dplyr::rename(subroi_num = roi_num) %>%
+              dplyr::mutate(roi_num = !!roi_val) %>%
+              dplyr::select(roi_num, subroi_num, everything())
+          } else {
+            cdf <- NULL # no subclusters to return
+          }
+
+          ret_list <- list(roi_num = roi_val, subcluster_df = cdf) #, subcluster_obj = best)
+          unlink(c(temp_mask, temp_clust_1d, temp_clust_nii)) # cleanup tmp files
+
+          return(ret_list)
+
+        })
+      } else {
+        message(glue("No clusters exceeded the maximum number of voxels ({break_nvox}) that would lead to subclustering."))
+        return(invisible(self))
+      }
+
+      private$pvt_subclust_df <- dplyr::bind_rows(lapply(private$pvt_subclust_list, "[[", "subcluster_df"))
     },
 
-    #' @description break up large clusters into subclusters
-    generate_subclusters = function(break_if_larger = 500, min_subclust = 50, max_subclust = 200, step_size = .1) {
-      
+    #' @description runs a subclustering algorithm on this object, increasing the thresholds until the desired constraints are satisfied
+    #' @details this is intended to be used internally
+    #' @param min_clust The minimum number of clusters that will be accepted
+    #' @param max_clust The maximum number of clusters that will be accepted
+    #' @param max_iter The maximum number of increment steps that will be taken before giving up
+    #' @param refine_steps The number of steps backward from a winning solution. This maximizes the subcluster sizes.
+    #' @param print_progress If TRUE, the user will see the thresholds being used to subcluster each region.
+    run_subclustering = function(min_clust = NULL, max_clust = NULL, min_nvox = NULL, max_nvox = NULL, step_size = NULL,
+    refine_steps = 5, max_iter = 50, print_progress = TRUE) {
+
+      checkmate::assert_integerish(min_clust, lower = 2, len = 1L)
+      checkmate::assert_integerish(min_nvox, lower = 1, len = 1L)
+      checkmate::assert_number(step_size, lower = 1e-10)
+
+      # get current threshold as starting values
+      if (self$sided == "bi" || self$sided == "2") {
+        vals <- c(lower_thresh = self$lower_thresh, upper_thresh = self$upper_thresh)
+      } else {
+        vals <- c(one_thresh = self$one_thresh)
+      }
+
+      delta_thresh <- function(vals, step_size, incr = 1) {
+        step_size <- incr * step_size # determine the current step forward or backward
+        if (length(vals) == 1L) {
+          if (vals < 0) {
+            return(vals - step_size) # make more negative
+          } else {
+            return(vals + step_size) # make more positive
+          }
+        } else if (length(vals) == 2L) {
+          # make more extreme
+          return(c(vals[1L] - step_size, vals[2L] + step_size))
+        } else {
+          stop("Cannot figure out vals")
+        }
+      }
+
+      self$clust_nvox <- min_nvox # use subclustering settings for defining lower bound on clusters
+      search_finished <- FALSE
+      incr <- 0 # how much to walk forward or backward
+      starting_vals <- vals # where did we start
+      iter <- 0
+      solution_found <- FALSE # pin a satisfactory solution while we look around
+      refine_iter <- 0 # number of steps in refinement of solution
+      best_vals <- NULL
+      best_obj <- NULL # object of best 3dClusterize attempt
+
+      while (search_finished == FALSE) {
+        iter <- iter + 1
+
+        # handle solution refinement steps (final search)
+        if (isTRUE(solution_found)) {
+          refine_iter <- refine_iter + 1
+          incr <- -1 # always backup by the smaller step size (overrides incrs below from initial search)
+          if (refine_iter > refine_steps) {
+            search_finished <- TRUE
+            break
+          }
+        }
+
+        # get current threshold values based on increment and step size
+        vals <- delta_thresh(vals, step_size, incr)
+        if (incr < 0) {
+          # if we have backed up all the way to the starting values, the search has failed
+          if (abs(vals[length(vals)] - starting_vals[length(starting_vals)]) < 1e-5) {
+            message("Could not backup further")
+            search_finished <- TRUE
+          }
+        }
+
+        if (self$sided == "one") {
+          self$one_thresh <- vals[1]
+        } else {
+          self$lower_thresh <- vals[1]
+          self$upper_thresh <- vals[2]
+        }
+
+        self$run(force = TRUE, quiet = TRUE)
+        dd <- self$get_clust_df()
+        n_subclust <- nrow(dd)
+
+        if (n_subclust > 0L) {
+          biggest_subclust <- max(dd$Volume)
+          smallest_subclust <- min(dd$Volume)
+        } else {
+          biggest_subclust <- NA_integer_
+          smallest_subclust <- NA_integer_
+        }
+
+        good_solution <- FALSE # whether the current values satisfy the constraints
+
+        if (n_subclust == 0L) {
+          # we have walked all the way out in the thresholds algorithm and have found no subclusters
+          # consider this a search failure, give up
+          search_finished <- TRUE
+        } else if (n_subclust < min_clust) {
+          # press on with higher thresholds
+          incr <- 1
+        } else if (biggest_subclust > max_nvox) {
+          # press on with higher threshold
+          incr <- 1
+        } else if (n_subclust > max_clust) {
+          # need to backup to get the max down
+          incr <- -0.5
+        } else if (smallest_subclust < min_nvox) {
+          # need to backup to get larger subclusters
+          incr <- -0.5
+        } else {
+          # a solution has been found
+          # if it's the first solution, walk backwards in smaller steps
+          if (isFALSE(solution_found)) {
+            step_size <- step_size / (refine_steps + 1)
+          }
+
+          solution_found <- TRUE # these settings satisfy constraint -- refine, if relevant
+          good_solution <- TRUE # this solution works (for printing progress)
+          best_vals <- vals # on a solution refinement, if we get here, the values are good
+          best_obj <- self$clone() # keep the best object in the backward search
+          #message("Solution found")
+        }
+
+        if (isTRUE(print_progress)) {
+          print(
+            data.frame(t(vals), biggest = biggest_subclust, smallest = smallest_subclust, nclust = n_subclust, good_solution = good_solution),
+            row.names = FALSE
+          )
+        }
+
+        if (iter > max_iter && isFALSE(solution_found)) {
+          message(glue::glue("Could not find solution after {max_iter} iterations. Perhaps adjust step size?"))
+          search_finished <- TRUE
+        }
+      }
+
+      if (isTRUE(solution_found)) {
+        # was attempting to just update the object itself, but this does not overwrite the entire object with the cloned best one
+        # self <- best_obj
+
+        # need to re-run 3dClusterize once more at the best params to ensure that the output files reflect the final settings
+        # the alternative would be to use new files with every iteration, which I may implement in future
+        best_obj$run(force = TRUE, quiet = TRUE)
+      } else {
+        message("No subclusters found that satisfy constraints")
+      }
+
+      # instead of assigning self, we just return the best cloned object
+      return(best_obj)
+    },
+
+    #' @description check whether clusteres were found
+    #' @details returns TRUE if clusters were found, FALSE if they were not found, and NULL if the expected cluster
+    #'   output file does not exist (e.g., if 3dClusterize has not been run yet)
+    has_clusters = function() {
+      private$pvt_has_clusters
+    },
+
+    #' @description not intended to be called by user, this resets the cluster data.frame and whereami objects to NULL
+    #' @details this is used internally when cloning the parent clusterize object for subclustering
+    reset_cache = function() {
+      private$pvt_whereami <- NULL
+      private$pvt_clust_df <- NULL
+      return(invisible(self))
+    },
+
+    get_subclust_list = function() {
+      private$pvt_subclust_list
     }
   )
 )

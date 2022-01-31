@@ -4,10 +4,12 @@
 \alias{read_gfeat_dir}
 \title{helper function to look up core stats outputs from a .gfeat folder}
 \usage{
-read_gfeat_dir(gfeat_dir)
+read_gfeat_dir(gfeat_dir, what = "all")
 }
 \arguments{
 \item{gfeat_dir}{a .gfeat folder containing the outputs of an FSL analysis}
+
+\item{what}{What to parse in each folder. Currently just passed through to read_feat_dir}
 }
 \value{
 a list containing sorted vectors of each stat output

@@ -34,7 +34,11 @@ wrapper class for 3dClusterize
 \item \href{#method-get_orient}{\code{afni_3dclusterize$get_orient()}}
 \item \href{#method-add_whereami}{\code{afni_3dclusterize$add_whereami()}}
 \item \href{#method-is_complete}{\code{afni_3dclusterize$is_complete()}}
-\item \href{#method-whereami}{\code{afni_3dclusterize$whereami()}}
+\item \href{#method-generate_subclusters}{\code{afni_3dclusterize$generate_subclusters()}}
+\item \href{#method-run_subclustering}{\code{afni_3dclusterize$run_subclustering()}}
+\item \href{#method-has_clusters}{\code{afni_3dclusterize$has_clusters()}}
+\item \href{#method-reset_cache}{\code{afni_3dclusterize$reset_cache()}}
+\item \href{#method-get_subclust_list}{\code{afni_3dclusterize$get_subclust_list()}}
 \item \href{#method-clone}{\code{afni_3dclusterize$clone()}}
 }
 }
@@ -42,6 +46,9 @@ wrapper class for 3dClusterize
 \if{html}{\out{<a id="method-new"></a>}}
 \if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
+passthrough access to whereami object if that has been setup
+
+
 initialization function for a new afni_3dclusterize object. Arguments largely mirror the 3dClusterize parameters.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$new(
@@ -62,7 +69,7 @@ initialization function for a new afni_3dclusterize object. Arguments largely mi
   one_tail = NULL,
   NN = NULL,
   clust_nvox = NULL,
-  clust_nvol = NULL,
+  clust_vol = NULL,
   pref_map = NULL,
   pref_dat = NULL,
   quiet = NULL,
@@ -82,7 +89,7 @@ initialization function for a new afni_3dclusterize object. Arguments largely mi
 \item{\code{threshold_file}}{A 3D dataset containing the statistic to use for thresholding. Mutually exclusive with \code{inset}
 If passed, \code{ithr} and \code{idat} are ignored because the \code{inset} file is generated internally.}
 
-\item{\code{data_file}}{A 3D dataset containing the data value to be retained in clusters post-thresholding. 
+\item{\code{data_file}}{A 3D dataset containing the data value to be retained in clusters post-thresholding.
 Must be passed with \code{threshold_file} and will be stitched together with it internally. Mutually exclusive with \code{inset}.}
 
 \item{\code{mask_from_hdr}}{passes through as -mask_from_hdr}
@@ -91,14 +98,31 @@ Must be passed with \code{threshold_file} and will be stitched together with it 
 
 \item{\code{ithr}}{sub-brik number for the voxelwise threshold. Passes through as -ithr}
 
+\item{\code{idat}}{sub-brik number for the voxelwise data to be output in cluster table. Passes through as -idat}
+
 \item{\code{onesided}}{if TRUE, clusterizing will be conducted on one tail of the statistic distribution (-ithr)}
 
 \item{\code{twosided}}{if TRUE, clusterizing will be conducted on both tails of the statistic distribution (-ithr)}
 
+\item{\code{bisided}}{if TRUE, clusterizing will be conducted on each tail of the distribution individually}
+
+\item{\code{lower_thresh}}{the lower tail cutoff for two/bi-sided testing}
+
+\item{\code{upper_thresh}}{the upper tail cutoff for two/bi-sided testing}
+
+\item{\code{one_thresh}}{The threshold value for one-sided testing}
+
 \item{\code{NN}}{1, 2, 3. Default: 1. Passes through as -NN.}
 
-\item{\code{pref_map}}{File name for the integer-valued mask containing each cluster, ordered by descending voxel size. 
+\item{\code{clust_nvox}}{The minimum number of voxels allowed in a cluster. Passes through as -clust_nvol}
+
+\item{\code{clust_vol}}{The minimum volume in (microliters) allowed in a cluster (mutually exclusive with clust_nvox). 
+Passes through as -clust_vol}
+
+\item{\code{pref_map}}{File name for the integer-valued mask containing each cluster, ordered by descending voxel size.
 Passes through as -pref_map.}
+
+\item{\code{pref_dat}}{File name for the clusterized and thresholded data. Passes through as -pref_dat.}
 
 \item{\code{quiet}}{passes through as -quiet.}
 }
@@ -111,13 +135,15 @@ Passes through as -pref_map.}
 \subsection{Method \code{run()}}{
 run the 3dClusterize command relevant to this object
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$run(force = FALSE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$run(force = FALSE, quiet = FALSE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{force}}{if TRUE, 3dClusterize will be re-run}
+
+\item{\code{quiet}}{if TRUE, don't output messages as object is run or checked}
 }
 \if{html}{\out{</div>}}
 }
@@ -128,7 +154,10 @@ run the 3dClusterize command relevant to this object
 \subsection{Method \code{get_clust_df()}}{
 return the 3dClusterize table of clusters as a data.frame
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$get_clust_df(include_whereami = TRUE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$get_clust_df(
+  include_whereami = TRUE,
+  include_subclusters = TRUE
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -136,6 +165,9 @@ return the 3dClusterize table of clusters as a data.frame
 \describe{
 \item{\code{include_whereami}}{If TRUE and if $add_whereami() is already complete, merge the whereami data
 into the cluster data.frame that is returned by this function.}
+
+\item{\code{include_subclusters}}{If TRUE and if $generate_subclusters() is already complete, merge the subcluster
+data into the cluster data.frame that is returned by this function.}
 }
 \if{html}{\out{</div>}}
 }
@@ -205,9 +237,16 @@ Add's an afni_whereami object to this class in the $whereami slot. The correspon
   whereami command is also run when this is added so that coordinates and labels can be obtained
   immediately. To access the whereami object and its methods, use $whereami()
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$add_whereami()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$add_whereami(atlases = NULL)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{atlases}}{An optional character vector of atlases to be requested in whereami.}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-is_complete"></a>}}
@@ -220,12 +259,121 @@ returns TRUE if all expected output files exist for this 3dClusterize call
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-whereami"></a>}}
-\if{latex}{\out{\hypertarget{method-whereami}{}}}
-\subsection{Method \code{whereami()}}{
-passthrough access to whereami object if that has been
+\if{html}{\out{<a id="method-generate_subclusters"></a>}}
+\if{latex}{\out{\hypertarget{method-generate_subclusters}{}}}
+\subsection{Method \code{generate_subclusters()}}{
+break up large clusters into subclusters
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$whereami()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$generate_subclusters(
+  break_nvox = 400,
+  min_subclust_nvox = 25,
+  max_subclust_nvox = NULL,
+  min_n_subclust = 2,
+  max_n_subclust = NULL,
+  step_size = 0.1,
+  add_whereami = TRUE,
+  whereami_atlases = NULL,
+  print_progress = FALSE
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{break_nvox}}{Break up any clusters larger than this value into subclusters. Default: 400}
+
+\item{\code{min_subclust_nvox}}{The smallest number of voxels allowed in a subcluster. Default: 25.}
+
+\item{\code{max_subclust_nvox}}{The largest numver of voxels allowed in a subcluster. If NULL, no upper limit is set.}
+
+\item{\code{min_n_subclust}}{The smallest number of subclusters that will be allowed. Must be 2 or greater. Default: 2}
+
+\item{\code{max_n_subclust}}{The maximum number of subclusters that will be allowed. If NULL, no upper limit is set.}
+
+\item{\code{step_size}}{The step size used to change the threshold values in the test statistic map being clusterized. Default: 0.1.}
+
+\item{\code{add_whereami}}{If TRUE, whereami will be run for each subcluster. Default: TRUE}
+
+\item{\code{whereami_atlases}}{Passes through to afni_whereami for specifying which atlases to use in lookup}
+
+\item{\code{print_progress}}{If TRUE, the user will see the thresholds being used to subcluster each region.}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-run_subclustering"></a>}}
+\if{latex}{\out{\hypertarget{method-run_subclustering}{}}}
+\subsection{Method \code{run_subclustering()}}{
+runs a subclustering algorithm on this object, increasing the thresholds until the desired constraints are satisfied
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$run_subclustering(
+  min_clust = NULL,
+  max_clust = NULL,
+  min_nvox = NULL,
+  max_nvox = NULL,
+  step_size = NULL,
+  refine_steps = 5,
+  max_iter = 50,
+  print_progress = TRUE
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{min_clust}}{The minimum number of clusters that will be accepted}
+
+\item{\code{max_clust}}{The maximum number of clusters that will be accepted}
+
+\item{\code{refine_steps}}{The number of steps backward from a winning solution. This maximizes the subcluster sizes.}
+
+\item{\code{max_iter}}{The maximum number of increment steps that will be taken before giving up}
+
+\item{\code{print_progress}}{If TRUE, the user will see the thresholds being used to subcluster each region.}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Details}{
+this is intended to be used internally
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-has_clusters"></a>}}
+\if{latex}{\out{\hypertarget{method-has_clusters}{}}}
+\subsection{Method \code{has_clusters()}}{
+check whether clusteres were found
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$has_clusters()}\if{html}{\out{</div>}}
+}
+
+\subsection{Details}{
+returns TRUE if clusters were found, FALSE if they were not found, and NULL if the expected cluster
+  output file does not exist (e.g., if 3dClusterize has not been run yet)
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-reset_cache"></a>}}
+\if{latex}{\out{\hypertarget{method-reset_cache}{}}}
+\subsection{Method \code{reset_cache()}}{
+not intended to be called by user, this resets the cluster data.frame and whereami objects to NULL
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$reset_cache()}\if{html}{\out{</div>}}
+}
+
+\subsection{Details}{
+this is used internally when cloning the parent clusterize object for subclustering
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-get_subclust_list"></a>}}
+\if{latex}{\out{\hypertarget{method-get_subclust_list}{}}}
+\subsection{Method \code{get_subclust_list()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$get_subclust_list()}\if{html}{\out{</div>}}
 }
 
 }

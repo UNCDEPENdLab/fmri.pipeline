@@ -4,10 +4,12 @@
 \alias{read_feat_dir}
 \title{helper function to look up core stats outputs from a .feat folder}
 \usage{
-read_feat_dir(feat_dir)
+read_feat_dir(feat_dir, what = "all")
 }
 \arguments{
 \item{feat_dir}{a .feat folder containing the outputs of an FSL analysis}
+
+\item{what}{which parts of the .feat folder should be parsed. If "all", extract everything.}
 }
 \value{
 a list containing sorted vectors of each stat output
