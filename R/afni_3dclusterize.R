@@ -502,6 +502,11 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$pvt_clusterize_output_file <- paste0(basename(file_sans_ext(private$pvt_input_file)), "_clusters.1D")
       }
 
+      # at present, default to outputting a pref_map... perhaps need a way to disable this, but enabling it by default seems better
+      if (is.null(private$pvt_pref_map)) {
+        private$pvt_pref_map <- paste0(basename(file_sans_ext(private$pvt_input_file)), "_clusters.nii.gz")
+      }
+
       # if output files are provided without any path specification, use the directory of the input file
       private$pvt_clusterize_output_file <- R.utils::getAbsolutePath(private$pvt_clusterize_output_file,
         workDirectory = default_wd
@@ -667,7 +672,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #' @description Provides a vector of expected output files that correspond to this 3dClusterize setup
     #' @param exclude_missing if TRUE (default), any output file that cannot be found will be returned as NA.
     #' @return a named vector of output files related to this 3dClusterize setup
-    get_output_files = function(exclude_missing = TRUE) {
+    get_outputs = function(exclude_missing = TRUE) {
 
       cluster_map <- private$pvt_pref_map
       cluster_masked_data <- private$pvt_pref_dat
@@ -708,7 +713,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
     #' @description returns TRUE if all expected output files exist for this 3dClusterize call
     is_complete = function() {
-      expect_file <- self$get_output_files(exclude_missing = FALSE)["cluster_table"]
+      expect_file <- self$get_outputs(exclude_missing = FALSE)["cluster_table"]
       checkmate::test_file_exists(expect_file)
     },
 
@@ -719,11 +724,13 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #' @param min_n_subclust The smallest number of subclusters that will be allowed. Must be 2 or greater. Default: 2
     #' @param max_n_subclust The maximum number of subclusters that will be allowed. If NULL, no upper limit is set.
     #' @param step_size The step size used to change the threshold values in the test statistic map being clusterized. Default: 0.1.
+    #' @param max_iter The maximum number of steps to be taken for subcluster search. Default: 50.
     #' @param add_whereami If TRUE, whereami will be run for each subcluster. Default: TRUE
     #' @param whereami_atlases Passes through to afni_whereami for specifying which atlases to use in lookup
     #' @param print_progress If TRUE, the user will see the thresholds being used to subcluster each region.
     generate_subclusters = function(break_nvox = 400, min_subclust_nvox = 25, max_subclust_nvox = NULL,
-      min_n_subclust = 2, max_n_subclust = NULL, step_size = .1, add_whereami = TRUE, whereami_atlases = NULL, print_progress = FALSE) {
+      min_n_subclust = 2, max_n_subclust = NULL, step_size = .1, max_iter = 50,
+      add_whereami = TRUE, whereami_atlases = NULL, print_progress = FALSE) {
 
       if (is.null(private$pvt_has_clusters)) {
         warning("Did not find expected 3dClusterize output file to use for clusters. Have you used $run() yet?")
@@ -748,7 +755,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       checkmate::assert_integerish(min_n_subclust, lower = 2L, upper = 1000L)
       if (!is.infinite(max_n_subclust)) checkmate::assert_integerish(max_n_subclust, lower = 2L)
 
-      cdf <- self$get_clust_df(include_whereami = FALSE)
+      cdf <- self$get_clust_df(include_whereami = FALSE, include_subclusters = FALSE)
       big_clusters <- cdf %>% dplyr::filter(Volume >= !!break_nvox)
 
       if (nrow(big_clusters) > 0L) {
@@ -782,27 +789,28 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
           # run subclustering algorithm within this mask
           best <- sobj$run_subclustering(
-            min_n_subclust, max_n_subclust, min_subclust_nvox, this_max_nvox, step_size
+            min_n_subclust, max_n_subclust, min_subclust_nvox, this_max_nvox, step_size,
+            max_iter = max_iter, print_progress = print_progress
           )
 
+          # if subclustering fails, best will be NULL
           if (!is.null(best)) {
             if (isTRUE(add_whereami) && best$has_clusters()) {
               best$add_whereami(whereami_atlases)
             }
 
-            cdf <- best$get_clust_df() %>%
+            subcluster_df <- best$get_clust_df(include_subclusters = FALSE) %>%
               dplyr::rename(subroi_num = roi_num) %>%
               dplyr::mutate(roi_num = !!roi_val) %>%
               dplyr::select(roi_num, subroi_num, everything())
           } else {
-            cdf <- NULL # no subclusters to return
+            subcluster_df <- NULL # no subclusters to return
           }
 
-          ret_list <- list(roi_num = roi_val, subcluster_df = cdf) #, subcluster_obj = best)
+          ret_list <- list(roi_num = roi_val, subcluster_df = subcluster_df) # , subcluster_obj = best)
           unlink(c(temp_mask, temp_clust_1d, temp_clust_nii)) # cleanup tmp files
 
           return(ret_list)
-
         })
       } else {
         message(glue("No clusters exceeded the maximum number of voxels ({break_nvox}) that would lead to subclustering."))
@@ -810,6 +818,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       }
 
       private$pvt_subclust_df <- dplyr::bind_rows(lapply(private$pvt_subclust_list, "[[", "subcluster_df"))
+      return(invisible(self))
     },
 
     #' @description runs a subclustering algorithm on this object, increasing the thresholds until the desired constraints are satisfied
@@ -973,11 +982,45 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     reset_cache = function() {
       private$pvt_whereami <- NULL
       private$pvt_clust_df <- NULL
+      private$pvt_subclust_df <- NULL
+      private$pvt_subclust_list <- NULL
       return(invisible(self))
     },
 
     get_subclust_list = function() {
       private$pvt_subclust_list
+    },
+
+    #' @description method to delete any/all files generated by this object
+    #' @param prompt if TRUE, user will have to confirm deletion of each file. If FALSE, files are deleted without prompting.
+    delete_outputs = function(prompt = FALSE) {
+      checkmate::assert_logical(prompt, len = 1L)
+      f_list <- self$get_outputs()
+      f_exists <- sapply(f_list, checkmate::test_file_exists)
+      f_list <- f_list[f_exists]
+      if (length(f_list) == 0L) {
+        message("No output files found for removal.")
+      } else {
+        if (isTRUE(prompt)) {
+          for (ff in f_list) {
+            cat("File:", ff, "\n")
+            remove <- askYesNo("Delete?")
+            if (isTRUE(remove)) {
+              cat(sprintf("Removing: %s", ff), sep = "\n")
+              unlink(ff)
+            } else if (is.na(remove)) {
+              # cancel
+              return(invisible(NULL))
+            }
+          }
+        } else {
+          cat(sprintf("Removing: %s", f_list), sep="\n")
+          unlink(f_list)
+        }
+
+      }
+      self$reset_cache()
+      return(invisible(self))
     }
   )
 )
