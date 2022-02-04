@@ -1133,20 +1133,20 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         if (isTRUE(mask_by_overlap)) {
           at_mod <- at_mod * clust_bin # mask out retained atlas voxels that did not overlap with a cluster
         }
+
+        if (isTRUE(output_atlas)) {
+          if (output_atlas_file == "default") {
+            atlas_name <- basename(file_sans_ext(atlas_file))
+            output_atlas_file <- paste0(file_sans_ext(private$pvt_input_file), "_", atlas_name, "_overlap.nii.gz")
+          }
+
+          message(glue("Writing atlas subset to file: {output_atlas_file}"))
+          attr(output_atlas_file, "rois_retained") <- uvals
+          RNifti::writeNifti(image = at_mod, file = output_atlas_file)
+          private$pvt_atlas_files[[atlas_name]] <- output_atlas_file
+        }
       } else {
         message("No atlas parcel overlapped")
-      }
-
-      if (isTRUE(output_atlas)) {
-        if (output_atlas_file == "default") {
-          atlas_name <- basename(file_sans_ext(atlas_file))
-          output_atlas_file <- paste0(file_sans_ext(private$pvt_input_file), "_", atlas_name, "_overlap.nii.gz")
-        }
-
-        message(glue("Writing atlas subset to file: {output_atlas_file}"))
-        attr(output_atlas_file, "rois_retained") <- uvals
-        RNifti::writeNifti(image = at_mod, file = output_atlas_file)
-        private$pvt_atlas_files[[atlas_name]] <- output_atlas_file
       }
 
       return(invisible(self))
