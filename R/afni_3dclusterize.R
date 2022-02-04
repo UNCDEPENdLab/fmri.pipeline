@@ -1,5 +1,6 @@
 #' wrapper class for 3dClusterize
 #' @importFrom tidyselect everything
+#' @importFrom RNifti readNifti writeNifti
 #' @export
 afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
   private = list(
@@ -36,6 +37,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     pvt_clust_df = NULL, # cached data.frame of parsed 3dClusterize output
     pvt_subclust_list = NULL, # cached list of afni_3dclusterize objects for each parent cluster larger than threshold
     pvt_subclust_df = NULL, # cached data.frame of subcluster information
+    pvt_atlas_files = list(), # location of atlas overlap files from calls to subset_atlas_against_clusters
+    pvt_subclust_files = list(), # location of subclustering outputs
 
     # private methods
     # ---------------
@@ -684,7 +687,10 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         if (!checkmate::test_file_exists(cluster_table)) cluster_table <- NA_character_
       }
 
-      named_vector(cluster_table, cluster_map, cluster_masked_data)
+      atlas_files <- private$pvt_atlas_files
+      subcluster_files <- private$pvt_subclust_files
+
+      named_list(cluster_table, cluster_map, cluster_masked_data, atlas_files, subcluster_files)
 
     },
 
@@ -713,7 +719,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
     #' @description returns TRUE if all expected output files exist for this 3dClusterize call
     is_complete = function() {
-      expect_file <- self$get_outputs(exclude_missing = FALSE)["cluster_table"]
+      expect_file <- self$get_outputs(exclude_missing = FALSE)$cluster_table
       checkmate::test_file_exists(expect_file)
     },
 
@@ -819,6 +825,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
           }
 
           ret_list <- list(roi_num = roi_val, subcluster_df = subcluster_df, subcluster_files = subcluster_files) # , subcluster_obj = best)
+          private$pvt_subclust_files[[paste0("roi", roi_val)]] <- subcluster_files
           unlink(c(temp_mask, temp_clust_1d, temp_clust_nii)) # cleanup tmp files
 
           return(ret_list)
@@ -1014,7 +1021,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #' @param mask_by_overlap If TRUE, only voxels in the atlas that overlapped with a cluster are retained. In essence,
     #'   this erodes the retained atlas parcels to only include voxels that were in a cluster. Default: FALSE
     subset_atlas_against_clusters = function(atlas_file = NULL, atlas_lower_threshold = 0, atlas_upper_threshold = Inf,
-      minimum_overlap = 0.8, mask_by_overlap = FALSE) {
+      minimum_overlap = 0.8, mask_by_overlap = FALSE, output_atlas = "default") {
 
       if (isFALSE(self$is_complete)) {
         message("Cannot run subset_atlas_against_clusters because 3dClusterize has not been run successfully yet. Use $run()")
@@ -1023,7 +1030,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
       checkmate::assert_number(minimum_overlap, lower = 0.01, upper = 1.0)
       checkmate::assert_logical(mask_by_overlap, len=1L)
-      clust_file <- self$get_outputs()["cluster_map"]
+      clust_file <- self$get_outputs()$cluster_map
       if (is.na(clust_file)) {
         message("Cannot find a cluster file for the 3dClusterize object. Make sure you include a pref_map when you setup the object.")
         return(invisible(self))
@@ -1031,8 +1038,19 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         message(glue("Cannot find the cluster map {clust_file}"))
         return(invisible(self))
       }
-      
+
+      # figure out whether to output the subset atlas and if so, where
+      # output_atlas becomes TRUE/FALSE and output_atlas_file is the location
       checkmate::assert_file_exists(atlas_file)
+      if (checkmate::test_logical(output_atlas, len = 1L) && isTRUE(output_atlas)) {
+        output_atlas_file <- "default"
+      } else if (is.null(output_atlas)) {
+        output_atlas <- FALSE
+      } else if (checkmate::test_string(output_atlas)) {
+        output_atlas_file <- output_atlas # name of output
+        output_atlas <- TRUE # switch to logical
+      }
+
       atlas_nii <- RNifti::readNifti(atlas_file)
       clust_nii <- RNifti::readNifti(clust_file)
       if (!identical(dim(atlas_nii), dim(clust_nii))) {
@@ -1066,7 +1084,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         clust_match <- clust_bin * at
         prop_overlap <- sum(clust_match) / sum(at)
 
-        if (prop_overlap > minimum_overlap) {
+        if (prop_overlap >= minimum_overlap) {
           good_vals <- c(good_vals, ii)
         }
       }
@@ -1086,8 +1104,19 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         message("No atlas parcel overlapped")
       }
 
-      return(at_mod)
+      if (isTRUE(output_atlas)) {
+        if (output_atlas_file == "default") {
+          atlas_name <- basename(file_sans_ext(atlas_file))
+          output_atlas_file <- paste0(file_sans_ext(private$pvt_input_file), "_", atlas_name, "_overlap.nii.gz")
+        }
 
+        message(glue("Writing atlas subset to file: {output_atlas_file}"))
+        attr(output_atlas_file, "rois_retained") <- uvals
+        RNifti::writeNifti(image = at_mod, file = output_atlas_file)
+        private$pvt_atlas_files[[atlas_name]] <- output_atlas_file
+      }
+
+      return(invisible(self))
     },
 
     #' @description method to delete any/all files generated by this object

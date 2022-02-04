@@ -111,8 +111,8 @@ afni_whereami <- R6::R6Class("afni_whereami",
         checkmate::assert_class(afni_3dclusterize_obj, "afni_3dclusterize")
         coord_orientation <- afni_3dclusterize_obj$get_orient()
         ofiles <- afni_3dclusterize_obj$get_outputs()
-        omask <- ofiles["cluster_map"] # file containing integer-valued clusters
-        coord_file <- ofiles["cluster_table"]
+        omask <- ofiles$cluster_map # file containing integer-valued clusters
+        coord_file <- ofiles$cluster_table
         coord_file_columns <- 1:3 # 0-based indexing in AFNI 1D parser, so this should be CM LR, CM PA, and CM IS
       }
 
