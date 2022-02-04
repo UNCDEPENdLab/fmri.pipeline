@@ -294,8 +294,6 @@ afni_3dfwhmx <- R6::R6Class("afni_3dfwhmx",
 
       }
       private$fwhmx_complete <- FALSE # will need to re-run
-      
-
     }
   )
 )

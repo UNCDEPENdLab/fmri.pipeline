@@ -225,7 +225,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
   # active bindings (these are the only things that can change after initialization)
   active = list(
-    #' @field fwe_p a vector of p-values used for familywise error (FWE) z-statistic threshold calculations in pTFCE.
+    #' @field sided Whether to clusterize 1-sided ('one'), two-sided ('two'), or bi-sided ('bi')
     sided = function(val) {
       if (missing(val)) {
         return(private$pvt_sided)
@@ -233,6 +233,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_sided(val)
       }
     },
+
+    #' @field NN the cluster definition basis: 1 = faces touch; 2 = edges touch; 3 = corners touch
     NN = function(val) {
       if (missing(val)) {
         return(private$pvt_NN)
@@ -240,6 +242,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_NN(val)
       }
     },
+
+    #' @field clust_nvox The minimum number of voxels required for each cluster
     clust_nvox = function(val) {
       if (missing(val)) {
         return(private$pvt_clust_nvox)
@@ -247,6 +251,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_clust_nvox(val)
       }
     },
+
+    #' @field clust_vol The minimum volume (in microliters) required for each cluster
     clust_vol = function(val) {
       if (missing(val)) {
         return(private$pvt_clust_vol)
@@ -254,6 +260,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_clust_vol(val)
       }
     },
+
+    #' @field lower_thresh For two/bi-sided clusterizing, the lower threshold for the left tail of the distribution
     lower_thresh = function(val) {
       if (missing(val)) {
         return(private$pvt_lower_thresh)
@@ -261,6 +269,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_lower_thresh(val)
       }
     },
+
+    #' @field upper_thresh For two/bi-sided clusterizing, the upper threshold for the right tail of the distribution
     upper_thresh = function(val) {
       if (missing(val)) {
         return(private$pvt_upper_thresh)
@@ -268,6 +278,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_upper_thresh(val)
       }
     },
+
+    #' @field one_thresh For one-sided clusterizing, the threshold for the test statistic distribution
     one_thresh = function(val) {
       if (missing(val)) {
         return(private$pvt_one_thresh)
@@ -275,6 +287,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_one_thresh(val)
       }
     },
+
+    #' @field mask the mask within which 3dClusterize searches for clusters
     mask = function(val) {
       if (missing(val)) {
         return(private$pvt_mask)
@@ -282,6 +296,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_mask(val)
       }
     },
+
+    #' @field pref_map The name/location of the pref_map (aka cluster_map) file containing an integer-valued mask of identified clusters
     pref_map = function(val) {
       if (missing(val)) {
         return(private$pvt_pref_map)
@@ -289,6 +305,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_pref_map(val)
       }
     },
+
+    #' @field pref_dat The name/location of the pref_data (aka cluster_masked_data) file containing the input data masked by the clusters
     pref_dat = function(val) {
       if (missing(val)) {
         return(private$pvt_pref_dat)
@@ -296,6 +314,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_pref_dat(val)
       }
     },
+
+    #' @field clusterize_output_file The name of the text file containing the output of 3dClusterize (i.e., the table of clusters)
     clusterize_output_file = function(val) {
       if (missing(val)) {
         return(private$pvt_clusterize_output_file)
@@ -304,7 +324,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       }
     },
 
-    #' @description passthrough access to whereami object if that has been setup
+    #' @field whereami passthrough access to whereami object if that has been setup
     whereami = function(val) {
       if (missing(val)) {
         if (is.null(private$pvt_whereami)) {
@@ -339,6 +359,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #' @param lower_thresh the lower tail cutoff for two/bi-sided testing
     #' @param upper_thresh the upper tail cutoff for two/bi-sided testing
     #' @param one_thresh The threshold value for one-sided testing
+    #' @param one_tail For one-sided clusterizing, whether to threshold the LEFT or RIGHT tail of the distribution
     #' @param clust_nvox The minimum number of voxels allowed in a cluster. Passes through as -clust_nvol
     #' @param clust_vol The minimum volume in (microliters) allowed in a cluster (mutually exclusive with clust_nvox). 
     #'   Passes through as -clust_vol
@@ -347,6 +368,11 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #' @param pref_dat File name for the clusterized and thresholded data. Passes through as -pref_dat.
     #' @param NN 1, 2, 3. Default: 1. Passes through as -NN.
     #' @param quiet passes through as -quiet.
+    #' @param orient passes through as -orient. 'RAI' or 'LPI'. Default is LPI.
+    #' @param binary if TRUE, the pref_map (cluster mask) will be output as a 1/0 binary image instead of integer-valued. 
+    #'   Passes through as -binary.
+    #' @param clusterize_output_file The name/location of the 3dClusterize output file containing a table of identified clusters.
+    #'   Defaults to adding the suffix '_clusters.1D' to the input image and placing the file in the same folder as the input.
     initialize = function(inset = NULL, mask = NULL, threshold_file = NULL, data_file = NULL, mask_from_hdr = NULL, out_mask = NULL, 
       ithr = NULL, idat = NULL, onesided = NULL, twosided = NULL, bisided = NULL, 
       lower_thresh = NULL, upper_thresh = NULL, one_thresh = NULL, one_tail = NULL,
@@ -843,8 +869,11 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #' @details this is intended to be used internally
     #' @param min_clust The minimum number of clusters that will be accepted
     #' @param max_clust The maximum number of clusters that will be accepted
-    #' @param max_iter The maximum number of increment steps that will be taken before giving up
-    #' @param refine_steps The number of steps backward from a winning solution. This maximizes the subcluster sizes.
+    #' @param min_nvox The minimum number of voxels in a subcluster that will be accepted
+    #' @param max_nvox The maximum number of voxels in a subcluster that will be accepted
+    #' @param step_size The increments in the threshold values from one step to the next.
+    #' @param max_iter The maximum number of increment steps that will be taken before giving up. Default: 50.
+    #' @param refine_steps The number of steps backward from a winning solution. This maximizes the subcluster sizes. Default: 5.
     #' @param print_progress If TRUE, the user will see the thresholds being used to subcluster each region.
     run_subclustering = function(min_clust = NULL, max_clust = NULL, min_nvox = NULL, max_nvox = NULL, step_size = NULL,
     refine_steps = 5, max_iter = 50, print_progress = TRUE) {
@@ -1020,6 +1049,10 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #'   Default: 0.8
     #' @param mask_by_overlap If TRUE, only voxels in the atlas that overlapped with a cluster are retained. In essence,
     #'   this erodes the retained atlas parcels to only include voxels that were in a cluster. Default: FALSE
+    #' @param output_atlas the name/location of the file to output containing the subset of parcels in \code{atlas_file} that
+    #'   are retained by this function. If \code{'default'} or \code{TRUE}, the subset atlas will be placed in the same
+    #'   folder as the 3dClusterize input image, with a filename that combines the atlas file name with the input/threshold
+    #'   image name. To disable creation of this file, set \code{output_atlas = FALSE}.
     subset_atlas_against_clusters = function(atlas_file = NULL, atlas_lower_threshold = 0, atlas_upper_threshold = Inf,
       minimum_overlap = 0.8, mask_by_overlap = FALSE, output_atlas = "default") {
 
