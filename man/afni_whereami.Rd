@@ -16,7 +16,7 @@ wrapper class for AFNI whereami
 \item \href{#method-get_omask_call}{\code{afni_whereami$get_omask_call()}}
 \item \href{#method-get_whereami_df}{\code{afni_whereami$get_whereami_df()}}
 \item \href{#method-get_omask_df}{\code{afni_whereami$get_omask_df()}}
-\item \href{#method-get_output_files}{\code{afni_whereami$get_output_files()}}
+\item \href{#method-get_outputs}{\code{afni_whereami$get_outputs()}}
 \item \href{#method-run}{\code{afni_whereami$run()}}
 \item \href{#method-clone}{\code{afni_whereami$clone()}}
 }
@@ -79,11 +79,11 @@ wrapper class for AFNI whereami
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_output_files"></a>}}
-\if{latex}{\out{\hypertarget{method-get_output_files}{}}}
-\subsection{Method \code{get_output_files()}}{
+\if{html}{\out{<a id="method-get_outputs"></a>}}
+\if{latex}{\out{\hypertarget{method-get_outputs}{}}}
+\subsection{Method \code{get_outputs()}}{
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_whereami$get_output_files(exclude_missing = TRUE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{afni_whereami$get_outputs(exclude_missing = TRUE)}\if{html}{\out{</div>}}
 }
 
 }

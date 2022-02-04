@@ -1007,7 +1007,12 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #'   atlas that overlaps sufficiently with the map from 3dClusterize
     #' @param atlas_file A NIfTI file containing parcels or perhaps meta-analytic statistics
     #' @param atlas_lower_threshold Only retain values greater than this threshold in the comparison against the clusters. Default: 0
-    #' @param atlas_upper_threshold Only retain values less than this threshold in the comparison against the clusters. Default: Inf (retain all high values)
+    #' @param atlas_upper_threshold Only retain values less than this threshold in the comparison against the clusters. 
+    #'   Default: Inf (retain all high values)
+    #' @param minimum_overlap The proportion overlap of an atlas parcel with a cluster required for the parcel to be retained.
+    #'   Default: 0.8
+    #' @param mask_by_overlap If TRUE, only voxels in the atlas that overlapped with a cluster are retained. In essence,
+    #'   this erodes the retained atlas parcels to only include voxels that were in a cluster. Default: FALSE
     subset_atlas_against_clusters = function(atlas_file = NULL, atlas_lower_threshold = 0, atlas_upper_threshold = Inf,
       minimum_overlap = 0.8, mask_by_overlap = FALSE) {
 
@@ -1016,6 +1021,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         return(invisible(self))
       }
 
+      checkmate::assert_number(minimum_overlap, lower = 0.01, upper = 1.0)
+      checkmate::assert_logical(mask_by_overlap, len=1L)
       clust_file <- self$get_outputs()["cluster_map"]
       if (is.na(clust_file)) {
         message("Cannot find a cluster file for the 3dClusterize object. Make sure you include a pref_map when you setup the object.")
@@ -1037,6 +1044,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       uvals <- sort(unique(as.vector(atlas_nii)))
       if (!checkmate::test_integerish(uvals)) {
         stop("At present, only integer-valued atlases are allowed.")
+      } else {
+        uvals <- uvals[uvals != 0] # never retain 0 as an atlas value
       }
 
       checkmate::assert_number(atlas_lower_threshold)
@@ -1049,11 +1058,12 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       if (!is.infinite(atlas_upper_threshold)) {
         atlas_nii[atlas_nii > atlas_upper_threshold] <- 0 # nullify voxels above threshold
       }
-   
+
       good_vals <- c()
       for (ii in uvals) {
         at <- 1L * (atlas_nii == ii) # convert to 1/0 image
-        clust_match <- (1L * (clust_nii != 0L)) * (at)
+        clust_bin <- (1L * (clust_nii != 0L)) # convert to 1/0 image
+        clust_match <- clust_bin * at
         prop_overlap <- sum(clust_match) / sum(at)
 
         if (prop_overlap > minimum_overlap) {
@@ -1061,11 +1071,17 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         }
       }
 
+      bad_vals <- uvals[!uvals %in% good_vals]
+
       if (length(good_vals) > 0L) {
-        browser()
         at_mod <- atlas_nii
         at_mod[!at_mod %in% good_vals] <- 0
-        cat("The following atlas ")
+        cat(glue("The following atlas values were retained: {paste(good_vals, collapse=', ')}"), "\n")
+        cat(glue("The following atlas values were excluded: {paste(bad_vals, collapse=', ')}"), "\n")
+
+        if (isTRUE(mask_by_overlap)) {
+          at_mod <- at_mod * clust_bin # mask out retained atlas voxels that did not overlap with a cluster
+        }
       } else {
         message("No atlas parcel overlapped")
       }
