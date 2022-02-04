@@ -1110,26 +1110,31 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         atlas_nii[atlas_nii > atlas_upper_threshold] <- 0 # nullify voxels above threshold
       }
 
-      good_vals <- c()
-      for (ii in uvals) {
-        at <- 1L * (atlas_nii == ii) # convert to 1/0 image
+      meets_criteria <- rep(NA, length(uvals))
+      prop_overlap <- rep(NA_real_, length(uvals))
+      for (ii in seq_along(uvals)) {
+        at <- 1L * (atlas_nii == uvals[ii]) # convert to 1/0 image
         clust_bin <- (1L * (clust_nii != 0L)) # convert to 1/0 image
         clust_match <- clust_bin * at
-        prop_overlap <- sum(clust_match) / sum(at)
-
-        if (prop_overlap >= minimum_overlap) {
-          good_vals <- c(good_vals, ii)
+        prop_overlap[ii] <- sum(clust_match) / sum(at)
+        
+        if (prop_overlap[ii] >= minimum_overlap) {
+          meets_criteria[ii] <- TRUE
+        } else {
+          meets_criteria[ii] <- FALSE
         }
       }
 
-      bad_vals <- uvals[!uvals %in% good_vals]
+      good_vals <- uvals[meets_criteria]
+      bad_vals <- uvals[!meets_criteria]
 
       if (length(good_vals) > 0L) {
         at_mod <- atlas_nii
         at_mod[!at_mod %in% good_vals] <- 0
         cat(glue("The following atlas values were retained: {paste(good_vals, collapse=', ')}"), "\n")
-        cat(glue("The following atlas values were excluded: {paste(bad_vals, collapse=', ')}"), "\n")
-
+        cat(glue("The following atlas values were excluded: {paste(bad_vals, collapse=', ')}"), "\n\n")
+        print(data.frame(roi_val = uvals, prop_overlap = prop_overlap, retained = meets_criteria), row.names = FALSE)
+        
         if (isTRUE(mask_by_overlap)) {
           at_mod <- at_mod * clust_bin # mask out retained atlas voxels that did not overlap with a cluster
         }
