@@ -1117,7 +1117,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         clust_bin <- (1L * (clust_nii != 0L)) # convert to 1/0 image
         clust_match <- clust_bin * at
         prop_overlap[ii] <- sum(clust_match) / sum(at)
-        
+
         if (prop_overlap[ii] >= minimum_overlap) {
           meets_criteria[ii] <- TRUE
         } else {
@@ -1128,13 +1128,15 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       good_vals <- uvals[meets_criteria]
       bad_vals <- uvals[!meets_criteria]
 
+      cat("Summary of overlap in atlas parcels and clusters\n")
+      print(data.frame(roi_val = uvals, prop_overlap = prop_overlap, retained = meets_criteria), row.names = FALSE)
+
       if (length(good_vals) > 0L) {
         at_mod <- atlas_nii
         at_mod[!at_mod %in% good_vals] <- 0
         cat(glue("The following atlas values were retained: {paste(good_vals, collapse=', ')}"), "\n")
         cat(glue("The following atlas values were excluded: {paste(bad_vals, collapse=', ')}"), "\n\n")
-        print(data.frame(roi_val = uvals, prop_overlap = prop_overlap, retained = meets_criteria), row.names = FALSE)
-        
+
         if (isTRUE(mask_by_overlap)) {
           at_mod <- at_mod * clust_bin # mask out retained atlas voxels that did not overlap with a cluster
         }
@@ -1146,12 +1148,12 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
           }
 
           message(glue("Writing atlas subset to file: {output_atlas_file}"))
-          attr(output_atlas_file, "rois_retained") <- uvals
+          attr(output_atlas_file, "rois_retained") <- good_vals
           RNifti::writeNifti(image = at_mod, file = output_atlas_file)
           private$pvt_atlas_files[[atlas_name]] <- output_atlas_file
         }
       } else {
-        message("No atlas parcel overlapped")
+        message("No atlas parcel overlapped sufficiently")
       }
 
       return(invisible(self))
