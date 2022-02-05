@@ -173,6 +173,8 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope",
 #' @importFrom tidyr pivot_longer unnest
 #' @importFrom glue glue_data
 #' @importFrom tidyselect all_of
+#' @importFrom data.table copy setDT
+#' @importFrom RNifti readNifti
 #' @importFrom parallel mclapply
 extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "zstat"),
   aggregate = TRUE, aggFUN = mean, remove_zeros = TRUE, mask_file = NULL, ncores=1L, lg=NULL) {
