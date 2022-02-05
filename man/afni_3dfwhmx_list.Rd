@@ -26,16 +26,30 @@ R6 class for running 3dFWHMx on a group of input files using a scheduler/cluster
 \if{html}{\out{<a id="method-new"></a>}}
 \if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
+create a new afni_3dfwhmx_list object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dfwhmx_list$new(
   input_files = NULL,
   mask_files = NULL,
   scheduler = NULL,
-  wall_time = "10:00:00",
-  ...
+  wall_time = "10:00:00"
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{input_files}}{A vector of input files that should each be passed to 3dFWHMx (usually first-level residuals)}
+
+\item{\code{mask_files}}{A vector of mask files corresponding to \code{input_files} (i.e., these should align),
+use to set the volume over which smoothness is estimated by 3dFWHMx}
+
+\item{\code{scheduler}}{The HPC scheduler to be used: 'local', 'slurm', or 'torque'. Default: 'slurm'}
+
+\item{\code{wall_time}}{The total time required to run all 3dFWHMx objects on the job scheduler/HPC}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-refresh"></a>}}
@@ -46,6 +60,13 @@ recreate afni_3dfwhmx objects and completion status
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dfwhmx_list$refresh(...)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{...}}{Passes through any arguments to afni_3dfwhmx$new()}
+}
+\if{html}{\out{</div>}}
+}
 \subsection{Details}{
 useful for updating job status and ACF params after a run completes
 }

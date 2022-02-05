@@ -25,6 +25,7 @@ wrapper class for AFNI whereami
 \if{html}{\out{<a id="method-new"></a>}}
 \if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
+create new afni_whereami object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_whereami$new(
   afni_3dclusterize_obj = NULL,
@@ -41,11 +42,41 @@ wrapper class for AFNI whereami
 )}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{afni_3dclusterize_obj}}{Use an existing 3dClusterize object to build the whereami lookup}
+
+\item{\code{omask}}{Use this integer-valued cluster mask to lookup percent overlap with different atlas parcels}
+
+\item{\code{coord_file}}{The text file containing coordinates for the clusters to lookup}
+
+\item{\code{coord_file_columns}}{The columns in \code{coord_file} containing the x, y, and z coordinates.
+Note that these should be zero-based indices, so the first column is 0, second column is 1, etc.}
+
+\item{\code{coord_vector}}{Rather than lookup multiple locations from a file, \code{coord_vector} requires
+three numeric values (x, y, and z coordinates) that are used to lookup a single region in the atlases.}
+
+\item{\code{atlases}}{a character vector of atlases in whereami to use for lookup}
+
+\item{\code{coord_orientation}}{LPI or RAI}
+
+\item{\code{coord_space}}{The template space for the coordinates. Default: 'MNI'}
+
+\item{\code{output_file}}{The file name/path for the output of whereami}
+
+\item{\code{omask_output_file}}{The file name/path for the output of whereami with the omask (percentage overlap)}
+
+\item{\code{afnidir}}{The location of afni}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-get_call"></a>}}
 \if{latex}{\out{\hypertarget{method-get_call}{}}}
 \subsection{Method \code{get_call()}}{
+return the whereami call for this object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_whereami$get_call()}\if{html}{\out{</div>}}
 }
@@ -55,6 +86,7 @@ wrapper class for AFNI whereami
 \if{html}{\out{<a id="method-get_omask_call"></a>}}
 \if{latex}{\out{\hypertarget{method-get_omask_call}{}}}
 \subsection{Method \code{get_omask_call()}}{
+return the whereami call for the omask lookup
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_whereami$get_omask_call()}\if{html}{\out{</div>}}
 }
@@ -64,6 +96,7 @@ wrapper class for AFNI whereami
 \if{html}{\out{<a id="method-get_whereami_df"></a>}}
 \if{latex}{\out{\hypertarget{method-get_whereami_df}{}}}
 \subsection{Method \code{get_whereami_df()}}{
+return the data.frame of coordinates and labels from the whereami lookup
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_whereami$get_whereami_df()}\if{html}{\out{</div>}}
 }
@@ -73,6 +106,7 @@ wrapper class for AFNI whereami
 \if{html}{\out{<a id="method-get_omask_df"></a>}}
 \if{latex}{\out{\hypertarget{method-get_omask_df}{}}}
 \subsection{Method \code{get_omask_df()}}{
+return the data.frame of the percentage overlap for each parcel (not implemented)
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_whereami$get_omask_df()}\if{html}{\out{</div>}}
 }
@@ -82,19 +116,38 @@ wrapper class for AFNI whereami
 \if{html}{\out{<a id="method-get_outputs"></a>}}
 \if{latex}{\out{\hypertarget{method-get_outputs}{}}}
 \subsection{Method \code{get_outputs()}}{
+return a list of the output files from this whereami objet
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_whereami$get_outputs(exclude_missing = TRUE)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{exclude_missing}}{if TRUE, any expected output file that does not exist will be NA in the returned list}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+a list of all output files
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-run"></a>}}
 \if{latex}{\out{\hypertarget{method-run}{}}}
 \subsection{Method \code{run()}}{
+Run whereami for this object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_whereami$run(force = FALSE)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{force}}{if TRUE, re-run a whereami call even if the expected output file exists}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}
