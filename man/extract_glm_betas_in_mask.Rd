@@ -7,12 +7,13 @@
 extract_glm_betas_in_mask(
   gpa,
   mask_files,
-  what = c("cope", "varcope", "zstat"),
+  what = c("cope", "zstat"),
   out_dir = getwd(),
   extract_l1 = "all",
   extract_l2 = "all",
   extract_l3 = "all",
   ncores = NULL,
+  scheduler = "local",
   aggregate = TRUE,
   aggFUN = mean,
   return_data = TRUE,
@@ -25,7 +26,7 @@ extract_glm_betas_in_mask(
 \item{mask_files}{vector of filenames for NIfTI-based atlases. The function will loop over each and extract coefficients from
 each unique value in each mask.}
 
-\item{what}{which statistics to extract from each parcel. Default is cope (aka 'beta'), varcope, and zstat.}
+\item{what}{which statistics to extract from each parcel. Default is 'cope' (aka 'beta') and 'zstat'.}
 
 \item{out_dir}{the directory to which statistics are written as .csv.gz files.}
 
@@ -39,6 +40,12 @@ for which l1 models you want to extract from each l2 model).}
 \item{extract_l3}{a character vector of l3 models from which to extract group-level (level 3) statistics. If "none",
 l3 statistic extraction will be skipped. If "all", then all l3 models will be extracted (you will still be prompted
 for which l1 and l2 models you want to extract from each l3 model).}
+
+\item{ncores}{The number of cores to use for extracting statistics from lower-level imgages. If NULL, lookup value in
+gpa$parallel$extract_glm_betas_ncores. If this value is > 1 and scheduler = "local", then mclapply will be used locally to extract.}
+
+\item{scheduler}{The scheduler to use for extracting statistics. If "local", use lapply/mclapply within the current compute session.
+If 'slurm', use doFuture with multiple slurm jobs to extract.}
 
 \item{aggregate}{whether to take the average (or other central tendency measure) of voxels within a given mask value. This
 only pertains to integer-valued masks, not continuous ones.}
