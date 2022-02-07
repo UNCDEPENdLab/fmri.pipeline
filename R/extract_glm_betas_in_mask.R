@@ -330,9 +330,6 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     registerDoFuture() # tell dopar to use future compute mechanism
     #options(future.debug = FALSE, future.progress = FALSE)
 
-    stat_results_orig <- stat_results
-    stat_results <- stat_results[1:2000,]
-
     future::plan(
       future.batchtools::batchtools_slurm,
       template = "slurm-simple",
