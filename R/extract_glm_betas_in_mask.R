@@ -345,7 +345,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     )
 
     stat_results$img_stats <- foreach(
-      img_chunk = iter(stat_results$img),
+      img_chunk = iter(stat_results$img), .combine = c, # since each worker returns a list, concatenate into a bigger list
       .options.future = list(chunk.size = chunk_size),
       .packages = c("parallel", "data.table", "RNifti"),
       .noexport = "gpa" # avoid large object being sent to workers.
