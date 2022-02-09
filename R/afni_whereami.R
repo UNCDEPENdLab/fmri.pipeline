@@ -103,6 +103,20 @@ afni_whereami <- R6::R6Class("afni_whereami",
     }
   ),
   public = list(
+    #' @description create new afni_whereami object
+    #' @param afni_3dclusterize_obj Use an existing 3dClusterize object to build the whereami lookup
+    #' @param omask Use this integer-valued cluster mask to lookup percent overlap with different atlas parcels
+    #' @param coord_file The text file containing coordinates for the clusters to lookup
+    #' @param coord_file_columns The columns in \code{coord_file} containing the x, y, and z coordinates.
+    #'   Note that these should be zero-based indices, so the first column is 0, second column is 1, etc.
+    #' @param coord_vector Rather than lookup multiple locations from a file, \code{coord_vector} requires
+    #'   three numeric values (x, y, and z coordinates) that are used to lookup a single region in the atlases.
+    #' @param atlases a character vector of atlases in whereami to use for lookup
+    #' @param coord_orientation LPI or RAI
+    #' @param coord_space The template space for the coordinates. Default: 'MNI'
+    #' @param output_file The file name/path for the output of whereami
+    #' @param omask_output_file The file name/path for the output of whereami with the omask (percentage overlap)
+    #' @param afnidir The location of afni
     initialize = function(afni_3dclusterize_obj = NULL, omask = NULL, coord_file = NULL, coord_file_columns = NULL,
                           coord_vector = NULL, atlases = NULL, coord_orientation = NULL, coord_space = NULL, 
                           output_file = NULL, omask_output_file = NULL, afnidir = NULL) {
@@ -110,9 +124,9 @@ afni_whereami <- R6::R6Class("afni_whereami",
       if (!is.null(afni_3dclusterize_obj)) {
         checkmate::assert_class(afni_3dclusterize_obj, "afni_3dclusterize")
         coord_orientation <- afni_3dclusterize_obj$get_orient()
-        ofiles <- afni_3dclusterize_obj$get_output_files()
-        omask <- ofiles["cluster_map"] # file containing integer-valued clusters
-        coord_file <- ofiles["cluster_table"]
+        ofiles <- afni_3dclusterize_obj$get_outputs()
+        omask <- ofiles$cluster_map # file containing integer-valued clusters
+        coord_file <- ofiles$cluster_table
         coord_file_columns <- 1:3 # 0-based indexing in AFNI 1D parser, so this should be CM LR, CM PA, and CM IS
       }
 
@@ -199,14 +213,20 @@ afni_whereami <- R6::R6Class("afni_whereami",
       }
 
     },
+
+    #' @description return the whereami call for this object
     get_call = function() {
       private$build_call()
       private$pvt_call
     },
+
+    #' @description return the whereami call for the omask lookup
     get_omask_call = function() {
       private$build_call()
       private$pvt_call_omask
     },
+
+    #' @description return the data.frame of coordinates and labels from the whereami lookup
     get_whereami_df = function() {
       if (!checkmate::test_file_exists(private$pvt_output_file)) {
         warning("Expected whereami output directory does not exist. Cannot return data! ", private$pvt_output_file)
@@ -215,10 +235,16 @@ afni_whereami <- R6::R6Class("afni_whereami",
       txt <- readLines(private$pvt_output_file)
       return(private$parse_whereami_output(txt))
     },
+
+    #' @description return the data.frame of the percentage overlap for each parcel (not implemented)
     get_omask_df = function() {
 
     },
-    get_output_files = function(exclude_missing = TRUE) {
+
+    #' @description return a list of the output files from this whereami objet
+    #' @param exclude_missing if TRUE, any expected output file that does not exist will be NA in the returned list
+    #' @return a list of all output files
+    get_outputs = function(exclude_missing = TRUE) {
       whereami_from_coords <- private$pvt_output_file
       whereami_omask_overlap <- private$pvt_omask_output_file
 
@@ -227,8 +253,11 @@ afni_whereami <- R6::R6Class("afni_whereami",
         if (!checkmate::test_file_exists(whereami_omask_overlap)) whereami_omask_overlap <- NA_character_
       }
 
-      named_vector(whereami_from_coords, whereami_omask_overlap)
+      named_list(whereami_from_coords, whereami_omask_overlap)
     },
+
+    #' @description Run whereami for this object
+    #' @param force if TRUE, re-run a whereami call even if the expected output file exists
     run = function(force = FALSE) {
       private$build_call()
       outfile_exists <- checkmate::test_file_exists(private$pvt_output_file)
@@ -258,7 +287,7 @@ afni_whereami <- R6::R6Class("afni_whereami",
         }
       }
 
-      return(invisible(result))
+      return(invisible(self))
     }
   ),
 )

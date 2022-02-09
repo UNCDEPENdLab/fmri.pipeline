@@ -8,13 +8,7 @@ R6 class for a list of 3dClustSim runs
 
 R6 class for a list of 3dClustSim runs
 }
-\keyword{all}
-\keyword{in}
 \keyword{internal}
-\keyword{jobs}
-\keyword{list}
-\keyword{submit}
-\keyword{this}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
@@ -28,6 +22,7 @@ R6 class for a list of 3dClustSim runs
 \if{html}{\out{<a id="method-new"></a>}}
 \if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
+create a new afni_3dclustsim_list object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim_list$new(obj_list = NULL, ...)}\if{html}{\out{</div>}}
 }
@@ -37,15 +32,24 @@ R6 class for a list of 3dClustSim runs
 \if{html}{\out{<a id="method-submit"></a>}}
 \if{latex}{\out{\hypertarget{method-submit}{}}}
 \subsection{Method \code{submit()}}{
+submit all jobs in this list
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim_list$submit(force = FALSE)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{force}}{If TRUE, pass force = TRUE to all the submit method of all subsidiary 3dClustSim objects}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-get_objs"></a>}}
 \if{latex}{\out{\hypertarget{method-get_objs}{}}}
 \subsection{Method \code{get_objs()}}{
+return the clustsim objects
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim_list$get_objs()}\if{html}{\out{</div>}}
 }

@@ -14,6 +14,7 @@ extract_fsl_betas(
   remove_zeros = TRUE,
   mask_file = NULL,
   ncores = 1L,
+  scheduler = "local",
   lg = NULL
 )
 }

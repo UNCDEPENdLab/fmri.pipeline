@@ -1,5 +1,6 @@
 #' wrapper class for 3dClusterize
 #' @importFrom tidyselect everything
+#' @importFrom RNifti readNifti writeNifti
 #' @export
 afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
   private = list(
@@ -36,6 +37,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     pvt_clust_df = NULL, # cached data.frame of parsed 3dClusterize output
     pvt_subclust_list = NULL, # cached list of afni_3dclusterize objects for each parent cluster larger than threshold
     pvt_subclust_df = NULL, # cached data.frame of subcluster information
+    pvt_atlas_files = list(), # location of atlas overlap files from calls to subset_atlas_against_clusters
+    pvt_subclust_files = list(), # location of subclustering outputs
 
     # private methods
     # ---------------
@@ -222,7 +225,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
   # active bindings (these are the only things that can change after initialization)
   active = list(
-    #' @field fwe_p a vector of p-values used for familywise error (FWE) z-statistic threshold calculations in pTFCE.
+    #' @field sided Whether to clusterize 1-sided ('one'), two-sided ('two'), or bi-sided ('bi')
     sided = function(val) {
       if (missing(val)) {
         return(private$pvt_sided)
@@ -230,6 +233,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_sided(val)
       }
     },
+
+    #' @field NN the cluster definition basis: 1 = faces touch; 2 = edges touch; 3 = corners touch
     NN = function(val) {
       if (missing(val)) {
         return(private$pvt_NN)
@@ -237,6 +242,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_NN(val)
       }
     },
+
+    #' @field clust_nvox The minimum number of voxels required for each cluster
     clust_nvox = function(val) {
       if (missing(val)) {
         return(private$pvt_clust_nvox)
@@ -244,6 +251,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_clust_nvox(val)
       }
     },
+
+    #' @field clust_vol The minimum volume (in microliters) required for each cluster
     clust_vol = function(val) {
       if (missing(val)) {
         return(private$pvt_clust_vol)
@@ -251,6 +260,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_clust_vol(val)
       }
     },
+
+    #' @field lower_thresh For two/bi-sided clusterizing, the lower threshold for the left tail of the distribution
     lower_thresh = function(val) {
       if (missing(val)) {
         return(private$pvt_lower_thresh)
@@ -258,6 +269,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_lower_thresh(val)
       }
     },
+
+    #' @field upper_thresh For two/bi-sided clusterizing, the upper threshold for the right tail of the distribution
     upper_thresh = function(val) {
       if (missing(val)) {
         return(private$pvt_upper_thresh)
@@ -265,6 +278,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_upper_thresh(val)
       }
     },
+
+    #' @field one_thresh For one-sided clusterizing, the threshold for the test statistic distribution
     one_thresh = function(val) {
       if (missing(val)) {
         return(private$pvt_one_thresh)
@@ -272,6 +287,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_one_thresh(val)
       }
     },
+
+    #' @field mask the mask within which 3dClusterize searches for clusters
     mask = function(val) {
       if (missing(val)) {
         return(private$pvt_mask)
@@ -279,6 +296,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_mask(val)
       }
     },
+
+    #' @field pref_map The name/location of the pref_map (aka cluster_map) file containing an integer-valued mask of identified clusters
     pref_map = function(val) {
       if (missing(val)) {
         return(private$pvt_pref_map)
@@ -286,6 +305,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_pref_map(val)
       }
     },
+
+    #' @field pref_dat The name/location of the pref_data (aka cluster_masked_data) file containing the input data masked by the clusters
     pref_dat = function(val) {
       if (missing(val)) {
         return(private$pvt_pref_dat)
@@ -293,6 +314,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$set_pref_dat(val)
       }
     },
+
+    #' @field clusterize_output_file The name of the text file containing the output of 3dClusterize (i.e., the table of clusters)
     clusterize_output_file = function(val) {
       if (missing(val)) {
         return(private$pvt_clusterize_output_file)
@@ -301,7 +324,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       }
     },
 
-    #' @description passthrough access to whereami object if that has been setup
+    #' @field whereami passthrough access to whereami object if that has been setup
     whereami = function(val) {
       if (missing(val)) {
         if (is.null(private$pvt_whereami)) {
@@ -336,6 +359,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #' @param lower_thresh the lower tail cutoff for two/bi-sided testing
     #' @param upper_thresh the upper tail cutoff for two/bi-sided testing
     #' @param one_thresh The threshold value for one-sided testing
+    #' @param one_tail For one-sided clusterizing, whether to threshold the LEFT or RIGHT tail of the distribution
     #' @param clust_nvox The minimum number of voxels allowed in a cluster. Passes through as -clust_nvol
     #' @param clust_vol The minimum volume in (microliters) allowed in a cluster (mutually exclusive with clust_nvox). 
     #'   Passes through as -clust_vol
@@ -344,6 +368,11 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #' @param pref_dat File name for the clusterized and thresholded data. Passes through as -pref_dat.
     #' @param NN 1, 2, 3. Default: 1. Passes through as -NN.
     #' @param quiet passes through as -quiet.
+    #' @param orient passes through as -orient. 'RAI' or 'LPI'. Default is LPI.
+    #' @param binary if TRUE, the pref_map (cluster mask) will be output as a 1/0 binary image instead of integer-valued. 
+    #'   Passes through as -binary.
+    #' @param clusterize_output_file The name/location of the 3dClusterize output file containing a table of identified clusters.
+    #'   Defaults to adding the suffix '_clusters.1D' to the input image and placing the file in the same folder as the input.
     initialize = function(inset = NULL, mask = NULL, threshold_file = NULL, data_file = NULL, mask_from_hdr = NULL, out_mask = NULL, 
       ithr = NULL, idat = NULL, onesided = NULL, twosided = NULL, bisided = NULL, 
       lower_thresh = NULL, upper_thresh = NULL, one_thresh = NULL, one_tail = NULL,
@@ -500,6 +529,11 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       # default to naming clusters file according to the inset file
       if (is.null(private$pvt_clusterize_output_file)) {
         private$pvt_clusterize_output_file <- paste0(basename(file_sans_ext(private$pvt_input_file)), "_clusters.1D")
+      }
+
+      # at present, default to outputting a pref_map... perhaps need a way to disable this, but enabling it by default seems better
+      if (is.null(private$pvt_pref_map)) {
+        private$pvt_pref_map <- paste0(basename(file_sans_ext(private$pvt_input_file)), "_clusters.nii.gz")
       }
 
       # if output files are provided without any path specification, use the directory of the input file
@@ -667,7 +701,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #' @description Provides a vector of expected output files that correspond to this 3dClusterize setup
     #' @param exclude_missing if TRUE (default), any output file that cannot be found will be returned as NA.
     #' @return a named vector of output files related to this 3dClusterize setup
-    get_output_files = function(exclude_missing = TRUE) {
+    get_outputs = function(exclude_missing = TRUE) {
 
       cluster_map <- private$pvt_pref_map
       cluster_masked_data <- private$pvt_pref_dat
@@ -679,7 +713,10 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         if (!checkmate::test_file_exists(cluster_table)) cluster_table <- NA_character_
       }
 
-      named_vector(cluster_table, cluster_map, cluster_masked_data)
+      atlas_files <- private$pvt_atlas_files
+      subcluster_files <- private$pvt_subclust_files
+
+      named_list(cluster_table, cluster_map, cluster_masked_data, atlas_files, subcluster_files)
 
     },
 
@@ -708,7 +745,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
     #' @description returns TRUE if all expected output files exist for this 3dClusterize call
     is_complete = function() {
-      expect_file <- self$get_output_files(exclude_missing = FALSE)["cluster_table"]
+      expect_file <- self$get_outputs(exclude_missing = FALSE)$cluster_table
       checkmate::test_file_exists(expect_file)
     },
 
@@ -719,11 +756,13 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #' @param min_n_subclust The smallest number of subclusters that will be allowed. Must be 2 or greater. Default: 2
     #' @param max_n_subclust The maximum number of subclusters that will be allowed. If NULL, no upper limit is set.
     #' @param step_size The step size used to change the threshold values in the test statistic map being clusterized. Default: 0.1.
+    #' @param max_iter The maximum number of steps to be taken for subcluster search. Default: 50.
     #' @param add_whereami If TRUE, whereami will be run for each subcluster. Default: TRUE
     #' @param whereami_atlases Passes through to afni_whereami for specifying which atlases to use in lookup
     #' @param print_progress If TRUE, the user will see the thresholds being used to subcluster each region.
     generate_subclusters = function(break_nvox = 400, min_subclust_nvox = 25, max_subclust_nvox = NULL,
-      min_n_subclust = 2, max_n_subclust = NULL, step_size = .1, add_whereami = TRUE, whereami_atlases = NULL, print_progress = FALSE) {
+      min_n_subclust = 2, max_n_subclust = NULL, step_size = .1, max_iter = 50,
+      add_whereami = TRUE, whereami_atlases = NULL, print_progress = FALSE) {
 
       if (is.null(private$pvt_has_clusters)) {
         warning("Did not find expected 3dClusterize output file to use for clusters. Have you used $run() yet?")
@@ -748,7 +787,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       checkmate::assert_integerish(min_n_subclust, lower = 2L, upper = 1000L)
       if (!is.infinite(max_n_subclust)) checkmate::assert_integerish(max_n_subclust, lower = 2L)
 
-      cdf <- self$get_clust_df(include_whereami = FALSE)
+      cdf <- self$get_clust_df(include_whereami = FALSE, include_subclusters = FALSE)
       big_clusters <- cdf %>% dplyr::filter(Volume >= !!break_nvox)
 
       if (nrow(big_clusters) > 0L) {
@@ -782,27 +821,40 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
           # run subclustering algorithm within this mask
           best <- sobj$run_subclustering(
-            min_n_subclust, max_n_subclust, min_subclust_nvox, this_max_nvox, step_size
+            min_n_subclust, max_n_subclust, min_subclust_nvox, this_max_nvox, step_size,
+            max_iter = max_iter, print_progress = print_progress
           )
 
+          # if subclustering fails, best will be NULL
           if (!is.null(best)) {
             if (isTRUE(add_whereami) && best$has_clusters()) {
               best$add_whereami(whereami_atlases)
             }
 
-            cdf <- best$get_clust_df() %>%
+            subcluster_df <- best$get_clust_df(include_subclusters = FALSE) %>%
               dplyr::rename(subroi_num = roi_num) %>%
               dplyr::mutate(roi_num = !!roi_val) %>%
               dplyr::select(roi_num, subroi_num, everything())
+
+            # move mask and cluster table into same folder as input map
+            dest_table <- glue("{file_sans_ext(private$pvt_input_file)}_roi{roi_val}_subclusters.1D")
+            dest_map <- glue("{file_sans_ext(private$pvt_input_file)}_roi{roi_val}_subclusters.nii.gz")
+
+            subcluster_files <- c(cluster_table = dest_table, cluster_map = dest_map)
+
+            file.copy(temp_clust_1d, dest_table, overwrite = TRUE)
+            file.copy(temp_clust_nii, dest_map, overwrite = TRUE)
+            subcluster_files
           } else {
-            cdf <- NULL # no subclusters to return
+            subcluster_df <- NULL # no subclusters to return
+            subcluster_files <- c(cluster_table = NA_character_, cluster_map = NA_character_)
           }
 
-          ret_list <- list(roi_num = roi_val, subcluster_df = cdf) #, subcluster_obj = best)
+          ret_list <- list(roi_num = roi_val, subcluster_df = subcluster_df, subcluster_files = subcluster_files) # , subcluster_obj = best)
+          private$pvt_subclust_files[[paste0("roi", roi_val)]] <- subcluster_files
           unlink(c(temp_mask, temp_clust_1d, temp_clust_nii)) # cleanup tmp files
 
           return(ret_list)
-
         })
       } else {
         message(glue("No clusters exceeded the maximum number of voxels ({break_nvox}) that would lead to subclustering."))
@@ -810,14 +862,18 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       }
 
       private$pvt_subclust_df <- dplyr::bind_rows(lapply(private$pvt_subclust_list, "[[", "subcluster_df"))
+      return(invisible(self))
     },
 
     #' @description runs a subclustering algorithm on this object, increasing the thresholds until the desired constraints are satisfied
     #' @details this is intended to be used internally
     #' @param min_clust The minimum number of clusters that will be accepted
     #' @param max_clust The maximum number of clusters that will be accepted
-    #' @param max_iter The maximum number of increment steps that will be taken before giving up
-    #' @param refine_steps The number of steps backward from a winning solution. This maximizes the subcluster sizes.
+    #' @param min_nvox The minimum number of voxels in a subcluster that will be accepted
+    #' @param max_nvox The maximum number of voxels in a subcluster that will be accepted
+    #' @param step_size The increments in the threshold values from one step to the next.
+    #' @param max_iter The maximum number of increment steps that will be taken before giving up. Default: 50.
+    #' @param refine_steps The number of steps backward from a winning solution. This maximizes the subcluster sizes. Default: 5.
     #' @param print_progress If TRUE, the user will see the thresholds being used to subcluster each region.
     run_subclustering = function(min_clust = NULL, max_clust = NULL, min_nvox = NULL, max_nvox = NULL, step_size = NULL,
     refine_steps = 5, max_iter = 50, print_progress = TRUE) {
@@ -973,11 +1029,166 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     reset_cache = function() {
       private$pvt_whereami <- NULL
       private$pvt_clust_df <- NULL
+      private$pvt_subclust_df <- NULL
+      private$pvt_subclust_list <- NULL
       return(invisible(self))
     },
 
+    #' @description return list of subcluster details for each large ROI broken up by generate_subclusters()
     get_subclust_list = function() {
       private$pvt_subclust_list
+    },
+
+    #' @description Compares the clusters generated by 3dClusterize to an atlas of interest, then returns the subset of the
+    #'   atlas that overlaps sufficiently with the map from 3dClusterize
+    #' @param atlas_file A NIfTI file containing parcels or perhaps meta-analytic statistics
+    #' @param atlas_lower_threshold Only retain values greater than this threshold in the comparison against the clusters. Default: 0
+    #' @param atlas_upper_threshold Only retain values less than this threshold in the comparison against the clusters. 
+    #'   Default: Inf (retain all high values)
+    #' @param minimum_overlap The proportion overlap of an atlas parcel with a cluster required for the parcel to be retained.
+    #'   Default: 0.8
+    #' @param mask_by_overlap If TRUE, only voxels in the atlas that overlapped with a cluster are retained. In essence,
+    #'   this erodes the retained atlas parcels to only include voxels that were in a cluster. Default: FALSE
+    #' @param output_atlas the name/location of the file to output containing the subset of parcels in \code{atlas_file} that
+    #'   are retained by this function. If \code{'default'} or \code{TRUE}, the subset atlas will be placed in the same
+    #'   folder as the 3dClusterize input image, with a filename that combines the atlas file name with the input/threshold
+    #'   image name. To disable creation of this file, set \code{output_atlas = FALSE}.
+    subset_atlas_against_clusters = function(atlas_file = NULL, atlas_lower_threshold = 0, atlas_upper_threshold = Inf,
+      minimum_overlap = 0.8, mask_by_overlap = FALSE, output_atlas = "default") {
+
+      if (isFALSE(self$is_complete)) {
+        message("Cannot run subset_atlas_against_clusters because 3dClusterize has not been run successfully yet. Use $run()")
+        return(invisible(self))
+      }
+
+      checkmate::assert_number(minimum_overlap, lower = 0.01, upper = 1.0)
+      checkmate::assert_logical(mask_by_overlap, len=1L)
+      clust_file <- self$get_outputs()$cluster_map
+      if (is.na(clust_file)) {
+        message("Cannot find a cluster file for the 3dClusterize object. Make sure you include a pref_map when you setup the object.")
+        return(invisible(self))
+      } else if (!checkmate::test_file_exists(clust_file)) {
+        message(glue("Cannot find the cluster map {clust_file}"))
+        return(invisible(self))
+      }
+
+      # figure out whether to output the subset atlas and if so, where
+      # output_atlas becomes TRUE/FALSE and output_atlas_file is the location
+      checkmate::assert_file_exists(atlas_file)
+      if (checkmate::test_logical(output_atlas, len = 1L) && isTRUE(output_atlas)) {
+        output_atlas_file <- "default"
+      } else if (is.null(output_atlas)) {
+        output_atlas <- FALSE
+      } else if (checkmate::test_string(output_atlas)) {
+        output_atlas_file <- output_atlas # name of output
+        output_atlas <- TRUE # switch to logical
+      }
+
+      atlas_nii <- RNifti::readNifti(atlas_file)
+      clust_nii <- RNifti::readNifti(clust_file)
+      if (!identical(dim(atlas_nii), dim(clust_nii))) {
+        cat("Atlas dimensions: ", paste(dim(atlas_nii), collapse=", "), "\n")
+        cat("Cluster file dimensions: ", paste(dim(clust_nii), collapse = ", "), "\n")
+        stop("Cannot proceed with subsetting because the dimensions are different!")
+      }
+
+      uvals <- sort(unique(as.vector(atlas_nii)))
+      if (!checkmate::test_integerish(uvals)) {
+        stop("At present, only integer-valued atlases are allowed.")
+      } else {
+        uvals <- uvals[uvals != 0] # never retain 0 as an atlas value
+      }
+
+      checkmate::assert_number(atlas_lower_threshold)
+      checkmate::assert_number(atlas_upper_threshold)
+      stopifnot(atlas_upper_threshold >= atlas_lower_threshold)
+      if (!is.infinite(atlas_lower_threshold)) {
+        atlas_nii[atlas_nii < atlas_lower_threshold] <- 0 # nullify voxels below threshold
+      }
+
+      if (!is.infinite(atlas_upper_threshold)) {
+        atlas_nii[atlas_nii > atlas_upper_threshold] <- 0 # nullify voxels above threshold
+      }
+
+      meets_criteria <- rep(NA, length(uvals))
+      prop_overlap <- rep(NA_real_, length(uvals))
+      for (ii in seq_along(uvals)) {
+        at <- 1L * (atlas_nii == uvals[ii]) # convert to 1/0 image
+        clust_bin <- (1L * (clust_nii != 0L)) # convert to 1/0 image
+        clust_match <- clust_bin * at
+        prop_overlap[ii] <- sum(clust_match) / sum(at)
+
+        if (prop_overlap[ii] >= minimum_overlap) {
+          meets_criteria[ii] <- TRUE
+        } else {
+          meets_criteria[ii] <- FALSE
+        }
+      }
+
+      good_vals <- uvals[meets_criteria]
+      bad_vals <- uvals[!meets_criteria]
+
+      cat("Summary of overlap in atlas parcels and clusters\n")
+      print(data.frame(roi_val = uvals, prop_overlap = prop_overlap, retained = meets_criteria), row.names = FALSE)
+
+      if (length(good_vals) > 0L) {
+        at_mod <- atlas_nii
+        at_mod[!at_mod %in% good_vals] <- 0
+        cat(glue("The following atlas values were retained: {paste(good_vals, collapse=', ')}"), "\n")
+        cat(glue("The following atlas values were excluded: {paste(bad_vals, collapse=', ')}"), "\n\n")
+
+        if (isTRUE(mask_by_overlap)) {
+          at_mod <- at_mod * clust_bin # mask out retained atlas voxels that did not overlap with a cluster
+        }
+
+        if (isTRUE(output_atlas)) {
+          if (output_atlas_file == "default") {
+            atlas_name <- basename(file_sans_ext(atlas_file))
+            output_atlas_file <- paste0(file_sans_ext(private$pvt_input_file), "_", atlas_name, "_overlap.nii.gz")
+          }
+
+          message(glue("Writing atlas subset to file: {output_atlas_file}"))
+          attr(output_atlas_file, "rois_retained") <- good_vals
+          RNifti::writeNifti(image = at_mod, file = output_atlas_file)
+          private$pvt_atlas_files[[atlas_name]] <- output_atlas_file
+        }
+      } else {
+        message("No atlas parcel overlapped sufficiently")
+      }
+
+      return(invisible(self))
+    },
+
+    #' @description method to delete any/all files generated by this object
+    #' @param prompt if TRUE, user will have to confirm deletion of each file. If FALSE, files are deleted without prompting.
+    delete_outputs = function(prompt = FALSE) {
+      checkmate::assert_logical(prompt, len = 1L)
+      f_list <- self$get_outputs()
+      f_exists <- sapply(f_list, checkmate::test_file_exists)
+      f_list <- f_list[f_exists]
+      if (length(f_list) == 0L) {
+        message("No output files found for removal.")
+      } else {
+        if (isTRUE(prompt)) {
+          for (ff in f_list) {
+            cat("File:", ff, "\n")
+            remove <- askYesNo("Delete?")
+            if (isTRUE(remove)) {
+              cat(sprintf("Removing: %s", ff), sep = "\n")
+              unlink(ff)
+            } else if (is.na(remove)) {
+              # cancel
+              return(invisible(NULL))
+            }
+          }
+        } else {
+          cat(sprintf("Removing: %s", f_list), sep="\n")
+          unlink(f_list)
+        }
+
+      }
+      self$reset_cache()
+      return(invisible(self))
     }
   )
 )

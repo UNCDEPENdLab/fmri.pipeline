@@ -8,17 +8,32 @@ wrapper class for 3dClusterize
 
 wrapper class for 3dClusterize
 }
-\section{Public fields}{
-\if{html}{\out{<div class="r6-fields">}}
-\describe{
-\item{\code{fwe_p}}{a vector of p-values used for familywise error (FWE) z-statistic threshold calculations in pTFCE.}
-}
-\if{html}{\out{</div>}}
-}
 \section{Active bindings}{
 \if{html}{\out{<div class="r6-active-bindings">}}
 \describe{
-\item{\code{fwe_p}}{a vector of p-values used for familywise error (FWE) z-statistic threshold calculations in pTFCE.}
+\item{\code{sided}}{Whether to clusterize 1-sided ('one'), two-sided ('two'), or bi-sided ('bi')}
+
+\item{\code{NN}}{the cluster definition basis: 1 = faces touch; 2 = edges touch; 3 = corners touch}
+
+\item{\code{clust_nvox}}{The minimum number of voxels required for each cluster}
+
+\item{\code{clust_vol}}{The minimum volume (in microliters) required for each cluster}
+
+\item{\code{lower_thresh}}{For two/bi-sided clusterizing, the lower threshold for the left tail of the distribution}
+
+\item{\code{upper_thresh}}{For two/bi-sided clusterizing, the upper threshold for the right tail of the distribution}
+
+\item{\code{one_thresh}}{For one-sided clusterizing, the threshold for the test statistic distribution}
+
+\item{\code{mask}}{the mask within which 3dClusterize searches for clusters}
+
+\item{\code{pref_map}}{The name/location of the pref_map (aka cluster_map) file containing an integer-valued mask of identified clusters}
+
+\item{\code{pref_dat}}{The name/location of the pref_data (aka cluster_masked_data) file containing the input data masked by the clusters}
+
+\item{\code{clusterize_output_file}}{The name of the text file containing the output of 3dClusterize (i.e., the table of clusters)}
+
+\item{\code{whereami}}{passthrough access to whereami object if that has been setup}
 }
 \if{html}{\out{</div>}}
 }
@@ -30,7 +45,7 @@ wrapper class for 3dClusterize
 \item \href{#method-get_clust_df}{\code{afni_3dclusterize$get_clust_df()}}
 \item \href{#method-get_cluster_map_nifti}{\code{afni_3dclusterize$get_cluster_map_nifti()}}
 \item \href{#method-get_call}{\code{afni_3dclusterize$get_call()}}
-\item \href{#method-get_output_files}{\code{afni_3dclusterize$get_output_files()}}
+\item \href{#method-get_outputs}{\code{afni_3dclusterize$get_outputs()}}
 \item \href{#method-get_orient}{\code{afni_3dclusterize$get_orient()}}
 \item \href{#method-add_whereami}{\code{afni_3dclusterize$add_whereami()}}
 \item \href{#method-is_complete}{\code{afni_3dclusterize$is_complete()}}
@@ -39,6 +54,8 @@ wrapper class for 3dClusterize
 \item \href{#method-has_clusters}{\code{afni_3dclusterize$has_clusters()}}
 \item \href{#method-reset_cache}{\code{afni_3dclusterize$reset_cache()}}
 \item \href{#method-get_subclust_list}{\code{afni_3dclusterize$get_subclust_list()}}
+\item \href{#method-subset_atlas_against_clusters}{\code{afni_3dclusterize$subset_atlas_against_clusters()}}
+\item \href{#method-delete_outputs}{\code{afni_3dclusterize$delete_outputs()}}
 \item \href{#method-clone}{\code{afni_3dclusterize$clone()}}
 }
 }
@@ -46,9 +63,6 @@ wrapper class for 3dClusterize
 \if{html}{\out{<a id="method-new"></a>}}
 \if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
-passthrough access to whereami object if that has been setup
-
-
 initialization function for a new afni_3dclusterize object. Arguments largely mirror the 3dClusterize parameters.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$new(
@@ -112,6 +126,8 @@ Must be passed with \code{threshold_file} and will be stitched together with it 
 
 \item{\code{one_thresh}}{The threshold value for one-sided testing}
 
+\item{\code{one_tail}}{For one-sided clusterizing, whether to threshold the LEFT or RIGHT tail of the distribution}
+
 \item{\code{NN}}{1, 2, 3. Default: 1. Passes through as -NN.}
 
 \item{\code{clust_nvox}}{The minimum number of voxels allowed in a cluster. Passes through as -clust_nvol}
@@ -125,6 +141,14 @@ Passes through as -pref_map.}
 \item{\code{pref_dat}}{File name for the clusterized and thresholded data. Passes through as -pref_dat.}
 
 \item{\code{quiet}}{passes through as -quiet.}
+
+\item{\code{orient}}{passes through as -orient. 'RAI' or 'LPI'. Default is LPI.}
+
+\item{\code{binary}}{if TRUE, the pref_map (cluster mask) will be output as a 1/0 binary image instead of integer-valued. 
+Passes through as -binary.}
+
+\item{\code{clusterize_output_file}}{The name/location of the 3dClusterize output file containing a table of identified clusters.
+Defaults to adding the suffix '_clusters.1D' to the input image and placing the file in the same folder as the input.}
 }
 \if{html}{\out{</div>}}
 }
@@ -200,12 +224,12 @@ returns the 3dClusterize call for this specification
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_output_files"></a>}}
-\if{latex}{\out{\hypertarget{method-get_output_files}{}}}
-\subsection{Method \code{get_output_files()}}{
+\if{html}{\out{<a id="method-get_outputs"></a>}}
+\if{latex}{\out{\hypertarget{method-get_outputs}{}}}
+\subsection{Method \code{get_outputs()}}{
 Provides a vector of expected output files that correspond to this 3dClusterize setup
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$get_output_files(exclude_missing = TRUE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$get_outputs(exclude_missing = TRUE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -271,6 +295,7 @@ break up large clusters into subclusters
   min_n_subclust = 2,
   max_n_subclust = NULL,
   step_size = 0.1,
+  max_iter = 50,
   add_whereami = TRUE,
   whereami_atlases = NULL,
   print_progress = FALSE
@@ -291,6 +316,8 @@ break up large clusters into subclusters
 \item{\code{max_n_subclust}}{The maximum number of subclusters that will be allowed. If NULL, no upper limit is set.}
 
 \item{\code{step_size}}{The step size used to change the threshold values in the test statistic map being clusterized. Default: 0.1.}
+
+\item{\code{max_iter}}{The maximum number of steps to be taken for subcluster search. Default: 50.}
 
 \item{\code{add_whereami}}{If TRUE, whereami will be run for each subcluster. Default: TRUE}
 
@@ -326,9 +353,15 @@ runs a subclustering algorithm on this object, increasing the thresholds until t
 
 \item{\code{max_clust}}{The maximum number of clusters that will be accepted}
 
-\item{\code{refine_steps}}{The number of steps backward from a winning solution. This maximizes the subcluster sizes.}
+\item{\code{min_nvox}}{The minimum number of voxels in a subcluster that will be accepted}
 
-\item{\code{max_iter}}{The maximum number of increment steps that will be taken before giving up}
+\item{\code{max_nvox}}{The maximum number of voxels in a subcluster that will be accepted}
+
+\item{\code{step_size}}{The increments in the threshold values from one step to the next.}
+
+\item{\code{refine_steps}}{The number of steps backward from a winning solution. This maximizes the subcluster sizes. Default: 5.}
+
+\item{\code{max_iter}}{The maximum number of increment steps that will be taken before giving up. Default: 50.}
 
 \item{\code{print_progress}}{If TRUE, the user will see the thresholds being used to subcluster each region.}
 }
@@ -372,10 +405,69 @@ this is used internally when cloning the parent clusterize object for subcluster
 \if{html}{\out{<a id="method-get_subclust_list"></a>}}
 \if{latex}{\out{\hypertarget{method-get_subclust_list}{}}}
 \subsection{Method \code{get_subclust_list()}}{
+return list of subcluster details for each large ROI broken up by generate_subclusters()
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$get_subclust_list()}\if{html}{\out{</div>}}
 }
 
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-subset_atlas_against_clusters"></a>}}
+\if{latex}{\out{\hypertarget{method-subset_atlas_against_clusters}{}}}
+\subsection{Method \code{subset_atlas_against_clusters()}}{
+Compares the clusters generated by 3dClusterize to an atlas of interest, then returns the subset of the
+  atlas that overlaps sufficiently with the map from 3dClusterize
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$subset_atlas_against_clusters(
+  atlas_file = NULL,
+  atlas_lower_threshold = 0,
+  atlas_upper_threshold = Inf,
+  minimum_overlap = 0.8,
+  mask_by_overlap = FALSE,
+  output_atlas = "default"
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{atlas_file}}{A NIfTI file containing parcels or perhaps meta-analytic statistics}
+
+\item{\code{atlas_lower_threshold}}{Only retain values greater than this threshold in the comparison against the clusters. Default: 0}
+
+\item{\code{atlas_upper_threshold}}{Only retain values less than this threshold in the comparison against the clusters. 
+Default: Inf (retain all high values)}
+
+\item{\code{minimum_overlap}}{The proportion overlap of an atlas parcel with a cluster required for the parcel to be retained.
+Default: 0.8}
+
+\item{\code{mask_by_overlap}}{If TRUE, only voxels in the atlas that overlapped with a cluster are retained. In essence,
+this erodes the retained atlas parcels to only include voxels that were in a cluster. Default: FALSE}
+
+\item{\code{output_atlas}}{the name/location of the file to output containing the subset of parcels in \code{atlas_file} that
+are retained by this function. If \code{'default'} or \code{TRUE}, the subset atlas will be placed in the same
+folder as the 3dClusterize input image, with a filename that combines the atlas file name with the input/threshold
+image name. To disable creation of this file, set \code{output_atlas = FALSE}.}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-delete_outputs"></a>}}
+\if{latex}{\out{\hypertarget{method-delete_outputs}{}}}
+\subsection{Method \code{delete_outputs()}}{
+method to delete any/all files generated by this object
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{afni_3dclusterize$delete_outputs(prompt = FALSE)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{prompt}}{if TRUE, user will have to confirm deletion of each file. If FALSE, files are deleted without prompting.}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}

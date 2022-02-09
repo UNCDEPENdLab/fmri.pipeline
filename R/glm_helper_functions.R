@@ -1365,7 +1365,7 @@ named_vector <- function(...) {
   if (length(unique(classes)) > 1L) {
     stop("All inputs must be of the same data type.")
   }
-  
+
   return(setNames(do.call(c, vec), vnames))
 }
 

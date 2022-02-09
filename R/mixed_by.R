@@ -70,6 +70,7 @@
 #' @importFrom doParallel registerDoParallel
 #' @importFrom broom.mixed tidy
 #' @importFrom data.table fread setDT setkeyv
+#' @export
 mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_formulae = NULL, split_on = NULL,
                      external_df = NULL, external_merge_by = NULL,
                      padjust_by = "term", padjust_method = "BY", outcome_transform = NULL, scale_predictors = NULL,

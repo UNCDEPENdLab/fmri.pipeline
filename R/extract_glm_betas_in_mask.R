@@ -3,7 +3,7 @@
 #' @param gpa a \code{glm_pipeline_arguments} object for which results of GLM analyses are already available
 #' @param mask_files vector of filenames for NIfTI-based atlases. The function will loop over each and extract coefficients from
 #'   each unique value in each mask.
-#' @param what which statistics to extract from each parcel. Default is cope (aka 'beta'), varcope, and zstat.
+#' @param what which statistics to extract from each parcel. Default is 'cope' (aka 'beta') and 'zstat'.
 #' @param out_dir the directory to which statistics are written as .csv.gz files.
 #' @param extract_l1 a character vector of l1 models from which to extract run-level (level 1) statistics. If "none",
 #'   l1 statistic extraction will be skipped. If "all", then all l1 models will be extracted.
@@ -13,6 +13,10 @@
 #' @param extract_l3 a character vector of l3 models from which to extract group-level (level 3) statistics. If "none",
 #'   l3 statistic extraction will be skipped. If "all", then all l3 models will be extracted (you will still be prompted
 #'   for which l1 and l2 models you want to extract from each l3 model).
+#' @param ncores The number of cores to use for extracting statistics from lower-level imgages. If NULL, lookup value in
+#'   gpa$parallel$extract_glm_betas_ncores. If this value is > 1 and scheduler = "local", then mclapply will be used locally to extract.
+#' @param scheduler The scheduler to use for extracting statistics. If "local", use lapply/mclapply within the current compute session.
+#'   If 'slurm', use doFuture with multiple slurm jobs to extract.
 #' @param aggregate whether to take the average (or other central tendency measure) of voxels within a given mask value. This
 #'   only pertains to integer-valued masks, not continuous ones.
 #' @param aggFUN the function used to aggregate statistics for voxels within a given mask value. Default is mean.
@@ -22,14 +26,18 @@
 #' @importFrom checkmate test_integerish assert_class assert_data_frame assert_character assert_logical
 #' @importFrom parallel makeCluster
 #' @importFrom doParallel registerDoParallel
-#' @importFrom foreach registerDoSEQ
+#' @importFrom foreach registerDoSEQ foreach
+#' @importFrom iterators iter
+#' @importFrom future plan
+#' @importFrom future.batchtools batchtools_slurm
+#' @importFrom doFuture registerDoFuture
 #' @importFrom data.table fwrite rbindlist
 #' @importFrom glue glue_data
 #' @importFrom RNifti readNifti
 #' @export
-extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope", "zstat"), out_dir=getwd(),
+extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "zstat"), out_dir=getwd(),
   extract_l1="all", extract_l2="all", extract_l3="all",
-  ncores=NULL, aggregate=TRUE, aggFUN=mean, return_data=TRUE, write_data=TRUE) {
+  ncores = NULL, scheduler = "local", aggregate=TRUE, aggFUN=mean, return_data=TRUE, write_data=TRUE) {
 
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_data_frame(gpa$subject_data)
@@ -120,7 +128,7 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope",
       lg$info("%s", capture.output(print(espec)))
       res_list[[aa]] <- extract_fsl_betas(gpa,
         extract = espec, level = level, what = what,
-        aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores = ncores, lg = lg
+        aggregate = aggregate, aggFUN = aggFUN, mask_file = aa, ncores = ncores, scheduler = scheduler, lg = lg
       )
     }
 
@@ -173,9 +181,11 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "varcope",
 #' @importFrom tidyr pivot_longer unnest
 #' @importFrom glue glue_data
 #' @importFrom tidyselect all_of
+#' @importFrom data.table copy setDT
+#' @importFrom RNifti readNifti
 #' @importFrom parallel mclapply
 extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "zstat"),
-  aggregate = TRUE, aggFUN = mean, remove_zeros = TRUE, mask_file = NULL, ncores=1L, lg=NULL) {
+  aggregate = TRUE, aggFUN = mean, remove_zeros = TRUE, mask_file = NULL, ncores=1L, scheduler = "local", lg=NULL) {
 
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_integerish(level, lower = 1, upper = 3, len = 1)
@@ -193,46 +203,16 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   }
 
   # helper subfunction to extract voxel statistics from a 3D image within a mask
-  get_img_stats <- function(img_name, mask, aggregate=TRUE, aggFUN=mean) {
+  get_img_stats <- function(img_name, mask, is_int_mask = TRUE, aggregate = TRUE, aggFUN=mean) {
     # use readNifti from the RNifti package for speed (about 8x faster than oro.nifti)
-    # microbenchmark(
-    #   img = readNIfTI(img_name, reorient = FALSE),
-    #   abc = readNifti(img_name),
-    #   def = readNifti(img_name, internal=TRUE)
-    # )
-    # img <- readNIfTI(img_name, reorient = FALSE)
-    # stopifnot(img@dim_[1] == 3L)
-
     img <- readNifti(img_name, internal = TRUE)
 
     stopifnot(identical(mask$dim, dim(img))) # enforce identical dimensions for mask and target image
-    # note that the direct matrix indexing is about 500x faster than the apply approach. leaving here for record-keeping
-    # microbenchmark(
-    #   coef_vec = img[m_indices],
-    #   coef_mat = apply(m_coordinates[, c("i", "j", "k")], 1, function(r) { img[r["i"], r["j"], r["k"]] })
-    # )
-
+    
     # use data.table for faster aggregate + join operations
     coef_df <- copy(mask$coordinates)
     setDT(coef_df, key = c("mask_value", "vnum"))
     coef_df[, value := img[mask$indices]]
-
-    #coef_df <- mask$coordinates %>% bind_cols(value = coef_vec)
-    #setDT(coef_df)
-
-    # microbenchmark(
-    #   tt = merge(mask$agg_coordinates, coef_df[, .(value = mean(value)), by = .(mask_value)], by = "mask_value"),
-    #   withmean=coef_df %>%
-    #     group_by(mask_value) %>%
-    #     # get center of gravity and aggregate coefficient per parcel
-    #     dplyr::summarize(mask_name = mask_name[1], x = mean(x), y = mean(y), z = mean(z), value = aggFUN(value)) %>%
-    #     ungroup(),
-    #   agg = coef_df %>%
-    #     group_by(mask_value) %>%
-    #     dplyr::summarize(value = mean(value)) %>%
-    #     left_join(mask$agg_coordinates, by="mask_value"), times=400
-    # )
-
 
     if (isTRUE(is_int_mask) && isTRUE(aggregate)) {
       coef_df <- merge(
@@ -240,11 +220,6 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
         coef_df[, .(value = aggFUN(value)), by = .(mask_value)],
         by = "mask_value"
       )
-      # coef_df <- coef_df %>%
-      #   group_by(mask_value) %>%
-      #   # get center of gravity and aggregate coefficient per parcel
-      #   dplyr::summarize(mask_name = mask_name[1], x=mean(x), y=mean(y), z=mean(z), value = aggFUN(value)) %>%
-      #   ungroup()
     }
 
     return(coef_df)
@@ -322,6 +297,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     setNames(c("i", "j", "k", "x", "y", "z")) %>%
     mutate(vnum = 1:n(), mask_value = mask_img[m_indices], mask_name = mask_name) %>%
     select(vnum, mask_value, everything())
+  mask_dim <- dim(mask_img)
 
   # extract each statistic requested
   stat_results <- stat_results %>%
@@ -337,34 +313,6 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   stat_results <- stat_results %>%
     dplyr::filter(img_exists == TRUE)
 
-  # library(microbenchmark)
-  # afni appears to be about 2-3x faster than internal use of oro.nifti, but not much faster than RNifti
-  # microbenchmark(
-  #   afni = data.table::fread(text = system(paste("3dROIstats -1DRformat -mask", mask_file, "-nomeanout -nobriklab -nzmean", paste(xx, collapse = " ")), intern = TRUE)),
-  #   local = lapply(xx, function(img) {
-  #     lg$debug("Processing image: %s", img)
-  #     tryCatch(
-  #       get_img_stats(img,
-  #         mask = list(indices = m_indices, coordinates = m_coordinates, dim = dim(mask_img)),
-  #         aggregate = aggregate, aggFUN = aggFUN
-  #       ),
-  #       error = function(e) {
-  #         lg$error("Problem extracting statistics from image %s. Error: %s", img, as.character(e))
-  #         return(NULL)
-  #       }
-  #     )
-  #   }), times=30
-  # )
-
-  # afni_stats <- function(img_list, aggFUN) {
-  #   if (!is.null(attr(res, "status"))) {
-  #     afni_output <- text = system2("3dROIstats", args = paste("-1DRformat -mask", mask_file, "-nomeanout -nobriklab -nzmean", paste(xx, collapse = " ")), stdout = TRUE)
-  #     afni_df <- data.table::fread(text = afni_output)
-  #   } else {
-  #     stop("Problem running 3dROIstats")
-  #   }
-  # }
-
   # The slow part of beta extraction is the reading of images and calculation of summaries. Use mclapply to help
   # Pre-compute ROI-level center of gravity, rather than computing the means repeatedly for each image
   if (isTRUE(is_int_mask) && isTRUE(aggregate)) {
@@ -376,19 +324,60 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     agg_coordinates <- NULL
   }
 
-  stat_results$img_stats <- mclapply(stat_results$img, function(img) {
-    lg$debug("Processing image: %s", img)
-    tryCatch(
-      get_img_stats(img,
-        mask = list(indices = m_indices, coordinates = m_coordinates, agg_coordinates = agg_coordinates, dim = dim(mask_img)),
-        aggregate = aggregate, aggFUN = aggFUN
-      ),
-      error = function(e) {
-        lg$error("Problem extracting statistics from image %s. Error: %s", img, as.character(e))
-        return(NULL)
-      }
+  if (scheduler == "slurm") {
+    chunk_size <- min(500, nrow(stat_results) / 16) # 500 images per job, or divide images into 16 jobs, whichever is smaller
+    cores_per_job <- 8 # use mclapply within job to accelerate
+    registerDoFuture() # tell dopar to use future compute mechanism
+    #options(future.debug = FALSE, future.progress = FALSE)
+
+    future::plan(
+      future.batchtools::batchtools_slurm,
+      template = "slurm-simple",
+      resources = list(
+        walltime = 30 * chunk_size, # 30-second request per image (upper bound)
+        memory = 1024, # 1 GB per core
+        ncpus = cores_per_job, # just needs one CPU within each chunk
+        chunks.as.arrayjobs = FALSE
+      )
     )
-  }, mc.cores = ncores)
+
+    stat_results$img_stats <- foreach(
+      img_chunk = iter(stat_results$img), .combine = c, # since each worker returns a list, concatenate into a bigger list
+      .options.future = list(chunk.size = chunk_size),
+      .packages = c("parallel", "data.table", "RNifti"),
+      .noexport = "gpa" # avoid large object being sent to workers.
+      ) %dopar% {
+
+      # use within-job parallelism
+      mclapply(img_chunk, function(img) {
+        lg$debug("Processing image: %s", img)
+        tryCatch(
+          get_img_stats(img,
+            mask = list(indices = m_indices, coordinates = m_coordinates, agg_coordinates = agg_coordinates, dim = mask_dim),
+            is_int_mask = is_int_mask, aggregate = aggregate, aggFUN = aggFUN
+          ),
+          error = function(e) {
+            lg$error("Problem extracting statistics from image %s. Error: %s", img, as.character(e))
+            return(NULL)
+          }
+        )
+      }, mc.cores = cores_per_job)
+    }
+  } else if (scheduler == "local") {
+    stat_results$img_stats <- mclapply(stat_results$img, function(img) {
+      lg$debug("Processing image: %s", img)
+      tryCatch(
+        get_img_stats(img,
+          mask = list(indices = m_indices, coordinates = m_coordinates, agg_coordinates = agg_coordinates, dim = mask_dim),
+          is_int_mask = is_int_mask, aggregate = aggregate, aggFUN = aggFUN
+        ),
+        error = function(e) {
+          lg$error("Problem extracting statistics from image %s. Error: %s", img, as.character(e))
+          return(NULL)
+        }
+      )
+    }, mc.cores = ncores)
+  }
 
   # unnest statistics for each image
   stat_expand <- stat_results %>%

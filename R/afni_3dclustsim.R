@@ -137,6 +137,12 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
     #' @param clustsim_mask This controls the volume over which to correct for FWE using 3dClustSim. If you give a whole-brain mask,
     #'   then your cluster thresholds reflect whole-brain FWE correction. If you give a smaller mask (e.g., a single region or network),
     #'   you are correcting only over that volume (i.e., a small-volume correction).
+    #' @param pthr A vector of voxelwise p-values to be tested in 3dClustSim (-pthr). Can be a space-separated string or
+    #'   a numeric vector. Default: ".01 .005 .002 .001 .0005 .0002 .0001".
+    #' @param athr A vector of cluster p-values to be tested in 3dClustSim (-athr). Can be a space-separated string or
+    #'   a numeric vector. Default: ".05 .02 .01 .005 .002 .001 .0005 .0002 .0001".
+    #' @param iter The number of iterations to use in simulating null datasets in 3dClustSim. Default: 30000.
+    #' @param seed The seed to use when starting 3dClustSim random number generation. Default: 0 (sets a random seed)
     #' @param scheduler The HPC scheduler to use. Can be 'local', 'slurm', or 'torque'.
     #' @param ncpus The number of cores to use in the 3dClustSim job. This sets OMP_NUM_THREADS in the 3dClustSim job to 
     #'   speed up computation.
@@ -564,6 +570,7 @@ afni_3dclustsim_list <- R6::R6Class("afni_3dclustsim_list",
     clustsim_objs = NULL
   ),
   public = list(
+    #' @description create a new afni_3dclustsim_list object
     initialize = function(obj_list=NULL, ...) {
       if (is.null(obj_list)) {
         # assume the ... contains a set of afni_3dclustsim objects
@@ -580,11 +587,15 @@ afni_3dclustsim_list <- R6::R6Class("afni_3dclustsim_list",
 
       private$clustsim_objs <- obj_list
     },
-    #' submit all jobs in this list
+
+    #' @description submit all jobs in this list
+    #' @param force If TRUE, pass force = TRUE to all the submit method of all subsidiary 3dClustSim objects
     submit = function(force = FALSE) {
       lapply(private$clustsim_objs, function(x) { x$submit(force = force) })
       return(invisible(self))
     },
+
+    #' @description return the clustsim objects
     get_objs = function() {
       private$clustsim_objs
     }

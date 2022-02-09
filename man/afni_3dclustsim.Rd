@@ -88,6 +88,16 @@ Must match 1:1 with \code{fwhmx_input_files}.}
 then your cluster thresholds reflect whole-brain FWE correction. If you give a smaller mask (e.g., a single region or network),
 you are correcting only over that volume (i.e., a small-volume correction).}
 
+\item{\code{pthr}}{A vector of voxelwise p-values to be tested in 3dClustSim (-pthr). Can be a space-separated string or
+a numeric vector. Default: ".01 .005 .002 .001 .0005 .0002 .0001".}
+
+\item{\code{athr}}{A vector of cluster p-values to be tested in 3dClustSim (-athr). Can be a space-separated string or
+a numeric vector. Default: ".05 .02 .01 .005 .002 .001 .0005 .0002 .0001".}
+
+\item{\code{iter}}{The number of iterations to use in simulating null datasets in 3dClustSim. Default: 30000.}
+
+\item{\code{seed}}{The seed to use when starting 3dClustSim random number generation. Default: 0 (sets a random seed)}
+
 \item{\code{scheduler}}{The HPC scheduler to use. Can be 'local', 'slurm', or 'torque'.}
 
 \item{\code{ncpus}}{The number of cores to use in the 3dClustSim job. This sets OMP_NUM_THREADS in the 3dClustSim job to 
