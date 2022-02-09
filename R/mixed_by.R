@@ -111,7 +111,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   checkmate::assert_string(padjust_method)
   checkmate::assert_integerish(ncores, lower = 1L)
   checkmate::assert_class(cl, "cluster", null.ok = TRUE)
-  checkmate::assert_subset(calculate, c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"))
+  checkmate::assert_subset(calculate, c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics", "residuals", "fitted"))
   checkmate::assert_logical(return_models, len = 1L)
   checkmate::assert_character(scale_predictors, null.ok = TRUE)
   checkmate::assert_list(emmeans_spec, null.ok = TRUE)
@@ -357,6 +357,14 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
           ret[, coef_df_ml := list(do.call(tidy, append(tidy_args, x = thism_ml)))]
         }
         
+        if ("residuals" %in% calculate) {
+          ret[, residuals := list(residuals(thism))]
+        }
+        
+        if ("fitted" %in% calculate) {
+          ret[, fitted := list(fitted(thism))]
+        }
+        
         # no option to return model object at present
         # ret[, model := list(list(thism))] #not sure why a double list is needed, but a single list does not make a list-column
         
@@ -434,9 +442,19 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
         emt_data <- subset(split_results, sapply(emt, function(x) !is.null(x)), 
                            select=c(split_on, "outcome", "model_name", "rhs", "emt"))
       }
+      
+      residual_data <- NULL
+      if ("residuals" %in% calculate) {
+        residual_data <- split_results[, residuals[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
+      }
+      
+      fitted_data <- NULL
+      if ("fitted" %in% calculate) {
+        fitted_data <- split_results[, fitted[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
+      }
 
       list(coef_df_reml=coef_df_reml, coef_df_ml=coef_df_ml, fit_df=fit_df, 
-           emm_data=emm_data, emt_data=emt_data) # return list
+           emm_data=emm_data, emt_data=emt_data, residuals = residual_data, fitted = fitted_data) # return list
     }
     
     rm(data) # cleanup big datasets and force memory release before next iteration
