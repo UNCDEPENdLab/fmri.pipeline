@@ -36,7 +36,7 @@
 #'   the function only returns the fixed effects and computes confidence intervals using the Wald method.
 #' @param lmer_control An lmerControl object specifying any optimization settings to be passed to lmer()
 #' @param calculate A character vector specifying what calculations should be returned by the function. 
-#'   The options are: "parameter_estimates_reml", "parameter_estimates_ml", and "fit_statistics".
+#'   The options are: "parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics", "fitted", and "residuals".
 #' @param emmeans_spec A named list of emmeans calls to be run for each model to obtain model predictions.
 #'   Any arguments that are valid for emmeans can be passed through the list structure.
 #' @param emtrends_spec A named list of emtrends calls to be run for each model to obtain model-predicted slopes.
@@ -112,7 +112,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   checkmate::assert_string(padjust_method)
   checkmate::assert_integerish(ncores, lower = 1L)
   checkmate::assert_class(cl, "cluster", null.ok = TRUE)
-  checkmate::assert_subset(calculate, c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"))
+  checkmate::assert_subset(calculate, c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics", "residuals", "fitted"))
   checkmate::assert_logical(return_models, len = 1L)
   checkmate::assert_character(scale_predictors, null.ok = TRUE)
   checkmate::assert_list(emmeans_spec, null.ok = TRUE)
@@ -358,6 +358,14 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
           ret[, coef_df_ml := list(do.call(tidy, append(tidy_args, x = thism_ml)))]
         }
         
+        if ("residuals" %in% calculate) {
+          ret[, residuals := list(resid = residuals(thism))]
+        }
+        
+        if ("fitted" %in% calculate) {
+          ret[, fitted := list(fitted = fitted(thism))]
+        }
+        
         # no option to return model object at present
         # ret[, model := list(list(thism))] #not sure why a double list is needed, but a single list does not make a list-column
         
@@ -423,7 +431,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
         fit_df <- split_results[, fit_df[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
         fit_df <- cbind(dt_split[, ..split_on], fit_df) # add back metadata for this split
       }
-
+      
       emm_data <- NULL
       if (!is.null(emmeans_spec)) {
         emm_data <- subset(split_results, sapply(emm, function(x) !is.null(x)), 
@@ -435,9 +443,21 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
         emt_data <- subset(split_results, sapply(emt, function(x) !is.null(x)), 
                            select=c(split_on, "outcome", "model_name", "rhs", "emt"))
       }
+      
+      residual_data <- NULL
+      if ("residuals" %in% calculate) {
+        residual_data <- split_results[, residuals[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
+        residual_data <- cbind(dt_split[, ..split_on], residual_data) # add back metadata for this split
+      }
+      
+      fitted_data <- NULL
+      if ("fitted" %in% calculate) {
+        fitted_data <- split_results[, fitted[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
+        fitted_data <- cbind(dt_split[, ..split_on], fitted_data) # add back metadata for this split
+      }
 
       list(coef_df_reml=coef_df_reml, coef_df_ml=coef_df_ml, fit_df=fit_df, 
-           emm_data=emm_data, emt_data=emt_data) # return list
+           emm_data=emm_data, emt_data=emt_data, residuals = residual_data, fitted = fitted_data) # return list
     }
     
     rm(data) # cleanup big datasets and force memory release before next iteration
@@ -462,9 +482,13 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   coef_results_reml <- NULL
   coef_results_ml <- NULL
   fit_results <- NULL
+  fitted_data <- NULL
+  residual_data <- NULL
   if ("parameter_estimates_reml" %in% calculate) { coef_results_reml <- extract_df(mresults, "coef_df_reml", split_on) }
   if ("parameter_estimates_ml" %in% calculate) { coef_results_ml <- extract_df(mresults, "coef_df_ml", split_on) }
   if ("fit_statistics" %in% calculate) { fit_results <- extract_df(mresults, "fit_df", split_on) }
+  if ("fitted" %in% calculate) { fitted_data <- extract_df(mresults, "fitted", split_on) }
+  if ("residuals" %in% calculate) { residual_data <- extract_df(mresults, "residuals", split_on) }
   
   emmeans_list <- NULL
   if (!is.null(emmeans_spec)) {
@@ -525,5 +549,5 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   }
 
   return(list(coef_df_reml=coef_results_reml, coef_df_ml=coef_results_ml, fit_df=fit_results, 
-              emmeans_list=emmeans_list, emtrends_list=emtrends_list))
+              emmeans_list=emmeans_list, emtrends_list=emtrends_list, residuals = residual_data, fitted = fitted_data))
 }
