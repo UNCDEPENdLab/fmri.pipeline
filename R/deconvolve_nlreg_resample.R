@@ -29,7 +29,7 @@
 #'
 #' @author Keith Bush
 #' @importFrom stats t.test
-#' @importFrom checkmate assert_logicla
+#' @importFrom checkmate assert_logical
 #' @export
 deconvolve_nlreg_resample <- function(bold_obs, kernel, nev_lr=.01, epsilon=.005, beta=40, n_resample=30, trim_kernel=TRUE) {
 
