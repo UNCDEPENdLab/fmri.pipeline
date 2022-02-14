@@ -64,10 +64,10 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   l3_df <- l3_df %>% dplyr::inner_join(mobj$metadata, by=c("id", "session"))
 
   # generate FSL EV syntax for these regressors
-  ev_syntax <- generate_fsf_ev_syntax(inputs = l3_df$cope_file, dmat = mobj$model_matrix)
+  ev_syntax <- fsl_generate_fsf_ev_syntax(inputs = l3_df$cope_file, dmat = mobj$model_matrix)
 
   # generate FSF contrast syntax for this setup
-  contrast_syntax <- generate_fsf_contrast_syntax(mobj$contrasts)
+  contrast_syntax <- fsl_generate_fsf_contrast_syntax(mobj$contrasts)
 
   l3_fsf_syntax <- readLines(system.file("feat_lvl3_copefiles_template.fsf", package = "fmri.pipeline"))
 

@@ -24,13 +24,15 @@ voxelwise_deconvolution(
 \arguments{
 \item{niftis}{A vector of processed fMRI timeseries images (4D files) to be deconvolved}
 
-\item{add_metadata}{A data.frame with one row per value of \code{niftis}. Columns of this data.frame are added to the output file for identification.}
+\item{add_metadata}{A data.frame with one row per value of \code{niftis}. Columns of this data.frame
+are added to the output file for identification.}
 
 \item{out_dir}{Base output directory for deconvolved time series files. Default is \code{getwd()}.}
 
-\item{out_file_expression}{Expression evaluated to resolve the filename for the deconvolved csv files. Default is to convert the \code{niftis} value
-for a given subject into a filename by replacing slashes with periods and adding the atlas image name. Note that the suffix \code{_deconvolved.csv.gz}
-or \code{_original.csv.gz} will be added to the expression, so don't pass this piece.}
+\item{out_file_expression}{Expression evaluated to resolve the filename for the deconvolved csv files. Default is
+to convert the \code{niftis} value for a given subject into a filename by replacing slashes with periods and adding
+the atlas image name. Note that the suffix \code{_deconvolved.csv.gz} or \code{_original.csv.gz} will be added
+to the expression, so don't pass this piece.}
 
 \item{log_file}{Name (and path) of log file for any deconvolution errors or messages}
 

@@ -106,7 +106,7 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL) {
   model_set <- expand.grid(l1_model = l1_model_names, l2_model = l2_model_names, stringsAsFactors = FALSE)
   all_l2_list <- foreach(
     model_info = iter(model_set, by = "row"), .inorder = FALSE,
-    .packages = c("dependlab", "dplyr", "data.table"),
+    .packages = c("fmri.pipeline", "dplyr", "data.table"),
     .export = c("lg", "gpa", "fsl_l2_model")
   ) %dopar% {
 

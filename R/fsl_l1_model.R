@@ -138,13 +138,13 @@ fsl_l1_model <- function(
           tempfilt=1, timing_file=file.path(timing_dir, paste0("run", feat_l1_df$run_number[rr], "_", x, ".1D")))
       })
 
-      lg$debug("dependlab::generate_fsf_lvl1_ev_syntax")
-      ev_syn <- dependlab::generate_fsf_lvl1_ev_syntax(regressors)
+      lg$debug("fsl_generate_fsf_lvl1_ev_syntax")
+      ev_syn <- fsl_generate_fsf_lvl1_ev_syntax(regressors)
 
       #creation of l1 contrast matrices, including the diagonal contrasts, now abstracted to finalize_pipeline_configuration.R
-      #thus, l1_contrasts is already a contrast matrix ready to be passed to the generate_fsf_contrast_syntax function
-      lg$debug("dependlab::generate_fsf_contrast_syntax")
-      cmat_syn <- dependlab::generate_fsf_contrast_syntax(l1_contrasts)
+      #thus, l1_contrasts is already a contrast matrix ready to be passed to the fsl_generate_fsf_contrast_syntax function
+      lg$debug("fsl_generate_fsf_contrast_syntax")
+      cmat_syn <- fsl_generate_fsf_contrast_syntax(l1_contrasts)
 
       #combine all syntax
       this_template <- c(this_template, ev_syn, cmat_syn)

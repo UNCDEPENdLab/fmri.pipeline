@@ -158,7 +158,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
 
   all_l3_list <- foreach(
     model_info = iter(to_run), .inorder = FALSE,
-    .packages = c("dependlab", "dplyr", "data.table"), .export = c("lg", "gpa", "fsl_l3_model")
+    .packages = c("fmri.pipeline", "dplyr", "data.table"), .export = c("lg", "gpa", "fsl_l3_model")
   ) %dopar% {
     model_info <- model_info # to avoid complaints about global variable binding in R CMD check
 
@@ -209,7 +209,6 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   # This is important so that if a user requests a model subset (using input arguments, and from run_glm_pipeline),
   # we don't clear out information about many other models that may have already completed
 
-  
   # Look for existing models in l3_model_setup that are identical to models that were just setup
   # Replace the rows corresponding to new models
   if (!is.null(gpa$l3_model_setup) && inherits(gpa$l3_model_setup, "l3_set")) {

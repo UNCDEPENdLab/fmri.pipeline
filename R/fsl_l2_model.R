@@ -96,10 +96,10 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
   )
 
   # generate FSL EV syntax for these regressors
-  ev_syntax <- generate_fsf_ev_syntax(inputs = l1_feat_dirs, dmat = dmat)
+  ev_syntax <- fsl_generate_fsf_ev_syntax(inputs = l1_feat_dirs, dmat = dmat)
 
   # generate FSF contrast syntax for this setup
-  contrast_syntax <- generate_fsf_contrast_syntax(cmat)
+  contrast_syntax <- fsl_generate_fsf_contrast_syntax(cmat)
 
   l2_fsf_syntax <- readLines(system.file("feat_lvl2_nparam_template.fsf", package = "fmri.pipeline"))
 

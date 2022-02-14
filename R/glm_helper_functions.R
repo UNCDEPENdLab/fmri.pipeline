@@ -391,15 +391,16 @@ get_cluster_means <- function(roimask, ni4d) {
   })
 }
 
-#function to extract mean beta series
+# internal function to extract mean beta series
+# NOT USED AT THE MOMENT
 get_beta_series <- function(inputs, roimask, n_bs=50) {
   #inputs <- inputs[1:5] #speed up testing
 
-  beta_res <- foreach(i=iter(1:length(inputs)), .packages=c("reshape2", "oro.nifti", "dplyr", "abind"), .export="get_cluster_means") %dopar% {
+  beta_res <- foreach(i=iter(seq_along(inputs)), .packages=c("reshape2", "oro.nifti", "dplyr", "abind"), .export="get_cluster_means") %dopar% {
   #beta_res <- lapply(1:length(inputs), function(i) {
     run_dirs <- list.files(path=inputs[i], pattern="FEAT_LVL1_run\\d+\\.feat", recursive=FALSE, full.names=TRUE)
     run_betas <- list()
-    
+
     for (r in seq_along(run_dirs)) {
       runnum <- as.numeric(sub(".*/FEAT_LVL1_run(\\d+)\\.feat", "\\1", run_dirs[r], perl=TRUE))
       copes <- file.path(run_dirs[r], "stats", paste0("cope", 1:n_bs, ".nii.gz"))

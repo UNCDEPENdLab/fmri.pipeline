@@ -80,7 +80,7 @@ the function only returns the fixed effects and computes confidence intervals us
 \item{lmer_control}{An lmerControl object specifying any optimization settings to be passed to lmer()}
 
 \item{calculate}{A character vector specifying what calculations should be returned by the function. 
-The options are: "parameter_estimates_reml", "parameter_estimates_ml", and "fit_statistics".}
+The options are: "parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics", "fitted", and "residuals".}
 
 \item{return_models}{A boolean indicating whether to return fitted model objects, which can be used for
 post hoc contrasts, visualization and statistics. Note that model objects can get very large, so be
