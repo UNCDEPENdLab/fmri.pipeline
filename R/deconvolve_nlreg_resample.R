@@ -73,7 +73,7 @@ deconvolve_nlreg_resample <- function(bold_obs, kernel, nev_lr=.01, epsilon=.005
     RNDobs <- bold_dcv_scale + RND_residuals
 
     #Deconvolve the variant
-    NEVresidual <- deconvolve_nlreg(matrix(RNDobs, ncol=1), kernel, nev_lr, epsilon, beta, normalize = FALSE, trim_kernel = FALSE)
+    NEVresidual <- deconvolve_nlreg(BOLDobs = matrix(RNDobs, ncol=1), kernel, nev_lr, epsilon, beta, normalize = FALSE, trim_kernel = FALSE)
 
     #Store encoding of this variant
     NEVvariants[z, ] <- NEVresidual

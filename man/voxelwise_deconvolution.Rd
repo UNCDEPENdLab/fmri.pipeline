@@ -18,7 +18,7 @@ voxelwise_deconvolution(
   save_original_ts = TRUE,
   algorithm = "bush2011",
   decon_settings = list(nev_lr = 0.01, epsilon = 0.005, beta = 60, kernel =
-    spm_hrf(TR)$hrf, Nresample = 25)
+    spm_hrf(TR)$hrf, n_resample = 25)
 )
 }
 \arguments{

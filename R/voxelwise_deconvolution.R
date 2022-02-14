@@ -58,7 +58,7 @@ voxelwise_deconvolution <- function(
     epsilon = .005, #convergence criterion (default)
     beta = 60, #best from Bush 2015 update
     kernel = spm_hrf(TR)$hrf, #canonical SPM difference of gammas
-    Nresample = 25)) { #for Bush 2015 only
+    n_resample = 25)) { #for Bush 2015 only
 
   sapply(niftis, checkmate::assert_file_exists)
   checkmate::assert_data_frame(add_metadata, nrows=length(niftis), null.ok=TRUE)
@@ -185,7 +185,7 @@ voxelwise_deconvolution <- function(
         #use R implementation of Bush 2015 algorithm
         alg_input <- as.matrix(data.table::fread(temp_i))
         deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("dependlab")) %do% {
-          reg <- tryCatch(deconvolve_nlreg_resample(as.vector(vox_ts), kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon, Nresample=decon_settings$Nresample),
+          reg <- tryCatch(deconvolve_nlreg_resample(as.vector(vox_ts), kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon, n_resample=decon_settings$n_resample),
             error=function(e) { cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE); return(rep(NA, length(vox_ts))) })
 
           if (is.list(reg)) { reg <- reg$NEVmean } #just keep the mean resampled events vector
@@ -194,7 +194,7 @@ voxelwise_deconvolution <- function(
       } else if (algorithm == "bush2011") {
         #this should use the new internal RcppArmadillo function
         alg_input <- as.matrix(t(data.table::fread(temp_i)))
-        deconv_mat <- tryCatch(deconvolve_nlreg(alg_input, kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon, beta=decon_settings$beta),
+        deconv_mat <- tryCatch(deconvolve_nlreg(BOLDobs = alg_input, kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon, beta=decon_settings$beta),
           error=function(e) {
             cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE)
             return(matrix(NA, nrow=nrow(alg_input), ncol=ncol(alg_input)))
