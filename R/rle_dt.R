@@ -2,7 +2,6 @@
 #' 
 #' @importFrom R6 R6Class
 #' @importFrom data.table data.table
-#' @importFrom gtools permutations
 #' @importFrom checkmate assert_data_frame assert_logical
 #' @export
 rle_dt <- R6::R6Class("rle_dt",
@@ -26,7 +25,7 @@ rle_dt <- R6::R6Class("rle_dt",
     #' @param optimize_order A boolean indicating whether to search for the smallest encoding scheme.
     #'    The default it to search in data with 4 or fewer keys, but not to search for 5+.
     #'    Optionally, if a positive integer, randomly test ordering over this number of permutations.
-    initialize=function(data, keys=NULL, optimize_order=(length(keys) <= 4)) {
+    initialize=function(data, keys = NULL, optimize_order = (length(keys) <= 4)) {
       checkmate::assert_data_frame(data)
       checkmate::assert_character(keys, null.ok=TRUE)
       checkmate::assert_integerish(as.numeric(optimize_order), max.len=1, lower=0)
@@ -47,8 +46,11 @@ rle_dt <- R6::R6Class("rle_dt",
         klist <- list()
         optimize_order <- as.integer(optimize_order)
 
-        if (optimize_order != 0L) { #TRUE or numeric
-          perms <- gtools::permutations(n=length(keys), r=length(keys), v=keys, repeats.allowed=FALSE)
+        if (optimize_order == 1L && length(keys) > 10) {
+          message("More than 10 keys specified. Will disable order optimization because number of permutations is huge!")
+          perms <- matrix(data = keys, nrow = 1) # take keys as stated
+        } else if (optimize_order != 0L) { #TRUE or numeric
+          perms <- compute_permutations(keys = keys) # compute all possible permutations of keys
           if (optimize_order==1L) {
             perms <- perms #test all permutations
           } else {

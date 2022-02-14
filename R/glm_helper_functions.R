@@ -1533,3 +1533,38 @@ c_string <- function(vec, null_val="none") {
     paste(vec, collapse = ", ")
   }
 }
+
+# fast permutation calculator to avoid gtools dependence
+# @details This is way faster than permutations in gtools
+# and is adapted from: https://stackoverflow.com/questions/11095992/generating-all-distinct-permutations-of-a-list-in-r
+# @param n is the number of elements to permute
+# @keys is an optional character vector of keys whose permutations should be calculated
+# @return a permutations x keys/elements of n matrix with all possible permutations
+compute_permutations <- function(n, keys = NULL) {
+  if (!is.null(keys)) {
+    if (missing(n) || is.null(n)) {
+      # support key input alone
+      n <- length(keys)
+    }
+    checkmate::assert_character(keys, len = n)
+  }
+  
+  if (n == 1) {
+    A <- matrix(1)
+  } else {
+    sp <- Recall(n - 1)
+    p <- nrow(sp)
+    A <- matrix(nrow = n * p, ncol = n)
+
+    for (i in 1:n) {
+      A[(i - 1) * p + 1:p, ] <- cbind(i, sp + (sp >= i))
+    }
+  }
+
+  # convert to lookup of keys based on indices in A
+  if (!is.null(keys)) {
+    A <- apply(A, 2, function(x) { keys[x]} )
+  }
+
+  return(A)
+}

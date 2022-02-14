@@ -15,10 +15,17 @@
 #'   model comparison tests to examine whether a given factor has an overall effect. If
 #'   \code{FALSE} or \code{"none"}, no split variable subsets will be fit. If \code{"individual"},
 #'   then the split variables are added in subsets individually, but their interactions are not.
-#'
-#' @importFrom brms brm
+#' @export
 meta_mixed_by <- function(coef_df, terms = "all", fit_subsets = "all", max_order = 3,
                           brms_args = list(chains = 4, cores = 4, iter = 12000)) {
+  
+  if (!requireNamespace("brms", quietly = TRUE)) {
+    stop(
+      "Package \"brms\" must be installed to use meta_mixed_by. Use install.packages('brms') first.",
+      call. = FALSE
+    )
+  }
+
   checkmate::assert_data_frame(coef_df)
   checkmate::assert_character(terms)
 
@@ -35,7 +42,8 @@ meta_mixed_by <- function(coef_df, terms = "all", fit_subsets = "all", max_order
   # build formula list
   if (isTRUE(fit_subsets)) {
     for (tt in seq_len(terms)) {
-      combs <- gtools::combinations(n = length(terms), r = tt, v = terms)
+
+      combs <- combn(terms, m = tt) # elements x combinations matrix
       for (cc in combs) {
         # and loop over model order
       }
