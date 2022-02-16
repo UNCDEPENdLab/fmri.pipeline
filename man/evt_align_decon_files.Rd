@@ -33,6 +33,6 @@ evt_align_decon_files(
 Align a set of deconvolved time series files to an event of interest function.
 }
 \details{
-This is intended to be used internally by \code{event_align_decons}, which accepts a set of mask/atlas files
+This is intended to be used internally by \code{run_decon_alignment}, which accepts a set of mask/atlas files
   and alignments, then processes these in parallel.
 }

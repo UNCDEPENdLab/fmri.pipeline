@@ -407,7 +407,7 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
 #'      to avoid missing values at the edge of the interpolation window. Default: 1.5
 #' }
 #' @export
-event_align_decons <- function(atlas_files, decon_dir, trial_df, alignments = list(), nbins = 12, overwrite = FALSE, tr = NULL,
+run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = list(), nbins = 12, overwrite = FALSE, tr = NULL,
                                ncpus = 8, walltime = "1:00:00", scheduler = "slurm") {
   checkmate::assert_file_exists(atlas_files)
   checkmate::assert_directory_exists(decon_dir)
@@ -491,6 +491,7 @@ event_align_decons <- function(atlas_files, decon_dir, trial_df, alignments = li
     for (ee in names(alignments)) {
       out_file <- file.path(decon_dir, aname, glue("{aname}_{ee}_decon_aligned.csv.gz"))
       this_alignment <- alignments[[ee]]
+      this_alignment$aname <- aname # populate atlas name so that it can be added in downstream alignment function
 
       if (file.exists(out_file) && isFALSE(overwrite)) {
         message("Output file already exists: ", out_file)
@@ -516,7 +517,7 @@ event_align_decons <- function(atlas_files, decon_dir, trial_df, alignments = li
 
 #' Align a set of deconvolved time series files to an event of interest function.
 #' @details
-#'   This is intended to be used internally by \code{event_align_decons}, which accepts a set of mask/atlas files
+#'   This is intended to be used internally by \code{run_decon_alignment}, which accepts a set of mask/atlas files
 #'   and alignments, then processes these in parallel.
 #' @param d_files A vector of deconvolved .csv.gz files created by \code{voxelwise_deconvolution}.
 #' @param trial_df The trial-level data.frame containing id and run for each subject represented in \code{d_files}.
@@ -605,7 +606,7 @@ evt_align_decon_files <- function(d_files, trial_df, alignment = list(), tr = NU
   }
 
   all_e <- dplyr::bind_rows(lapply(elist, "[[", "ts"))
-  all_e$atlas <- aname
+  all_e$atlas <- alignment$aname
   if (!is.null(out_file)) {
     message("Writing output: ", out_file)
     readr::write_csv(all_e, file = out_file)
