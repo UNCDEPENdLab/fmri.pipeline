@@ -234,7 +234,7 @@ R_batch_job <- R6::R6Class("batch_job",
     batch_id = NULL,
 
     #' @field batch_directory Location of batch scripts to be written
-    batch_directory = "~/", # needs to be somewhere that both compute nodes and login nodes can access, so /tmp is not good.
+    batch_directory = NULL, # needs to be somewhere that both compute nodes and login nodes can access, so /tmp is not good.
 
     #' @field batch_code Shell code to be included in the batch script prior to the R code to be run. This can include
     #'    module load statements, environment variable exports, etc.
@@ -294,7 +294,20 @@ R_batch_job <- R6::R6Class("batch_job",
                           post_children_r_code = NULL, batch_code = NULL, r_packages = NULL, scheduler = NULL, wait_for_children = NULL,
                           input_rdata_file = NULL, input_objects = NULL, output_rdata_file = NULL,
                           scheduler_options = NULL, repolling_interval = NULL) {
-      if (!is.null(batch_directory)) self$batch_directory <- batch_directory
+
+      if (!is.null(batch_directory)) {
+        self$batch_directory <- batch_directory
+      } else {
+        hostname <- Sys.info()["nodename"]
+        user <- Sys.info()["user"]
+        if (isTRUE(grepl("longleaf", hostname))) {
+          self$batch_directory <- glue("/pine/scr/{substr(user, 1, 1)}/{substr(user, 2, 2)}/{user}")
+          message(glue("On Longleaf, defaulting to batch_directory on the scratch system: {self$batch_directory}"))
+        } else {
+          self$batch_directory <- normalizePath(("~/"))
+          message(glue("Defaulting batch_directory to your home directory: {self$batch_directory}"))
+        }
+      }
       if (!is.null(parent_jobs)) self$parent_jobs <- parent_jobs
       if (!is.null(job_name)) self$job_name <- as.character(job_name)
       if (!is.null(n_nodes)) self$n_nodes <- as.character(n_nodes)

@@ -16,7 +16,7 @@
 #'   boundary that can help to have sufficient data to interpolate early and late times within the epoch.
 #' @param pad_after Number of seconds to include in the epoch time window after the event of interest.
 #' @param logfile Name of log file containing event-locking problems
-#' 
+#'
 #' @importFrom dplyr filter pull
 #' @importFrom data.table rbindlist
 #' @importFrom checkmate assert_numeric assert_data_frame assert_string assert_subset
@@ -28,7 +28,7 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
   ts_data <- fmri_obj$get_ts(orig_names=TRUE) #so that vm pass-through to returned object works
   run_df <- fmri_obj$event_data
   vm <- fmri_obj$vm
-  
+
   #input validation
   checkmate::assert_numeric(time_before, upper=0, max.len=1)
   checkmate::assert_numeric(time_after, lower=0, max.len=1)
@@ -48,9 +48,9 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
     print(tt[tt > 1L])
     stop("run_df contains duplicated trials. Cannot figure out how to event-lock based on this.")
   }
-  
+
   trials <- run_df[[ vm[["trial"]] ]] %>% sort() #sorted vector of trials
-  
+
   #list containing event-locked data frames, one per trial
   tlist <- list()
 
@@ -69,9 +69,9 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
     evt_after <- Inf
     if (!is.null(collide_after)) {
       evts <- run_df %>% select(all_of(collide_after)) %>% unlist() %>% unname()
-      if (any(evts > evt_onset)) { evt_after <- min(evts[evts > evt_onset]) } #nearest future event       
+      if (any(evts > evt_onset)) { evt_after <- min(evts[evts > evt_onset]) } #nearest future event
     }
-   
+
     if (is.na(evt_onset)) { next } #times are missing for some events on early trials (like rt_vmax_cum)
     ts_data$evt_time <- ts_data[[ vm[["time"]] ]] - evt_onset
 
@@ -86,7 +86,7 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
     if (evt_after < Inf) { trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) < evt_after) }
 
     #populate trial field
-    trial_ts[[ vm[["trial"]] ]] <- if(nrow(trial_ts) > 0L) { trials[t] } else { numeric(0) } #allow for a zero-row df
+    trial_ts[[ vm[["trial"]] ]] <- if (nrow(trial_ts) > 0L) { trials[t] } else { numeric(0) } #allow for a zero-row df
 
     #add these data to trial list
     tlist[[t]] <- trial_ts
@@ -179,7 +179,7 @@ get_medusa_interpolated_ts <- function(fmri_obj, event=NULL, time_before=-3.0, t
 #' @importFrom checkmate assert_string assert_numeric assert_character
 #' @importFrom data.table dcast melt
 #' @author Michael Hallquist
-#' @export 
+#' @export
 get_medusa_compression_score <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
                                          collide_before=NULL, collide_after=NULL, group_by=NULL) {
 
@@ -189,7 +189,7 @@ get_medusa_compression_score <- function(fmri_obj, event=NULL, time_before=-3, t
   checkmate::assert_numeric(time_after, lower=0, max.len=1)
   checkmate::assert_character(collide_before, null.ok=TRUE, unique=TRUE)
   checkmate::assert_character(collide_after, null.ok=TRUE, unique=TRUE)
-  
+
   #get event-locked windowed data
   stopifnot(inherits(fmri_obj, "fmri_ts"))
 
@@ -209,7 +209,7 @@ get_medusa_compression_score <- function(fmri_obj, event=NULL, time_before=-3, t
   calculate_compression <- function(dt, keys=NULL, ...) {
     #convert to wide format with multiple signals (e.g., from many voxels) as columns
     ff <- as.formula(paste0("evt_time ~ ", paste(keys, collapse=" + ")))
-    thismat <- dcast(dt, ff, value.var="value")
+    thismat <- data.table::dcast(dt, ff, value.var="value")
     thismat[, evt_time := NULL] #omit time column itself from matrix
     thismat <- as.matrix(thismat)
     compress_mts_pca(thismat, ...)
@@ -223,13 +223,13 @@ get_medusa_compression_score <- function(fmri_obj, event=NULL, time_before=-3, t
   comp_calc <- interp_dt[, calculate_compression(.SD, keys=other_keys, pexp_target=0.9, scale_columns=TRUE), by=c(".vkey", group_by)]
 
   #reshape multiple signals to wide format again
-  output_dt <- dcast(comp_calc, formula = ... ~ .vkey, value.var=grep("a*compress_.*", names(comp_calc), value=TRUE), sep="|")
+  output_dt <- data.table::dcast(comp_calc, formula = ... ~ .vkey, value.var=grep("a*compress_.*", names(comp_calc), value=TRUE), sep="|")
 
   #make names more readable: like decon_compress_0.9, not compress_0.9_decon
   setnames(output_dt, names(output_dt), sub("(a*compress_[^|]+)\\|(.+)", "\\2_\\1", names(output_dt), perl=TRUE))
 
   return(output_dt)
-  
+
 }
 
 #' Interpolate an aligned fmri_ts object onto a consistent time grid with respect to a target event
@@ -241,7 +241,8 @@ get_medusa_compression_score <- function(fmri_obj, event=NULL, time_before=-3, t
 #' @param output_resolution The timestep (in seconds) used for interpolation
 #' @param group_by a character vector of keying variables used for aggregation of data prior to interpolation
 #'
-#' @importFrom data.table dcast melt
+#' @importFrom data.table dcast melt setnames
+#' @importFrom dplyr summarize group_by across
 #' @author Michael Hallquist
 #' @keywords internal
 interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, time_after=3,
@@ -257,8 +258,9 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
     #  series is the same is the mean of interpolated time series. But the former is faster to compute.
     #  https://math.stackexchange.com/questions/15596/mean-of-interpolated-data-or-interpolation-of-means-in-geostatistics
 
-    interp_agg <- to_interpolate %>% group_by(across(evt_time)) %>%
-      summarize(across("value", funs, na.rm=TRUE), .groups="drop")
+    interp_agg <- to_interpolate %>% 
+      group_by(across(evt_time)) %>%
+      dplyr::summarize(across("value", funs, na.rm=TRUE), .groups="drop")
 
     #rare, but if we have no data at tail end of run, we may not be able to interpolate
     if (nrow(interp_agg) < 2) {
@@ -266,7 +268,7 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
       #  trial_df[[runcol]][1], ", trial:", trials[t], "\n", file=logfile, append=TRUE)
       return(NULL)
     }
-    
+
     vcols <- grep("value_.*", names(interp_agg), value=TRUE)
     tout <- seq(time_before, time_after, by=output_resolution)
     df <- data.frame(evt_time=tout, sapply(vcols, function(cname) {
@@ -289,7 +291,7 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
   interp_dt <- interp_dt[, interpolate_worker(.SD), by=c(".vkey", group_by)]
 
   #reshape multiple signals to wide format again
-  output_dt <- dcast(interp_dt, formula = ... ~ .vkey, value.var=grep("value_.*", names(interp_dt), value=TRUE), sep="|")
+  output_dt <- data.table::dcast(interp_dt, formula = ... ~ .vkey, value.var=grep("value_.*", names(interp_dt), value=TRUE), sep="|")
 
   #make names more readable: like decon_mean, not value_mean_decon
   setnames(output_dt, names(output_dt), sub("value_([^|]+)\\|(.+)", "\\2_\\1", names(output_dt), perl=TRUE))
@@ -328,7 +330,7 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
   checkmate::assert_logical(scale_columns, max.len=1L)
   
   #orig <- mts
-  mts <- mts[,!apply(mts, 2, function(x) all(is.na(x))), drop=FALSE] #drop columns/time series that are all NA (edge of brain)
+  mts <- mts[, !apply(mts, 2, function(x) all(is.na(x))), drop=FALSE] #drop columns/time series that are all NA (edge of brain)
   mts <- na.omit(mts) #now drop rows that have NAs (event censoring)
 
   #screen for lousy time series (no variation or extreme means)
@@ -336,7 +338,7 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
   sds <- apply(mts, 2, sd)
 
   bad <- sds < 1e-3 | mms < 1e-6 #very small SD or super-low mean
-  mts <- mts[,!bad, drop=FALSE]
+  mts <- mts[, !bad, drop=FALSE]
 
   if (nrow(mts) <= 3 || ncol(mts) <= 1) {
     warning("mts matrix cannot be compressed. Dims: ", paste(dim(mts), collapse=", "))
@@ -353,14 +355,14 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
     if (isTRUE(scale_columns)) { 
       mts <- apply(mts, 2, function(x) {  (x - mean(x))/mean(x) })
     }
-    
+
     dd <- svd(mts)
     pexp <- cumsum(dd$d^2)/sum(dd$d^2) #proportion of variance explained
 
     compress_ret <- list()
     for (pp in pexp_target) {
       nexceed <- min(which(pexp > pp))
-      
+
       #linear approximation of rank, allowing non-integer values
       napprox <- approx(y=1:length(dd$d), x=pexp, xout=pp, ties="ordered")$y
       compress_ret[[paste0("compress_", pp)]] <- 1-(nexceed/length(dd$d))
@@ -370,6 +372,244 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
     compress_ret[["compress_nt"]] <- length(dd$d) #number of timepoints
 
   }
-    
+
   return(compress_ret)
+}
+
+
+#' Align a set of deconvolved time series files from \code{voxelwise_deconvolution} to a set of events in a task-related design
+#' @param atlas_files A character vector containing filenames of atlases that used for aggregating voxel-level deconvolved time series
+#' @param decon_dir The directory containing the deconvolved data from \code{voxelwise_deconvolution}. Should be the same as
+#'   \code{out_dir} from \code{voxelwise_deconvolution}.
+#' @param alignments A list of alignment specifications, each of which will be computed by this function.
+#'   See \code{get_medusa_interpolated_ts} for help with arguments, and see Details.
+#' @param nbins For atlases with continuous values, how many bins should be used to discretize the mask values, leading to aggregation
+#'   by bin.
+#' @param overwrite if TRUE, overwrite existing output files
+#' @param tr The repetition time of the scan in seconds.
+#' @param ncpus The number of cores to use for each parallel job
+#' @param walltime The time requested for each event alignment job. Default: 1:00:00 (1 hour).
+#'
+#' @details
+#'   This function will create a separate R batch job on the scheduler for each combination of atlas files and alignments. Each of these
+#'   jobs can be allocated a number of cores, which will be used to loop over the deconvolved time series files for event alignment. The
+#'   number of cores requested for each alignment job is specified using \code{ncpus}, which defaults to 8.
+#'
+#'   The alignments argument is a list containing information about how to event-align the deconvolved time series. Elements include:
+#'
+#' \itemize{
+#'   \item \code{$evt_col}: (Required) The name of the column in \code{trial_df} containing the event of interest.
+#'   \item \code{$time_before}: (Required) The number of seconds before the event of interest to include in the interpolation window.
+#'   \item \code{$time_after}: (Required) The number of seconds after the event of interest to include in the interpolation window.
+#'   \item \code{$pad_before}: (Optional) The number of seconds before the earliest event to include in the interpolation window
+#'      to avoid missing values at the edge of the interpolation window. Default: -1.5
+#'   \item \code{$pad_after}: (Optional) The number of seconds after the latest event to include in the interpolation window
+#'      to avoid missing values at the edge of the interpolation window. Default: 1.5
+#' }
+#' @export
+event_align_decons <- function(atlas_files, decon_dir, trial_df, alignments = list(), nbins = 12, overwrite = FALSE, tr = NULL,
+                               ncpus = 8, walltime = "1:00:00", scheduler = "slurm") {
+  checkmate::assert_file_exists(atlas_files)
+  checkmate::assert_directory_exists(decon_dir)
+  checkmate::assert_data_frame(trial_df)
+  checkmate::assert_list(alignments, names = "named") # require named list input
+  checkmate::assert_integerish(nbins, lower = 1, upper = 1e4, len = 1L)
+  checkmate::assert_logical(overwrite, len = 1L)
+  checkmate::assert_number(tr, lower = 0.01, upper = 1000)
+  checkmate::assert_integerish(ncpus, lower = 1, upper = 1e3, len = 1L)
+  walltime <- validate_dhms(walltime) # validate and correct ambiguities
+  checkmate::assert_string(scheduler)
+  checkmate::assert_subset(scheduler, c("local", "slurm", "torque"))
+
+  # validate padding and alignment settings, input defaults
+  for (aa in seq_along(alignments)) {
+    if (!"pad_before" %in% names(alignments[[aa]])) {
+      message(glue("For alignment {names(alignments)[aa]}, defaulting pad_before to -1.5"))
+      alignments[[aa]]$pad_before <- -1.5
+    } else {
+      checkmate::assert_number(alignments[[aa]]$pad_before, upper = 0)
+    }
+
+    if (!"pad_after" %in% names(alignments[[aa]])) {
+      message(glue("For alignment {names(alignments)[aa]}, defaulting pad_after to 1.5"))
+      alignments[[aa]]$pad_after <- 1.5
+    } else {
+      checkmate::assert_number(alignments[[aa]]$pad_after, lower = 0)
+    }
+
+    if (!"output_resolution" %in% names(alignments[[aa]])) {
+      message(glue("For alignment {names(alignments)[aa]}, defaulting output_resolution (sampling rate) of 1.0"))
+      alignments[[aa]]$output_resolution <- 1.0
+    } else {
+      checkmate::assert_number(alignments[[aa]]$output_resolution, lower = 0.01, upper = 1e2)
+    }
+
+    has_ingredients <- c("pad_before", "pad_after", "evt_col", "time_before", "time_after", "output_resolution") %in% names(alignments[[aa]])
+    if (!all(has_ingredients)) {
+      stop(glue("For alignment {names(alignments)[aa]}, missing required fields: {paste(names(alignments[[aa]]), collapse=', ')}"))
+    }
+
+    stopifnot(alignments[[aa]]$evt_col %in% names(trial_df))
+  }
+
+  # loop over atlases and alignments
+  for (af in atlas_files) {
+    if (!checkmate::test_file_exists(af)) {
+      message("Cannot find input atlas file: {af}. Skipping alignment for this atlas.")
+      next
+    }
+
+    aname <- file_sans_ext(basename(af)) # atlas name
+
+    mask <- RNifti::readNifti(af)
+    mi <- which(mask > 0, arr.ind = TRUE)
+    maskvals <- unique(mask[mi])
+
+    if (isTRUE(checkmate::test_integerish(maskvals))) {
+      continuous <- FALSE
+      message("Atlas: ", aname, " has integer values. Using unique mask values for aggregation in event-aligning.")
+      atlas_cuts <- NULL
+    } else {
+      continuous <- TRUE
+      message("Atlas: ", aname, "has continuous values. Dividing into ", nbins, "bins")
+      atlas_cuts <- seq(min(mask[mi]) - 1e-5, max(mask[mi]) + 1e-5, length.out = nbins + 1)
+    }
+
+    adir <- file.path(decon_dir, aname, "deconvolved")
+    if (!dir.exists(adir)) {
+      message(glue("Cannot find expected deconvolved output directory: {adir}. Have you run voxelwise_deconvolution yet?"))
+      next
+    }
+
+    d_files <- list.files(path = adir, pattern = "_deconvolved\\.csv\\.gz", full.names = TRUE)
+    if (length(d_files) == 0L) {
+      message(glue("No deconvolved files found in directory: {adir}"))
+      next
+    }
+
+    # loop over event alignments within this atlas
+    for (ee in names(alignments)) {
+      out_file <- file.path(decon_dir, aname, glue("{aname}_{ee}_decon_aligned.csv.gz"))
+      this_alignment <- alignments[[ee]]
+
+      if (file.exists(out_file) && isFALSE(overwrite)) {
+        message("Output file already exists: ", out_file)
+        next
+      }
+
+      # mask <- list(continuous = continuous, atlas_cuts = atlas_cuts, nifti = mask)
+
+      d_batch <- R_batch_job$new(
+        job_name = glue("evtalign_{aname}_{ee}"), n_cpus = ncpus, mem_per_cpu = "4g",
+        wall_time = walltime, scheduler = scheduler,
+        input_objects = named_list(d_files, trial_df, this_alignment, tr, atlas_cuts, out_file, ncpus), # pass the current object as input to the batch
+        r_packages = "fmri.pipeline",
+        r_code = c(
+          "evt_align_decon_files(d_files, trial_df, this_alignment, tr, atlas_cuts, out_file, ncpus)"
+        )
+      )
+
+      d_batch$submit()
+    }
+  }
+}
+
+#' Align a set of deconvolved time series files to an event of interest function.
+#' @details
+#'   This is intended to be used internally by \code{event_align_decons}, which accepts a set of mask/atlas files
+#'   and alignments, then processes these in parallel.
+#' @param d_files A vector of deconvolved .csv.gz files created by \code{voxelwise_deconvolution}.
+#' @param trial_df The trial-level data.frame containing id and run for each subject represented in \code{d_files}.
+#' @param alignment A list containing alignment details passed to get_medusa_interpolated_ts
+#' @param tr The repetition time of the sequence in seconds.
+#' @param atlas_cuts For a continuous-valued atlas (e.g., containing a gradient of interest), a vector of cut points for binning values
+#' @param mask A list of mask-related information, including ...
+#' @param output_dir The output directory for the event-aligned csv file. If NULL, nothing it output
+#' @importFrom doParallel registerDoParallel
+#' @importFrom parallel makeCluster stopCluster
+#' @importFrom foreach registerDoSEQ
+#' @export
+evt_align_decon_files <- function(d_files, trial_df, alignment = list(), tr = NULL, atlas_cuts, out_file = NULL, ncpus = 8) {
+  checkmate::assert_character(d_files)
+  checkmate::assert_file_exists(d_files)
+  checkmate::assert_data_frame(trial_df)
+  checkmate::assert_list(alignment)
+  checkmate::assert_number(tr, lower = 0.01, upper = 1000)
+  checkmate::assert_numeric(atlas_cuts, null.ok = TRUE)
+  checkmate::assert_string(out_file, null.ok = TRUE)
+
+  if (ncpus > 1) {
+    clusterobj <- parallel::makeCluster(ncpus)
+    on.exit(try(stopCluster(clusterobj)))
+    registerDoParallel(clusterobj)
+  } else {
+    registerDoSEQ()
+  }
+
+  elist <- foreach(fname = iter(d_files), .packages = c("dplyr", "readr", "data.table", "fmri.pipeline")) %dopar% {
+
+    # add sub and run for now since I screwed this up in the outputs...
+    id <- as.numeric(sub("^.*/sub(\\d+)_.*", "\\1", fname))
+    run <- as.numeric(sub("^.*/sub\\d+_run(\\d+).*", "\\1", fname))
+    d <- read_csv(fname) %>% dplyr::select(-atlas_name, -x, -y, -z)
+    if (all(is.na(d$decon))) {
+      cat(glue("For file {fname}, all decon values are NA, suggesting a failue in deconvolution. Returning NULL."))
+      return(NULL)
+    }
+
+    # discretize atlas value into bins (continuous) or unique values (integer mask)
+    if (!is.null(atlas_cuts)) {
+      d <- d %>% dplyr::mutate(atlas_value = cut(atlas_value, atlas_cuts))
+    } else {
+      # d <- d %>% mutate(atlas_value=factor(atlas_value))
+      d <- d %>% dplyr::mutate(atlas_value = as.numeric(atlas_value))
+    }
+
+    # run data
+    subj_df <- trial_df %>% filter(id == !!id & run == !!run)
+
+    if (nrow(subj_df) == 0L) {
+      cat("Cannot find trial-level data for id {id}, run {run}.\n")
+      return(NULL)
+    }
+
+    tsobj <- fmri_ts$new(
+      ts_data = d, event_data = subj_df, tr = tr,
+      vm = list(value = c("decon"), key = c("vnum", "atlas_value"))
+    )
+
+    subj_align <- tryCatch(
+      get_medusa_interpolated_ts(tsobj,
+        event = alignment$evt_col,
+        time_before = alignment$time_before, time_after = alignment$time_after,
+        collide_before = alignment$collide_before, collide_after = alignment$collide_after,
+        pad_before = alignment$pad_before, pad_after = alignment$pad_after, output_resolution = alignment$output_resolution,
+        group_by = c("atlas_value", "trial")
+      ), # one time series per region and trial
+      error = function(err) {
+        cat("Problems with event aligning ", fname, " for event: ", e, "\n  ",
+          as.character(err), "\n\n",
+          file = "evt_align_errors.txt", append = TRUE
+        )
+        return(NULL)
+      }
+    )
+
+    if (!is.null(subj_align)) {
+      # tack on run and id to interpolated time series object
+      subj_align[, id := id]
+      subj_align[, run := run]
+    }
+
+    return(list(ts = subj_align))
+  }
+
+  all_e <- dplyr::bind_rows(lapply(elist, "[[", "ts"))
+  all_e$atlas <- aname
+  if (!is.null(out_file)) {
+    message("Writing output: ", out_file)
+    readr::write_csv(all_e, file = out_file)
+  }
+
+  return(all_e)
 }
