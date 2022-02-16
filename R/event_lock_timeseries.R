@@ -20,7 +20,7 @@
 #' @importFrom dplyr filter pull
 #' @importFrom data.table rbindlist
 #' @importFrom checkmate assert_numeric assert_data_frame assert_string assert_subset
-#' 
+#'
 #' @export
 event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
                           collide_before=NULL, collide_after=NULL, pad_before=-1, pad_after=1) {
@@ -132,7 +132,7 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
 #'   to provide one interpolated time series per trial.
 #'
 #' @author Michael Hallquist
-#' @export 
+#' @export
 get_medusa_interpolated_ts <- function(fmri_obj, event=NULL, time_before=-3.0, time_after=3.0,
                                        collide_before=NULL, collide_after=NULL,
                                        pad_before=-1.5, pad_after=1.5, output_resolution=NULL,
@@ -143,9 +143,11 @@ get_medusa_interpolated_ts <- function(fmri_obj, event=NULL, time_before=-3.0, t
   #make default output_resolution equal to fmri TR
   if (is.null(output_resolution)) { output_resolution <- fmri_obj$tr }
 
-  #talign is an fmri_ts object keyed by trial (and other keying variables)
-  talign <- event_lock_ts(fmri_obj, event=event, time_before=time_before, time_after=time_after,
-    pad_before=pad_before, pad_after=pad_after, collide_before=collide_before, collide_after=collide_after)
+  # talign is an fmri_ts object keyed by trial (and other keying variables)
+  talign <- event_lock_ts(fmri_obj,
+    event = event, time_before = time_before, time_after = time_after,
+    pad_before = pad_before, pad_after = pad_after, collide_before = collide_before, collide_after = collide_after
+  )
   
   #need to interpolate by key variables
   interpolated_epochs <- interpolate_fmri_epochs(talign, time_before=time_before, time_after=time_after,
@@ -320,7 +322,7 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
 #'   get us to precisely 90% by linear interpolation.
 #'
 #' @return a list containing compression estimates of the matrix. For each pexp_target value, two values are included,
-#'  one representing the compression calculated using integer 
+#'  one representing the compression calculated using integer
 #' @importFrom checkmate assert_matrix assert_numeric assert_logical
 #' @author Michael Hallquist
 #' @export
@@ -405,6 +407,40 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
 #'      to avoid missing values at the edge of the interpolation window. Default: -1.5
 #'   \item \code{$pad_after}: (Optional) The number of seconds after the latest event to include in the interpolation window
 #'      to avoid missing values at the edge of the interpolation window. Default: 1.5
+#' }
+#' 
+#' @examples 
+#'
+#' \dontrun{
+#'   atlas_files <- c(
+#'     "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/bilateral_striatum_tight_7Networks_2.3mm.nii.gz",
+#'     "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/pauli_combined_integermask_2.3mm.nii.gz"
+#'   )
+#' 
+#'   decon_dir <- "/proj/mnhallqlab/users/michael/sceptic_decon" # has the outputs of voxelwise_deconvolution for these atlases
+#'   trial_df <- get_trial_data(repo_directory = "/proj/mnhallqlab/projects/clock_analysis", dataset = "mmclock_fmri", groupfixed = TRUE) 
+#'
+#'   alignments <- list(
+#'     clock_long = list(
+#'       evt_col = "clock_onset",
+#'       time_before = -5,
+#'       time_after = 10,
+#'       collide_before = "iti_onset", # censor data if we bump into the end of the prior trial
+#'       collide_after = "clock_onset" # censor data it we hit the next trial
+#'     ),
+#'     rt_long = list(
+#'       evt_col = "rt_time",
+#'       time_before = -4,
+#'       time_after = 7,
+#'       collide_before = "iti_onset",
+#'       collide_after = "clock_onset"
+#'     )
+#'   )
+#'
+#'   # run all atlases and alignments as separate slurm jobs (2 hours each, 8 cpus) 
+#'   run_decon_alignment(atlas_files, decon_dir, trial_df, alignments, 
+#'     overwrite = TRUE, tr = 1.0, ncpus = 8, walltime = "2:00:00", scheduler = "slurm")
+#'
 #' }
 #' @export
 run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = list(), nbins = 12, overwrite = FALSE, tr = NULL,
@@ -503,7 +539,7 @@ run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = l
       d_batch <- R_batch_job$new(
         job_name = glue("evtalign_{aname}_{ee}"), n_cpus = ncpus, mem_per_cpu = "4g",
         wall_time = walltime, scheduler = scheduler,
-        input_objects = named_list(d_files, trial_df, this_alignment, tr, atlas_cuts, out_file, ncpus), # pass the current object as input to the batch
+        input_objects = named_list(d_files, trial_df, this_alignment, tr, atlas_cuts, out_file, ncpus), # pass relevant vars to the batch
         r_packages = "fmri.pipeline",
         r_code = c(
           "evt_align_decon_files(d_files, trial_df, this_alignment, tr, atlas_cuts, out_file, ncpus)"

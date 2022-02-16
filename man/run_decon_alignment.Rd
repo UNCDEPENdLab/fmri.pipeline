@@ -57,3 +57,37 @@ This function will create a separate R batch job on the scheduler for each combi
      to avoid missing values at the edge of the interpolation window. Default: 1.5
 }
 }
+\examples{
+
+\dontrun{
+  atlas_files <- c(
+    "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/bilateral_striatum_tight_7Networks_2.3mm.nii.gz",
+    "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/pauli_combined_integermask_2.3mm.nii.gz"
+  )
+
+  decon_dir <- "/proj/mnhallqlab/users/michael/sceptic_decon" # has the outputs of voxelwise_deconvolution for these atlases
+  trial_df <- get_trial_data(repo_directory = "/proj/mnhallqlab/projects/clock_analysis", dataset = "mmclock_fmri", groupfixed = TRUE) 
+
+  alignments <- list(
+    clock_long = list(
+      evt_col = "clock_onset",
+      time_before = -5,
+      time_after = 10,
+      collide_before = "iti_onset", # censor data if we bump into the end of the prior trial
+      collide_after = "clock_onset" # censor data it we hit the next trial
+    ),
+    rt_long = list(
+      evt_col = "rt_time",
+      time_before = -4,
+      time_after = 7,
+      collide_before = "iti_onset",
+      collide_after = "clock_onset"
+    )
+  )
+
+  # run all atlases and alignments as separate slurm jobs (2 hours each, 8 cpus) 
+  run_decon_alignment(atlas_files, decon_dir, trial_df, alignments, 
+    overwrite = TRUE, tr = 1.0, ncpus = 8, walltime = "2:00:00", scheduler = "slurm")
+
+}
+}
