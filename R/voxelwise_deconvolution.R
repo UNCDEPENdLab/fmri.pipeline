@@ -104,6 +104,10 @@ voxelwise_deconvolution <- function(
     registerDoSEQ()
   }
 
+  # Whether to write a file with the input to deconvolve_nlreg to an external file. 
+  # Needed if we are using the external binary, but not the internal C++ function
+  from_file <- ifelse(algorithm == "bush2011_external", TRUE, FALSE)
+
   #loop over atlas files
   for (ai in seq_along(atlas_files)) {
     cat("Working on atlas: ", atlas_files[ai], "\n")
@@ -132,16 +136,18 @@ voxelwise_deconvolution <- function(
       out_file_expression <- expression(paste0(gsub("[/\\]", ".", niftis[si]), "_", atlas_img_name))
     }
 
-    if (!is.null(add_metadata)) { add_metadata$.nifti <- NA_character_ } #initialize empty nifti string for population
+    if (!is.null(add_metadata)) {
+      # add nifti as a metadata output
+      add_metadata$.nifti <- niftis
+    }
 
     #loop over niftis in parallel
-    ff <- foreach(si = seq_along(niftis), 
+    ff <- foreach(si = seq_along(niftis),
       .packages=c("dplyr", "readr", "data.table", "reshape2", "fmri.pipeline", "foreach", "iterators")) %dopar% {
 
       #get the si-th row of the metadata to match nifti, allow one to use this_subj in out_file_expression
       if (!is.null(add_metadata)) {
         this_subj <- add_metadata %>% dplyr::slice(si)
-        add_metadata$.nifti[si] <- niftis[si]
       }
 
       out_name <- file.path(out_dir, atlas_img_name, "deconvolved", paste0(eval(out_file_expression), "_deconvolved.csv.gz"))
@@ -156,10 +162,11 @@ voxelwise_deconvolution <- function(
       afnistat <- run_afni_command(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]))
       ts_out <- data.table::fread(dump_out) #read time series
 
-      #to_deconvolve is a voxels x time matrix
+      # to_deconvolve is a voxels x time matrix
       to_deconvolve <- as.matrix(ts_out[, -1:-3]) #remove ijk
 
-      to_deconvolve <- t(apply(to_deconvolve, 1, scale)) #need to unit normalize for algorithm not to choke on near-constant 100-normed data
+      # need to unit normalize for algorithm not to choke on near-constant 100-normed data
+      to_deconvolve <- t(apply(to_deconvolve, 1, scale))
 
       # just demean, which will rescale to percent signal change around 0 (this matches Bush 2015)
       #to_deconvolve <- t(apply(to_deconvolve, 1, function(x) { scale(x, scale=FALSE) }))
@@ -167,25 +174,30 @@ voxelwise_deconvolution <- function(
       # pct signal change around 0
       #to_deconvolve <- t(apply(to_deconvolve, 1, function(x) { x/mean(x)*100 - 100 }))
 
-      temp_i <- tempfile()
-      temp_o <- tempfile()
+      if (isTRUE(from_file)) {
+        temp_i <- tempfile()
+        temp_o <- tempfile()
 
-      # to_deconvolve %>%  as_tibble() %>% write_delim(path=temp_i, col_names=FALSE)
+        # to_deconvolve %>%  as_tibble() %>% write_delim(path=temp_i, col_names=FALSE)
 
-      # zero pad tail end (based on various readings, but not original paper)
-      # this was decided on because we see the deconvolved signal dropping to 0.5 for all voxels
+        # zero pad tail end (based on various readings, but not original paper)
+        # this was decided on because we see the deconvolved signal dropping to 0.5 for all voxels
 
-      to_deconvolve %>%
-        cbind(matrix(0, nrow = nrow(to_deconvolve), ncol = hrf_pad)) %>%
-        as_tibble() %>%
-        write_delim(file = temp_i, col_names = FALSE)
-
+        to_deconvolve %>%
+          cbind(matrix(0, nrow = nrow(to_deconvolve), ncol = hrf_pad)) %>%
+          as_tibble() %>%
+          write_delim(file = temp_i, col_names = FALSE)
+      } else {
+        alg_input <- to_deconvolve %>%
+          cbind(matrix(0, nrow = nrow(to_deconvolve), ncol = hrf_pad)) %>%
+          as.matrix()
+      }
+      
       #test1 <- deconvolve_nlreg(to_deconvolve[117,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
       #test2 <- deconvolve_nlreg(to_deconvolve[118,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
 
       if (algorithm == "bush2015") {
         #use R implementation of Bush 2015 algorithm
-        alg_input <- as.matrix(data.table::fread(temp_i))
         deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("dependlab")) %do% {
           reg <- tryCatch(deconvolve_nlreg_resample(as.vector(vox_ts), kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon, n_resample=decon_settings$n_resample),
             error=function(e) { cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE); return(rep(NA, length(vox_ts))) })
@@ -194,15 +206,16 @@ voxelwise_deconvolution <- function(
           return(reg)
         }
       } else if (algorithm == "bush2011") {
-        #this should use the new internal RcppArmadillo function
-        alg_input <- as.matrix(t(data.table::fread(temp_i)))
+        # This should use the new internal RcppArmadillo function
+        # Rcpp function is time x voxels... tranpose inputs and outputs to match voxels x time expectations
+        alg_input <- t(alg_input)
         deconv_mat <- tryCatch(deconvolve_nlreg(BOLDobs = alg_input, kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon, beta=decon_settings$beta),
           error=function(e) {
             cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE)
             return(matrix(NA, nrow=nrow(alg_input), ncol=ncol(alg_input)))
           })
 
-        deconv_mat <- t(deconv_mat) #Rcpp function is time x voxels...
+        deconv_mat <- t(deconv_mat)
       } else if (algorithm == "bush2011_external") {
         #use C++ implementation of Bush 2011 algorithm, if possible
         decon_bin <- NULL #default to pure R algorithm
@@ -245,7 +258,7 @@ voxelwise_deconvolution <- function(
       }
 
       #trim hrf end-padding for both C++ and R variants
-      deconv_mat <- deconv_mat[,c(seq(-ncol(deconv_mat), -ncol(deconv_mat)+hrf_pad-1))] #trim trailing padding added above
+      deconv_mat <- deconv_mat[, c(seq(-ncol(deconv_mat), -ncol(deconv_mat)+hrf_pad-1))] #trim trailing padding added above
 
       #melt this for combination
       deconv_melt <- reshape2::melt(deconv_mat, value.name="decon", varnames=c("vnum", "time"))
