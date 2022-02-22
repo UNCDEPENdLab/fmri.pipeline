@@ -49,11 +49,11 @@
 #' @importFrom oro.nifti readNIfTI translateCoordinate
 #' @importFrom checkmate assert_file_exists
 #' @importFrom foreach foreach
-#' @importFrom dplyr mutate mutate_at select left_join
+#' @importFrom dplyr mutate across select left_join
 #' @importFrom readr write_delim write_csv
 #' @export
 voxelwise_deconvolution <- function(
-  niftis, add_metadata=NULL, out_dir=getwd(), out_file_expression=NULL, 
+  niftis, add_metadata=NULL, out_dir=getwd(), out_file_expression=NULL,
   log_file=file.path(out_dir, "deconvolve_errors"),
   TR = NULL, time_offset=0, atlas_files=NULL, mask=NULL, nprocs=20, save_original_ts=TRUE, algorithm="bush2011",
   decon_settings=list(nev_lr = .01, #neural events learning rate (default in algorithm)
@@ -66,13 +66,13 @@ voxelwise_deconvolution <- function(
   checkmate::assert_data_frame(add_metadata, nrows=length(niftis), null.ok=TRUE)
   sapply(atlas_files, checkmate::assert_file_exists)
   checkmate::assert_numeric(TR, lower=0.01)
-  
+
   if (!is.null(decon_settings$kernel)) {
     hrf_pad <- length(decon_settings$kernel)
   } else {
     stop("At present no alternative way to set hrf_pad if $kernel not passed in decon_settings")
   }
-  
+
   if (is.null(atlas_files)) {
     message("Performing whole-brain voxelwise deconvolution")
     if (is.null(mask)) {
@@ -119,7 +119,7 @@ voxelwise_deconvolution <- function(
     a_coordinates <- as.data.frame(a_coordinates) %>%
       setNames(c("i", "j", "k", "x", "y", "z")) %>%
       dplyr::mutate(vnum = 1:n(), atlas_value = aimg[a_indices], atlas_name = basename(atlas_files[ai])) %>%
-      mutate_at(vars(x, y, z), round, 2) %>%
+      mutate(across(c(x, y, z), ~round(.x, 2))) %>%
       dplyr::select(vnum, atlas_value, everything())
 
     #setup output subdirectories for deconvolved files, named according to atlas
@@ -178,7 +178,7 @@ voxelwise_deconvolution <- function(
       to_deconvolve %>%
         cbind(matrix(0, nrow = nrow(to_deconvolve), ncol = hrf_pad)) %>%
         as_tibble() %>%
-        write_delim(path = temp_i, col_names = FALSE)
+        write_delim(file = temp_i, col_names = FALSE)
 
       #test1 <- deconvolve_nlreg(to_deconvolve[117,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
       #test2 <- deconvolve_nlreg(to_deconvolve[118,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
