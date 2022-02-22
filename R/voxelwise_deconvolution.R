@@ -23,8 +23,9 @@
 #'   pass it as \code{bush2011_binary}, which will be used in deconvolution.
 #' @param afni_dir Full path to directory containing AFNI binaries (this function uses 3dMaskdump).
 #'
-#' @details The Bush 2011 algorithm is implemented in a compiled binary called deconvolvefilter (https://github.com/UNCDEPENdLab/deconvolution-filtering)
-#'   that is much faster than the pure R (or original MATLAB) version. We recommend using this for whole-brain deconvolution. The package includes a binary for
+#' @details The Bush 2011 algorithm is implemented in a compiled binary called deconvolvefilter
+#'   (https://github.com/UNCDEPENdLab/deconvolution-filtering) that is much faster than the pure R (or original MATLAB) version.
+#'   We recommend using this for whole-brain deconvolution. The package includes a binary for
 #'   the Linux x86_64 architecture.
 #'
 #'   If you want to use subject metadata to name the output file, use \code{this_subj} in your \code{out_file_expression}, which will give you access to a one-row
@@ -50,6 +51,7 @@
 #' @importFrom foreach foreach
 #' @importFrom dplyr mutate mutate_at select left_join
 #' @importFrom readr write_delim write_csv
+#' @export
 voxelwise_deconvolution <- function(
   niftis, add_metadata=NULL, out_dir=getwd(), out_file_expression=NULL, 
   log_file=file.path(out_dir, "deconvolve_errors"),

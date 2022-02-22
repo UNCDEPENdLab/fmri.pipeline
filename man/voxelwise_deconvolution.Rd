@@ -65,8 +65,9 @@ Nothing (invisible NULL).
 Function to perform voxelwise deconvolution on an fMRI dataset using the fMRI model arguments object
 }
 \details{
-The Bush 2011 algorithm is implemented in a compiled binary called deconvolvefilter (https://github.com/UNCDEPENdLab/deconvolution-filtering)
-  that is much faster than the pure R (or original MATLAB) version. We recommend using this for whole-brain deconvolution. The package includes a binary for
+The Bush 2011 algorithm is implemented in a compiled binary called deconvolvefilter
+  (https://github.com/UNCDEPENdLab/deconvolution-filtering) that is much faster than the pure R (or original MATLAB) version.
+  We recommend using this for whole-brain deconvolution. The package includes a binary for
   the Linux x86_64 architecture.
 
   If you want to use subject metadata to name the output file, use \code{this_subj} in your \code{out_file_expression}, which will give you access to a one-row
