@@ -92,13 +92,16 @@ R_batch_job <- R6::R6Class("batch_job",
           mem_string <- paste0("#PBS -l mem=", self$mem_total)
         }
 
+        job_string <- if (is.null(self$job_name)) NULL else paste("#PBS -N", substr(self$job_name, 1, 15)) # torque limits to 15 chars
+        sched_string <- if (is.null(self$scheduler_options)) NULL else paste("#PBS", self$scheduler_options)
+
         syntax <- c(
           syntax,
           paste0("#PBS -l nodes=", self$n_nodes, ":ppn=", self$n_cpus),
           paste0("#PBS -l walltime=", self$wall_time),
           mem_string,
-          ifelse(is.null(self$job_name), NULL, paste("#PBS -N", substr(self$job_name, 1, 15))), # torque limits to 15 chars
-          paste("#PBS", self$scheduler_options),
+          job_string,
+          sched_string,
           "",
           "cd $PBS_O_WORKDIR",
           self$batch_code
