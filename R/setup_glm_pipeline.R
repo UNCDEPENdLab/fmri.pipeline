@@ -273,6 +273,13 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   # populate $output_locations
   gpa <- setup_output_locations(gpa, lg)
 
+  # copy in settings passed by user
+  gpa$parallel <- parallel
+
+  # add name of node/host on which this is run (useful for logic about different compute environments)
+  info <- Sys.info()
+  gpa$nodename <- info["nodename"]
+
   # populate $parallel
   gpa <- setup_parallel_settings(gpa, lg)
 
