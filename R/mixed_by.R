@@ -145,7 +145,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     model_formulae <- validate_form_list(model_formulae)
     
     # don't expand combinations, just form outcomes, rhs, and formulae
-    model_set <- tibble(outcome = sapply(model_formulae, formula.tools::lhs.vars)) %>%
+    model_set <- tibble(outcome = sapply(model_formulae, formula.tools::lhs.vars), model_name = names(model_formulae)) %>%
       mutate(rhs = lapply(model_formulae, function(x) { update.formula(x, "NULL ~ .") }), form = model_formulae)
 
   } else if (!is.null(rhs_model_formulae)) {
@@ -155,7 +155,8 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     model_set <- expand.grid(outcome = outcomes, rhs = rhs_model_formulae, stringsAsFactors = FALSE) %>%
       rowwise() %>%
       mutate(form = list(update.formula(rhs, paste(outcome, "~ .")))) %>%
-      ungroup() %>% as_tibble()
+      ungroup() %>% as_tibble() %>%
+      mutate(model_name = names(rhs_model_formulae))
   }
   
   # handle external_df
@@ -251,6 +252,19 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
 
     emt_metadata <- rbindlist(lapply(emtrends_spec, function(ee) { data.frame(ee[c("outcome", "model_name")])})) %>%
       mutate(emt_number = 1:n(), emt_label=names(emtrends_spec))
+    
+    bad_outcomes <- !emt_metadata$outcome %in% model_set$outcome
+    if (any(bad_outcomes)) {
+      print(emt_metadata[bad_outcomes, ])
+      stop("Cannot have an outcome in emtrends that is not present in the models")
+    }
+    
+    bad_models <- !emt_metadata$model_name %in% model_set$model_name
+    if (any(bad_models)) {
+      print(emt_metadata[bad_models, ])
+      stop("Cannot have models in emtrends that is not present in the model formulae")
+    }
+    
   }
 
   # setup parallel compute
