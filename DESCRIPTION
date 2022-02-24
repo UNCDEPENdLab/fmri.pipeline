@@ -1,8 +1,8 @@
 Package: fmri.pipeline
 Type: Package
-Title: Analysis of fMRI data on HPC clusters
-Version: 0.1
-Date: 2021-05-14
+Title: Analysis of fMRI Data on HPC clusters
+Version: 0.2
+Date: 2022-02-14
 Authors@R: c(person("Michael", "Hallquist", role = c("aut", "cre"),
     email = "michael.hallquist@gmail.com"))
 Maintainer: Michael Hallquist <michael.hallquist@gmail.com>
@@ -13,17 +13,44 @@ Encoding: UTF-8
 LazyLoad: yes
 LazyData: yes
 RoxygenNote: 7.1.2
+Depends: R (>= 3.5.0)
 Imports:
-  dplyr,
-  data.table,
-  lgr,
-  checkmate,
-  doParallel,
-  foreach,
-  oro.nifti,
-  DBI,
-  RSQLite,
-  Rcpp (>= 1.0.1)
+    DBI,
+    RSQLite,
+    Rcpp,
+    R.utils,
+    RNifti,
+    anytime,
+    broom.mixed,
+    checkmate,
+    dplyr,
+    data.table,
+    doParallel,
+    doFuture,
+    emmeans,
+    fmri,
+    foreach,
+    future,
+    future.batchtools,
+    ggplot2,
+    glue,
+    gsubfn,
+    oro.nifti,
+    orthopolynom,
+    lgr,
+    lubridate,
+    lme4,
+    lmerTest,
+    purrr,
+    rlang,
+    signal,
+    stringr,
+    tidyr,
+    tibble,
+    tidyselect,
+    yaml
+Suggests:
+  brms
 LinkingTo:
     Rcpp,
     RcppArmadillo

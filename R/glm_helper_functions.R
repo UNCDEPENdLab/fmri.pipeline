@@ -391,15 +391,16 @@ get_cluster_means <- function(roimask, ni4d) {
   })
 }
 
-#function to extract mean beta series
+# internal function to extract mean beta series
+# NOT USED AT THE MOMENT
 get_beta_series <- function(inputs, roimask, n_bs=50) {
   #inputs <- inputs[1:5] #speed up testing
 
-  beta_res <- foreach(i=iter(1:length(inputs)), .packages=c("reshape2", "oro.nifti", "dplyr", "abind"), .export="get_cluster_means") %dopar% {
+  beta_res <- foreach(i=iter(seq_along(inputs)), .packages=c("reshape2", "oro.nifti", "dplyr", "abind"), .export="get_cluster_means") %dopar% {
   #beta_res <- lapply(1:length(inputs), function(i) {
     run_dirs <- list.files(path=inputs[i], pattern="FEAT_LVL1_run\\d+\\.feat", recursive=FALSE, full.names=TRUE)
     run_betas <- list()
-    
+
     for (r in seq_along(run_dirs)) {
       runnum <- as.numeric(sub(".*/FEAT_LVL1_run(\\d+)\\.feat", "\\1", run_dirs[r], perl=TRUE))
       copes <- file.path(run_dirs[r], "stats", paste0("cope", 1:n_bs, ".nii.gz"))
@@ -1531,4 +1532,39 @@ c_string <- function(vec, null_val="none") {
   } else {
     paste(vec, collapse = ", ")
   }
+}
+
+# fast permutation calculator to avoid gtools dependence
+# @details This is way faster than permutations in gtools
+# and is adapted from: https://stackoverflow.com/questions/11095992/generating-all-distinct-permutations-of-a-list-in-r
+# @param n is the number of elements to permute
+# @keys is an optional character vector of keys whose permutations should be calculated
+# @return a permutations x keys/elements of n matrix with all possible permutations
+compute_permutations <- function(n, keys = NULL) {
+  if (!is.null(keys)) {
+    if (missing(n) || is.null(n)) {
+      # support key input alone
+      n <- length(keys)
+    }
+    checkmate::assert_character(keys, len = n)
+  }
+  
+  if (n == 1) {
+    A <- matrix(1)
+  } else {
+    sp <- Recall(n - 1)
+    p <- nrow(sp)
+    A <- matrix(nrow = n * p, ncol = n)
+
+    for (i in 1:n) {
+      A[(i - 1) * p + 1:p, ] <- cbind(i, sp + (sp >= i))
+    }
+  }
+
+  # convert to lookup of keys based on indices in A
+  if (!is.null(keys)) {
+    A <- apply(A, 2, function(x) { keys[x]} )
+  }
+
+  return(A)
 }

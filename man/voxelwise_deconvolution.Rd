@@ -18,19 +18,21 @@ voxelwise_deconvolution(
   save_original_ts = TRUE,
   algorithm = "bush2011",
   decon_settings = list(nev_lr = 0.01, epsilon = 0.005, beta = 60, kernel =
-    spm_hrf(TR)$hrf, Nresample = 25)
+    spm_hrf(TR)$hrf, n_resample = 25)
 )
 }
 \arguments{
 \item{niftis}{A vector of processed fMRI timeseries images (4D files) to be deconvolved}
 
-\item{add_metadata}{A data.frame with one row per value of \code{niftis}. Columns of this data.frame are added to the output file for identification.}
+\item{add_metadata}{A data.frame with one row per value of \code{niftis}. Columns of this data.frame
+are added to the output file for identification.}
 
 \item{out_dir}{Base output directory for deconvolved time series files. Default is \code{getwd()}.}
 
-\item{out_file_expression}{Expression evaluated to resolve the filename for the deconvolved csv files. Default is to convert the \code{niftis} value
-for a given subject into a filename by replacing slashes with periods and adding the atlas image name. Note that the suffix \code{_deconvolved.csv.gz}
-or \code{_original.csv.gz} will be added to the expression, so don't pass this piece.}
+\item{out_file_expression}{Expression evaluated to resolve the filename for the deconvolved csv files. Default is
+to convert the \code{niftis} value for a given subject into a filename by replacing slashes with periods and adding
+the atlas image name. Note that the suffix \code{_deconvolved.csv.gz} or \code{_original.csv.gz} will be added
+to the expression, so don't pass this piece.}
 
 \item{log_file}{Name (and path) of log file for any deconvolution errors or messages}
 
@@ -63,8 +65,9 @@ Nothing (invisible NULL).
 Function to perform voxelwise deconvolution on an fMRI dataset using the fMRI model arguments object
 }
 \details{
-The Bush 2011 algorithm is implemented in a compiled binary called deconvolvefilter (https://github.com/UNCDEPENdLab/deconvolution-filtering)
-  that is much faster than the pure R (or original MATLAB) version. We recommend using this for whole-brain deconvolution. The package includes a binary for
+The Bush 2011 algorithm is implemented in a compiled binary called deconvolvefilter
+  (https://github.com/UNCDEPENdLab/deconvolution-filtering) that is much faster than the pure R (or original MATLAB) version.
+  We recommend using this for whole-brain deconvolution. The package includes a binary for
   the Linux x86_64 architecture.
 
   If you want to use subject metadata to name the output file, use \code{this_subj} in your \code{out_file_expression}, which will give you access to a one-row

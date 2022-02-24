@@ -237,7 +237,7 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   if (is.null(gpa$parallel$l1_setup_time)) gpa$parallel$l1_setup_time <- "4:00:00" # 4.0 hours
   if (is.null(gpa$parallel$l2_setup_run_time)) gpa$parallel$l2_setup_run_time <- "14:00:00" # 14 hours for l2 setup and execution to clear scheduler (all jobs)
   if (is.null(gpa$parallel$l3_setup_run_time)) gpa$parallel$l3_setup_run_time <- "80:00:00" # 80 hours for all L3 analyses to clear scheduler (all jobs)
-  if (is.null(gpa$parallel$compute_environment)) {
+  if (is.null(gpa$parallel$compute_environment) && isTRUE(grepl("longleaf", gpa$nodename))) {
     lg$info("Using default R compute environment for UNC Longleaf")
     gpa$parallel$compute_environment <- c(
       "module use /proj/mnhallqlab/sw/modules",
@@ -261,15 +261,15 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   if (is.null(gpa$parallel$fsl$l3_feat_memgb)) gpa$parallel$fsl$l3_feat_memgb <- "32" # 32 GB by default
   if (is.null(gpa$parallel$fsl$l3_feat_cpusperjob)) gpa$parallel$fsl$l3_feat_cpusperjob <- 16 # cpus used to process all slices
 
-  if (is.null(gpa$parallel$fsl$compute_environment)) {
+  if (is.null(gpa$parallel$fsl$compute_environment) && isTRUE(grepl("longleaf", gpa$nodename))) {
     lg$info("Using default FSL compute environment for UNC Longleaf")
     gpa$parallel$fsl$compute_environment <- c(
-      "module unload afni", # remove any current afni module
-      "module load afni/21.3.04" # load latest version (2021)
+      "module unload fsl", # remove any current fsl module
+      "module load fsl/6.0.4" # load latest version (2021)
     )
   }
 
-  if (is.null(gpa$parallel$afni$compute_environment)) {
+  if (is.null(gpa$parallel$afni$compute_environment) && isTRUE(grepl("longleaf", gpa$nodename))) {
     lg$info("Using default AFNI compute environment for UNC Longleaf")
     gpa$parallel$afni$compute_environment <- c(
       "module unload afni", # remove any current afni module

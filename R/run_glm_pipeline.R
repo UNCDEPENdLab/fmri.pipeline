@@ -40,7 +40,8 @@ l3_model_names = "prompt", glm_software = NULL) {
     n_nodes = 1, n_cpus = 1, wall_time = gpa$parallel$finalize_time,
     mem_total = "16G",
     r_code = "gpa <- finalize_pipeline_configuration(gpa)", r_packages = "fmri.pipeline",
-    batch_code = gpa$parallel$compute_environment
+    batch_code = gpa$parallel$compute_environment,
+    scheduler_options = gpa$parallel$sched_args
   )
 
   if (is.null(gpa$finalize_complete) || isFALSE(gpa$finalize_complete)) {

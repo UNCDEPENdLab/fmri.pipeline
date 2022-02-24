@@ -181,7 +181,7 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "zstat"), 
 #' @importFrom tidyr pivot_longer unnest
 #' @importFrom glue glue_data
 #' @importFrom tidyselect all_of
-#' @importFrom data.table copy setDT
+#' @importFrom data.table copy setDT set
 #' @importFrom RNifti readNifti
 #' @importFrom parallel mclapply
 extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "zstat"),
@@ -203,21 +203,28 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   }
 
   # helper subfunction to extract voxel statistics from a 3D image within a mask
-  get_img_stats <- function(img_name, mask, is_int_mask = TRUE, aggregate = TRUE, aggFUN=mean) {
+  get_img_stats <- function(img_name, mask, is_int_mask = TRUE, aggregate = TRUE, aggFUN=mean, remove_zeros = TRUE) {
     # use readNifti from the RNifti package for speed (about 8x faster than oro.nifti)
     img <- readNifti(img_name, internal = TRUE)
 
     stopifnot(identical(mask$dim, dim(img))) # enforce identical dimensions for mask and target image
-    
+
     # use data.table for faster aggregate + join operations
     coef_df <- copy(mask$coordinates)
-    setDT(coef_df, key = c("mask_value", "vnum"))
+    setDT(coef_df) # convert to data.table without resorting. Danger: setting keys will sort data.table before we use mask indices!
     coef_df[, value := img[mask$indices]]
+    if (isTRUE(remove_zeros)) {
+      zvals <- which(abs(coef_df$value) < 2 * .Machine$double.eps)
+      if (length(zvals) > 0L) {
+        data.table::set(coef_df, i = zvals, j = "value", value = NA_real_) # use fast set methods in data.table to set NAs
+      }
+    }
 
     if (isTRUE(is_int_mask) && isTRUE(aggregate)) {
+      # use na.omit to remove any NAs generated from the remove_zeros step
       coef_df <- merge(
         mask$agg_coordinates,
-        coef_df[, .(value = aggFUN(value)), by = .(mask_value)],
+        coef_df[, .(value = aggFUN(na.omit(value))), by = .(mask_value)],
         by = "mask_value"
       )
     }
@@ -295,14 +302,14 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   m_coordinates <- cbind(m_indices, t(apply(m_indices, 1, function(r) { translateCoordinate(i=r, nim=mask_img, verbose=FALSE) })))
   m_coordinates <- as.data.frame(m_coordinates) %>%
     setNames(c("i", "j", "k", "x", "y", "z")) %>%
-    mutate(vnum = 1:n(), mask_value = mask_img[m_indices], mask_name = mask_name) %>%
-    select(vnum, mask_value, everything())
+    dplyr::mutate(vnum = 1:n(), mask_value = mask_img[m_indices], mask_name = mask_name) %>%
+    dplyr::select(vnum, mask_value, everything())
   mask_dim <- dim(mask_img)
 
   # extract each statistic requested
   stat_results <- stat_results %>%
-    pivot_longer(cols = all_of(what), names_to = "statistic", values_to = "img") %>%
-    mutate(img_exists = file.exists(img))
+    tidyr::pivot_longer(cols = all_of(what), names_to = "statistic", values_to = "img") %>%
+    dplyr::mutate(img_exists = file.exists(img))
 
   miss_imgs <- stat_results %>% dplyr::filter(img_exists == FALSE)
   if (nrow(miss_imgs) > 0L) {
@@ -329,6 +336,8 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     cores_per_job <- 8 # use mclapply within job to accelerate
     registerDoFuture() # tell dopar to use future compute mechanism
     #options(future.debug = FALSE, future.progress = FALSE)
+    # put cache in scratch directory and reduce polling frequency to every 2 seconds since 0.2 was generating errors
+    options(future.wait.interval = 2, future.wait.alpha = 1.05)
 
     future::plan(
       future.batchtools::batchtools_slurm,
@@ -343,7 +352,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
 
     stat_results$img_stats <- foreach(
       img_chunk = iter(stat_results$img), .combine = c, # since each worker returns a list, concatenate into a bigger list
-      .options.future = list(chunk.size = chunk_size),
+      .options.future = list(chunk.size = chunk_size), .inorder = TRUE,
       .packages = c("parallel", "data.table", "RNifti"),
       .noexport = "gpa" # avoid large object being sent to workers.
       ) %dopar% {
@@ -354,7 +363,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
         tryCatch(
           get_img_stats(img,
             mask = list(indices = m_indices, coordinates = m_coordinates, agg_coordinates = agg_coordinates, dim = mask_dim),
-            is_int_mask = is_int_mask, aggregate = aggregate, aggFUN = aggFUN
+            is_int_mask = is_int_mask, aggregate = aggregate, aggFUN = aggFUN, remove_zeros = remove_zeros
           ),
           error = function(e) {
             lg$error("Problem extracting statistics from image %s. Error: %s", img, as.character(e))
@@ -369,7 +378,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
       tryCatch(
         get_img_stats(img,
           mask = list(indices = m_indices, coordinates = m_coordinates, agg_coordinates = agg_coordinates, dim = mask_dim),
-          is_int_mask = is_int_mask, aggregate = aggregate, aggFUN = aggFUN
+          is_int_mask = is_int_mask, aggregate = aggregate, aggFUN = aggFUN, remove_zeros = remove_zeros
         ),
         error = function(e) {
           lg$error("Problem extracting statistics from image %s. Error: %s", img, as.character(e))

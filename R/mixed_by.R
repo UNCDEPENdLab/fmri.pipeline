@@ -69,7 +69,7 @@
 #' @importFrom parallel makeCluster stopCluster
 #' @importFrom doParallel registerDoParallel
 #' @importFrom broom.mixed tidy
-#' @importFrom data.table fread setDT setkeyv
+#' @importFrom data.table fread setDT setkeyv setattr copy
 #' @export
 mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_formulae = NULL, split_on = NULL,
                      external_df = NULL, external_merge_by = NULL,
@@ -166,10 +166,10 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     } else {
       checkmate::assert_data_frame(external_df)
       if (!is.data.table(external_df)) {
-        setDT(external_df)
+        data.table::setDT(external_df)
       }
       checkmate::assert_subset(external_merge_by, names(external_df))
-      setkeyv(external_df, external_merge_by) # key external data by merge columns
+      data.table::setkeyv(external_df, external_merge_by) # key external data by merge columns
     }
   }
 
@@ -248,7 +248,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
       empty_names <- which(names(emtrends_spec) == "")
       names(emtrends_spec)[empty_names] <- paste("emt", empty_names, sep="_")
     }
-    
+
     emt_metadata <- rbindlist(lapply(emtrends_spec, function(ee) { data.frame(ee[c("outcome", "model_name")])})) %>%
       mutate(emt_number = 1:n(), emt_label=names(emtrends_spec))
   }
@@ -281,7 +281,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
           setDT(data)
         }
       } else if (grepl("(.csv|.csv.gz|.csv.bz2|.dat|.txt|.txt.gz|.txt.bz2)", df_i, ignore.case = TRUE, perl = TRUE)) {
-        data <- fread(df_i, data.table = TRUE)
+        data <- data.table::fread(df_i, data.table = TRUE)
       } else {
         stop("Unable to sort out this data input: ", df_i)
       }
@@ -342,7 +342,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
 
       split_results <- lapply(seq_len(nrow(model_set)), function(mm) {
         ff <- model_set$form[[mm]]
-        ret <- copy(dt_split)
+        ret <- data.table::copy(dt_split)
         ret[, outcome := model_set$outcome[[mm]]]
         ret[, model_name := names(model_set$rhs)[mm]]
         ret[, rhs := as.character(model_set$rhs[mm])]
@@ -472,8 +472,8 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     result_df <- rbindlist(lapply(nested_list, function(df_set) {
       rbindlist(lapply(df_set, "[[", element))
     })) # combine results from each df (in the multiple df case)
-    setattr(result_df, "split_on", split_on) #tag split variables for secondary analysis
-    setorderv(result_df, split_on) # since we allow out-of-order foreach, reorder coefs here.
+    data.table::setattr(result_df, "split_on", split_on) #tag split variables for secondary analysis
+    data.table::setorderv(result_df, split_on) # since we allow out-of-order foreach, reorder coefs here.
     return(result_df)
   }
   

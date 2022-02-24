@@ -81,7 +81,7 @@ backproject_medusa <- function(coef_df, brain_mask, plot_cols=NULL, parcel_col="
         to_fill <- cbind(to_fill, tt, this_val) #4-D indices for this mask value and this timepoint plus the value to fill in col 5
         assign_mat[[paste(mm, tt, sep=".")]] <- to_fill
 
-      }  
+      }
     }
 
     assign_mat <- do.call(rbind, assign_mat)

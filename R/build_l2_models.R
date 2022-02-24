@@ -317,9 +317,11 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
     # ask about outlier deweighting
     if (level == 3L) {
       cat(
+        "",
         "Do you want to turn on outlier deweighting in FSL level 3 analysis? This is available for any mixed effects analysis,",
         "most commonly FLAME1 or FLAME1+2. In general, this is a good idea, but we have seen it break down for some legitimate inputs,",
         "generating many complaints about excessive outliers being detected. If you get those messages, you should probably disable this.",
+        "",
         sep = "\n  "
       )
       

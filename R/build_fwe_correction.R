@@ -276,7 +276,6 @@ build_3dclustsim_permutation <- function(to_fwe) {
 #'
 #' @importFrom R6 R6Class
 #' @importFrom data.table data.table
-#' @importFrom gtools permutations
 #' @importFrom checkmate assert_data_frame assert_logical
 #' @keywords internal
 fwe_spec <- R6::R6Class("fwe_spec",

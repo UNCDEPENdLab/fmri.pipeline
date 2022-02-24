@@ -71,6 +71,9 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
         private$set_fwep(vec)
       }
     },
+
+    #' @field two_sided It \code{TRUE}, run pTFCE on both tails of the statistic separately. If \code{FALSE},
+    #'   only run pTFCE on the positve tail (z > 0).
     two_sided = function(val) {
       if (missing(val)) {
         return(private$pvt_two_sided)
@@ -85,6 +88,12 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     #'   mask files, and fsl residual smoothness estimates.
     #' @param zstat_numbers if a \code{gfeat_dir} is used, a vector of zstat numbers can also be provided to
     #'   subset the zstat images that are used in pTFCE correction. Ignored if gfeat_dir is not provided.
+    #' @param fsl_smoothest_file The smoothness file created by the smoothest command in FSL. Created by FEAT automatically
+    #'   or can be run manually with smoothest on the res4d file. Used by ptfce to compute resels.
+    #' @param dof The degrees of freedom for the test of interest. Found in the dof file created by FSL and used by
+    #'   ptfce for FWE correction.
+    #' @param residuals_file The residuals file from the group analysis used by ptfce for FWE correction. In FSL, this
+    #'   is the res4d.nii.gz file created by FEAT.
     #' @param z_files A vector of z-statistic filenames that should be corrected using pTFCE
     #' @param mask_files A vector of mask filenames that correspond to \code{z_files}. If this is of length 1,
     #'   then the mask file will be recycled for all zstat images.
@@ -96,6 +105,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
     #' @param scheduler Which scheduler to use for submitting jobs. Options are 'local', 'slurm', and 'torque'.
     #' @param time_per_zstat The amount of time to budget for each zstat to run through pTFCE in dd-hh:mm:ss format.
     #'   Default is 10:00 (10 minutes).
+    #' @param memgb_per_command How many GB of memory should be requested for each pTFCE command/run. If not provided, defaults to 8.
     initialize = function(gfeat_dir = NULL, zstat_numbers = NULL, fsl_smoothest_file = NULL, dof = NULL, residuals_file = NULL,
                           z_files = NULL, mask_files = NULL, fwe_p = .05, two_sided = TRUE, write_thresh_imgs = TRUE,
                           scheduler = NULL, time_per_zstat = NULL, memgb_per_command = NULL) {

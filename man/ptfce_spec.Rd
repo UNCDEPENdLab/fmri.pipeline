@@ -12,6 +12,9 @@ R6 class for pTFCE specification for one or more z-statistic images
 \if{html}{\out{<div class="r6-active-bindings">}}
 \describe{
 \item{\code{fwe_p}}{a vector of p-values used for familywise error (FWE) z-statistic threshold calculations in pTFCE.}
+
+\item{\code{two_sided}}{It \code{TRUE}, run pTFCE on both tails of the statistic separately. If \code{FALSE},
+only run pTFCE on the positve tail (z > 0).}
 }
 \if{html}{\out{</div>}}
 }
@@ -60,6 +63,15 @@ mask files, and fsl residual smoothness estimates.}
 \item{\code{zstat_numbers}}{if a \code{gfeat_dir} is used, a vector of zstat numbers can also be provided to
 subset the zstat images that are used in pTFCE correction. Ignored if gfeat_dir is not provided.}
 
+\item{\code{fsl_smoothest_file}}{The smoothness file created by the smoothest command in FSL. Created by FEAT automatically
+or can be run manually with smoothest on the res4d file. Used by ptfce to compute resels.}
+
+\item{\code{dof}}{The degrees of freedom for the test of interest. Found in the dof file created by FSL and used by
+ptfce for FWE correction.}
+
+\item{\code{residuals_file}}{The residuals file from the group analysis used by ptfce for FWE correction. In FSL, this
+is the res4d.nii.gz file created by FEAT.}
+
 \item{\code{z_files}}{A vector of z-statistic filenames that should be corrected using pTFCE}
 
 \item{\code{mask_files}}{A vector of mask filenames that correspond to \code{z_files}. If this is of length 1,
@@ -77,6 +89,8 @@ to the same folder as the z-statistic. These thresholded files let you look at t
 
 \item{\code{time_per_zstat}}{The amount of time to budget for each zstat to run through pTFCE in dd-hh:mm:ss format.
 Default is 10:00 (10 minutes).}
+
+\item{\code{memgb_per_command}}{How many GB of memory should be requested for each pTFCE command/run. If not provided, defaults to 8.}
 }
 \if{html}{\out{</div>}}
 }

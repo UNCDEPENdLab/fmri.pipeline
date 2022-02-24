@@ -45,5 +45,8 @@ slurm-*.out
 #leaving these in for now (in prototyping phase)
 /local/
 
+# deprecated files
+/deprecated/
+
 #R CMD BATCH outputs
 *.Rout

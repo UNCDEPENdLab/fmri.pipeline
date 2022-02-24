@@ -56,6 +56,7 @@
 #'
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 #'    test_string test_class
+#' @importFrom dplyr mutate_at group_by select vars
 #' @export
 setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm",
                                output_directory = file.path(getwd(), analysis_name),
@@ -271,6 +272,13 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   # populate $output_locations
   gpa <- setup_output_locations(gpa, lg)
+
+  # copy in settings passed by user
+  gpa$parallel <- parallel
+
+  # add name of node/host on which this is run (useful for logic about different compute environments)
+  info <- Sys.info()
+  gpa$nodename <- info["nodename"]
 
   # populate $parallel
   gpa <- setup_parallel_settings(gpa, lg)

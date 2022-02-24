@@ -150,7 +150,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
   if (isTRUE(new_l1)) {
     cat(
       "Welcome to the l1 model builder. This process will walk you through setting up all level 1 fMRI models for you analyses.",
-      "This process consists of six steps: ",
+      "This process consists of eight steps: ",
       "  1. Selection of event onset columns in trial_data. Event onsets must be in seconds relative to the scan start.",
       "  2. Selection of event duration columns in trial_data. Event durations must be in seconds relative to the scan start.",
       "  3. Optional selection of interstimulus/intertrial intervals in trial_data. These must be ISI/ISI durations in seconds.",
