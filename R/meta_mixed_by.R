@@ -17,10 +17,13 @@
 #'   then the split variables are added in subsets individually, but their interactions are not.
 #'
 #' @importFrom brms brm
-meta_mixed_by <- function(coef_df, terms = "all", fit_subsets = "all", max_order = 3,
+meta_mixed_by <- function(coef_df, terms = "all", fit_subsets = "all", max_order = 3, 
+                          outcome=NULL, fixef= rhs=NULL,
                           brms_args = list(chains = 4, cores = 4, iter = 12000)) {
   checkmate::assert_data_frame(coef_df)
   checkmate::assert_character(terms)
+  checkmate::assert_subset(outcome, names(coef_df))
+  
 
   checkmate::assert_character(attr(coef_df, "split_on"))
   split_on <- attr(coef_df, "split_on")
@@ -31,6 +34,10 @@ meta_mixed_by <- function(coef_df, terms = "all", fit_subsets = "all", max_order
     coef_subset <- coef_df[term %in% terms, ]
   } # only fit models to requested terms
   split_coef <- split(coef_subset, by = terms)
+  
+  for (sub_df in split_coef) {
+    
+  }
 
   # build formula list
   if (isTRUE(fit_subsets)) {
@@ -42,15 +49,21 @@ meta_mixed_by <- function(coef_df, terms = "all", fit_subsets = "all", max_order
     }
   }
 
-
-  for (ff in split_coef) {
-
-  }
-
-
-  fnull <- brm(
-    estimate | se(std.error, sigma = FALSE) ~ 1 + (1 | splitid),
-    ddf %>% filter(term == "v_max_wi"),
-    chains = 4, cores = 4, iter = 12000
-  )
+# 
+#   for (ff in split_coef) {
+# 
+#   }
+# 
+# 
+#   fnull <- brm(
+#     estimate | se(std.error, sigma = FALSE) ~ 1 + (1 | splitid),
+#     ddf %>% filter(term == "v_max_wi"),
+#     chains = 4, cores = 4, iter = 12000
+#   )
+  
+  
 }
+
+#generally support:
+# draws on emmeans of brm objects
+# stacking split coef_dfs, allowing for new things like estimate ~ type where type could be selective versus full etc.
