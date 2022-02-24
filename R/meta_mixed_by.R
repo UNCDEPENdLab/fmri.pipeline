@@ -19,7 +19,7 @@
 #' @importFrom brms brm
 #' @export
 meta_mixed_by <- function(coef_df, terms = "all", fit_subsets = "all", max_order = 3, 
-                          outcome=NULL, fixef= rhs=NULL,
+                          outcome=NULL, fixef=NULL, rhs=NULL,
                           brms_args = list(chains = 4, cores = 4, iter = 12000)) {
   
   if (!requireNamespace("brms", quietly = TRUE)) {
