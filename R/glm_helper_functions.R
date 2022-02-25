@@ -330,41 +330,6 @@ generateRunMask <- function(mr_files, outdir=getwd(), outfile="runmask") {
   runFSLCommand(paste0("imrm ", outdir, "/tmin*"))#, fsldir="/usr/local/ni_tools/fsl") #cleanup 
 }
 
-visualizeDesignMatrix <- function(d, outfile=NULL, runboundaries=NULL, events=NULL, includeBaseline=TRUE) {
-  require(ggplot2)
-  require(reshape2)
-
-  if (!includeBaseline) {
-    d <- d[,!grepl("run[0-9]+base", colnames(d))]
-  }
-
-  print(round(cor(d), 3))
-  d <- as.data.frame(d)
-  d$volume <- seq_len(nrow(d))
-  d.m <- melt(d, id.vars="volume")
-  g <- ggplot(d.m, aes(x = volume, y = value)) +
-    geom_line(size = 1.2) +
-    theme_bw(base_size = 15) +
-    facet_grid(variable ~ ., scales = "free_y")
-  
-  colors <- c("black", "blue", "red", "orange") #just a hack for color scheme right now
-
-  if (!is.null(runboundaries)) {
-    g <- g + geom_vline(xintercept=runboundaries, color=colors[1L])
-  }
-
-  if (!is.null(events)) {
-    for (i in seq_along(events)) {
-      g <- g + geom_vline(xintercept=events[[i]], color=colors[i+1])
-    }
-  }
-
-  if (!is.null(outfile)) {
-    ggsave(filename=outfile, plot=g, width=21, height=9)
-  }
-  return(invisible(g))
-}
-
 #compute the mean of each cluster in roimask
 #within a 4d array: x, y, z, subbrik
 #

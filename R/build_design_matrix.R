@@ -428,6 +428,12 @@ build_design_matrix <- function(
   shorten_additional <- TRUE # whether to apply drop_volumes to additional regressors (would only be FALSE if user supplied confound files that already dropped these)
   shorten_ts <- TRUE # whether to apply drop_volumes to ts regressors (would only be FALSE if user supplied confound files that already dropped these)
 
+  # make sure beta_series is populated with TRUE or FALSE (default)
+  signals <- lapply(signals, function(s) {
+    s$beta_series <- ifelse(isTRUE(s$beta_series), TRUE, FALSE) #no beta series by default
+    s
+  })
+  
   # expand_signal returns a list itself -- use flatten to make one big mega-list
   signals_expanded <- rlang::flatten(unname(lapply(signals, expand_signal)))
   names(signals_expanded) <- sapply(signals_expanded, "[[", "name")

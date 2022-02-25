@@ -744,9 +744,9 @@ visualize_design_matrix <- function(d, outfile=NULL, run_boundaries=NULL, events
   }
 
   if (!include_baseline) {
-    d <- d[,!grepl("(run[0-9]+)*base", colnames(d))]
+    d <- d[ ,!grepl("(run[0-9]+)*base", colnames(d)), drop = FALSE]
   } else {
-    d <- d[,!grepl("(run[0-9]+)*base0", colnames(d))] #always remove constant
+    d <- d[, !grepl("(run[0-9]+)*base0", colnames(d)), drop = FALSE] #always remove constant
   }
 
   print(round(cor(d), 3))

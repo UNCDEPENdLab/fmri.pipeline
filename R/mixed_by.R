@@ -486,8 +486,11 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     result_df <- rbindlist(lapply(nested_list, function(df_set) {
       rbindlist(lapply(df_set, "[[", element))
     })) # combine results from each df (in the multiple df case)
-    data.table::setattr(result_df, "split_on", split_on) #tag split variables for secondary analysis
-    data.table::setorderv(result_df, split_on) # since we allow out-of-order foreach, reorder coefs here.
+    
+    if (nrow(result_df) > 0L) { # only set keys if data were extracted (setorderv fails on 0-row df)
+      data.table::setattr(result_df, "split_on", split_on) #tag split variables for secondary analysis
+      data.table::setorderv(result_df, split_on) # since we allow out-of-order foreach, reorder coefs here.
+    }
     return(result_df)
   }
   
@@ -506,30 +509,36 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   
   emmeans_list <- NULL
   if (!is.null(emmeans_spec)) {
+    # will be a 0-row data.frame if there are no emm_data embedded in mresults
     emm_data <- extract_df(mresults, "emm_data", split_on)
     
-    emmeans_list <- lapply(seq_along(emmeans_spec), function(aa) {
-      em_sub <- subset(emm_data, outcome==emmeans_spec[[aa]]$outcome & model_name==emmeans_spec[[aa]]$model_name)
-      nn <- names(em_sub)
-      other_keys <- nn[nn != "emm"]
-      em_name <- names(emmeans_spec)[aa]
-      em_sub[, emm[[1]][[em_name]], by=other_keys]  
-    })
-    names(emmeans_list) <- names(emmeans_spec)
+    if (nrow(emm_data) > 0L) {
+      emmeans_list <- lapply(seq_along(emmeans_spec), function(aa) {
+        em_sub <- subset(emm_data, outcome==emmeans_spec[[aa]]$outcome & model_name==emmeans_spec[[aa]]$model_name)
+        nn <- names(em_sub)
+        other_keys <- nn[nn != "emm"]
+        em_name <- names(emmeans_spec)[aa]
+        em_sub[, emm[[1]][[em_name]], by=other_keys]  
+      })
+      names(emmeans_list) <- names(emmeans_spec)
+    }
   }
   
   emtrends_list <- NULL
   if (!is.null(emtrends_spec)) {
+    # will be a 0-row data.frame if there are no emt_data embedded in mresults
     emt_data <- extract_df(mresults, "emt_data", split_on)
     
-    emtrends_list <- lapply(seq_along(emtrends_spec), function(aa) {
-      em_sub <- subset(emt_data, outcome==emtrends_spec[[aa]]$outcome & model_name==emtrends_spec[[aa]]$model_name)
-      nn <- names(em_sub)
-      other_keys <- nn[nn != "emt"]
-      em_name <- names(emtrends_spec)[aa]
-      em_sub[, emt[[1]][[em_name]], by=other_keys]  
-    })
-    names(emtrends_list) <- names(emtrends_spec)
+    if (nrow(emt_data) > 0L) {
+      emtrends_list <- lapply(seq_along(emtrends_spec), function(aa) {
+        em_sub <- subset(emt_data, outcome==emtrends_spec[[aa]]$outcome & model_name==emtrends_spec[[aa]]$model_name)
+        nn <- names(em_sub)
+        other_keys <- nn[nn != "emt"]
+        em_name <- names(emtrends_spec)[aa]
+        em_sub[, emt[[1]][[em_name]], by=other_keys]  
+      })
+      names(emtrends_list) <- names(emtrends_spec)
+    }
   }
   
   #helper subfunction to adjust p-values
