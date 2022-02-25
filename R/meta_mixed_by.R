@@ -16,12 +16,11 @@
 #'   \code{FALSE} or \code{"none"}, no split variable subsets will be fit. If \code{"individual"},
 #'   then the split variables are added in subsets individually, but their interactions are not.
 #'
-#' @importFrom brms brm
 #' @export
 meta_mixed_by <- function(coef_df, terms = "all", fit_subsets = "all", max_order = 3, 
                           outcome=NULL, fixef=NULL, rhs=NULL,
                           brms_args = list(chains = 4, cores = 4, iter = 12000)) {
-  
+
   if (!requireNamespace("brms", quietly = TRUE)) {
     stop(
       "Package \"brms\" must be installed to use meta_mixed_by. Use install.packages('brms') first.",
