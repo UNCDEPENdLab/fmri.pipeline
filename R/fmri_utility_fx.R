@@ -815,3 +815,81 @@ cleanup_regressor <- function(times, durations, values, rm_zeros=TRUE) {
 
   return(list(times=times, durations=durations, values=values))
 }
+
+#' fmri.design function from \code{fmri} R package. Brought into this package to avoid dependency on \code{fmri} package,
+#'   especially the \code{gsl} package dependency in \code{aws}, which is finicky on clusters if the GSL module isn't available.
+#' 
+#' @param stimulus The regressor of interest
+#' @param order The polynomial order of baseline/drift terms to incorporate in the design matrix
+#' @param cef confound regressors to add
+#' @param verbose if TRUE, output detailed progress about each step in the design setup
+#' @keywords internal
+fmri.design <- function(stimulus, order = 2, cef = NULL, verbose = FALSE) {
+  checkmate::assert_logical(verbose, len = 1L)
+
+  ## create matrices and make consistency checks
+  if (is.list(stimulus)) {
+    nstimulus <- length(stimulus)
+    dims <- dim(stimulus[[1]])
+    if (!is.null(dims)) {
+      slicetiming <- TRUE
+      nslices <- dims[2]
+      scans <- dims[1]
+      stims <- array(0, c(scans, nstimulus, nslices))
+      for (j in 1:nstimulus) {
+        if (!all(dim(stimulus[[j]]) == dims)) stop("Inconsistent dimensions in stimulus list")
+        stims[, j, ] <- as.matrix(stimulus[[j]])
+      }
+    }
+  } else {
+    slicetiming <- FALSE
+    stims <- as.matrix(stimulus)
+    dims <- dim(stims)
+    nstimulus <- dims[2]
+    scans <- dims[1]
+    nslices <- 1
+    dim(stims) <- c(dims, nslices)
+  }
+  if (!is.null(cef)) {
+    cef <- as.matrix(cef)
+    if (dim(stims)[1] != dim(cef)[1]) {
+      stop("Length of stimuli ", dim(stimulus)[1], " does not match the length of confounding effects ", dim(cef)[1])
+    }
+    neffects <- dim(cef)[2]
+  } else {
+    neffects <- 0
+  }
+
+
+  ## create empty design matrix and fill first columns with Stimulus
+
+  dz <- c(scans, nstimulus + neffects + order + 1, nslices)
+  z <- array(0, dz)
+  if (verbose) cat("fmriDesign: Adding stimuli to design matrix\n")
+  z[, 1:nstimulus, ] <- stims
+
+  ## this is the mean effect
+  if (verbose) cat("fmriDesign: Adding mean effect to design matrix\n")
+  z[, neffects + nstimulus + 1, ] <- 1
+  ## now confounding effects
+  if (neffects != 0) {
+    if (verbose) cat("fmriDesign: Adding", neffects, "confounding effect(s) to design matrix\n")
+    z[, (nstimulus + 1):(nstimulus + neffects), ] <- cef
+  }
+
+  ## now the polynomial trend (make orthogonal to stimuli)
+  if (order != 0) {
+    if (verbose) cat("fmriDesign: Adding polynomial trend of order", order, "to design matrix\n")
+    for (k in 1:nslices) {
+      ortho <- t(stims[, , k]) %*% stims[, , k]
+      hz <- numeric(nstimulus)
+      for (i in (neffects + nstimulus + 2):(neffects + nstimulus + order + 1)) {
+        z[, i, k] <- (1:scans)^(i - nstimulus - neffects - 1)
+        z[, i, k] <- z[, i, k] / mean(z[, i, k])
+      }
+    }
+  }
+  if (dim(z)[3] == 1) dim(z) <- dim(z)[1:2]
+  
+  return(z)
+}

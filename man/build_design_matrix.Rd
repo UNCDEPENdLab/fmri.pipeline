@@ -60,8 +60,8 @@ within each run (e.g. baseline_coef_order = 1 includes both an intercept and a l
 
 \item{baseline_parameterization}{Defaults to "Legendre". This adds Legendre polynomials up to
 \code{baseline_coef_order} (e.g., 2). The alternative is "orthogonal_polynomials",
-which uses \code{fmri.design} from the \code{fmri} package to add polynomial regressors that
-are orthogonal to substantive design factors.}
+which uses \code{fmri.design} from the \code{fmri} package (now internal to fmri.pipeline) to add 
+polynomial regressors that are orthogonal to substantive design factors.}
 
 \item{run_data}{a data.frame containing metadata about the runs for which we want to model the task design. This
 data.frame should contain the columns run_number, run_volumes, run_nifti, and drop_volumes. If run_nifti
