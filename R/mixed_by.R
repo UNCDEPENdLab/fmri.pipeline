@@ -156,7 +156,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
       rowwise() %>%
       mutate(form = list(update.formula(rhs, paste(outcome, "~ .")))) %>%
       ungroup() %>% as_tibble() %>%
-      mutate(model_name = names(rhs_model_formulae))
+      mutate(model_name = names(.$rhs))
   }
   
   # handle external_df
@@ -256,13 +256,13 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     bad_outcomes <- !emt_metadata$outcome %in% model_set$outcome
     if (any(bad_outcomes)) {
       print(emt_metadata[bad_outcomes, ])
-      stop("Cannot have an outcome in emtrends that is not present in the models")
+      warning("Cannot have an outcome in emtrends that is not present in the models. Ignoring this specification!")
     }
     
     bad_models <- !emt_metadata$model_name %in% model_set$model_name
     if (any(bad_models)) {
       print(emt_metadata[bad_models, ])
-      stop("Cannot have models in emtrends that is not present in the model formulae")
+      warning("Cannot have model names in emtrends that is are present in the model formula names. Ignoring this specification!")
     }
     
   }
@@ -392,7 +392,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
             this_emmspec <- emmeans_spec[emm_torun %>% pull(emm_number)] #subset list to relevant elements
             emms <- lapply(seq_along(this_emmspec), function(emm_i) {
               tidy(do.call(emmeans, c(this_emmspec[[emm_i]], object=thism))) %>%
-                dplyr::bind_cols(emm_torun[emm_i,])
+                dplyr::bind_cols(emm_torun[emm_i,] %>% dplyr::select(emm_number, emm_label)) # don't add model and outcome, which will double at the unnest
             })
             names(emms) <- names(this_emmspec)
             
@@ -410,7 +410,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
             this_emtspec <- emtrends_spec[emt_torun %>% pull(emt_number)] #subset list to relevant elements
             emts <- lapply(seq_along(this_emtspec), function(emt_i) {
               tidy(do.call(emtrends, c(this_emtspec[[emt_i]], object=thism))) %>%
-                dplyr::bind_cols(emt_torun[emt_i,])
+                dplyr::bind_cols(emt_torun[emt_i,] %>% dplyr::select(emt_number, emt_label)) # don't add model and outcome, which will double at the unnest
             })
             names(emts) <- names(this_emtspec)
 
@@ -447,13 +447,13 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
       }
       
       emm_data <- NULL
-      if (!is.null(emmeans_spec)) {
+      if (!is.null(emmeans_spec) && "emm" %in% names(split_results)) {
         emm_data <- subset(split_results, sapply(emm, function(x) !is.null(x)), 
                            select=c(split_on, "outcome", "model_name", "rhs", "emm"))
       }
 
       emt_data <- NULL
-      if (!is.null(emtrends_spec)) {
+      if (!is.null(emtrends_spec) && "emt" %in% names(split_results)) {
         emt_data <- subset(split_results, sapply(emt, function(x) !is.null(x)), 
                            select=c(split_on, "outcome", "model_name", "rhs", "emt"))
       }
