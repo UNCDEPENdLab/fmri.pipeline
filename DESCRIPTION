@@ -28,7 +28,6 @@ Imports:
     doParallel,
     doFuture,
     emmeans,
-    fmri,
     foreach,
     future,
     future.batchtools,
