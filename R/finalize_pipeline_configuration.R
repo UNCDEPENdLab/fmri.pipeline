@@ -376,7 +376,7 @@ finalize_confound_settings <- function(gpa, lg) {
     motion_params_colnames = NULL,
     confound_input_file = "confounds.tsv",
     l1_confound_regressors = NULL, # column names in motion_params_file and/or confound_input_file
-    exclude_run = "mean(FD) > 0.5 || max(FD) > 6)",
+    exclude_run = "mean(FD) > 0.5 | max(FD) > 6",
     truncate_run = NULL, # example: FD > 1 & time > last_onset
     spike_volumes = "FD > 0.9",
     na_strings = getOption("datatable.na.strings", "NA") # default na.strings argument for data.table::fread calls
