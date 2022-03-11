@@ -46,11 +46,9 @@ ggbrain <- function(underlay=NULL, overlay=NULL,
   checkmate::assert_file_exists(underlay)
   checkmate::assert_file_exists(overlay)
   
-  underlay <- oro.nifti::readNIfTI(underlay, reorient = FALSE)
-  overlay <- oro.nifti::readNIfTI(overlay, reorient = FALSE)
-  #underlay <- RNifti::readNifti(underlay)
-  #overlay <- RNifti::readNifti(overlay)
-  
+  underlay <- RNifti::readNifti(underlay)
+  overlay <- RNifti::readNifti(overlay)
+
   # round very small values to zero
   if (!is.null(zero_underlay) && zero_underlay > 0) {
     underlay[underlay > -1*zero_underlay & underlay < zero_underlay] <- 0
@@ -255,7 +253,7 @@ ggbrain <- function(underlay=NULL, overlay=NULL,
 #' @param sagittal_slices List of sagittal slices to display
 #' @param coronal_slices List of coronal slices to display
 #' @param axial_slices List of axial slices to display
-#' @param underlay the oro.nifti object of the underlay that defines the coordinate system
+#' @param underlay the RNifti object of the underlay that defines the coordinate system
 #' @keywords internal
 lookup_slices <- function(sagittal_slices = NULL, coronal_slices = NULL, axial_slices = NULL, underlay, remove_null_space = TRUE) {
   checkmate::assert_list(sagittal_slices)
@@ -282,14 +280,9 @@ lookup_slices <- function(sagittal_slices = NULL, coronal_slices = NULL, axial_s
   }
   
   # translate ijk to xyz for each axis
-  xcoords <- oro.nifti::translateCoordinate(rbind(seq_len(dim(underlay)[1]), 1, 1), underlay)[1,]
-  ycoords <- oro.nifti::translateCoordinate(rbind(1, seq_len(dim(underlay)[2]), 1), underlay)[2,]
-  zcoords <- oro.nifti::translateCoordinate(rbind(1, 1, seq_len(dim(underlay)[3])), underlay)[3,]
-  
-  # browser()
-  # xcoords <- RNifti::voxelToWorld(cbind(seq_len(dim(underlay)[1]), 1, 1), underlay)[,1]
-  # ycoords <- RNifti::voxelToWorld(cbind(1, seq_len(dim(underlay)[2]), 1), underlay)[,2]
-  # zcoords <- RNifti::voxelToWorld(cbind(1, 1, seq_len(dim(underlay)[3])), underlay)[,3]  
+  xcoords <- RNifti::voxelToWorld(cbind(seq_len(dim(underlay)[1]), 1, 1), underlay)[,1]
+  ycoords <- RNifti::voxelToWorld(cbind(1, seq_len(dim(underlay)[2]), 1), underlay)[,2]
+  zcoords <- RNifti::voxelToWorld(cbind(1, 1, seq_len(dim(underlay)[3])), underlay)[,3]
   
   # look up coordinates and slice numbers for requested slice positions
   coords <- list()
@@ -312,8 +305,8 @@ lookup_slices <- function(sagittal_slices = NULL, coronal_slices = NULL, axial_s
     }
     
     sag_nums <- sort(unique(sag_nums)) # don't display the same slice twice
-    sag_coords <- round(oro.nifti::translateCoordinate(rbind(sag_nums, 1, 1), underlay)[1,], 1)
-    #sag_coords <- round(RNifti::voxelToWorld(rbind(sag_nums, 1, 1), underlay)[1,], 1)
+    #sag_coords <- round(RNifti::voxelToWorld(cbind(sag_nums, 1, 1), underlay)[,1], 1)
+    sag_coords <- round(xcoords[sag_nums], 1)
     coords[["sagittal"]] <- data.frame(slice = paste0("s", seq_along(sag_nums)), slice_number = sag_nums, coord_label = paste("x =", sag_coords))
   }
   
@@ -334,7 +327,7 @@ lookup_slices <- function(sagittal_slices = NULL, coronal_slices = NULL, axial_s
     }
     
     cor_nums <- sort(unique(cor_nums))
-    cor_coords <- round(oro.nifti::translateCoordinate(rbind(1, cor_nums, 1), underlay)[2,], 1)
+    cor_coords <- round(ycoords[cor_nums], 1)
     coords[["coronal"]] <- data.frame(slice = paste0("c", seq_along(cor_nums)), slice_number = cor_nums, coord_label = paste("y =", cor_coords))
   }
   
@@ -353,10 +346,13 @@ lookup_slices <- function(sagittal_slices = NULL, coronal_slices = NULL, axial_s
     if (!is.null(axial_slices$xyz)) {
       checkmate::assert_integerish(axial_slices$xyz, lower = min(zcoords), upper = max(zcoords))
       ax_nums <- c(ax_nums, sapply(axial_slices$xyz, function(p) which.min(abs(p - zcoords))))
+      
+      # skipping this for now because it returns matrix for multiple slices, and vector for single slice (indexing code)
+      #ax_nums <- c(ax_nums, RNifti::worldToVoxel(cbind(0, rep(axial_slices$xyz, 2), 0), underlay)[,3])
     }
     
     ax_nums <- sort(unique(ax_nums))
-    ax_coords <- round(oro.nifti::translateCoordinate(rbind(1, 1, ax_nums), underlay)[3,], 1)
+    ax_coords <- round(zcoords[ax_nums], 1)
     coords[["axial"]] <- data.frame(slice = paste0("a", seq_along(ax_nums)), slice_number = ax_nums, coord_label = paste("z =", ax_coords))
   }
   
