@@ -15,6 +15,7 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
 
   lg <- lgr::get_logger("glm_pipeline/l2_setup")
+  lg$set_threshold(gpa$lgr_threshold)
 
   if (length(unique(l1_df$id)) > 1L) {
     msg <- "fsl_l2_model is designed for execution on a single id data.frame"

@@ -67,6 +67,7 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "zstat"), 
   checkmate::assert_integerish(ncores, lower=1L)
 
   lg <- lgr::get_logger("glm_pipeline/extract_glm_betas")
+  lg$set_threshold(gpa$lgr_threshold)
 
   # enforce available outputs across GLM levels
   enforce_glms_complete(gpa, level = 1L, lg)

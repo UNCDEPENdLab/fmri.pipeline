@@ -33,6 +33,7 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
   if (!is.null(l3_model)) checkmate::assert_subset(l3_model, names(gpa$l3_models$models))
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
+  lg$set_threshold(gpa$lgr_threshold)
 
   # create local synonyms for these in case they are used the glue() expression.
   l1_cope_name <- l1_contrast

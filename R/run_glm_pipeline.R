@@ -18,6 +18,7 @@ l3_model_names = "prompt", glm_software = NULL) {
   checkmate::assert_character(l3_model_names, null.ok = TRUE)
 
   lg <- lgr::get_logger("glm_pipeline/run_glm_pipeline")
+  lg$set_threshold(gpa$lgr_threshold)
 
   model_list <- choose_glm_set(gpa, l1_model_names, l2_model_names, l3_model_names, lg)
   if (is.null(model_list)) { return(invisible(NULL)) } # user canceled

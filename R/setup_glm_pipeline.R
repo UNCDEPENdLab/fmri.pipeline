@@ -53,6 +53,10 @@
 #' @param additional A list of additional metadata that will be added to the \code{glm.pipeline} object returned
 #'   by the function. This can be useful if there are other identifiers that you want for long-term storage or
 #'   off-shoot functions.
+#' @param lgr_threshold The logging threshold used to determine whether to output messages of different severity to
+#'   the screen and to log files. Default is "info", which produces all messages, warnings, and errors, but not debug
+#'   or trace statements. To output only concerning errors, change to "error". See: 
+#'   \url{https://s-fleck.github.io/lgr/articles/lgr.html} for details.
 #'
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 #'    test_string test_class
@@ -95,7 +99,8 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                ), additional = list(
                                  # additional feat level 1 settings (uses internal FSL nomenclature)
                                  feat_l1_args = list(z_thresh = 1.96, prob_thresh = .05)
-                               )) {
+                               ),
+                               lgr_threshold = "info") {
   checkmate::assert_string(analysis_name) # must be scalar string
   checkmate::assert_subset(scheduler, c("slurm", "sbatch", "torque", "qsub", "local", "sh"), empty.ok = FALSE)
   checkmate::assert_data_frame(subject_data, null.ok = TRUE)
@@ -110,12 +115,21 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   checkmate::assert_integerish(drop_volumes)
   checkmate::assert_character(glm_software)
   checkmate::assert_logical(use_preconvolve, null.ok = FALSE)
-  
+
   glm_software <- tolower(glm_software)
   checkmate::assert_subset(glm_software, c("fsl", "spm", "afni"))
   checkmate::assert_integerish(n_expected_runs, lower = 1L, null.ok = TRUE)
+  if (checkmate::test_string(lgr_threshold)) {
+    checkmate::assert_subset(lgr_threshold, c("off", "fatal", "error", "warn", "info", "debug", "trace", "all"))
+  } else if (checkmate::test_number(lgr_threshold)) {
+    checkmate::assert_integerish(lgr_threshold, lower = 0, len = 1L, all.missing = TRUE)
+    lgr_threshold <- as.integer(lgr_threshold)
+  } else {
+    lgr_threshold <- "info" # default to info in case of weird input
+  }
 
   lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
+  lg$set_threshold(lgr_threshold)
 
   if (!basename(output_directory) == analysis_name) {
     lg$info("Appending analysis_name %s to output_directory %s", analysis_name, output_directory)
@@ -262,7 +276,8 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
     # l3 analysis details
     l3_models = l3_models,
-    finalize_complete = FALSE
+    finalize_complete = FALSE,
+    lgr_threshold = lgr_threshold
   )
 
   # validate and populate any other pipeline details before execution

@@ -37,7 +37,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
   # Maybe allow glm object to be passed in that would have trial_data and variable_mapping.
   # I guess that would be like "add_l1_model"
   lg <- lgr::get_logger("glm_pipeline/build_l1_models")
-
+  lg$set_threshold(gpa$lgr_threshold)
 
   checkmate::assert_class(gpa, "glm_pipeline_arguments", null.ok = TRUE)
   if (!is.null(gpa)) {

@@ -22,7 +22,7 @@
 #' @importFrom checkmate assert_numeric
 #' @importFrom ggnewscale new_scale_fill
 #' @importFrom cowplot plot_grid add_sub
-#' @importFrom ggplot geom_raster scale_fill_gradient theme
+#' @importFrom ggplot2 geom_raster scale_fill_gradient theme
 #' @export
 ggbrain <- function(underlay=NULL, overlay=NULL, 
                     color_col=NULL, alpha_col=NULL,

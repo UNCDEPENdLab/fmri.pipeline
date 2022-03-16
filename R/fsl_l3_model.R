@@ -13,6 +13,7 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
 
   lg <- lgr::get_logger("glm_pipeline/l3_setup")
+  lg$set_threshold(gpa$lgr_threshold)
 
   if (length(unique(l3_df$session)) > 1L) {
     msg <- "fsl_l3_model is designed for execution on a single session data.frame"

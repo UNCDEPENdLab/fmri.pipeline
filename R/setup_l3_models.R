@@ -59,6 +59,8 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   if (is.null(l1_model_names)) l1_model_names <- names(gpa$l1_models$models)
 
   lg <- lgr::get_logger("glm_pipeline/l3_setup")
+  lg$set_threshold(gpa$lgr_threshold)
+
   if (isTRUE(gpa$log_txt) && !"setup_l3_log_txt" %in% names(lg$appenders)) {
     lg$add_appender(lgr::AppenderFile$new(gpa$output_locations$setup_l3_log_txt), name = "setup_l3_log_txt")
   }

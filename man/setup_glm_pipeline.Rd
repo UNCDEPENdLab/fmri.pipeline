@@ -32,10 +32,11 @@ setup_glm_pipeline(
   confound_settings = list(motion_params_file = "motion.par", motion_params_colnames =
     c("rx", "ry", "rz", "tx", "ty", "tz"), confound_input_file = NULL,
     confound_input_colnames = NULL, l1_confound_regressors = NULL, exclude_run =
-    "mean(FD) > 0.9 | max(FD) > 0.5)", truncate_run = NULL, exclude_subject = NULL,
+    "mean(FD) > 0.9 | max(FD) > 0.5", truncate_run = NULL, exclude_subject = NULL,
     spike_volumes = "FD > 0.9"),
   parallel = list(l1_setup_cores = 4L, pipeline_cores = "default"),
-  additional = list(feat_l1_args = list(z_thresh = 1.96, prob_thresh = 0.05))
+  additional = list(feat_l1_args = list(z_thresh = 1.96, prob_thresh = 0.05)),
+  lgr_threshold = "info"
 )
 }
 \arguments{
@@ -106,6 +107,11 @@ by the GLM software. I recommend \code{TRUE} for consistency.}
 \item{additional}{A list of additional metadata that will be added to the \code{glm.pipeline} object returned
 by the function. This can be useful if there are other identifiers that you want for long-term storage or
 off-shoot functions.}
+
+\item{lgr_threshold}{The logging threshold used to determine whether to output messages of different severity to
+the screen and to log files. Default is "info", which produces all messages, warnings, and errors, but not debug
+or trace statements. To output only concerning errors, change to "error". See: 
+\url{https://s-fleck.github.io/lgr/articles/lgr.html} for details.}
 
 \item{id_column}{A character string indicating the name of the subject identifier in \code{subject_data} and \code{trial_data}.}
 

@@ -17,6 +17,7 @@ lookup_nifti_inputs <- function(gpa, add_run_volumes = TRUE, add_nvoxels = TRUE)
     count()
 
   lg <- lgr::get_logger("glm_pipeline/pipeline_setup")
+  lg$set_threshold(gpa$lgr_threshold)
 
   not_expected <- n_subj_runs %>% dplyr::filter(n != gpa$n_expected_runs)
 
