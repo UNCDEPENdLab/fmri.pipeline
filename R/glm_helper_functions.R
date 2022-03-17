@@ -505,6 +505,8 @@ get_mr_abspath <- function(mr_df, col="run_nifti") {
 #' @author Michael Hallquist
 calculate_subject_exclusions <- function(gpa) {
   lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
+  lg$set_threshold(gpa$lgr_threshold)
+
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_data_frame(gpa$run_data)
   checkmate::assert_subset(c("id", "session", "run_number", "exclude_run"), names(gpa$run_data)) # verify that exclude_run is populated
@@ -1262,6 +1264,8 @@ hours_to_dhms <- function(hours, frac=FALSE) {
 #' @export
 cleanup_glm_pipeline <- function(gpa) {
   lg <- lgr::get_logger("glm_pipeline/cleanup_glm_pipeline")
+  lg$set_threshold(gpa$lgr_threshold)
+  
   gpa <- refresh_feat_status(gpa, level = 1L, lg = lg)
   gpa <- refresh_feat_status(gpa, level = 2L, lg = lg)
   gpa <- refresh_feat_status(gpa, level = 3L, lg = lg)

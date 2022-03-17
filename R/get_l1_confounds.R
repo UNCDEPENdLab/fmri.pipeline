@@ -50,6 +50,7 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
+  lg$set_threshold(gpa$lgr_threshold)
 
   # these columns should be populated to run_df for every case
   calculation_columns <- c(

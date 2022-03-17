@@ -5,7 +5,13 @@
 \title{Function to convert dmat (runs x regressor list) to a time-oriented representation.
 This yields a list of runs where each element is data.frame of volumes x regressors}
 \usage{
-place_dmat_on_time_grid(dmat, convolve = TRUE, run_timing = NULL, bdm_args)
+place_dmat_on_time_grid(
+  dmat,
+  convolve = TRUE,
+  run_timing = NULL,
+  bdm_args,
+  lg = NULL
+)
 }
 \arguments{
 \item{dmat}{A runs x regressors 2-d list where each element is a matrix containing
@@ -29,6 +35,8 @@ during the initial argument parsing. See build_design_matrix for details. Should
   \item tr The repetition time (sometimes called TR) in seconds
   \item hrf_parameters The parameters for the double-gamma HRF
 }}
+
+\item{lg}{An lgr logger object used for logging messages}
 }
 \description{
 Function to convert dmat (runs x regressor list) to a time-oriented representation.

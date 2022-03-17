@@ -24,7 +24,8 @@ build_design_matrix(
   high_pass = NULL,
   iti_post = 12,
   ts_multipliers = NULL,
-  additional_regressors = NULL
+  additional_regressors = NULL,
+  lg = NULL
 )
 }
 \arguments{
@@ -129,6 +130,8 @@ list of data.frames (1 df per run). These values are tacked onto design_convolve
 run_volumes within that run. If you pass in a vector of .txt files containing additional regressors,
 these will be read into R, truncated to run_volumes, and column-wise concatenated with
 substantive regressors.}
+
+\item{lg}{An lgr object used for logging messages}
 }
 \value{
 A list of containing different aspects of the design matrix:

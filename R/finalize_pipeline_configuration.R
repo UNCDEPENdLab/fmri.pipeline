@@ -15,6 +15,7 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_logical(refinalize, len = 1L)
   lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
+  lg$set_threshold(gpa$lgr_threshold)
 
   if (isTRUE(gpa$finalize_complete) && isFALSE(refinalize)) {
     lg$debug("In finalize_pipeline_configuration, finalization of gpa already complete. Returning object unchanged.")

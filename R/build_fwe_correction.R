@@ -309,6 +309,7 @@ build_fwe_correction <- function(gpa, lg = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   if (is.null(lg)) {
     lg <- lgr::get_logger("glm_pipeline/fwe_correction")
+    lg$set_threshold(gpa$lgr_threshold)
   }
   checkmate::assert_class(lg, "Logger")
 

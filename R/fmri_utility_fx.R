@@ -132,13 +132,13 @@ get_collin_events <- function(dmat) {
 #'            \item tr The repetition time (sometimes called TR) in seconds
 #'            \item hrf_parameters The parameters for the double-gamma HRF
 #'          }
-#'
+#' @param lg An lgr logger object used for logging messages
 #' @details Note that any volumes dropped from the beginning of each run should already be reflected in the timings
 #'   of regressors in \code{dmat}. This prevents us from needing to have a drop_volumes implementation inside convolve_regressor,
 #'   which is confusing anyhow. Likewise, run_timing should reflect the post-drop cumulative volumes.
 #' @author Michael Hallquist
 #' @keywords internal
-place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_args) {
+place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_args, lg = NULL) {
 
   if (isTRUE(bdm_args$convolve_wi_run)) {
     #create an HRF-convolved version of the list
@@ -164,9 +164,9 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
             center_values = bdm_args$center_values, convmax_1 = bdm_args$convmax_1[j],
             demean_convolved = FALSE, high_pass = bdm_args$high_pass, convolve = convolve,
             ts_multiplier = bdm_args$ts_multiplier[[j]][[i]],
-            hrf_parameters = bdm_args$hrf_parameters
+            hrf_parameters = bdm_args$hrf_parameters, lg=lg
           )
-        }      
+        }
       })
 
       # drop null events before combining into data.frame
@@ -197,7 +197,7 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
                          center_values=bdm_args$center_values, convmax_1=bdm_args$convmax_1[j],
                          demean_convolved = FALSE, high_pass=bdm_args$high_pass, convolve=convolve,
                          ts_multiplier=concat_ts_multiplier,
-                         hrf_parameters = bdm_args$hrf_parameters)
+                         hrf_parameters = bdm_args$hrf_parameters, lg=lg)
 
       #now, to be consistent with code below (and elsewhere), split back into runs
       splitreg <- split(all.convolve, do.call(c, sapply(seq_along(bdm_args$run_volumes), function(x) { rep(x, bdm_args$run_volumes[x]) })))
@@ -263,18 +263,27 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
 #' @param ts_multiplier A vector that is n_vols in length that will be multiplied against the stimulus vector before convolution.
 #' @param hrf_parameters. A named vector of parameters passed to \code{fmri.stimulus} that control the shape of the double gamma HRF.
 #'          Default: \code{c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35)}.
+#' @param lg An lgr object used for logging messages
 #'
 #' @author Michael Hallquist
 #' @keywords internal
 convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zeros=TRUE,
                                    center_values=TRUE, convmax_1=FALSE, demean_convolved=FALSE,
                                    high_pass=NULL, convolve=TRUE, ts_multiplier=NULL,
-                                   hrf_parameters=c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35)) {
+                                   hrf_parameters=c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35), lg=NULL) {
+
+  if (is.null(lg)) {
+    lg <- lgr::get_logger()
+  }
 
   #reg should be a matrix containing, minimally: trial, onset, duration, value
   stopifnot(is.matrix(reg))
 
-  if (is.null(tr) || !is.numeric(tr)) { stop("tr must be a number (in seconds)") }
+  if (is.null(tr) || !is.numeric(tr)) {
+    msg <- glue("tr must be a number (in seconds), but was: %s", tr)
+    lg$error(msg)
+    stop(msg)
+  }
 
   # check for the possibility that the onset of an event falls after the number of good volumes in the run
   # if so, this should be omitted from the convolution altogether
@@ -282,11 +291,12 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
 
   if (any(which_high, na.rm=TRUE)) {
     if (isTRUE(convolve)) {
-      message("At least one event onset falls on or after last volume of run. Omitting this from model.")
+      lg$warn("At least one event onset falls on or after last volume of run. Omitting this from model.")
+      lg$warn("%s", capture.output(print(reg[which_high, ])))
     }
-    print(reg[which_high, ])
+
     r_orig <- reg
-    reg <- reg[!which_high, ] #this loses attributes, need to copy them over for code to work as expected
+    reg <- reg[!which_high, , drop = FALSE] #this loses attributes, need to copy them over for code to work as expected
     attr(reg, "event") <- attr(r_orig, "event")
     attr(reg, "reg_name") <- attr(r_orig, "reg_name")
   }
@@ -316,11 +326,11 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
   } else { stop("unrecognized normalization: ", normalization) }
 
   #cleanup NAs and zeros in the regressor before proceeding with placing it onto the time grid
-  cleaned <- cleanup_regressor(reg[,"onset"], reg[, "duration"], reg[, "value"], rm_zeros = rm_zeros)
+  cleaned <- cleanup_regressor(reg[, "onset"], reg[, "duration"], reg[, "value"], rm_zeros = rm_zeros)
   times <- cleaned$times; durations <- cleaned$durations; values <- cleaned$values
 
   if (length(times) == 0L) {
-    warning("No non-zero events for regressor to be convolved. Returning all-zero result for fMRI GLM.")
+    lg$warn("No non-zero events for regressor to be convolved. Returning all-zero result for fMRI GLM.")
     ret <- matrix(0, nrow=n_vols, ncol=1)
     colnames(ret) <- attr(reg, "reg_name")
     return(ret)
@@ -357,10 +367,12 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
           #   -- even if it fits within the time interval -- can be rescaled improperly. A general solution is to place this
           #   event in the middle of the interval, convolve it with the HRF, then use *that* height as the normalization factor.
           # Apply this alternative correction to any event that begins or is 'on' in the last 20 seconds.
-          message(
-            "Event occurs at the tail of the run. Using HRF peak from center of run for evtmax_1 regressor to avoid strange scaling.",
-            " Please check that the end of your convolved regressors matches your expectation."
+          msg <- glue(
+            "Event occurs at the tail of the run. Onset: {times[i]}, Offset: {times[i] + durations[i]}, Run duration: {nvols*tr}.",
+            "Using HRF peak from center of run for evtmax_1 regressor to avoid strange scaling.",
+            "Please check that the end of your convolved regressors matches your expectation."
           )
+          lg$info(msg)
 
           mid_vol <- n_vols*tr/2
           stim_at_center <- fmri.stimulus(n_vols=n_vols, values=1.0, times=mid_vol, durations=durations[i], tr=tr, demean=FALSE, 
@@ -513,18 +525,20 @@ fmri.stimulus <- function(n_vols=1, onsets=c(1), durations=c(1), values=c(1), ti
     }
 
   }
-  numberofonsets <- length(onsets)
+  number_of_onsets <- length(onsets)
 
   if (length(durations) == 1) {
-    durations <- rep(durations,numberofonsets)
-  } else if (length(durations) != numberofonsets)  {
-    stop("Length of durations vector does not match the number of onsets!")
+    durations <- rep(durations, number_of_onsets)
+  } else if (length(durations) != number_of_onsets)  {
+    msg <- glue("Length of durations vector ({length(durations)}) does not match the number of onsets ({number_of_onsets})!")
+    lg$error
+    stop(msg)
   }
 
   if (length(values) == 1) {
     #use the same regressor height (usually 1.0) for all onsets
-    values <- rep(values, numberofonsets)
-  } else if (length(values) != numberofonsets) {
+    values <- rep(values, number_of_onsets)
+  } else if (length(values) != number_of_onsets) {
     stop("Length of values vector does not match the number of onsets!")
   }
 
@@ -534,12 +548,12 @@ fmri.stimulus <- function(n_vols=1, onsets=c(1), durations=c(1), values=c(1), ti
     onsets <- onsets[!badonsets]
     durations <- durations[!badonsets]
     values <- values[!badonsets]
-    numberofonsets <- numberofonsets - sum(badonsets)
+    number_of_onsets <- number_of_onsets - sum(badonsets)
   }
 
   stimulus <- rep(0, n_vols)
 
-  for (i in 1:numberofonsets) {
+  for (i in 1:number_of_onsets) {
     for (j in onsets[i]:(onsets[i]+durations[i]-1)) {
       stimulus[j] <- values[i]
     }
@@ -749,7 +763,7 @@ visualize_design_matrix <- function(d, outfile=NULL, run_boundaries=NULL, events
     d <- d[, !grepl("(run[0-9]+)*base0", colnames(d)), drop = FALSE] #always remove constant
   }
 
-  print(round(cor(d), 3))
+  #print(round(cor(d), 3))
   d <- as.data.frame(d)
   d$volume <- 1:nrow(d)
   d.m <- d %>% gather(key="variable", value="value", -volume)

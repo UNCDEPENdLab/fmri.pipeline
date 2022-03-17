@@ -33,6 +33,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
   }
 
   lg <- lgr::get_logger(paste0("glm_pipeline/l", level, "_setup"))
+  lg$set_threshold(gpa$lgr_threshold)
 
   # allow deferred model specification upstream
   if (!is.null(model_set) && model_set == "prompt") model_set <- NULL

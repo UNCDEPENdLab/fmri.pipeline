@@ -20,6 +20,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   checkmate::assert_logical(rerun)
 
   lg <- lgr::get_logger(paste0("glm_pipeline/l", level, "_estimation"))
+  lg$set_threshold(gpa$lgr_threshold)
 
   # TODO: support named subsetting in model_names, like list(l1_model="pe_only", l2_model=c("l2_1", "l2_2"))
   # level-specific copy-paste is a bit clunky here, but at least it's clear...

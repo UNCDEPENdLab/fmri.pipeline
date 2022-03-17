@@ -27,6 +27,8 @@ fsl_l1_model <- function(
   if (is.null(nvoxels)) { nvoxels <- rep(5e4, length(run_nifti)) } #arbitrarily use 50k voxels in fsf
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
+  lg$set_threshold(gpa$lgr_threshold)
+
   if (!is.null(d_obj$run_nifti)) {
     lg$debug("Using internal NIfTI files (run_nifti) within d_obj for Feat level 1 setup")
     run_nifti <- d_obj$run_nifti

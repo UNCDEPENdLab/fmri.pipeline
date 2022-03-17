@@ -8,7 +8,7 @@
 #'   a superordinate level or, even better, to be spread across independent jobs on a cluster. This function
 #'   already provides the option to parallelize over subjects for a single model if \code{gpa$l1_setup_cpus}
 #'   is greater than 1.
-#' 
+#'
 #' @author Michael Hallquist
 #'
 #' @importFrom checkmate assert_class assert_character
@@ -33,6 +33,8 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   if (is.null(l1_model_names)) { l1_model_names <- names(gpa$l1_models$models) }
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
+  lg$set_threshold(gpa$lgr_threshold)
+
   if (isTRUE(gpa$log_json) && !"setup_l1_log_json" %in% names(lg$appenders)) {
     lg$add_appender(lgr::AppenderJson$new(gpa$output_locations$setup_l1_log_json), name = "setup_l1_log_json")
   }
@@ -62,6 +64,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   all_subj_l1_list <- foreach(subj_df = iter(gpa$subject_data, by="row"), .inorder=FALSE, .packages=c("dplyr", "fmri.pipeline"),
     .export=c("truncate_runs", "fsl_l1_model", "get_mr_abspath",
     "get_output_directory", "runFSLCommand", "get_feat_status", "add_custom_feat_syntax")) %dopar% {
+
       subj_df <- subj_df # avoid complaints about visible global binding in R CMD check
       subj_id <- subj_df$id
       subj_session <- subj_df$session
@@ -125,12 +128,24 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         m_signals <- lapply(gpa$l1_models$signals[gpa$l1_models$models[[this_model]]$signals], function(this_signal) {
           # filter down to this id if the signal is a data.frame
           if (inherits(this_signal$value, "data.frame")) {
-            this_signal$value <- this_signal$value %>% dplyr::filter(id == !!subj_id & session == !!subj_session)
+            this_signal$value <- this_signal$value %>%
+              dplyr::filter(id == !!subj_id & session == !!subj_session)
+
+            if (nrow(this_signal$value) == 0L) {
+              msg <- glue(
+                "In L1 model setup, failed to find any rows in in gpa$l1_models$signals${this_signal$name}$value",
+                " for id: {subj_id}, session: {subj_session}, model: {this_model}.\n  Mismatch between run_data and subject_data?", .trim = FALSE
+              )
+              lg$error(msg)
+              stop(msg)
+            }
 
             #refit wi model if needed
             if (!is.null(this_signal$wi_model)) {
               this_signal <- fit_wi_model(this_signal)
             }
+          } else {
+            stop("Unable to sort out how to refit wi_model with signal that doesn't have a data.frame in the $value slot")
           }
           return(this_signal)
         })
@@ -164,6 +179,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
           bdm_args$run_data <- mr_df
           bdm_args$runs_to_output <- mr_run_nums
           bdm_args$output_directory <- file.path(l1_output_dir, "timing_files")
+          bdm_args$lg <- lg
           d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error=function(e) {
             lg$error("Failed build_design_matrix for id: %s, session: %s, model: %s", subj_id, subj_session, this_model)
             lg$error("Error message: %s", as.character(e))

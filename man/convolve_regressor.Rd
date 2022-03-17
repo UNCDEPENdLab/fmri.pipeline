@@ -16,7 +16,8 @@ convolve_regressor(
   high_pass = NULL,
   convolve = TRUE,
   ts_multiplier = NULL,
-  hrf_parameters = c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35)
+  hrf_parameters = c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35),
+  lg = NULL
 )
 }
 \arguments{
@@ -44,6 +45,8 @@ the regressor values are simply aligned onto the time grid without convolution
 based on the corresponding onsets, durations, and values.}
 
 \item{ts_multiplier}{A vector that is n_vols in length that will be multiplied against the stimulus vector before convolution.}
+
+\item{lg}{An lgr object used for logging messages}
 
 \item{hrf_parameters.}{A named vector of parameters passed to \code{fmri.stimulus} that control the shape of the double gamma HRF.
 Default: \code{c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35)}.}
