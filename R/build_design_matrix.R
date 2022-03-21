@@ -245,6 +245,7 @@
 #' @importFrom RNifti niftiHeader
 #' @importFrom checkmate assert_file_exists
 #' @importFrom rlang flatten
+#' @importFrom fs path_sanitize
 #'
 #' @author Michael Hallquist
 #' @author Alison Schreiber
@@ -660,12 +661,15 @@ build_design_matrix <- function(
     #dmat_convolved <- cbind(dmat_convolved, additional_regressors_df)
   }
 
-  #Write timing files to disk for analysis by AFNI, FSL, etc.
+  # Write timing files to disk for analysis by AFNI, FSL, etc.
+  tf_convolved <- tf_convolved_concat <- tf_fsl <- tf_afni <- NULL
+  
   if (!is.null(write_timing_files)) {
     dir.create(output_directory, recursive=TRUE, showWarnings=FALSE)
 
     if ("convolved" %in% write_timing_files) {
-      #write convolved regressors
+      # write convolved regressors
+      tf_convolved <- matrix(NA_character_, nrow = dim(dmat)[1L], ncol = dim(dmat)[2L], dimnames=dimnames(dmat))
 
       conv_concat <- list()
       lapply(seq_along(dmat_convolved), function(r) {
@@ -674,25 +678,34 @@ build_design_matrix <- function(
           fname <- paste0(names(dmat_convolved)[r], "_", reg_name, ".1D")
           to_write <- round(dmat_convolved[[r]][[v]], 6)
           conv_concat[[reg_name]] <<- c(conv_concat[[reg_name]], to_write) #add for concatenated 1D file
+          ofile <- file.path(output_directory, fs::path_sanitize(fname, replacement = "."))
+          tf_convolved[r, v] <<- ofile
           write.table(to_write,
-            file = file.path(output_directory, fname),
+            file = ofile,
             sep = "\n", eol = "\n", quote = FALSE, col.names = FALSE, row.names = FALSE
           )
         })
       })
 
+      #tf_convolved_concat <- rep(NA_character_, length(conv_concat) %>% setNames(names(conv_concat))
+
       #write run-concatenated convolved regressors (for use in AFNI)
-      lapply(seq_along(conv_concat), function(v) {
+      tf_convolved_concat <- sapply(seq_along(conv_concat), function(v) {
         fname <- paste0(names(conv_concat)[v], "_concat.1D")
+        ofile <- file.path(output_directory, fs::path_sanitize(fname, replacement = "."))
+        #tf_convolved_concat[v] <<- ofile
         write.table(conv_concat[[v]],
-          file = file.path(output_directory, fname),
+          file = ofile,
           sep = "\n", eol = "\n", quote = FALSE, col.names = FALSE, row.names = FALSE
         )
-      })
+        return(ofile)
+      }) %>% setNames(names(conv_concat))
 
     }
 
     if ("fsl" %in% write_timing_files) {
+      tf_fsl <- matrix(NA_character_, nrow = dim(dmat)[1L], ncol = dim(dmat)[2L], dimnames = dimnames(dmat))
+
       for (i in 1:dim(dmat)[1L]) {
         for (reg in 1:dim(dmat)[2L]) {
           regout <- dmat[[i, reg]]
@@ -713,7 +726,9 @@ build_design_matrix <- function(
           }
 
           fname <- paste0("run", runs_to_output[i], "_", dimnames(dmat)[[2L]][reg], "_FSL3col.txt")
-          write.table(regout, file=file.path(output_directory, fname), sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
+          ofile <- file.path(output_directory, fs::path_sanitize(fname, replacement = "."))
+          tf_fsl[i, reg] <- ofile
+          write.table(regout, file=ofile, sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
         }
       }
     }
@@ -743,7 +758,8 @@ build_design_matrix <- function(
       #   #unname(do.call(c, lapply(reg, function(run) { run[,"onset"]})))
       # })
 
-      #TODO: make this work for uneven numbers of events across regressors
+      # TODO: make this work for uneven numbers of events across regressors
+      # The apply returns a list in the case of uneven regressors, which crashes various things below
       #this will require some sort of outer_join approach using trial. I've now preserved trial as a field in dmat, but haven't solved this
       regonsets <- apply(dmat, 2, function(reg) {
         unname(do.call(c, lapply(reg, function(run) { run[, "onset"]})))
@@ -753,17 +769,21 @@ build_design_matrix <- function(
         unname(do.call(c, lapply(reg, function(run) { run[, "duration"]})))
       })
 
-      #magical code from here: http://stackoverflow.com/questions/22993637/efficient-r-code-for-finding-indices-associated-with-unique-values-in-vector
-      first_onset_duration <- paste(regonsets[1,], regdurations[1,]) #use combination of onset and duration to determine unique dmBLOCK regressors
-      dt = as.data.table(first_onset_duration)[, list(comb=list(.I)), by=first_onset_duration] #just matches on first row (should work in general)
+      # magical code from here: http://stackoverflow.com/questions/22993637/efficient-r-code-for-finding-indices-associated-with-unique-values-in-vector
+      # use combination of onset and duration to determine unique dmBLOCK regressors
+      first_onset_duration <- paste(regonsets[1, ], regdurations[1, ])
+
+      # just matches on first row (should work in general)
+      dt <- as.data.table(first_onset_duration)[, list(comb=list(.I)), by=first_onset_duration]
 
       lapply(dt$comb, function(comb) {
-        combmat <- dmat[,comb, drop=F]
+        combmat <- dmat[, comb, drop=F]
         #onsets and durations are constant, amplitudes vary
         runvec <- c() #character vector of AFNI runs (one row per run)
         for (i in 1:dim(combmat)[1L]) {
-          runonsets <- combmat[[i,1]][,"onset"] #just use first regressor of combo to get vector onsets and durations (since combinations, by definition, share these)
-          rundurations <- combmat[[i,1]][,"duration"]
+          #just use first regressor of combo to get vector onsets and durations (since combinations, by definition, share these)
+          runonsets <- combmat[[i, 1]][, "onset"]
+          rundurations <- combmat[[i, 1]][, "duration"]
           runvalues <- do.call(cbind, lapply(combmat[i,], function(reg) { reg[, "value"] }))
 
           #AFNI doesn't like us if we pass in the boxcar ourselves in the dmBLOCK format (since it creates this internally). Filter out.
@@ -828,11 +848,15 @@ build_design_matrix <- function(
   #just the onsets for each event
   concat_onsets <- lapply(design_concat, function(x) { x[, "onset"] })
 
-  to_return <- list(design=dmat, design_concat=design_concat, design_convolved=dmat_convolved,
-                    design_unconvolved=dmat_unconvolved, collin_events=collin_diag_events,
-                    collin_convolved=collin_diag_convolved, concat_onsets=concat_onsets, runs_to_output=runs_to_output,
-                    run_nifti=run_nifti, run_volumes=run_volumes, drop_volumes = drop_volumes, tr = tr,
-                    output_directory=output_directory, additional_regressors=additional_regressors)
+  timing_files <- list(convolved = tf_convolved, convolved_concat = tf_convolved_concat, fsl = tf_fsl, afni = tf_afni)
+
+  to_return <- list(
+    design = dmat, design_concat = design_concat, design_convolved = dmat_convolved,
+    design_unconvolved = dmat_unconvolved, collin_events = collin_diag_events,
+    collin_convolved = collin_diag_convolved, concat_onsets = concat_onsets, runs_to_output = runs_to_output,
+    run_nifti = run_nifti, run_volumes = run_volumes, drop_volumes = drop_volumes, tr = tr,
+    output_directory = output_directory, additional_regressors = additional_regressors,
+    timing_files = timing_files)
 
   to_return$design_plot <- visualize_design_matrix(concat_design_runs(to_return))
 

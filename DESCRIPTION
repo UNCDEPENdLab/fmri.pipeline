@@ -30,6 +30,7 @@ Imports:
     doFuture,
     emmeans,
     foreach,
+    fs,
     future,
     future.batchtools,
     ggplot2,

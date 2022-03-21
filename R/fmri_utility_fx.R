@@ -148,7 +148,7 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
       run_convolve <- lapply(1:dim(dmat)[2L], function(j) {
         reg <- dmat[[i, j]] # regressor j for a given run i
         attr(reg, "reg_name") <- dimnames(dmat)[[2L]][j] # tag regressor with a name attribute so that return is named properly
-        
+
         if (nrow(reg) == 0L) {
           if (isTRUE(bdm_args$keep_empty_regressors)) {
             empty <- matrix(rep(0, bdm_args$run_volumes[i]), ncol = 1)
@@ -171,7 +171,7 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
 
       # drop null events before combining into data.frame
       run_convolve <- run_convolve[sapply(run_convolve, function(x) !is.null(x))]
-      df <- do.call(data.frame, run_convolve) #pull into a data.frame with nvols rows and nregressors cols (convolved)
+      df <- as.data.frame(run_convolve, check.names = FALSE) #pull into a data.frame with nvols rows and nregressors cols (convolved)
       #names(df) <- dimnames(dmat)[[2L]]
       return(df)
     })
@@ -765,7 +765,7 @@ visualize_design_matrix <- function(d, outfile=NULL, run_boundaries=NULL, events
 
   #print(round(cor(d), 3))
   d <- as.data.frame(d)
-  d$volume <- 1:nrow(d)
+  d$volume <- seq_len(nrow(d))
   d.m <- d %>% gather(key="variable", value="value", -volume)
   g <- ggplot(d.m, aes(x=volume, y=value)) + geom_line(size=1.2) + theme_bw(base_size=15) + facet_grid(variable ~ ., scales="free_y")
 
