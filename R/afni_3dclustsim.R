@@ -535,7 +535,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       clust_nvox <- sim_calc %>%
         pull(nvoxels) %>%
         ceiling()
-      
+
       arg_list <- list(
           threshold_file = statistic_nifti, bisided = bisided, onesided = onesided, twosided = twosided,
           NN = NN, clust_nvox = clust_nvox, pref_map = clusters_file, pref_dat = thresholded_stat_file
@@ -552,7 +552,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
 
       cobj <- do.call(afni_3dclusterize$new, arg_list)
       cobj$run(quiet = TRUE) # run 3dClusterize if needed
-      
+
       if (isTRUE(add_whereami)) {
         cobj$add_whereami(atlases = whereami_atlases)
       }
