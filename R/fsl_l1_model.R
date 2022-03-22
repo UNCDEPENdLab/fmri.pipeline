@@ -66,7 +66,6 @@ fsl_l1_model <- function(
 
   lg$info("Create l1 fsl_l1_output_dir: %s", fsl_l1_output_dir)
   dir.create(fsl_l1_output_dir, showWarnings=FALSE) #one directory up from a given run
-  timing_dir <- file.path(fsl_l1_output_dir, "timing_files")
 
   feat_l1_df <- data.frame(
     id = id, session = session, run_number = d_obj$runs_to_output, run_volumes = d_obj$run_volumes,
@@ -135,9 +134,25 @@ fsl_l1_model <- function(
       # generate ev syntax
 
       #add common ingredients for preconvolved regressors
-      regressors <- lapply(regressor_names, function(x) {
-        list(name=x, waveform="custom_1", convolution="none",
-          tempfilt=1, timing_file=file.path(timing_dir, paste0("run", feat_l1_df$run_number[rr], "_", x, ".1D")))
+      regressors <- lapply(regressor_names, function(rname) {
+        t_file <- tryCatch(
+          d_obj$timing_files$convolved[glue("run_number{feat_l1_df$run_number[rr]}"), rname],
+          error = function(e) {
+            lg$error(glue("Could not find timing file for run: {feat_l1_df$run_number[rr]}, regressor: {rname} in {fsl_l1_output_dir}"))
+            return(NULL)
+          }
+        )
+
+        if (!checkmate::test_file_exists(t_file)) {
+          msg <- glue("Cannot find timing file: {t_file}")
+          lg$error(msg)
+          stop(msg)
+        }
+
+        list(
+          name = rname, waveform = "custom_1", convolution = "none", tempfilt = 1,
+          timing_file = t_file
+        )
       })
 
       lg$debug("fsl_generate_fsf_lvl1_ev_syntax")
