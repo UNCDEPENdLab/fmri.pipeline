@@ -1,3 +1,91 @@
+ggbrain_images_r6 <- R6::R6Class(
+  classname = "ggbrain_images_r6",
+  private = list(
+    pvt_imgs = list(), # image data
+    pvt_dims = c(), # x, y, z extent
+    set_images = function(images, divide_overlay_posneg = TRUE) {
+      checkmate::assert_character(images)
+      checkmate::assert_file_exists(images)
+      if (is.null(names(images))) {
+        warning(
+          "The images vector does not contain any names. ",
+          "This may lead to weird behaviors downstream if 'underlay' and 'overlay' are requested."
+        )
+        names(images) <- paste0("img", seq_along(images))
+      } else if (!"underlay" %in% names(images)) {
+        warning("'underlay' is not among the images provided. This may lead to weirdness downstream.")
+      }
+
+      if (isTRUE(divide_overlay_posneg) && !"overlay" %in% names(images)) {
+        stop("divide_overlay_posneg is TRUE, but 'overlay' is not among the images provided")
+      }
+
+      private$pvt_imgs <- sapply(images, RNifti::readNifti, simplify = FALSE)
+
+      if (isTRUE(divide_overlay_posneg)) {
+        pos <- private$pvt_imgs[["overlay"]]
+        neg <- private$pvt_imgs[["overlay"]]
+        pos[pos < 0] <- 0
+        neg[neg > 0] <- 0
+        message("Adding positive overlay values to $images$overlay_pos")
+        message("Adding negative overlay values to $images$overlay_neg")
+        private$pvt_imgs[["overlay_pos"]] <- pos
+        private$pvt_imgs[["overlay_neg"]] <- neg
+      }
+    }
+  ),
+  active = list(
+    #' @field sided Whether to clusterize 1-sided ('one'), two-sided ('two'), or bi-sided ('bi')
+    images = function(val) {
+      if (missing(val)) {
+        return(private$pvt_imgs)
+      } else {
+        private$set_images(val)
+      }
+    }
+  ),
+
+  public = list(
+    initialize = function(images, divide_overlay_posneg = TRUE) {
+      private$set_images(images, divide_overlay_posneg)
+    },
+    get_all_slices = function(slices) {
+
+    },
+    get_slices = function(imgs, slice_numbers, plane, drop=FALSE) {
+      if (!checkmate::test_subset(imgs, names(private$pvt_imgs))) {
+        stop(glue("The img input to $get_slice() must be one of: {paste(names(private$pvt_imgs), collapse=', ')}"))
+      }
+
+      checkmate::assert_integerish(slice_numbers, lower = 1)
+      checkmate::assert_subset(plane, c("sagittal", "coronal", "axial"))
+      #return named list of slices for the images requested
+      sapply(imgs, function(iname) {
+        dat <- private$pvt_imgs[[iname]]
+        if (plane == "sagittal") {
+          slc_mat <- aperm(dat[slice_numbers, , , drop = FALSE], c(1, 2, 3))
+        } else if (plane == "coronal") {
+          slc_mat <- aperm(dat[, slice_numbers, , drop = FALSE], c(2, 1, 3))
+        } else if (plane == "axial") {
+          slc_mat <- aperm(dat[, , slice_numbers, drop = FALSE], c(3, 1, 2))
+        }
+
+        attr(slc_mat, "slice_numbers") <- slice_numbers
+        attr(slc_mat, "plane") <- plane
+
+        if (isTRUE(drop)) slc_mat <- drop(slc_mat)
+        return(slc_mat)
+      }, simplify = FALSE)
+
+    }
+  )
+
+)
+
+
+xx <- ggbrain_images_r6$new(c(underlay = "template_brain.nii", overlay = "zstat6_ptfce_fwep_0.05_1mm.nii.gz"))
+
+
 ggbrain_r6 <- R6::R6Class(
   classname = "ggbrain_r6",
   private = list(
@@ -220,11 +308,11 @@ ggbrain <- function(underlay=NULL, overlay=NULL,
   get_slice <- function(img, slice_number, plane) {
     checkmate::assert_number(slice_number)
     if (plane == "sagittal") {
-      slc_mat <- aperm(img[slice_number,,,drop=FALSE], c(1,2,3))
+      slc_mat <- aperm(img[slice_number, , , drop=FALSE], c(1, 2, 3))
     } else if (plane == "coronal") {
-      slc_mat <- aperm(img[,slice_number,,drop=FALSE], c(2,1,3))
+      slc_mat <- aperm(img[, slice_number, , drop=FALSE], c(2, 1, 3))
     } else if (plane == "axial") {
-      slc_mat <- aperm(img[,,slice_number,drop=FALSE], c(3,1,2))
+      slc_mat <- aperm(img[, , slice_number, drop=FALSE], c(3, 1, 2))
     }
     
     return(slc_mat)
@@ -322,6 +410,7 @@ ggbrain <- function(underlay=NULL, overlay=NULL,
     return(fxn)
   }
 
+  # breaks function for including min + max with labels, and a few unlabeled ticks in between
   range_breaks <- function(n=3, ...) {
     fxn <- function(x) {
       breaks <- round(seq(from = min(x, na.rm = T), to = max(x, na.rm = T), length.out = n + 2), ...)
@@ -406,10 +495,10 @@ ggbrain <- function(underlay=NULL, overlay=NULL,
       g$scales$scales[[2]]$name <- ifelse(has_pos, "", legend_label) # only add label to neg scale if there are no positive values
       g$scales$scales[[2]]$guide <- guide_colorbar(order = 2, available_aes = c("fill", "fill_new"), ticks.colour = text_color)
     }
-    
+
     # position of positive and negative color scales in g$scales$scales list
     ppos <- ifelse(has_pos && has_neg, 3, 2)
-    
+
     if (has_pos) {
       #g$scales$scales[[ppos]]$breaks <- integer_breaks()
       #g$scales$scales[[ppos]]$breaks <- pretty_breaks() # ggplot default for now
@@ -418,11 +507,11 @@ ggbrain <- function(underlay=NULL, overlay=NULL,
       g$scales$scales[[ppos]]$name <- legend_label # label above positive extent
       g$scales$scales[[ppos]]$guide <- guide_colorbar(order = 1, available_aes = c("fill", "fill_new"), ticks.colour = text_color)
     }
-    
+
     # annotation
     # g <- g +
     #   annotate(geom="text", x = Inf, y = -Inf, label=coords_df$coord_label[i], color = text_color, hjust = 1.5, vjust = -1.5)
-    
+
     # theme refinements
     g <- g +
       # geom_text(data = coords_df, mapping = aes(label = coord_label, x = Inf, y = -Inf), 
@@ -472,12 +561,12 @@ ggbrain <- function(underlay=NULL, overlay=NULL,
 
     # remove legend from subplots
     g <- g + theme(legend.position = "none")
-    
+
     # cache legend for extraction
     attr(g, "legend") <- leg
 
     # ggp <- ggbrain_panel_r6$new(g)
-    
+
     return(g)
   }
   
