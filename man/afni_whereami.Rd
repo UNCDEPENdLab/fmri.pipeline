@@ -15,6 +15,7 @@ wrapper class for AFNI whereami
 \item \href{#method-get_call}{\code{afni_whereami$get_call()}}
 \item \href{#method-get_omask_call}{\code{afni_whereami$get_omask_call()}}
 \item \href{#method-get_whereami_df}{\code{afni_whereami$get_whereami_df()}}
+\item \href{#method-get_overlap_df}{\code{afni_whereami$get_overlap_df()}}
 \item \href{#method-get_omask_df}{\code{afni_whereami$get_omask_df()}}
 \item \href{#method-get_outputs}{\code{afni_whereami$get_outputs()}}
 \item \href{#method-run}{\code{afni_whereami$run()}}
@@ -103,6 +104,16 @@ return the data.frame of coordinates and labels from the whereami lookup
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-get_overlap_df"></a>}}
+\if{latex}{\out{\hypertarget{method-get_overlap_df}{}}}
+\subsection{Method \code{get_overlap_df()}}{
+return the data.frame of percent overlap between each atlas and clusters/ROIs in the input mask
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{afni_whereami$get_overlap_df()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-get_omask_df"></a>}}
 \if{latex}{\out{\hypertarget{method-get_omask_df}{}}}
 \subsection{Method \code{get_omask_df()}}{
@@ -116,7 +127,7 @@ return the data.frame of the percentage overlap for each parcel (not implemented
 \if{html}{\out{<a id="method-get_outputs"></a>}}
 \if{latex}{\out{\hypertarget{method-get_outputs}{}}}
 \subsection{Method \code{get_outputs()}}{
-return a list of the output files from this whereami objet
+return a list of the output files from this whereami object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_whereami$get_outputs(exclude_missing = TRUE)}\if{html}{\out{</div>}}
 }
