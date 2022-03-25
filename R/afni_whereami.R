@@ -15,7 +15,7 @@ afni_whereami <- R6::R6Class("afni_whereami",
     pvt_call = NULL,
     pvt_call_omask = NULL,
     pvt_output_file = NULL,
-    pvt_omask_output_file = "whereami_omask.txt",
+    pvt_omask_output_file = NULL,
     pvt_afnidir = NULL,
     pvt_whereami_df = NULL,
 
@@ -77,8 +77,55 @@ afni_whereami <- R6::R6Class("afni_whereami",
 
       return(roi_df)
     },
-    parse_whereami_bmask_output = function(txt) {
+    parse_whereami_omask_output = function(txt) {
+      # section headers
+      head_lines <- grep("^\\s*\\+*\\s*Processing unique value of \\d+\\s*$", txt, perl=TRUE)
+      if (length(head_lines) == 0L) {
+        cat(glue("No valid ROI header lines found in {private$pvt_omask_output_file}"), "\n")
+        return(NULL)
+      }
 
+      parse_atlas_txt <- function(atlas_subsection, atlas, roi_num) {
+        overlap_lines <- grep("\\s*[0-9.]+\\s*%\\s*overlap with", atlas_subsection, perl = TRUE)
+        if (length(overlap_lines) == 0) {
+          cat("No ROI overlap lines found within section\n")
+          return(NULL) # not sure if a data.frame with overlap as NA should be preferred (but then you have a row in the df that is not 'real' in any sense)
+        }
+
+        pct <- sub("^\\s*([0-9.]+)\\s*%.*", "\\1", atlas_subsection[overlap_lines], perl = TRUE)
+        label <- sub("^\\s*[0-9.]+\\s*%\\s*overlap with\\s+([^,]+).*", "\\1", atlas_subsection[overlap_lines], perl = TRUE)
+        code <- sub("^\\s*[0-9.]+\\s*%\\s*overlap with\\s+[^,]+,\\s*code (\\S+)", "\\1", atlas_subsection[overlap_lines], perl = TRUE)
+
+        o_df <- data.frame(roi_num = roi_num, atlas = atlas, label = label, overlap_pct = as.numeric(pct), atlas_code = code)
+        return(o_df)
+      }
+
+      roi_nums <- as.integer(sub("^\\s*\\+*\\s*Processing unique value of (\\d+)\\s*$", "\\1", txt[head_lines], perl = TRUE))
+      roi_list <- list()
+
+      for (ss in seq_along(head_lines)) {
+        endl <- ifelse(ss == length(head_lines), length(txt), head_lines[ss+1]-1)
+        section <- txt[(head_lines[ss] + 1):endl]
+
+        atlas_sublines <- grep("\\s*Intersection of ROI \\(valued \\d+\\) with atlas\\s+[^\\s]+.*", section, perl = TRUE)
+        if (length(atlas_sublines) == 0L) {
+          cat(glue("No atlas subsections found for ROI {roi_nums[ss]}"), "\n")
+          next
+        }
+
+        atlas_names <- sub("\\s*Intersection of ROI \\(valued \\d+\\) with atlas\\s+([^\\s]+).*", "\\1", section[atlas_sublines], perl = TRUE)
+
+        o_list <- lapply(seq_along(atlas_sublines), function(aa) {
+          endl_sub <- ifelse(aa == length(atlas_sublines), length(section), atlas_sublines[aa + 1] - 1)
+          atlas_subsection <- section[(atlas_sublines[aa] + 1):endl_sub]
+
+          parse_atlas_txt(atlas_subsection, atlas = atlas_names[aa], roi = roi_nums[ss])
+        })
+
+        roi_list[[ss]] <- o_list # maybe move to another lapply at the ss level...
+      }
+
+      bind_rows(roi_list) # this will tolerate the nested list structure
     },
     build_call = function() {
       orient_str <- ifelse(private$pvt_orient == "LPI", "-lpi", "-rai")
@@ -173,6 +220,14 @@ afni_whereami <- R6::R6Class("afni_whereami",
           private$pvt_omask_output_file <- omask_output_file
         }
 
+        if (is.null(private$pvt_omask_output_file)) {
+          if (private$pvt_method == "coord_file") {
+            private$pvt_omask_output_file <- paste0(basename(file_sans_ext(private$pvt_coord_file)), "_whereami_omask.txt")
+          } else {
+            private$pvt_omask_output_file <- "whereami_omask.txt" # a bit dangerous if you have many stats in the same folder (overwriting)
+          }
+        }
+
         # convert output file to absolute path, using location of omask if user doesn't provide absolute path.
         private$pvt_omask_output_file <- R.utils::getAbsolutePath(private$pvt_omask_output_file, workDirectory = dirname(private$pvt_omask))
       }
@@ -229,11 +284,21 @@ afni_whereami <- R6::R6Class("afni_whereami",
     #' @description return the data.frame of coordinates and labels from the whereami lookup
     get_whereami_df = function() {
       if (!checkmate::test_file_exists(private$pvt_output_file)) {
-        warning("Expected whereami output directory does not exist. Cannot return data! ", private$pvt_output_file)
+        warning("Expected whereami output file does not exist. Cannot return data! ", private$pvt_output_file)
       }
 
       txt <- readLines(private$pvt_output_file)
       return(private$parse_whereami_output(txt))
+    },
+
+    #' @description return the data.frame of percent overlap between each atlas and clusters/ROIs in the input mask
+    get_overlap_df = function() {
+      if (!checkmate::test_file_exists(private$pvt_omask_output_file)) {
+        warning("Expected whereami mask overlap file does not exist. Cannot return data! ", private$pvt_omask_output_file)
+      }
+
+      txt <- readLines(private$pvt_omask_output_file)
+      return(private$parse_whereami_omask_output(txt))
     },
 
     #' @description return the data.frame of the percentage overlap for each parcel (not implemented)
@@ -241,7 +306,7 @@ afni_whereami <- R6::R6Class("afni_whereami",
 
     },
 
-    #' @description return a list of the output files from this whereami objet
+    #' @description return a list of the output files from this whereami object
     #' @param exclude_missing if TRUE, any expected output file that does not exist will be NA in the returned list
     #' @return a list of all output files
     get_outputs = function(exclude_missing = TRUE) {

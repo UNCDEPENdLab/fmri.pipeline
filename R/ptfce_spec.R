@@ -353,7 +353,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
       checkmate::assert_number(fwep, lower = 1e-10, upper = .999)
       checkmate::assert_integerish(clust_nvox, lower = 1, upper = 1e6)
       checkmate::assert_integerish(NN, len = 1L, lower = 1L, upper = 3L)
-      checkmate::assert_logical(add_whereami, len = 1L)      
+      checkmate::assert_logical(add_whereami, len = 1L)
       checkmate::assert_character(whereami_atlases, null.ok = TRUE)
 
       # TODO: doesn't really handle the one-sided versus two-sided issue if we have to calculate the z
@@ -389,14 +389,13 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
           bisided = bisided, onesided = onesided, lower_thresh = lower_thresh,
           upper_thresh = upper_thresh, one_thresh = one_thresh
         )
-        
-        #x <- afni_whereami$new(afni_3dclusterize_obj = cobj)
 
+        # x <- afni_whereami$new(afni_3dclusterize_obj = cobj)
         cobj$run(quiet = TRUE) # run 3dClusterize if needed
         if (isTRUE(add_whereami)) {
           cobj$add_whereami(atlases = whereami_atlases)
         }
-        
+
         return(cobj)
       })
 
@@ -408,7 +407,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
       } else {
         tbl <- tibble(cluster_obj = private$pvt_cluster_objs)
       }
-      
+
       return(tbl)
     }
   )
