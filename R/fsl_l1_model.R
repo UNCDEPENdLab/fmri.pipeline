@@ -90,7 +90,8 @@ fsl_l1_model <- function(
     }
 
     # handle inclusion of confound regressors
-    disable_confounds <- FALSE # whether to turn off confound regressors in FSF specification
+    # turn off confounds if l1_confound_regressors is NULL, l1_confound_files[rr] is NA or does not exist
+    disable_confounds <- TRUE # default to TRUE
     if (!is.null(gpa$confound_settings$l1_confound_regressors)) {
       # TODO: consider treating confound regressors as a feature of a given l1 model, rather than enforcing across all models
       l1_confound_file <- l1_confound_files[rr]
@@ -99,9 +100,9 @@ fsl_l1_model <- function(
           "Cannot find l1_confound_file for id: %d, session: %d, run_number: %d, file: %s",
           id, session, feat_l1_df$run_number[rr], l1_confound_file
         )
-        disable_confounds <- TRUE
       } else {
         this_template <- gsub(".CONFOUNDS.", l1_confound_file, this_template, fixed = TRUE)
+        disable_confounds <- FALSE
       }
     }
 
