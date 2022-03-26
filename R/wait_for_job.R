@@ -30,7 +30,7 @@
 #' }
 #'
 #' @author Michael Hallquist
-#' @importFrom dplyr full_join if_else
+#' @importFrom dplyr full_join if_else bind_rows
 #' @export
 wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 24,
                          scheduler = "local", quiet = TRUE, stop_on_timeout = TRUE) {
@@ -80,18 +80,24 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
       })
     } else if (scheduler %in% c("torque", "qsub")) {
       # QSUB
-      status <- system(paste("qstat -f", jj, "| grep -i 'job_state'"), intern = TRUE)
-      job_state <- sub(".*job_state = ([A-z]).*", "\\1", status, perl = TRUE)
-      state <- switch(status,
-        "C" = "complete",
-        "R" = "running",
-        "Q" = "queued",
-        "H" = "suspended",
-        "other"
-      )
+      status <- torque_job_status(job_ids)
+      state <- status$State
+
+      # no need for additional mapping in simple torque results
+      # state <- sapply(status$State, function(x) {
+      #   switch(x,
+      #     "C" = "complete",
+      #     "R" = "running",
+      #     "Q" = "queued",
+      #     "H" = "suspended",
+      #     "W" = "suspended", # waiting
+      #     stop("Unable to understand job state: ", x)
+      #   )
+      # })
     } else {
       stop("unknown scheduler: ", scheduler)
     }
+    return(state)
   }
 
   ret_code <- NULL # should be set to TRUE if all jobs complete and FALSE if any job fails 
@@ -155,8 +161,7 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
 }
 
 # calls sacct with a job list
-slurm_job_status <- function(job_ids = NULL, user = NULL,
-                             sacct_format = "jobid,submit,timelimit,start,end,state") {
+slurm_job_status <- function(job_ids = NULL, user = NULL, sacct_format = "jobid,submit,timelimit,start,end,state") {
   if (!is.null(job_ids)) {
     jstring <- paste0("-j", paste(job_ids, collapse = ","))
   } else {
@@ -175,7 +180,7 @@ slurm_job_status <- function(job_ids = NULL, user = NULL,
   cmd <- paste(jstring, ustring, "-X -P -o", sacct_format)
   # cat(cmd, "\n")
   res <- system2("sacct", args = cmd, stdout = TRUE)
-  
+
   df_base <- data.frame(JobID = job_ids)
   df_empty <- df_base %>%
     mutate(
@@ -211,6 +216,43 @@ slurm_job_status <- function(job_ids = NULL, user = NULL,
     mutate(State = if_else(is.na(State), "MISSING", State))
 
   return(df)
+}
+
+# torque does not keep information about completed jobs available in qstat or qselect
+# thus, need to log when a job is listed as queued, so that it 'going missing' is evidence of it being completed
+torque_job_status <- function(job_ids, user = NULL) {
+  #res <- system2("qstat", args = paste("-f", paste(job_ids, collapse=" "), "| grep -i 'job_state'"), stdout = TRUE)
+
+  q_jobs <- system2("qselect", args = "-u $USER -s QW", stdout = TRUE) # queued jobs
+  r_jobs <- system2("qselect", args = "-u $USER -s EHRT", stdout = TRUE) # running jobs
+  c_jobs <- system2("qselect", args = "-u $USER -s C", stdout = TRUE) # complete jobs
+  m_jobs <- setdiff(job_ids, c(q_jobs, r_jobs, c_jobs)) # missing jobs
+  #state <- c("queued", "running", "complete", "missing")
+  state <- c("queued", "running", "complete", "complete")
+
+  # TORQUE clusters only keep jobs with status C (complete) for a limited period of time. After that, the job comes back as missing.
+  # Because of this, if one job finishes at time X and another finishes at time Y, job X will be 'missing' if job Y takes a very long time.
+  # Thus, we return any missing jobs as complete, which could be problematic if they are truly missing immediately after submission (as happened with slurm).
+  # Ideally, we would track a job within wait_for_job such that it can be missing initially, then move into running, then move into complete.
+
+  j_list <- list(q_jobs, r_jobs, c_jobs, m_jobs)
+  state_list <- list()
+  for (ii in seq_along(j_list)) {
+    if (length(j_list[[ii]]) > 0L) {
+      state_list[[state[ii]]] <- data.frame(JobID = j_list[[ii]], State = state[ii])
+    }
+  }
+
+  state_df <- bind_rows(state_list)
+
+  if (!is.null(attr(q_jobs, "status"))) {
+    warning("qselect call generated non-zero exit status")
+    return(df_empty)
+  }
+
+  #job_state <- sub(".*job_state = ([A-z]).*", "\\1", res, perl = TRUE)
+
+  return(state_df)
 }
 
 local_job_status <- function(job_ids = NULL, user = NULL,
