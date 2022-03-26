@@ -247,7 +247,7 @@ torque_job_status <- function(job_ids, user = NULL) {
 
   if (!is.null(attr(q_jobs, "status"))) {
     warning("qselect call generated non-zero exit status")
-    return(df_empty)
+    return(data.frame(JobID = job_ids, State = "missing"))
   }
 
   #job_state <- sub(".*job_state = ([A-z]).*", "\\1", res, perl = TRUE)
