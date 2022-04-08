@@ -253,7 +253,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   extra <- NULL # columns to extract
   if (level == 1L) {
     stat_results <- to_extract %>%
-      left_join(get_l1_cope_df(gpa, extract), by = c("id", "session", "l1_model"))
+      inner_join(get_l1_cope_df(gpa, extract), by = c("id", "session", "l1_model"))
 
     for (ww in what) {
       # calculate the expected image location for this contrast and subject based on row values in stat_results data.frame
@@ -263,8 +263,8 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     extra <- "run_number" # also extract
   } else if (level == 2L) {
     stat_results <- to_extract %>%
-      left_join(get_l2_cope_df(gpa, extract), by = c("id", "session", "l2_model")) %>%
-      left_join(get_l1_cope_df(gpa, extract), by = c("id", "session", "l1_model"))
+      inner_join(get_l2_cope_df(gpa, extract), by = c("id", "session", "l2_model")) %>%
+      inner_join(get_l1_cope_df(gpa, extract), by = c("id", "session", "l1_model"))
 
     for (ww in what) {
       # calculate the expected image location for this contrast and subject based on row values in stat_results data.frame
@@ -274,9 +274,9 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   } else if (level == 3L) {
     browser()
     stat_results <- to_extract %>%
-      left_join(get_l3_cope_df(gpa, extract), by = c("id", "session", "l3_model")) %>%
-      left_join(get_l2_cope_df(gpa, extract), by = c("id", "session", "l2_model")) %>%
-      left_join(get_l1_cope_df(gpa, extract), by = c("id", "session", "l1_model"))
+      inner_join(get_l3_cope_df(gpa, extract), by = c("id", "session", "l3_model")) %>%
+      inner_join(get_l2_cope_df(gpa, extract), by = c("id", "session", "l2_model")) %>%
+      inner_join(get_l1_cope_df(gpa, extract), by = c("id", "session", "l1_model"))
   }
 
   stat_results <- stat_results %>%
