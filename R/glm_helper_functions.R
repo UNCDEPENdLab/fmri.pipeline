@@ -191,10 +191,10 @@ generate_motion_regressors <- function(motion_params_file = "motion.par",
     mot <- mot[, lapply(.SD, function(x) { x - mean(x, na.rm=TRUE) }) ]
   }
 
-  ##just PCA motion on the current run
-  ##mregressors <- pca_motion(run_nifti[r], runlengths[r], motion_parfile="motion.par", numpcs=3, drop_volumes=drop_volumes)$motion_pcs_concat
+  ## just PCA motion on the current run
+  ## mregressors <- pca_motion(run_nifti[r], runlengths[r], motion_parfile="motion.par", numpcs=3, drop_volumes=drop_volumes)$motion_pcs_concat
 
-  return(mot)
+  return(as.data.frame(mot))
 }
 
 #' compute spike regressors from a data.frame or matrix of motion parameters and a set of

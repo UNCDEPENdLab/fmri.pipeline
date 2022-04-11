@@ -92,7 +92,7 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   # Determine whether we should be returning information about l1 confound regressors
   # and whether this information has already been calculated
   generate_l1_confounds <- FALSE
-  if (is.null(gpa$confound_settings$l1_confound_regressors)) {
+  if (is.null(gpa$confound_settings$l1_confound_regressors) && is.null(gpa$confound_settings$spike_volumes)) {
     # no confounds requested
     expected_l1_confound_file <- NA_character_
   } else {
@@ -383,5 +383,5 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
       exclude_run = exclude_run, exclude_data = exclude_data, truncation_data = truncation_data
     ))
   }
-  
+
 }
