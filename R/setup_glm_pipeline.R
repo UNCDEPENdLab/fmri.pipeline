@@ -238,6 +238,32 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   # TODO: should probably look at names in subject, run, and trial data to make sure they all line up
 
+  # compare ids in subject_data, run_data, and trial_data
+  subject_data_ids <- unique(subject_data$id)
+  run_data_ids <- unique(run_data$id)
+  trial_data_ids <- unique(trial_data$id)
+
+  all_ids <- named_list(subject_data_ids, run_data_ids, trial_data_ids)
+  match_ids <- Reduce(intersect, all_ids) # only keep ids present at all three levels
+  union_ids <- Reduce(union, all_ids) # only keep ids present at all three levels
+
+  # print all pairwise differences in ids
+  setdiff_list_combn(all_ids)
+
+  if (length(match_ids) == 0L) {
+    msg <- "No ids are in common across subject_data, run_data, and trial_data! We cannot proceed with setup."
+    lg$error(msg)
+    stop(msg)
+  } else if (length(match_ids) < length(union_ids)) {
+    lg$warn("The ids in subject_data, run_data, and trial_data are not identical. Only the ids in common will be analyzed!")
+    lg$warn(glue("Number of non-matching ids: {length(union_ids) - length(match_ids)}"))
+    lg$warn(glue("Dropped ids: {paste(setdiff(union_ids, match_ids), collapse=', ')}"))
+  }
+
+  subject_data <- subject_data %>% filter(id %in% !!match_ids)
+  run_data <- run_data %>% filter(id %in% !!match_id)
+  trial_data <- trial_data %>% filter(id %in% !!match_ids)
+
   if (!is.null(l1_models)) {
     if (checkmate::test_string(l1_models) && l1_models[1L] == "prompt") {
       l1_models <- build_l1_models(trial_data = trial_data)
@@ -294,6 +320,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   # add name of node/host on which this is run (useful for logic about different compute environments)
   info <- Sys.info()
   gpa$nodename <- info["nodename"]
+  gpa$sys_info <- info # populate full system information to object
 
   # populate $parallel
   gpa <- setup_parallel_settings(gpa, lg)

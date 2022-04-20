@@ -1537,3 +1537,30 @@ compute_permutations <- function(n, keys = NULL) {
 
   return(A)
 }
+
+#' internal function to print bidirectional set differences in a list containing vectors to be compared
+#' @param l a named list containing vectors to be compared
+#' @details All pairwise combinations of vectors in the list will be compared. The setdiff() operation is
+#'   run twice for each pair, reflecting the two directions of comparison (s1 %notin% s2 and s2 %notin% s1).
+#' @return NULL (invisibly)
+#' @keywords internal
+setdiff_list_combn <- function(l) {
+    combs <- combn(length(l), 2)
+    for (i in seq_len(ncol(combs))) {
+      v1 <- l[[ combs[1, i] ]]
+      v2 <- l[[ combs[2, i] ]]
+      n1 <- names(l)[combs[1, i]]
+      n2 <- names(l)[combs[2, i]]
+      s1 <- setdiff(v1, v2)
+      s2 <- setdiff(v2, v1)
+
+      if (length(s1) > 0L) {
+        cat(glue("Values in {n1} that are not in {n2}: {paste(s1, collapse=', ')}\n", .trim = F))
+      }
+
+      if (length(s2) > 0L) {
+        cat(glue("Values in {n2} that are not in {n1}: {paste(s2, collapse=', ')}\n", .trim = F))
+      }
+    }
+    return(invisible(NULL))
+  }
