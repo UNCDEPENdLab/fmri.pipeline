@@ -1545,22 +1545,73 @@ compute_permutations <- function(n, keys = NULL) {
 #' @return NULL (invisibly)
 #' @keywords internal
 setdiff_list_combn <- function(l) {
-    combs <- combn(length(l), 2)
-    for (i in seq_len(ncol(combs))) {
-      v1 <- l[[ combs[1, i] ]]
-      v2 <- l[[ combs[2, i] ]]
-      n1 <- names(l)[combs[1, i]]
-      n2 <- names(l)[combs[2, i]]
-      s1 <- setdiff(v1, v2)
-      s2 <- setdiff(v2, v1)
+  combs <- combn(length(l), 2)
+  for (i in seq_len(ncol(combs))) {
+    v1 <- l[[combs[1, i]]]
+    v2 <- l[[combs[2, i]]]
+    n1 <- names(l)[combs[1, i]]
+    n2 <- names(l)[combs[2, i]]
+    s1 <- setdiff(v1, v2)
+    s2 <- setdiff(v2, v1)
 
-      if (length(s1) > 0L) {
-        cat(glue("Values in {n1} that are not in {n2}: {paste(s1, collapse=', ')}\n", .trim = F))
-      }
-
-      if (length(s2) > 0L) {
-        cat(glue("Values in {n2} that are not in {n1}: {paste(s2, collapse=', ')}\n", .trim = F))
-      }
+    if (length(s1) > 0L) {
+      cat(glue("Values in {n1} that are not in {n2}: {paste(s1, collapse=', ')}\n", .trim = F))
     }
-    return(invisible(NULL))
+
+    if (length(s2) > 0L) {
+      cat(glue("Values in {n2} that are not in {n1}: {paste(s2, collapse=', ')}\n", .trim = F))
+    }
   }
+  return(invisible(NULL))
+}
+
+#' initial function to generate a run_data object from a BIDS-compliant folder
+#' @param bids_dir a directory containing BIDS-compliant processed data for analysis
+#' @param modality the subfolder within \code{bids_dir} that contains data of a certain modality.
+#'   Almost always 'func', which is the default.
+#' @param type at present, always 'task' to denote this part of the BIDS filename... Not totally sure what else it could be
+#' @param task_name the name of the task, which is appended with \code{type}
+#' @param suffix an optional suffix in the expected filename (just before the file extension)
+#' @return a data.frame containing all run_nifti and confound_input_file results for subjects in the folder
+#' @details The files should generally have a name like
+#'   sub-220256_task-ridl3_space-MNI152NLin2009cAsym_desc-preproc_bold_postprocessed.nii.gz
+#'   and be located in a folder like: /proj/mnhallqlab/proc_data/sub-220256/func/
+#'   where 'func' is the \code{modality}, 'task' is the \code{type], 'ridl' is the \code{task_name}, and
+#'   '_postprocessed' is the \code{suffix}.
+#' @importFrom dplyr bind_rows
+#' @export
+generate_run_data_from_bids <- function(bids_dir, modality="func", type="task", task_name="ridl", suffix="_postproccessed") {
+  checkmate::assert_directory_exists(bids_dir)
+  checkmate::assert_string(modality)
+  checkmate::assert_string(type)
+  checkmate::assert_string(task_name)
+  checkmate::assert_string(suffix, null.ok=TRUE)
+  sub_dirs <- list.dirs(bids_dir, recursive = FALSE)
+  slist <- lapply(sub_dirs, function(ss) {
+    expect_dir <- file.path(ss, modality)
+    if (!checkmate::test_directory_exists(expect_dir)) {
+      warning(glue("Cannot find expected modality directory: {expect_dir}"))
+      return(NULL)
+    }
+
+    # I wonder if nii_files and confound_files could diverge in order, become mismatched
+    nii_files <- Sys.glob(glue("{expect_dir}/sub*_{type}-{task_name}*{suffix}.nii.gz"))
+    if (length(nii_files) == 0L) {
+      warning(glue("No NIfTI file matches in: {expect_dir}"))
+      return(NULL)
+    }
+    confound_files <- Sys.glob(glue("{expect_dir}/sub*_{type}-{task_name}*-confounds*.tsv"))
+
+    if (length(nii_files) != length(confound_files)) {
+      warning(glue("Cannot align nifti and confound files for {expect_dir}"))
+      return(NULL)
+    }
+    id <- sub("^sub-", "", basename(ss))
+
+    # NB. this is not a BIDS-compliant approach. Needs to be _run-01. Will to adjust
+    run_number <- as.integer(sub(glue(".*sub-.*_{type}-{task_name}(\\d+).*"), "\\1", nii_files, perl = TRUE))
+    data.frame(id = id, run_number = run_number, run_nifti = nii_files, confound_input_file = confound_files)
+  })
+
+  dplyr::bind_rows(slist)
+}

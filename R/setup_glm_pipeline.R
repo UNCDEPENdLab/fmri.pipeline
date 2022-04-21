@@ -261,7 +261,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   }
 
   subject_data <- subject_data %>% filter(id %in% !!match_ids)
-  run_data <- run_data %>% filter(id %in% !!match_id)
+  run_data <- run_data %>% filter(id %in% !!match_ids)
   trial_data <- trial_data %>% filter(id %in% !!match_ids)
 
   if (!is.null(l1_models)) {
