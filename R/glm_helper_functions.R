@@ -1580,7 +1580,7 @@ setdiff_list_combn <- function(l) {
 #'   '_postprocessed' is the \code{suffix}.
 #' @importFrom dplyr bind_rows
 #' @export
-generate_run_data_from_bids <- function(bids_dir, modality="func", type="task", task_name="ridl", suffix="_postproccessed") {
+generate_run_data_from_bids <- function(bids_dir, modality="func", type="task", task_name="ridl", suffix="_postprocessed") {
   checkmate::assert_directory_exists(bids_dir)
   checkmate::assert_string(modality)
   checkmate::assert_string(type)

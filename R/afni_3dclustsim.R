@@ -460,7 +460,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       bisided <- onesided <- twosided <- FALSE
 
       checkmate::assert_string(sided)
-      sided <- recode(tolower(sided), "one" = "1", "two" = "2") # consistent nomenclature
+      sided <- dplyr::recode(tolower(sided), "one" = "1", "two" = "2") # consistent nomenclature
       checkmate::assert_subset(sided, c("1", "2", "bi"))
 
       if (sided == "bi") {
