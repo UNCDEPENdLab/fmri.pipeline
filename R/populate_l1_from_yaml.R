@@ -147,6 +147,12 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
 
       sobj$wi_formula <- ff
 
+      model_vars <- all.vars(sobj$wi_formula)
+      if (!all(model_vars %in% sobj$wi_factors)) {
+        lg$warn("At least one variable in the spec wi_formula expression was not in wi_factors. Adding it!\n")
+        sobj$wi_factors <- union(sobj$wi_factors, model_vars)
+      }
+
       sobj$value <- get_value_df(sobj, trial_data, wi_factors = sobj$wi_factors)
 
       # fit dummy model to populate a set of dummy coefficients, then save those to the object
