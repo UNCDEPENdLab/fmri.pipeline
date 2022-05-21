@@ -369,7 +369,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
         vv <- all.vars(ff)
         miss_data <- data[rr, dt[[1]]] %>%
           dplyr::select(!!vv) %>% # just keep model-relevant variables
-          mutate(any_miss = rowSums(is.na(select(., any_of(!!vv)))) > 0)
+          mutate(any_miss = rowSums(is.na(dplyr::select(., any_of(!!vv)))) > 0)
         n_present <- miss_data %>%
           dplyr::filter(any_miss == FALSE) %>%
           nrow()

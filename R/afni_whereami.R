@@ -329,7 +329,19 @@ afni_whereami <- R6::R6Class("afni_whereami",
       # NULL means that omask is irrelevant, FALSE means we need to run it, TRUE means we already have the omask result
       omaskfile_exists <- if (is.null(private$pvt_omask)) NULL else checkmate::test_file_exists(private$pvt_omask_output_file)
 
-      if (isFALSE(force) && isTRUE(outfile_exists) && isTRUE(omaskfile_exists)) {
+      # when force is TRUE, remove extant files so that they are regenerated
+      if (isTRUE(force)) {
+        if (isTRUE(outfile_exists)) { 
+          unlink(private$pvt_output_file, force = TRUE)
+          outfile_exists <- FALSE
+        }
+        if (isTRUE(omaskfile_exists)) { 
+          unlink(private$pvt_omask_output_file, force = TRUE)
+          omaskfile_exists <- FALSE
+        }
+      }
+      
+      if (isTRUE(outfile_exists) && isTRUE(omaskfile_exists)) {
         message("whereami output file already exists: ", private$pvt_output_file, ". Use $run(force=TRUE) if you want to regenerate this file.")
         return(invisible(NULL))
       }
