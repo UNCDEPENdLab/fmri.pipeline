@@ -10,6 +10,7 @@ run_decon_alignment(
   trial_df,
   alignments = list(),
   nbins = 12,
+  aggregate_by = "atlas_value",
   overwrite = FALSE,
   tr = NULL,
   ncpus = 8,
@@ -28,6 +29,9 @@ See \code{get_medusa_interpolated_ts} for help with arguments, and see Details.}
 
 \item{nbins}{For atlases with continuous values, how many bins should be used to discretize the mask values, leading to aggregation
 by bin.}
+
+\item{aggregate_by}{The column name in the individual deconvolved files used for averaging repeated units (e.g., voxels) into single
+event-aligned time series. Most commonly, this is "atlas_value", which will lead to averaging of voxels within each parcel in the mask.}
 
 \item{overwrite}{if TRUE, overwrite existing output files}
 

@@ -387,6 +387,8 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
 #'   See \code{get_medusa_interpolated_ts} for help with arguments, and see Details.
 #' @param nbins For atlases with continuous values, how many bins should be used to discretize the mask values, leading to aggregation
 #'   by bin.
+#' @param aggregate_by The column name in the individual deconvolved files used for averaging repeated units (e.g., voxels) into single
+#'   event-aligned time series. Most commonly, this is "atlas_value", which will lead to averaging of voxels within each parcel in the mask.
 #' @param overwrite if TRUE, overwrite existing output files
 #' @param tr The repetition time of the scan in seconds.
 #' @param ncpus The number of cores to use for each parallel job
@@ -443,8 +445,8 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
 #'
 #' }
 #' @export
-run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = list(), nbins = 12, overwrite = FALSE, tr = NULL,
-                               ncpus = 8, walltime = "1:00:00", scheduler = "slurm") {
+run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = list(), nbins = 12, aggregate_by = "atlas_value", 
+    overwrite = FALSE, tr = NULL, ncpus = 8, walltime = "1:00:00", scheduler = "slurm") {
   checkmate::assert_file_exists(atlas_files)
   checkmate::assert_directory_exists(decon_dir)
   checkmate::assert_data_frame(trial_df)
@@ -558,6 +560,8 @@ run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = l
 #' @param d_files A vector of deconvolved .csv.gz files created by \code{voxelwise_deconvolution}.
 #' @param trial_df The trial-level data.frame containing id and run for each subject represented in \code{d_files}.
 #' @param alignment A list containing alignment details passed to get_medusa_interpolated_ts
+#' @param aggregate_by The column name in the individual deconvolved files used for averaging repeated units (e.g., voxels) into single
+#'   event-aligned time series. Most commonly, this is "atlas_value", which will lead to averaging of voxels within each parcel in the mask.
 #' @param tr The repetition time of the sequence in seconds.
 #' @param atlas_cuts For a continuous-valued atlas (e.g., containing a gradient of interest), a vector of cut points for binning values
 #' @param mask A list of mask-related information, including ...
@@ -565,8 +569,10 @@ run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = l
 #' @importFrom doParallel registerDoParallel
 #' @importFrom parallel makeCluster stopCluster
 #' @importFrom foreach registerDoSEQ
+#' @importFrom dplyr select
+#' @importFrom tidyselect all_of
 #' @export
-evt_align_decon_files <- function(d_files, trial_df, alignment = list(), tr = NULL, atlas_cuts, out_file = NULL, ncpus = 8) {
+evt_align_decon_files <- function(d_files, trial_df, alignment = list(), aggregate_by="atlas_value", tr = NULL, atlas_cuts, out_file = NULL, ncpus = 8) {
   checkmate::assert_character(d_files)
   checkmate::assert_file_exists(d_files)
   checkmate::assert_data_frame(trial_df)
@@ -588,7 +594,17 @@ evt_align_decon_files <- function(d_files, trial_df, alignment = list(), tr = NU
     # add sub and run for now since I screwed this up in the outputs...
     id <- as.numeric(sub("^.*/sub(\\d+)_.*", "\\1", fname))
     run <- as.numeric(sub("^.*/sub\\d+_run(\\d+).*", "\\1", fname))
-    d <- read_csv(fname) %>% dplyr::select(-atlas_name, -x, -y, -z)
+    d <- read_csv(fname)
+    if (!aggregate_by %in% names(d)) {
+      warning("Cannot find aggregate_by column: ", aggregate_by, " in deconvolved file: ", fname)
+      return(NULL)
+    }
+
+    drop_cols <- intersect(c("atlas_name", "x", "y", "z"), names(d))
+    if (length(drop_cols) > 0L) {
+      d <- d %>% dplyr::select(-all_of(drop_cols))
+    }
+
     if (all(is.na(d$decon))) {
       cat(glue("For file {fname}, all decon values are NA, suggesting a failue in deconvolution. Returning NULL."))
       return(NULL)
@@ -596,10 +612,10 @@ evt_align_decon_files <- function(d_files, trial_df, alignment = list(), tr = NU
 
     # discretize atlas value into bins (continuous) or unique values (integer mask)
     if (!is.null(atlas_cuts)) {
-      d <- d %>% dplyr::mutate(atlas_value = cut(atlas_value, atlas_cuts))
+      d[[aggregate_by]] <- cut(d[[aggregate_by]], atlas_cuts)
     } else {
       # d <- d %>% mutate(atlas_value=factor(atlas_value))
-      d <- d %>% dplyr::mutate(atlas_value = as.numeric(atlas_value))
+      d[[aggregate_by]] <- as.numeric(d[[aggregate_by]]) # convert atlas values to numbers explicitly
     }
 
     # run data
@@ -612,7 +628,7 @@ evt_align_decon_files <- function(d_files, trial_df, alignment = list(), tr = NU
 
     tsobj <- fmri_ts$new(
       ts_data = d, event_data = subj_df, tr = tr,
-      vm = list(value = c("decon"), key = c("vnum", "atlas_value"))
+      vm = list(value = c("decon"), key = c("vnum", aggregate_by))
     )
 
     subj_align <- tryCatch(
@@ -621,7 +637,7 @@ evt_align_decon_files <- function(d_files, trial_df, alignment = list(), tr = NU
         time_before = alignment$time_before, time_after = alignment$time_after,
         collide_before = alignment$collide_before, collide_after = alignment$collide_after,
         pad_before = alignment$pad_before, pad_after = alignment$pad_after, output_resolution = alignment$output_resolution,
-        group_by = c("atlas_value", "trial")
+        group_by = c(aggregate_by, "trial")
       ), # one time series per region and trial
       error = function(err) {
         cat("Problems with event aligning ", fname, " for event: ", e, "\n  ",

@@ -9,7 +9,7 @@ generate_run_data_from_bids(
   modality = "func",
   type = "task",
   task_name = "ridl",
-  suffix = "_postproccessed"
+  suffix = "_postprocessed"
 )
 }
 \arguments{

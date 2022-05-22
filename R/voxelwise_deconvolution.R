@@ -80,7 +80,7 @@ voxelwise_deconvolution <- function(
     } else {
       checkmate::assert_file_exists(mask)
     }
-    
+
     atlas_files <- mask
   }
 
