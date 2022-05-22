@@ -452,6 +452,7 @@ run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = l
   checkmate::assert_data_frame(trial_df)
   checkmate::assert_list(alignments, names = "named") # require named list input
   checkmate::assert_integerish(nbins, lower = 1, upper = 1e4, len = 1L)
+  checkmate::assert_string(aggregate_by)
   checkmate::assert_logical(overwrite, len = 1L)
   checkmate::assert_number(tr, lower = 0.01, upper = 1000)
   checkmate::assert_integerish(ncpus, lower = 1, upper = 1e3, len = 1L)
@@ -541,10 +542,10 @@ run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = l
       d_batch <- R_batch_job$new(
         job_name = glue("evtalign_{aname}_{ee}"), n_cpus = ncpus, mem_per_cpu = "4g",
         wall_time = walltime, scheduler = scheduler,
-        input_objects = named_list(d_files, trial_df, this_alignment, tr, atlas_cuts, out_file, ncpus), # pass relevant vars to the batch
+        input_objects = named_list(d_files, trial_df, this_alignment, aggregate_by, tr, atlas_cuts, out_file, ncpus), # pass relevant vars to the batch
         r_packages = "fmri.pipeline",
         r_code = c(
-          "evt_align_decon_files(d_files, trial_df, this_alignment, tr, atlas_cuts, out_file, ncpus)"
+          "evt_align_decon_files(d_files, trial_df, this_alignment, aggregate_by, tr, atlas_cuts, out_file, ncpus)"
         )
       )
 
