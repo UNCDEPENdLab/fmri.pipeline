@@ -11,9 +11,11 @@ run_decon_alignment(
   alignments = list(),
   nbins = 12,
   aggregate_by = "atlas_value",
+  atlas_subset = NULL,
   overwrite = FALSE,
   tr = NULL,
   ncpus = 8,
+  mem_per_cpu = "4g",
   walltime = "1:00:00",
   scheduler = "slurm"
 )
@@ -35,9 +37,11 @@ event-aligned time series. Most commonly, this is "atlas_value", which will lead
 
 \item{overwrite}{if TRUE, overwrite existing output files}
 
-\item{tr}{The repetition time of the scan in seconds.}
+\item{tr}{The repetition time of the scan in seconds}
 
 \item{ncpus}{The number of cores to use for each parallel job}
+
+\item{mem_per_cpu}{The amount of memory (RAM) allocated for each CPU job. Default is "4g" (4 gigabytes)}
 
 \item{walltime}{The time requested for each event alignment job. Default: 1:00:00 (1 hour).}
 }
