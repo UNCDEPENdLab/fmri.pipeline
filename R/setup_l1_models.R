@@ -136,8 +136,8 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
                 "In L1 model setup, failed to find any rows in in gpa$l1_models$signals${this_signal$name}$value",
                 " for id: {subj_id}, session: {subj_session}, model: {this_model}.\n  Mismatch between run_data and subject_data?", .trim = FALSE
               )
-              lg$error(msg)
-              stop(msg)
+              lg$warn(msg)
+              warning(msg)
             }
 
             #refit wi model if needed
