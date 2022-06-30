@@ -213,7 +213,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     thisrun <- with(df, fsf[job==j])
     cat(
       "function feat_runner() {",
-      ifelse(level == 1L, "  local odir=\"${1/.fsf/.feat}\"", "  local odir=\"${1/.fsf/.gfeat}\""),
+      ifelse(level == 1L, "  odir=\"${1/.fsf/.feat}\"", "  odir=\"${1/.fsf/.gfeat}\""),
       "  [ -f \"${odir}/.feat_fail\" ] && rm -f \"${odir}/.feat_fail\"",
       "  start_time=$( date )",
       "  if [ $# -eq 2 ]; then",
