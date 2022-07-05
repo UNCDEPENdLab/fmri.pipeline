@@ -60,7 +60,7 @@
 #'
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 #'    test_string test_class
-#' @importFrom dplyr mutate_at group_by select vars
+#' @importFrom dplyr mutate_at group_by select vars inner_join filter
 #' @export
 setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm",
                                output_directory = file.path(getwd(), analysis_name),
@@ -260,9 +260,20 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     lg$warn(glue("Dropped ids: {paste(setdiff(union_ids, match_ids), collapse=', ')}"))
   }
 
-  subject_data <- subject_data %>% filter(id %in% !!match_ids)
-  run_data <- run_data %>% filter(id %in% !!match_ids)
-  trial_data <- trial_data %>% filter(id %in% !!match_ids)
+  subject_data <- subject_data %>% dplyr::filter(id %in% !!match_ids)
+  run_data <- run_data %>% dplyr::filter(id %in% !!match_ids)
+  trial_data <- trial_data %>% dplyr::filter(id %in% !!match_ids)
+
+  # enforce that subject id + session must be unique (only one row per combination)
+  subj_counts <- subject_data %>% count(id, session)
+  if (any(subj_counts$n > 1)) {
+    subj_dupes <- subj_counts %>% dplyr::filter(n > 1)
+    msg <- "At least one id + session combination in subject_data is duplicated. All rows in subject_data must represent unique observations!"
+    lg$error(msg)
+    lg$error("Problematic entries: ")
+    lg$error("%s", capture.output(print(subject_data %>% dplyr::inner_join(subj_dupes, by=c("id", "session")))))
+    stop(msg)
+  }  
 
   if (!is.null(l1_models)) {
     if (checkmate::test_string(l1_models) && l1_models[1L] == "prompt") {
