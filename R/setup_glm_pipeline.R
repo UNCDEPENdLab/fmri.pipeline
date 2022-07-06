@@ -60,7 +60,7 @@
 #'
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 #'    test_string test_class
-#' @importFrom dplyr mutate_at group_by select vars inner_join filter
+#' @importFrom dplyr mutate_at group_by select vars inner_join filter count
 #' @export
 setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm",
                                output_directory = file.path(getwd(), analysis_name),

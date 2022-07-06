@@ -52,15 +52,16 @@ l3_model_names = "prompt", glm_software = NULL) {
     run_finalize <- FALSE
   }
 
+  # initialize batch sequence elements as NULL so that they are ignored in R_batch_sequence if not used
+  l1_setup_batch <- l1_execute_batch <- l2_batch <- l3_batch <- NULL
+
   # Note: one tricky job dependency problem occurs when a job spawns multiple child jobs.
   # In this case, downstream jobs cannot know the job ids to wait for because these have not been generated yet.
   # This occurs in the case of L1 job submissions, where run_feat_sepjobs submit many jobs that need to complete before
   # L2 jobs should start. The new approach is to keep the parent job active until all children complete. This is
   # implemented by wait_for_children in R_batch_job. Here, we run the l1 model setup, the launch all feat runs in batch
   # jobs and wait for all of these to complete before the l1_setup_batch (parent) job completes.
-
-  l1_setup_batch <- NULL
-  l1_execute_batch <- NULL
+  
   if (!is.null(model_list$l1_model_names)) {
     # batch job for setting up l1 models -- calls setup_l1_models to create relevant FSFs
       l1_setup_batch <- f_batch$copy(
@@ -89,8 +90,6 @@ l3_model_names = "prompt", glm_software = NULL) {
   # todo
   # gpa <- verify_lv1_runs(gpa)
 
-  l2_batch <- NULL
-
   # only run level 2 if this is a multi-run dataset and user requests l2 model estimation
   if (isTRUE(gpa$multi_run) && !is.null(model_list$l2_model_names)) {
     # setup of l2 models (should follow l1)
@@ -107,6 +106,7 @@ l3_model_names = "prompt", glm_software = NULL) {
     l2_batch$wait_for_children <- TRUE # need to wait for l2 feat jobs to complete before moving to l3
   }
 
+  
   if (!is.null(model_list$l3_model_names)) {
     l3_batch <- f_batch$copy(
       job_name = "setup_run_l3", n_cpus = gpa$parallel$l2_setup_cores,
