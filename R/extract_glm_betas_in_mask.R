@@ -332,31 +332,57 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     agg_coordinates <- NULL
   }
 
-  if (scheduler == "slurm") {
+  if (scheduler == "local") {
+    stat_results$img_stats <- mclapply(stat_results$img, function(img) {
+      lg$debug("Processing image: %s", img)
+      tryCatch(
+        get_img_stats(img,
+          mask = list(indices = m_indices, coordinates = m_coordinates, agg_coordinates = agg_coordinates, dim = mask_dim),
+          is_int_mask = is_int_mask, aggregate = aggregate, aggFUN = aggFUN, remove_zeros = remove_zeros
+        ),
+        error = function(e) {
+          lg$error("Problem extracting statistics from image %s. Error: %s", img, as.character(e))
+          return(NULL)
+        }
+      )
+    }, mc.cores = ncores)
+  } else {
     chunk_size <- min(500, nrow(stat_results) / 16) # 500 images per job, or divide images into 16 jobs, whichever is smaller
     cores_per_job <- 8 # use mclapply within job to accelerate
     registerDoFuture() # tell dopar to use future compute mechanism
-    #options(future.debug = FALSE, future.progress = FALSE)
+    # options(future.debug = FALSE, future.progress = FALSE)
     # put cache in scratch directory and reduce polling frequency to every 2 seconds since 0.2 was generating errors
     options(future.wait.interval = 2, future.wait.alpha = 1.05)
 
-    future::plan(
-      future.batchtools::batchtools_slurm,
-      template = "slurm-simple",
-      resources = list(
-        walltime = 30 * chunk_size, # 30-second request per image (upper bound)
-        memory = 1024, # 1 GB per core
-        ncpus = cores_per_job, # just needs one CPU within each chunk
-        chunks.as.arrayjobs = FALSE
+    if (scheduler == "torque") {
+      future::plan(
+        future.batchtools::batchtools_torque,
+        template = system.file("templates/torque.tmpl", package="future.batchtools"),
+        resources = list(
+          nodes = glue("1:ppn={cores_per_job}"),
+          walltime = hours_to_dhms((30 * chunk_size) / 60), # 30-second request per image (upper bound) -- convert from hours to period
+          pmem = "1gb" # 1 GB per core
+        )
       )
-    )
+    } else if (scheduler == "slurm") {
+      future::plan(
+        future.batchtools::batchtools_slurm,
+        template = "slurm-simple",
+        resources = list(
+          walltime = 30 * chunk_size, # 30-second request per image (upper bound)
+          memory = 1024, # 1 GB per core
+          ncpus = cores_per_job, # just needs one CPU within each chunk
+          chunks.as.arrayjobs = FALSE
+        )
+      )
+    }
 
     stat_results$img_stats <- foreach(
       img_chunk = iter(stat_results$img), .combine = c, # since each worker returns a list, concatenate into a bigger list
       .options.future = list(chunk.size = chunk_size), .inorder = TRUE,
       .packages = c("parallel", "data.table", "RNifti"),
       .noexport = "gpa" # avoid large object being sent to workers.
-      ) %dopar% {
+    ) %dopar% {
 
       # use within-job parallelism
       mclapply(img_chunk, function(img) {
@@ -373,20 +399,6 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
         )
       }, mc.cores = cores_per_job)
     }
-  } else if (scheduler == "local") {
-    stat_results$img_stats <- mclapply(stat_results$img, function(img) {
-      lg$debug("Processing image: %s", img)
-      tryCatch(
-        get_img_stats(img,
-          mask = list(indices = m_indices, coordinates = m_coordinates, agg_coordinates = agg_coordinates, dim = mask_dim),
-          is_int_mask = is_int_mask, aggregate = aggregate, aggFUN = aggFUN, remove_zeros = remove_zeros
-        ),
-        error = function(e) {
-          lg$error("Problem extracting statistics from image %s. Error: %s", img, as.character(e))
-          return(NULL)
-        }
-      )
-    }, mc.cores = ncores)
   }
 
   # unnest statistics for each image
