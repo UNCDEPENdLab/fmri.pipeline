@@ -357,11 +357,15 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     if (scheduler == "torque") {
       future::plan(
         future.batchtools::batchtools_torque,
-        template = system.file("templates/torque.tmpl", package="future.batchtools"),
+        template = system.file("templates/torque-simple.tmpl", package="fmri.pipeline"),
         resources = list(
-          nodes = glue("1:ppn={cores_per_job}"),
-          walltime = hours_to_dhms((30 * chunk_size) / 60), # 30-second request per image (upper bound) -- convert from hours to period
-          pmem = "1gb" # 1 GB per core
+          pbs_directives=list(
+            nodes = glue("1:ppn={cores_per_job}"),
+            walltime = hours_to_dhms((30 * chunk_size) / 60), # 30-second request per image (upper bound) -- convert from hours to period
+            pmem = "1gb" # 1 GB per core
+          ),
+          sched_args = gpa$parallel$sched_args, # pass through user scheduler settings for cluster
+          compute_environment = gpa$parallel$compute_environment # pass through user compute settings for cluster
         )
       )
     } else if (scheduler == "slurm") {
