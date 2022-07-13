@@ -382,7 +382,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
         resources = list(
           pbs_directives=list(
             nodes = glue("1:ppn={cores_per_job}"),
-            walltime = hours_to_dhms((30 * chunk_size) / (60*60)), # 30-second request per image (upper bound) -- convert from hours to period
+            walltime = hours_to_dhms((30 * chunk_size) / (60*60*cores_per_job)), # 30-second request per image (upper bound) -- convert from hours to period
             pmem = "1gb" # 1 GB per core
           ),
           sched_args = gpa$parallel$sched_args, # pass through user scheduler settings for cluster
@@ -394,7 +394,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
         future.batchtools::batchtools_slurm,
         template = "slurm-simple",
         resources = list(
-          walltime = 30 * chunk_size, # 30-second request per image (upper bound)
+          walltime = (30 * chunk_size)/cores_per_job, # 30-second request per image (upper bound)
           memory = 1024, # 1 GB per core
           ncpus = cores_per_job, # just needs one CPU within each chunk
           chunks.as.arrayjobs = FALSE
