@@ -1,13 +1,16 @@
 #' helper function to locate nifti inputs for each run of data
 #'
-#' @return a modified version of the \code{gpa} object that contains a $run_nifti field in
-#'   the $run_data data.frame.
 #' @param gpa a \code{glm_pipeline_arguments} object created by setup_glm_pipeline
+#' @param add_run_volumes whether to lookup and add the number of volumes in each run_nifti in the run_volumes column
+#' @param add_dim whether to lookup and add the dimensions of each run_nifti in the dim_x, dim_y, and dim_z columns.
+#'   This will also add an \code{nvoxels} column used in FEAT fsfs, which is x * y * z * t.
+#' @return a modified version of the \code{gpa} object that contains a $run_nifti field and relevant attribute columns (e.g., dim_x)
+#'   the $run_data data.frame.
 #' @keywords internal
 #' @author Michael Hallquist
 #' @importFrom dplyr count group_by left_join filter
 #' @importFrom magrittr %>%
-lookup_nifti_inputs <- function(gpa, add_run_volumes = TRUE, add_nvoxels = TRUE) {
+lookup_nifti_inputs <- function(gpa, add_run_volumes = TRUE, add_dim = TRUE) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_logical(add_run_volumes, len=1L)
 
@@ -94,10 +97,12 @@ lookup_nifti_inputs <- function(gpa, add_run_volumes = TRUE, add_nvoxels = TRUE)
     gpa$run_data$run_volumes <- sapply(run_nifti, lookup_run_volumes, USE.NAMES=FALSE)
   }
 
-  # add number of voxels for each run (used in FSL FEAT)
-  if (isTRUE(add_nvoxels)) {
-    lg$info("Lookup up number of voxels (x * y * z * t) from NIfTI headers")
-    gpa$run_data$nvoxels <- sapply(run_nifti, lookup_nvoxels, USE.NAMES=FALSE)
+  # add dimensions and number of voxels for each run (used in FSL FEAT)
+  if (isTRUE(add_dim)) {
+    lg$info("Lookup up the dimensions (x, y, z) from NIfTI headers")
+    dim_info <- bind_rows(lapply(run_nifti, lookup_dim))
+    gpa$run_data[, c("dim_x", "dim_y", "dim_z")] <- dim_info[, c("dim_x", "dim_y", "dim_z")]
+    gpa$run_data$nvoxels <- apply(dim_info, 1, prod, na.rm=TRUE)
   }
 
   return(gpa)

@@ -1164,6 +1164,41 @@ lookup_nvoxels <- function(nifti) {
   return(nvoxels)
 }
 
+
+#' Helper function to obtain the dimensions of a 4D file
+#'
+#' @details This function prefers to use fslval instead of an internal R library
+#'   because both oro.nifti and RNifti are rather slow to obtain a single value from
+#'   the NIfTI header
+#'
+#' @param nifti a 4D nifti file
+#' @return a named vector of dimensions for the input (dim_x, dim_y, dim_z)
+#' @keywords internal
+lookup_dim <- function(nifti) {
+  ret_vec <- c(dim_x = NA_integer_, dim_y = NA_integer_, dim_z = NA_integer_, dim_t = NA_integer_)
+  if (!file.exists(nifti)) return(ret_vec)
+
+  # fslval is much faster than any internal R command. Use it, if possible
+  # TODO: Make this more robust, more like runFSLCommand with path expectations
+  # TODO: should probably have a single global lookup for fslval in gpa (finalize step)
+  has_fslval <- system2("which", "fslval", stdout = FALSE, stderr = FALSE)
+  has_fslval <- ifelse(has_fslval == 0L, TRUE, FALSE)
+  if (isTRUE(has_fslval)) {
+    ndim <- min(4, as.integer(system2("fslval", args = c(nifti, "dim0"), stdout = TRUE)))
+    dim_vec <- sapply(1:ndim, function(xx) {
+      as.integer(system2("fslval", args = c(nifti, paste0("dim", xx)), stdout = TRUE))
+    })
+  } else {
+    nihead <- oro.nifti::readNIfTI(nifti, read_data = FALSE)
+    ndim <- min(4, nihead@dim_[1L])
+    dim_vec <- nihead@dim_[2:(ndim + 1)]
+  }
+
+  ret_vec[seq_along(dim_vec)] <- dim_vec # populate available dims
+
+  return(ret_vec)
+}
+
 #' small helper function to parse duration syntax of days-hours:minutes:seconds
 #'   into lubridate duration object
 #'
