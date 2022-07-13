@@ -194,10 +194,10 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     build_call = function() {
       if (isFALSE(private$pvt_dirty_call)) return(invisible(NULL)) # no need to rebuild call
 
-      str <- glue("3dClusterize -overwrite -inset {private$pvt_input_file} -ithr {private$pvt_ithr} -NN {private$pvt_NN} -1Dformat")
-      if (!is.null(private$pvt_mask)) str <- glue("{str} -mask {private$pvt_mask}")
+      str <- glue("3dClusterize -overwrite -inset \"{private$pvt_input_file}\" -ithr {private$pvt_ithr} -NN {private$pvt_NN} -1Dformat")
+      if (!is.null(private$pvt_mask)) str <- glue("{str} -mask \"{private$pvt_mask}\"")
       if (isTRUE(private$pvt_mask_from_hdr)) str <- glue("{str} -mask_from_hdr")
-      if (!is.null(private$pvt_out_mask)) str <- glue("{str} -out_mask {private$pvt_out_mask}")
+      if (!is.null(private$pvt_out_mask)) str <- glue("{str} -out_mask \"{private$pvt_out_mask}\"")
 
       # I do not support -within_range yet...
 
@@ -218,13 +218,13 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         stop("Both clust_nvox and clust_vol are missing... This shouldn't happen!")
       }
 
-      if (!is.null(private$pvt_pref_map)) str <- glue("{str} -pref_map {private$pvt_pref_map}")
-      if (!is.null(private$pvt_pref_dat)) str <- glue("{str} -pref_dat {private$pvt_pref_dat}")
+      if (!is.null(private$pvt_pref_map)) str <- glue("{str} -pref_map \"{private$pvt_pref_map}\"")
+      if (!is.null(private$pvt_pref_dat)) str <- glue("{str} -pref_dat \"{private$pvt_pref_dat}\"")
       if (isTRUE(private$pvt_quiet)) str <- glue("{str} -quiet")
       if (!is.null(private$pvt_orient)) str <- glue("{str} -orient {private$pvt_orient}")
       if (isTRUE(private$pvt_binary)) str <- glue("{str} -binary")
 
-      str <- glue(str, " > {private$pvt_clusterize_output_file}")
+      str <- glue(str, " > \"{private$pvt_clusterize_output_file}\"")
 
       private$pvt_clusterize_call <- str
     }
@@ -388,7 +388,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
 
       if (!is.null(inset)) {
         checkmate::assert_file_exists(inset)
-        private$pvt_inset_file <- normalizePath(inset)
+        private$pvt_inset_file <- inset #normalizePath(inset)
       } else if (!is.null(threshold_file)) {
         checkmate::assert_file_exists(threshold_file)
         private$pvt_threshold_file <- normalizePath(threshold_file)
@@ -421,6 +421,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         private$pvt_out_mask <- out_mask
       }
 
+      if (is.null(ithr)) { ithr <- 0 } # default to first sub-brik
       checkmate::assert_integerish(ithr, lower=0, upper=1e4)
       private$pvt_ithr <- ithr
 

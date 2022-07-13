@@ -60,7 +60,7 @@
 #'
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 #'    test_string test_class
-#' @importFrom dplyr mutate_at group_by select vars
+#' @importFrom dplyr mutate_at group_by select vars inner_join filter count
 #' @export
 setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm",
                                output_directory = file.path(getwd(), analysis_name),
@@ -238,6 +238,43 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   # TODO: should probably look at names in subject, run, and trial data to make sure they all line up
 
+  # compare ids in subject_data, run_data, and trial_data
+  subject_data_ids <- unique(subject_data$id)
+  run_data_ids <- unique(run_data$id)
+  trial_data_ids <- unique(trial_data$id)
+
+  all_ids <- named_list(subject_data_ids, run_data_ids, trial_data_ids)
+  match_ids <- Reduce(intersect, all_ids) # only keep ids present at all three levels
+  union_ids <- Reduce(union, all_ids) # only keep ids present at all three levels
+
+  # print all pairwise differences in ids
+  setdiff_list_combn(all_ids)
+
+  if (length(match_ids) == 0L) {
+    msg <- "No ids are in common across subject_data, run_data, and trial_data! We cannot proceed with setup."
+    lg$error(msg)
+    stop(msg)
+  } else if (length(match_ids) < length(union_ids)) {
+    lg$warn("The ids in subject_data, run_data, and trial_data are not identical. Only the ids in common will be analyzed!")
+    lg$warn(glue("Number of non-matching ids: {length(union_ids) - length(match_ids)}"))
+    lg$warn(glue("Dropped ids: {paste(setdiff(union_ids, match_ids), collapse=', ')}"))
+  }
+
+  subject_data <- subject_data %>% dplyr::filter(id %in% !!match_ids)
+  run_data <- run_data %>% dplyr::filter(id %in% !!match_ids)
+  trial_data <- trial_data %>% dplyr::filter(id %in% !!match_ids)
+
+  # enforce that subject id + session must be unique (only one row per combination)
+  subj_counts <- subject_data %>% count(id, session)
+  if (any(subj_counts$n > 1)) {
+    subj_dupes <- subj_counts %>% dplyr::filter(n > 1)
+    msg <- "At least one id + session combination in subject_data is duplicated. All rows in subject_data must represent unique observations!"
+    lg$error(msg)
+    lg$error("Problematic entries: ")
+    lg$error("%s", capture.output(print(subject_data %>% dplyr::inner_join(subj_dupes, by=c("id", "session")))))
+    stop(msg)
+  }  
+
   if (!is.null(l1_models)) {
     if (checkmate::test_string(l1_models) && l1_models[1L] == "prompt") {
       l1_models <- build_l1_models(trial_data = trial_data)
@@ -294,6 +331,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   # add name of node/host on which this is run (useful for logic about different compute environments)
   info <- Sys.info()
   gpa$nodename <- info["nodename"]
+  gpa$sys_info <- info # populate full system information to object
 
   # populate $parallel
   gpa <- setup_parallel_settings(gpa, lg)

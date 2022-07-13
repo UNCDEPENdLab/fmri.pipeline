@@ -178,7 +178,7 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "zstat"), 
 #' @keywords internal
 #' @importFrom oro.nifti readNIfTI translateCoordinate
 #' @importFrom checkmate assert_class assert_integerish assert_subset assert_logical assert_file_exists
-#' @importFrom dplyr group_by summarize ungroup left_join bind_cols filter n
+#' @importFrom dplyr group_by summarize ungroup left_join inner_join bind_cols filter n
 #' @importFrom tidyr pivot_longer unnest
 #' @importFrom glue glue_data
 #' @importFrom tidyselect all_of

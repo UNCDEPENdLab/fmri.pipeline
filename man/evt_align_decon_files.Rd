@@ -8,8 +8,10 @@ evt_align_decon_files(
   d_files,
   trial_df,
   alignment = list(),
+  aggregate_by = "atlas_value",
   tr = NULL,
-  atlas_cuts,
+  atlas_cuts = NULL,
+  atlas_subset = NULL,
   out_file = NULL,
   ncpus = 8
 )
@@ -21,9 +23,15 @@ evt_align_decon_files(
 
 \item{alignment}{A list containing alignment details passed to get_medusa_interpolated_ts}
 
+\item{aggregate_by}{The column name in the individual deconvolved files used for averaging repeated units (e.g., voxels) into single
+event-aligned time series. Most commonly, this is "atlas_value", which will lead to averaging of voxels within each parcel in the mask.}
+
 \item{tr}{The repetition time of the sequence in seconds.}
 
-\item{atlas_cuts}{For a continuous-valued atlas (e.g., containing a gradient of interest), a vector of cut points for binning values}
+\item{atlas_cuts}{For a continuous-valued atlas (e.g., containing a gradient of interest), a vector of cut points for binning values.
+These cuts are applied to the \code{aggregate_by} column, commonly "atlas_value"}
+
+\item{atlas_subset}{An optional numeric vector containing values of \code{aggregate_by}}
 
 \item{mask}{A list of mask-related information, including ...}
 

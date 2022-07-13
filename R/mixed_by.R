@@ -237,7 +237,32 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     }
     
     emm_metadata <- rbindlist(lapply(emmeans_spec, function(ee) { data.frame(ee[c("outcome", "model_name")])})) %>%
-      mutate(emm_number = 1:n(), emm_label=names(emmeans_spec))
+      mutate(emm_label=names(emmeans_spec))
+    
+    bad_outcomes <- !emm_metadata$outcome %in% model_set$outcome
+    if (any(bad_outcomes)) {
+      cat("Cannot have an outcome in emmeans that is not present in the models.\nIgnoring this specification!\n")
+      print(emm_metadata[bad_outcomes, ])
+    }
+    
+    bad_models <- !emm_metadata$model_name %in% model_set$model_name
+    if (any(bad_models)) {
+      cat("Cannot have model names in emmeans that are not present in the model formula names.\nIgnoring this specification!\n")
+      print(emm_metadata[bad_models, ])
+    }
+    
+    # logical and of outcomes and models to keep
+    keep_models <- !bad_outcomes & !bad_models
+    
+    if (sum(keep_models) == 0L) {
+      emmeans_spec <- NULL # reset to NULL because no emts specified overlap with the models and outcomes
+    } else {
+      # subset metadata and trends list to only relevant models
+      emm_metadata <- emm_metadata[keep_models,,drop=FALSE]
+      emm_metadata$emm_number <- 1:nrow(emm_metadata)
+      emmeans_spec <- emmeans_spec[keep_models]
+    }
+    
   }
   
   # process emtrends specification setup
@@ -251,18 +276,30 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     }
 
     emt_metadata <- rbindlist(lapply(emtrends_spec, function(ee) { data.frame(ee[c("outcome", "model_name")])})) %>%
-      mutate(emt_number = 1:n(), emt_label=names(emtrends_spec))
+      mutate(emt_label=names(emtrends_spec))
     
     bad_outcomes <- !emt_metadata$outcome %in% model_set$outcome
     if (any(bad_outcomes)) {
+      cat("Cannot have an outcome in emtrends that is not present in the models.\nIgnoring this specification!\n")
       print(emt_metadata[bad_outcomes, ])
-      warning("Cannot have an outcome in emtrends that is not present in the models. Ignoring this specification!")
     }
     
     bad_models <- !emt_metadata$model_name %in% model_set$model_name
     if (any(bad_models)) {
+      cat("Cannot have model names in emtrends that are not present in the model formula names.\nIgnoring this specification!\n")
       print(emt_metadata[bad_models, ])
-      warning("Cannot have model names in emtrends that is are present in the model formula names. Ignoring this specification!")
+    }
+    
+    # logical and of outcomes and models to keep
+    keep_models <- !bad_outcomes & !bad_models
+    
+    if (sum(keep_models) == 0L) {
+      emtrends_spec <- NULL # reset to NULL because no emts specified overlap with the models and outcomes
+    } else {
+      # subset metadata and trends list to only relevant models
+      emt_metadata <- emt_metadata[keep_models,,drop=FALSE]
+      emt_metadata$emt_number <- 1:nrow(emt_metadata)
+      emtrends_spec <- emtrends_spec[keep_models]
     }
     
   }
@@ -332,7 +369,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
         vv <- all.vars(ff)
         miss_data <- data[rr, dt[[1]]] %>%
           dplyr::select(!!vv) %>% # just keep model-relevant variables
-          mutate(any_miss = rowSums(is.na(select(., any_of(!!vv)))) > 0)
+          mutate(any_miss = rowSums(is.na(dplyr::select(., any_of(!!vv)))) > 0)
         n_present <- miss_data %>%
           dplyr::filter(any_miss == FALSE) %>%
           nrow()

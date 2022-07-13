@@ -134,14 +134,14 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
             if (nrow(this_signal$value) == 0L) {
               msg <- glue(
                 "In L1 model setup, failed to find any rows in in gpa$l1_models$signals${this_signal$name}$value",
-                " for id: {subj_id}, session: {subj_session}, model: {this_model}.\n  Mismatch between run_data and subject_data?", .trim = FALSE
+                " for id: {subj_id}, session: {subj_session}, model: {this_model}.\n  We will create an empty regressor.", .trim = FALSE
               )
-              lg$error(msg)
-              stop(msg)
+              lg$warn(msg)
+              warning(msg)
             }
 
             #refit wi model if needed
-            if (!is.null(this_signal$wi_model)) {
+            if (!is.null(this_signal$wi_model) && nrow(this_signal$value) > 0L) {
               this_signal <- fit_wi_model(this_signal)
             }
           } else {

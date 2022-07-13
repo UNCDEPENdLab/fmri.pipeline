@@ -346,7 +346,10 @@ R_batch_job <- R6::R6Class("batch_job",
         stop("Unable to initialize R_batch_job object without r_code")
       } else {
         checkmate::assert_multi_class(r_code, c("expression", "character"))
-        self$r_code <- as.character(r_code)
+        if (is.expression(r_code)) { # expand r_code expression as character vector
+          r_code <- capture.output(cat(as.character(r_code), sep = "\n"))
+        }
+        self$r_code <- r_code
       }
 
       if (!is.null(batch_code)) {
@@ -482,7 +485,10 @@ R_batch_job <- R6::R6Class("batch_job",
       if (!is.null(wall_time)) cloned$wall_time <- as.character(wall_time)
       if (!is.null(r_code)) {
         checkmate::assert_multi_class(r_code, c("expression", "character"))
-        cloned$r_code <- as.character(r_code)
+        if (is.expression(r_code)) { # expand r_code expression as character vector
+          r_code <- capture.output(cat(as.character(r_code), sep = "\n"))
+        }
+        cloned$r_code <- r_code
       }
 
       return(cloned)
