@@ -332,6 +332,24 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     agg_coordinates <- NULL
   }
 
+  # peek at the dimensions of the first 5 images and compare against the mask
+  dim_info <- bind_rows(lapply(stat_results$img[1:min(5, nrow(stat_results))], lookup_dim))
+  all_eq <- sapply(dim_info, function(x) all(x == x[1]))
+  if (isFALSE(all(all_eq, na.rm = TRUE))) {
+    msg <- "Dimensions of first images in extract_glm_betas_in_mask do not match. Cannot continue!"
+    lg$error(msg)
+    stop(msg)
+  }
+
+  img_dim <- dim_info[1, seq_along(mask_dim)] %>% unlist(use.names=FALSE)
+  if (!isTRUE(all.equal(img_dim, mask_dim))) {
+    msg <- "Cannot proceed with extract_fsl_betas due to a mismatch between stat image dimensions and mask dimensions."
+    lg$error(msg)
+    lg$error(glue("Mask dimensions: {paste(mask_dim, collapse=', ')}"))
+    lg$error(glue("Stat image dimensions: {paste(img_dim, collapse=', ')}"))
+    stop(msg)
+  }
+
   if (scheduler == "local") {
     stat_results$img_stats <- mclapply(stat_results$img, function(img) {
       lg$debug("Processing image: %s", img)
@@ -347,12 +365,15 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
       )
     }, mc.cores = ncores)
   } else {
-    chunk_size <- min(500, nrow(stat_results) / 16) # 500 images per job, or divide images into 16 jobs, whichever is smaller
+    # 500 images per job, or divide images into 16 jobs, whichever is smaller.
+    # If dividing into 16 jobs yields fewer than 56 images per job, revert to 56 -- otherwise jobs are exceedingly brief.
+    chunk_size <- min(500, max(56, nrow(stat_results) / 16))
     cores_per_job <- 8 # use mclapply within job to accelerate
     registerDoFuture() # tell dopar to use future compute mechanism
+
     # options(future.debug = FALSE, future.progress = FALSE)
     # put cache in scratch directory and reduce polling frequency to every 2 seconds since 0.2 was generating errors
-    options(future.wait.interval = 2, future.wait.alpha = 1.05)
+    options(future.wait.interval = 2, future.wait.alpha = 1.05) # , future.progress = TRUE, future.debug=TRUE)
 
     if (scheduler == "torque") {
       future::plan(
@@ -361,7 +382,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
         resources = list(
           pbs_directives=list(
             nodes = glue("1:ppn={cores_per_job}"),
-            walltime = hours_to_dhms((30 * chunk_size) / 60), # 30-second request per image (upper bound) -- convert from hours to period
+            walltime = hours_to_dhms((30 * chunk_size) / (60*60)), # 30-second request per image (upper bound) -- convert from hours to period
             pmem = "1gb" # 1 GB per core
           ),
           sched_args = gpa$parallel$sched_args, # pass through user scheduler settings for cluster
