@@ -979,7 +979,8 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
   # https://stackoverflow.com/questions/64287986/create-variable-that-captures-if-there-are-missing-fields-in-4-string-variables
   data <- data %>%
     dplyr::select(!!model_vars, !!id_cols) %>% # just keep model-relevant variables
-    mutate(any_miss = rowSums(is.na(select(., any_of(!!model_vars)))) > 0)
+    dplyr::mutate(any_miss = rowSums(is.na(dplyr::select(., any_of(model_vars)))) > 0)
+    #dplyr::mutate(across(all_of(model_vars), ~ +(is.na(.))))
 
   miss_data <- data %>%
     dplyr::filter(any_miss == TRUE) %>%

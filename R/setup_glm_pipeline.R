@@ -60,7 +60,7 @@
 #'
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 #'    test_string test_class
-#' @importFrom dplyr mutate_at group_by select vars inner_join filter count
+#' @importFrom dplyr mutate_at group_by select vars inner_join filter count is_grouped_df ungroup
 #' @export
 setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm",
                                output_directory = file.path(getwd(), analysis_name),
@@ -154,6 +154,9 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   default_vm[names(vm)] <- vm # override defaults with user inputs
   vm <- default_vm # reassign full vm
 
+  # having trial_data as grouped can cause problems (e.g., having the grouping variable unexpectedly come back as a column in select)
+  if (is_grouped_df(trial_data)) trial_data <- trial_data %>% ungroup()
+
   # code default session of 1, if missing
   if (!vm["session"] %in% names(trial_data)) {
     trial_data[[vm["session"]]] <- 1
@@ -201,6 +204,9 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     names(run_data) <- names_to_internal(run_data, vm)
   }
 
+  # having run_data as grouped can cause problems (e.g., having the grouping variable unexpectedly come back as a column in select)
+  if (is_grouped_df(run_data)) run_data <- run_data %>% ungroup()
+
   stopifnot("id" %in% names(run_data))
   if (!"session" %in% names(run_data)) run_data$session <- 1
 
@@ -230,6 +236,9 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     # rename columns of run data frame to use internal nomenclature (run_data modified in place)
     names(subject_data) <- names_to_internal(subject_data, vm)
   }
+
+  # having subject_data as grouped can cause problems (e.g., having the grouping variable unexpectedly come back as a column in select)
+  if (is_grouped_df(subject_data)) subject_data <- subject_data %>% ungroup()
 
   # can't really get traction without this!
   stopifnot("mr_dir" %in% names(subject_data))
