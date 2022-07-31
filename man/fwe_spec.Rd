@@ -12,14 +12,14 @@ R6 class for an FWE correction method that can apply to one or more models
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{fwe_spec$new()}}
-\item \href{#method-submit}{\code{fwe_spec$submit()}}
-\item \href{#method-clone}{\code{fwe_spec$clone()}}
+\item \href{#method-fwe_spec-new}{\code{fwe_spec$new()}}
+\item \href{#method-fwe_spec-submit}{\code{fwe_spec$submit()}}
+\item \href{#method-fwe_spec-clone}{\code{fwe_spec$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-fwe_spec-new"></a>}}
+\if{latex}{\out{\hypertarget{method-fwe_spec-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{fwe_spec$new(..., fwe_data = NULL)}\if{html}{\out{</div>}}
@@ -27,8 +27,8 @@ R6 class for an FWE correction method that can apply to one or more models
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-submit"></a>}}
-\if{latex}{\out{\hypertarget{method-submit}{}}}
+\if{html}{\out{<a id="method-fwe_spec-submit"></a>}}
+\if{latex}{\out{\hypertarget{method-fwe_spec-submit}{}}}
 \subsection{Method \code{submit()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{fwe_spec$submit()}\if{html}{\out{</div>}}
@@ -36,8 +36,8 @@ R6 class for an FWE correction method that can apply to one or more models
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-fwe_spec-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-fwe_spec-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

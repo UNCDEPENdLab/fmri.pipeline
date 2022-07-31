@@ -11,20 +11,20 @@ wrapper class for AFNI whereami
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{afni_whereami$new()}}
-\item \href{#method-get_call}{\code{afni_whereami$get_call()}}
-\item \href{#method-get_omask_call}{\code{afni_whereami$get_omask_call()}}
-\item \href{#method-get_whereami_df}{\code{afni_whereami$get_whereami_df()}}
-\item \href{#method-get_overlap_df}{\code{afni_whereami$get_overlap_df()}}
-\item \href{#method-get_omask_df}{\code{afni_whereami$get_omask_df()}}
-\item \href{#method-get_outputs}{\code{afni_whereami$get_outputs()}}
-\item \href{#method-run}{\code{afni_whereami$run()}}
-\item \href{#method-clone}{\code{afni_whereami$clone()}}
+\item \href{#method-afni_whereami-new}{\code{afni_whereami$new()}}
+\item \href{#method-afni_whereami-get_call}{\code{afni_whereami$get_call()}}
+\item \href{#method-afni_whereami-get_omask_call}{\code{afni_whereami$get_omask_call()}}
+\item \href{#method-afni_whereami-get_whereami_df}{\code{afni_whereami$get_whereami_df()}}
+\item \href{#method-afni_whereami-get_overlap_df}{\code{afni_whereami$get_overlap_df()}}
+\item \href{#method-afni_whereami-get_omask_df}{\code{afni_whereami$get_omask_df()}}
+\item \href{#method-afni_whereami-get_outputs}{\code{afni_whereami$get_outputs()}}
+\item \href{#method-afni_whereami-run}{\code{afni_whereami$run()}}
+\item \href{#method-afni_whereami-clone}{\code{afni_whereami$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-afni_whereami-new"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_whereami-new}{}}}
 \subsection{Method \code{new()}}{
 create new afni_whereami object
 \subsection{Usage}{
@@ -74,8 +74,8 @@ three numeric values (x, y, and z coordinates) that are used to lookup a single 
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_call"></a>}}
-\if{latex}{\out{\hypertarget{method-get_call}{}}}
+\if{html}{\out{<a id="method-afni_whereami-get_call"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_whereami-get_call}{}}}
 \subsection{Method \code{get_call()}}{
 return the whereami call for this object
 \subsection{Usage}{
@@ -84,8 +84,8 @@ return the whereami call for this object
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_omask_call"></a>}}
-\if{latex}{\out{\hypertarget{method-get_omask_call}{}}}
+\if{html}{\out{<a id="method-afni_whereami-get_omask_call"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_whereami-get_omask_call}{}}}
 \subsection{Method \code{get_omask_call()}}{
 return the whereami call for the omask lookup
 \subsection{Usage}{
@@ -94,8 +94,8 @@ return the whereami call for the omask lookup
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_whereami_df"></a>}}
-\if{latex}{\out{\hypertarget{method-get_whereami_df}{}}}
+\if{html}{\out{<a id="method-afni_whereami-get_whereami_df"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_whereami-get_whereami_df}{}}}
 \subsection{Method \code{get_whereami_df()}}{
 return the data.frame of coordinates and labels from the whereami lookup
 \subsection{Usage}{
@@ -104,8 +104,8 @@ return the data.frame of coordinates and labels from the whereami lookup
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_overlap_df"></a>}}
-\if{latex}{\out{\hypertarget{method-get_overlap_df}{}}}
+\if{html}{\out{<a id="method-afni_whereami-get_overlap_df"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_whereami-get_overlap_df}{}}}
 \subsection{Method \code{get_overlap_df()}}{
 return the data.frame of percent overlap between each atlas and clusters/ROIs in the input mask
 \subsection{Usage}{
@@ -114,8 +114,8 @@ return the data.frame of percent overlap between each atlas and clusters/ROIs in
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_omask_df"></a>}}
-\if{latex}{\out{\hypertarget{method-get_omask_df}{}}}
+\if{html}{\out{<a id="method-afni_whereami-get_omask_df"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_whereami-get_omask_df}{}}}
 \subsection{Method \code{get_omask_df()}}{
 return the data.frame of the percentage overlap for each parcel (not implemented)
 \subsection{Usage}{
@@ -124,8 +124,8 @@ return the data.frame of the percentage overlap for each parcel (not implemented
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_outputs"></a>}}
-\if{latex}{\out{\hypertarget{method-get_outputs}{}}}
+\if{html}{\out{<a id="method-afni_whereami-get_outputs"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_whereami-get_outputs}{}}}
 \subsection{Method \code{get_outputs()}}{
 return a list of the output files from this whereami object
 \subsection{Usage}{
@@ -144,8 +144,8 @@ a list of all output files
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-run"></a>}}
-\if{latex}{\out{\hypertarget{method-run}{}}}
+\if{html}{\out{<a id="method-afni_whereami-run"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_whereami-run}{}}}
 \subsection{Method \code{run()}}{
 Run whereami for this object
 \subsection{Usage}{
@@ -161,8 +161,8 @@ Run whereami for this object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-afni_whereami-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_whereami-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

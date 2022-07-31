@@ -50,3 +50,5 @@ slurm-*.out
 
 #R CMD BATCH outputs
 *.Rout
+
+.DS_Store
