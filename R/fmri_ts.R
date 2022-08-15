@@ -130,7 +130,10 @@ fmri_ts <- R6::R6Class("fmri_ts",
 
       if (!is.null(private$kvars)) {
         setorderv(ts_data, private$kvars)
-        ts_keys <- sapply(private$kvars, function(x) { rle(ts_data[[x]]) }, simplify = FALSE)
+        ts_keys <- sapply(private$kvars, function(x) {
+          if (is.factor(ts_data[[x]])) ts_data[[x]] <- as.character(ts_data[[x]]) # have to convert to character prior to rle
+          rle(ts_data[[x]])
+        }, simplify = FALSE)
         ts_data[, private$kvars := NULL] # drop key columns
         self$ts_keys <- ts_keys
       }
@@ -159,13 +162,15 @@ fmri_ts <- R6::R6Class("fmri_ts",
       nkeys <- length(private$kvars) #number of existing keys
       for (vv in seq_along(kv)) {
         vname <- kv[vv]
+        # convert factors to character before rle (loses levels/detail)
+        if (is.factor(self$ts_data[[vname]])) self$ts_data[[vname]] <- as.character(self$ts_data[[vname]])
         self$ts_keys[[nkeys+vv]] <- rle(self$ts_data[[vname]]) # RLE-compress the new key
       }
-      
+
       self$vm[["key"]] <- c(self$vm[["key"]], kv)
       private$update_variable_tracking(self$vm) #refresh mapping to internal names
       names(self$ts_keys) <- private$kvars #name ts_keys according to key variables to let get_ts() work
-      
+
       self$ts_data[, (kv) := NULL] #drop new keys from rectangular data
     },
 
