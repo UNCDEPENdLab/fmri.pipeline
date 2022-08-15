@@ -12,19 +12,19 @@ helper class to generate 3dttest++ null datasets using -randomsign
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{simulate_null_3dttest$new()}}
-\item \href{#method-is_complete}{\code{simulate_null_3dttest$is_complete()}}
-\item \href{#method-submit}{\code{simulate_null_3dttest$submit()}}
-\item \href{#method-get_3dttest_calls}{\code{simulate_null_3dttest$get_3dttest_calls()}}
-\item \href{#method-get_permutation_files}{\code{simulate_null_3dttest$get_permutation_files()}}
-\item \href{#method-get_batch}{\code{simulate_null_3dttest$get_batch()}}
-\item \href{#method-get_use_sdat}{\code{simulate_null_3dttest$get_use_sdat()}}
-\item \href{#method-clone}{\code{simulate_null_3dttest$clone()}}
+\item \href{#method-simulate_null_3dttest-new}{\code{simulate_null_3dttest$new()}}
+\item \href{#method-simulate_null_3dttest-is_complete}{\code{simulate_null_3dttest$is_complete()}}
+\item \href{#method-simulate_null_3dttest-submit}{\code{simulate_null_3dttest$submit()}}
+\item \href{#method-simulate_null_3dttest-get_3dttest_calls}{\code{simulate_null_3dttest$get_3dttest_calls()}}
+\item \href{#method-simulate_null_3dttest-get_permutation_files}{\code{simulate_null_3dttest$get_permutation_files()}}
+\item \href{#method-simulate_null_3dttest-get_batch}{\code{simulate_null_3dttest$get_batch()}}
+\item \href{#method-simulate_null_3dttest-get_use_sdat}{\code{simulate_null_3dttest$get_use_sdat()}}
+\item \href{#method-simulate_null_3dttest-clone}{\code{simulate_null_3dttest$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-simulate_null_3dttest-new"></a>}}
+\if{latex}{\out{\hypertarget{method-simulate_null_3dttest-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$new(
@@ -57,8 +57,8 @@ method to return R_batch_job to run 3dttest permutations}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-is_complete"></a>}}
-\if{latex}{\out{\hypertarget{method-is_complete}{}}}
+\if{html}{\out{<a id="method-simulate_null_3dttest-is_complete"></a>}}
+\if{latex}{\out{\hypertarget{method-simulate_null_3dttest-is_complete}{}}}
 \subsection{Method \code{is_complete()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$is_complete()}\if{html}{\out{</div>}}
@@ -66,8 +66,8 @@ method to return R_batch_job to run 3dttest permutations}
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-submit"></a>}}
-\if{latex}{\out{\hypertarget{method-submit}{}}}
+\if{html}{\out{<a id="method-simulate_null_3dttest-submit"></a>}}
+\if{latex}{\out{\hypertarget{method-simulate_null_3dttest-submit}{}}}
 \subsection{Method \code{submit()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$submit(force = FALSE)}\if{html}{\out{</div>}}
@@ -75,8 +75,8 @@ method to return R_batch_job to run 3dttest permutations}
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_3dttest_calls"></a>}}
-\if{latex}{\out{\hypertarget{method-get_3dttest_calls}{}}}
+\if{html}{\out{<a id="method-simulate_null_3dttest-get_3dttest_calls"></a>}}
+\if{latex}{\out{\hypertarget{method-simulate_null_3dttest-get_3dttest_calls}{}}}
 \subsection{Method \code{get_3dttest_calls()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$get_3dttest_calls(include_complete = FALSE)}\if{html}{\out{</div>}}
@@ -84,8 +84,8 @@ method to return R_batch_job to run 3dttest permutations}
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_permutation_files"></a>}}
-\if{latex}{\out{\hypertarget{method-get_permutation_files}{}}}
+\if{html}{\out{<a id="method-simulate_null_3dttest-get_permutation_files"></a>}}
+\if{latex}{\out{\hypertarget{method-simulate_null_3dttest-get_permutation_files}{}}}
 \subsection{Method \code{get_permutation_files()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$get_permutation_files()}\if{html}{\out{</div>}}
@@ -93,8 +93,8 @@ method to return R_batch_job to run 3dttest permutations}
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_batch"></a>}}
-\if{latex}{\out{\hypertarget{method-get_batch}{}}}
+\if{html}{\out{<a id="method-simulate_null_3dttest-get_batch"></a>}}
+\if{latex}{\out{\hypertarget{method-simulate_null_3dttest-get_batch}{}}}
 \subsection{Method \code{get_batch()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$get_batch()}\if{html}{\out{</div>}}
@@ -102,8 +102,8 @@ method to return R_batch_job to run 3dttest permutations}
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_use_sdat"></a>}}
-\if{latex}{\out{\hypertarget{method-get_use_sdat}{}}}
+\if{html}{\out{<a id="method-simulate_null_3dttest-get_use_sdat"></a>}}
+\if{latex}{\out{\hypertarget{method-simulate_null_3dttest-get_use_sdat}{}}}
 \subsection{Method \code{get_use_sdat()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$get_use_sdat()}\if{html}{\out{</div>}}
@@ -111,8 +111,8 @@ method to return R_batch_job to run 3dttest permutations}
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-simulate_null_3dttest-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-simulate_null_3dttest-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

@@ -40,28 +40,28 @@ wrapper class for 3dClusterize
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{afni_3dclusterize$new()}}
-\item \href{#method-run}{\code{afni_3dclusterize$run()}}
-\item \href{#method-get_clust_df}{\code{afni_3dclusterize$get_clust_df()}}
-\item \href{#method-get_cluster_map_nifti}{\code{afni_3dclusterize$get_cluster_map_nifti()}}
-\item \href{#method-get_call}{\code{afni_3dclusterize$get_call()}}
-\item \href{#method-get_outputs}{\code{afni_3dclusterize$get_outputs()}}
-\item \href{#method-get_orient}{\code{afni_3dclusterize$get_orient()}}
-\item \href{#method-add_whereami}{\code{afni_3dclusterize$add_whereami()}}
-\item \href{#method-is_complete}{\code{afni_3dclusterize$is_complete()}}
-\item \href{#method-generate_subclusters}{\code{afni_3dclusterize$generate_subclusters()}}
-\item \href{#method-run_subclustering}{\code{afni_3dclusterize$run_subclustering()}}
-\item \href{#method-has_clusters}{\code{afni_3dclusterize$has_clusters()}}
-\item \href{#method-reset_cache}{\code{afni_3dclusterize$reset_cache()}}
-\item \href{#method-get_subclust_list}{\code{afni_3dclusterize$get_subclust_list()}}
-\item \href{#method-subset_atlas_against_clusters}{\code{afni_3dclusterize$subset_atlas_against_clusters()}}
-\item \href{#method-delete_outputs}{\code{afni_3dclusterize$delete_outputs()}}
-\item \href{#method-clone}{\code{afni_3dclusterize$clone()}}
+\item \href{#method-afni_3dclusterize-new}{\code{afni_3dclusterize$new()}}
+\item \href{#method-afni_3dclusterize-run}{\code{afni_3dclusterize$run()}}
+\item \href{#method-afni_3dclusterize-get_clust_df}{\code{afni_3dclusterize$get_clust_df()}}
+\item \href{#method-afni_3dclusterize-get_cluster_map_nifti}{\code{afni_3dclusterize$get_cluster_map_nifti()}}
+\item \href{#method-afni_3dclusterize-get_call}{\code{afni_3dclusterize$get_call()}}
+\item \href{#method-afni_3dclusterize-get_outputs}{\code{afni_3dclusterize$get_outputs()}}
+\item \href{#method-afni_3dclusterize-get_orient}{\code{afni_3dclusterize$get_orient()}}
+\item \href{#method-afni_3dclusterize-add_whereami}{\code{afni_3dclusterize$add_whereami()}}
+\item \href{#method-afni_3dclusterize-is_complete}{\code{afni_3dclusterize$is_complete()}}
+\item \href{#method-afni_3dclusterize-generate_subclusters}{\code{afni_3dclusterize$generate_subclusters()}}
+\item \href{#method-afni_3dclusterize-run_subclustering}{\code{afni_3dclusterize$run_subclustering()}}
+\item \href{#method-afni_3dclusterize-has_clusters}{\code{afni_3dclusterize$has_clusters()}}
+\item \href{#method-afni_3dclusterize-reset_cache}{\code{afni_3dclusterize$reset_cache()}}
+\item \href{#method-afni_3dclusterize-get_subclust_list}{\code{afni_3dclusterize$get_subclust_list()}}
+\item \href{#method-afni_3dclusterize-subset_atlas_against_clusters}{\code{afni_3dclusterize$subset_atlas_against_clusters()}}
+\item \href{#method-afni_3dclusterize-delete_outputs}{\code{afni_3dclusterize$delete_outputs()}}
+\item \href{#method-afni_3dclusterize-clone}{\code{afni_3dclusterize$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-new"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-new}{}}}
 \subsection{Method \code{new()}}{
 initialization function for a new afni_3dclusterize object. Arguments largely mirror the 3dClusterize parameters.
 \subsection{Usage}{
@@ -154,8 +154,8 @@ Defaults to adding the suffix '_clusters.1D' to the input image and placing the 
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-run"></a>}}
-\if{latex}{\out{\hypertarget{method-run}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-run"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-run}{}}}
 \subsection{Method \code{run()}}{
 run the 3dClusterize command relevant to this object
 \subsection{Usage}{
@@ -173,8 +173,8 @@ run the 3dClusterize command relevant to this object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_clust_df"></a>}}
-\if{latex}{\out{\hypertarget{method-get_clust_df}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-get_clust_df"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-get_clust_df}{}}}
 \subsection{Method \code{get_clust_df()}}{
 return the 3dClusterize table of clusters as a data.frame
 \subsection{Usage}{
@@ -205,8 +205,8 @@ This function will return an empty data.frame if the 3dClusterize output file ca
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_cluster_map_nifti"></a>}}
-\if{latex}{\out{\hypertarget{method-get_cluster_map_nifti}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-get_cluster_map_nifti"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-get_cluster_map_nifti}{}}}
 \subsection{Method \code{get_cluster_map_nifti()}}{
 method to read and return the integer-valued clusterized mask (aka -pref_map) as an oro.nifti object
 \subsection{Usage}{
@@ -218,8 +218,8 @@ an oro.nifti object containing the clusterized mask from 3dClusterize
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_call"></a>}}
-\if{latex}{\out{\hypertarget{method-get_call}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-get_call"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-get_call}{}}}
 \subsection{Method \code{get_call()}}{
 returns the 3dClusterize call for this specification
 \subsection{Usage}{
@@ -228,8 +228,8 @@ returns the 3dClusterize call for this specification
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_outputs"></a>}}
-\if{latex}{\out{\hypertarget{method-get_outputs}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-get_outputs"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-get_outputs}{}}}
 \subsection{Method \code{get_outputs()}}{
 Provides a vector of expected output files that correspond to this 3dClusterize setup
 \subsection{Usage}{
@@ -248,8 +248,8 @@ a named vector of output files related to this 3dClusterize setup
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_orient"></a>}}
-\if{latex}{\out{\hypertarget{method-get_orient}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-get_orient"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-get_orient}{}}}
 \subsection{Method \code{get_orient()}}{
 returns the orientation code for this 3dClusterize call (LPI or RAI)
 \subsection{Usage}{
@@ -258,8 +258,8 @@ returns the orientation code for this 3dClusterize call (LPI or RAI)
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-add_whereami"></a>}}
-\if{latex}{\out{\hypertarget{method-add_whereami}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-add_whereami"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-add_whereami}{}}}
 \subsection{Method \code{add_whereami()}}{
 Add's an afni_whereami object to this class in the $whereami slot. The corresponding
   whereami command is also run when this is added so that coordinates and labels can be obtained
@@ -277,8 +277,8 @@ Add's an afni_whereami object to this class in the $whereami slot. The correspon
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-is_complete"></a>}}
-\if{latex}{\out{\hypertarget{method-is_complete}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-is_complete"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-is_complete}{}}}
 \subsection{Method \code{is_complete()}}{
 returns TRUE if all expected output files exist for this 3dClusterize call
 \subsection{Usage}{
@@ -287,8 +287,8 @@ returns TRUE if all expected output files exist for this 3dClusterize call
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-generate_subclusters"></a>}}
-\if{latex}{\out{\hypertarget{method-generate_subclusters}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-generate_subclusters"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-generate_subclusters}{}}}
 \subsection{Method \code{generate_subclusters()}}{
 break up large clusters into subclusters
 \subsection{Usage}{
@@ -333,8 +333,8 @@ break up large clusters into subclusters
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-run_subclustering"></a>}}
-\if{latex}{\out{\hypertarget{method-run_subclustering}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-run_subclustering"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-run_subclustering}{}}}
 \subsection{Method \code{run_subclustering()}}{
 runs a subclustering algorithm on this object, increasing the thresholds until the desired constraints are satisfied
 \subsection{Usage}{
@@ -377,8 +377,8 @@ this is intended to be used internally
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-has_clusters"></a>}}
-\if{latex}{\out{\hypertarget{method-has_clusters}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-has_clusters"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-has_clusters}{}}}
 \subsection{Method \code{has_clusters()}}{
 check whether clusteres were found
 \subsection{Usage}{
@@ -392,8 +392,8 @@ returns TRUE if clusters were found, FALSE if they were not found, and NULL if t
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-reset_cache"></a>}}
-\if{latex}{\out{\hypertarget{method-reset_cache}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-reset_cache"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-reset_cache}{}}}
 \subsection{Method \code{reset_cache()}}{
 not intended to be called by user, this resets the cluster data.frame and whereami objects to NULL
 \subsection{Usage}{
@@ -406,8 +406,8 @@ this is used internally when cloning the parent clusterize object for subcluster
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_subclust_list"></a>}}
-\if{latex}{\out{\hypertarget{method-get_subclust_list}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-get_subclust_list"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-get_subclust_list}{}}}
 \subsection{Method \code{get_subclust_list()}}{
 return list of subcluster details for each large ROI broken up by generate_subclusters()
 \subsection{Usage}{
@@ -416,8 +416,8 @@ return list of subcluster details for each large ROI broken up by generate_subcl
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-subset_atlas_against_clusters"></a>}}
-\if{latex}{\out{\hypertarget{method-subset_atlas_against_clusters}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-subset_atlas_against_clusters"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-subset_atlas_against_clusters}{}}}
 \subsection{Method \code{subset_atlas_against_clusters()}}{
 Compares the clusters generated by 3dClusterize to an atlas of interest, then returns the subset of the
   atlas that overlaps sufficiently with the map from 3dClusterize
@@ -458,8 +458,8 @@ image name. To disable creation of this file, set \code{output_atlas = FALSE}.}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-delete_outputs"></a>}}
-\if{latex}{\out{\hypertarget{method-delete_outputs}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-delete_outputs"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-delete_outputs}{}}}
 \subsection{Method \code{delete_outputs()}}{
 method to delete any/all files generated by this object
 \subsection{Usage}{
@@ -475,8 +475,8 @@ method to delete any/all files generated by this object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-afni_3dclusterize-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclusterize-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

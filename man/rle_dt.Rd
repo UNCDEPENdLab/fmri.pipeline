@@ -11,14 +11,14 @@ R6 class for a keyed data.table object that uses run-length encoding to reduce s
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{rle_dt$new()}}
-\item \href{#method-get}{\code{rle_dt$get()}}
-\item \href{#method-clone}{\code{rle_dt$clone()}}
+\item \href{#method-rle_dt-new}{\code{rle_dt$new()}}
+\item \href{#method-rle_dt-get}{\code{rle_dt$get()}}
+\item \href{#method-rle_dt-clone}{\code{rle_dt$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-rle_dt-new"></a>}}
+\if{latex}{\out{\hypertarget{method-rle_dt-new}{}}}
 \subsection{Method \code{new()}}{
 Create an RLE-encoded copy of the data
 \subsection{Usage}{
@@ -40,8 +40,8 @@ Optionally, if a positive integer, randomly test ordering over this number of pe
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get"></a>}}
-\if{latex}{\out{\hypertarget{method-get}{}}}
+\if{html}{\out{<a id="method-rle_dt-get"></a>}}
+\if{latex}{\out{\hypertarget{method-rle_dt-get}{}}}
 \subsection{Method \code{get()}}{
 Simple method to return the data.table with all columns in their original form.
 \subsection{Usage}{
@@ -55,8 +55,8 @@ Note that the data are modified slightly in that the keys columns are placed fir
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-rle_dt-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-rle_dt-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

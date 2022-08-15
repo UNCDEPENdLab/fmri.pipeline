@@ -11,20 +11,20 @@ R6 class for running 3dFWHMx on a group of input files using a scheduler/cluster
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{afni_3dfwhmx_list$new()}}
-\item \href{#method-refresh}{\code{afni_3dfwhmx_list$refresh()}}
-\item \href{#method-submit}{\code{afni_3dfwhmx_list$submit()}}
-\item \href{#method-get_batch}{\code{afni_3dfwhmx_list$get_batch()}}
-\item \href{#method-get_acf_average}{\code{afni_3dfwhmx_list$get_acf_average()}}
-\item \href{#method-get_acf_df}{\code{afni_3dfwhmx_list$get_acf_df()}}
-\item \href{#method-get_effective_fwhm}{\code{afni_3dfwhmx_list$get_effective_fwhm()}}
-\item \href{#method-is_complete}{\code{afni_3dfwhmx_list$is_complete()}}
-\item \href{#method-clone}{\code{afni_3dfwhmx_list$clone()}}
+\item \href{#method-afni_3dfwhmx_list-new}{\code{afni_3dfwhmx_list$new()}}
+\item \href{#method-afni_3dfwhmx_list-refresh}{\code{afni_3dfwhmx_list$refresh()}}
+\item \href{#method-afni_3dfwhmx_list-submit}{\code{afni_3dfwhmx_list$submit()}}
+\item \href{#method-afni_3dfwhmx_list-get_batch}{\code{afni_3dfwhmx_list$get_batch()}}
+\item \href{#method-afni_3dfwhmx_list-get_acf_average}{\code{afni_3dfwhmx_list$get_acf_average()}}
+\item \href{#method-afni_3dfwhmx_list-get_acf_df}{\code{afni_3dfwhmx_list$get_acf_df()}}
+\item \href{#method-afni_3dfwhmx_list-get_effective_fwhm}{\code{afni_3dfwhmx_list$get_effective_fwhm()}}
+\item \href{#method-afni_3dfwhmx_list-is_complete}{\code{afni_3dfwhmx_list$is_complete()}}
+\item \href{#method-afni_3dfwhmx_list-clone}{\code{afni_3dfwhmx_list$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx_list-new"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx_list-new}{}}}
 \subsection{Method \code{new()}}{
 create a new afni_3dfwhmx_list object
 \subsection{Usage}{
@@ -52,8 +52,8 @@ use to set the volume over which smoothness is estimated by 3dFWHMx}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-refresh"></a>}}
-\if{latex}{\out{\hypertarget{method-refresh}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx_list-refresh"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx_list-refresh}{}}}
 \subsection{Method \code{refresh()}}{
 recreate afni_3dfwhmx objects and completion status
 \subsection{Usage}{
@@ -73,8 +73,8 @@ useful for updating job status and ACF params after a run completes
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-submit"></a>}}
-\if{latex}{\out{\hypertarget{method-submit}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx_list-submit"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx_list-submit}{}}}
 \subsection{Method \code{submit()}}{
 Submit the 3dFWHMx batch for all inputs to the scheduler
 \subsection{Usage}{
@@ -90,8 +90,8 @@ Submit the 3dFWHMx batch for all inputs to the scheduler
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_batch"></a>}}
-\if{latex}{\out{\hypertarget{method-get_batch}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx_list-get_batch"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx_list-get_batch}{}}}
 \subsection{Method \code{get_batch()}}{
 Return R_batch_job objects used to submit 3dFWHMx for all inputs
 \subsection{Usage}{
@@ -107,8 +107,8 @@ Return R_batch_job objects used to submit 3dFWHMx for all inputs
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_acf_average"></a>}}
-\if{latex}{\out{\hypertarget{method-get_acf_average}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx_list-get_acf_average"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx_list-get_acf_average}{}}}
 \subsection{Method \code{get_acf_average()}}{
 method to calculate the overall ACF average across all input datasets
 \subsection{Usage}{
@@ -128,8 +128,8 @@ a three-element vector containing the ACF estimates averaged across all datasets
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_acf_df"></a>}}
-\if{latex}{\out{\hypertarget{method-get_acf_df}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx_list-get_acf_df"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx_list-get_acf_df}{}}}
 \subsection{Method \code{get_acf_df()}}{
 return the 3dFWHMx results as a data.frame
 \subsection{Usage}{
@@ -138,8 +138,8 @@ return the 3dFWHMx results as a data.frame
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_effective_fwhm"></a>}}
-\if{latex}{\out{\hypertarget{method-get_effective_fwhm}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx_list-get_effective_fwhm"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx_list-get_effective_fwhm}{}}}
 \subsection{Method \code{get_effective_fwhm()}}{
 return the effective FWHM estimated by 3dFWHMx -ACF
 \subsection{Usage}{
@@ -148,8 +148,8 @@ return the effective FWHM estimated by 3dFWHMx -ACF
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-is_complete"></a>}}
-\if{latex}{\out{\hypertarget{method-is_complete}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx_list-is_complete"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx_list-is_complete}{}}}
 \subsection{Method \code{is_complete()}}{
 Simple method to return whether 3dFWHMx is complete for all input files
 \subsection{Usage}{
@@ -161,8 +161,8 @@ returns \code{TRUE} if 3dFWHMx has completed for all runs
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx_list-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx_list-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

@@ -17,7 +17,7 @@ NULL
 NULL
 
 convolve_cpp <- function(a, b) {
-    .Call('_fmri_pipeline_convolve_cpp', PACKAGE = 'fmri.pipeline', a, b)
+    .Call(`_fmri_pipeline_convolve_cpp`, a, b)
 }
 
 #' This function convolves a stimulus vector with the double-gamma hrf
@@ -36,7 +36,7 @@ convolve_cpp <- function(a, b) {
 NULL
 
 convolve_double_gamma <- function(stimulus, a1 = 6.0, a2 = 12.0, b1 = 0.9, b2 = 0.9, cc = 0.35) {
-    .Call('_fmri_pipeline_convolve_double_gamma', PACKAGE = 'fmri.pipeline', stimulus, a1, a2, b1, b2, cc)
+    .Call(`_fmri_pipeline_convolve_double_gamma`, stimulus, a1, a2, b1, b2, cc)
 }
 
 #' C++ port of Bush and Cisler 2013, Magnetic Resonance Imaging
@@ -70,7 +70,7 @@ convolve_double_gamma <- function(stimulus, a1 = 6.0, a2 = 12.0, b1 = 0.9, b2 = 
 NULL
 
 deconvolve_nlreg <- function(BOLDobs, kernel, nev_lr = .01, epsilon = .005, beta = 40, normalize = TRUE, trim_kernel = TRUE) {
-    .Call('_fmri_pipeline_deconvolve_nlreg', PACKAGE = 'fmri.pipeline', BOLDobs, kernel, nev_lr, epsilon, beta, normalize, trim_kernel)
+    .Call(`_fmri_pipeline_deconvolve_nlreg`, BOLDobs, kernel, nev_lr, epsilon, beta, normalize, trim_kernel)
 }
 
 #' Dsigmoid transform
@@ -82,7 +82,7 @@ deconvolve_nlreg <- function(BOLDobs, kernel, nev_lr = .01, epsilon = .005, beta
 NULL
 
 dsigmoid <- function(x, beta = 1) {
-    .Call('_fmri_pipeline_dsigmoid', PACKAGE = 'fmri.pipeline', x, beta)
+    .Call(`_fmri_pipeline_dsigmoid`, x, beta)
 }
 
 #' This function creates K shifts of a neural events vector according to the kernel length, K.
@@ -100,7 +100,7 @@ dsigmoid <- function(x, beta = 1) {
 NULL
 
 generate_feature <- function(encoding, K) {
-    .Call('_fmri_pipeline_generate_feature', PACKAGE = 'fmri.pipeline', encoding, K)
+    .Call(`_fmri_pipeline_generate_feature`, encoding, K)
 }
 
 #' This function creates K shifts of a neural events vector according to the kernel length, K.
@@ -118,7 +118,7 @@ generate_feature <- function(encoding, K) {
 NULL
 
 generate_feature_armadillo <- function(encoding, K) {
-    .Call('_fmri_pipeline_generate_feature_armadillo', PACKAGE = 'fmri.pipeline', encoding, K)
+    .Call(`_fmri_pipeline_generate_feature_armadillo`, encoding, K)
 }
 
 #' Sigmoid transform
@@ -131,6 +131,6 @@ generate_feature_armadillo <- function(encoding, K) {
 NULL
 
 sigmoid <- function(x, beta = 1) {
-    .Call('_fmri_pipeline_sigmoid', PACKAGE = 'fmri.pipeline', x, beta)
+    .Call(`_fmri_pipeline_sigmoid`, x, beta)
 }
 

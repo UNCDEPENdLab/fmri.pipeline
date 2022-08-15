@@ -14,23 +14,23 @@ N.B. This class doesn't even expose the Gaussian ACF options given false positiv
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{afni_3dfwhmx$new()}}
-\item \href{#method-run}{\code{afni_3dfwhmx$run()}}
-\item \href{#method-get_call}{\code{afni_3dfwhmx$get_call()}}
-\item \href{#method-get_acf_params}{\code{afni_3dfwhmx$get_acf_params()}}
-\item \href{#method-get_acf_by_radius}{\code{afni_3dfwhmx$get_acf_by_radius()}}
-\item \href{#method-get_fwhm_by_volume}{\code{afni_3dfwhmx$get_fwhm_by_volume()}}
-\item \href{#method-get_input_file}{\code{afni_3dfwhmx$get_input_file()}}
-\item \href{#method-get_mask_file}{\code{afni_3dfwhmx$get_mask_file()}}
-\item \href{#method-get_outputs}{\code{afni_3dfwhmx$get_outputs()}}
-\item \href{#method-is_complete}{\code{afni_3dfwhmx$is_complete()}}
-\item \href{#method-delete_outputs}{\code{afni_3dfwhmx$delete_outputs()}}
-\item \href{#method-clone}{\code{afni_3dfwhmx$clone()}}
+\item \href{#method-afni_3dfwhmx-new}{\code{afni_3dfwhmx$new()}}
+\item \href{#method-afni_3dfwhmx-run}{\code{afni_3dfwhmx$run()}}
+\item \href{#method-afni_3dfwhmx-get_call}{\code{afni_3dfwhmx$get_call()}}
+\item \href{#method-afni_3dfwhmx-get_acf_params}{\code{afni_3dfwhmx$get_acf_params()}}
+\item \href{#method-afni_3dfwhmx-get_acf_by_radius}{\code{afni_3dfwhmx$get_acf_by_radius()}}
+\item \href{#method-afni_3dfwhmx-get_fwhm_by_volume}{\code{afni_3dfwhmx$get_fwhm_by_volume()}}
+\item \href{#method-afni_3dfwhmx-get_input_file}{\code{afni_3dfwhmx$get_input_file()}}
+\item \href{#method-afni_3dfwhmx-get_mask_file}{\code{afni_3dfwhmx$get_mask_file()}}
+\item \href{#method-afni_3dfwhmx-get_outputs}{\code{afni_3dfwhmx$get_outputs()}}
+\item \href{#method-afni_3dfwhmx-is_complete}{\code{afni_3dfwhmx$is_complete()}}
+\item \href{#method-afni_3dfwhmx-delete_outputs}{\code{afni_3dfwhmx$delete_outputs()}}
+\item \href{#method-afni_3dfwhmx-clone}{\code{afni_3dfwhmx$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx-new"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dfwhmx$new(
@@ -68,8 +68,8 @@ or arithmetic mean. Default: "geometric".}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-run"></a>}}
-\if{latex}{\out{\hypertarget{method-run}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx-run"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx-run}{}}}
 \subsection{Method \code{run()}}{
 runs 3dFWHMx on this input dataset
 \subsection{Usage}{
@@ -86,8 +86,8 @@ files already exist.}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_call"></a>}}
-\if{latex}{\out{\hypertarget{method-get_call}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx-get_call"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx-get_call}{}}}
 \subsection{Method \code{get_call()}}{
 return the 3dFWHMx call used for the specified input
 \subsection{Usage}{
@@ -104,8 +104,8 @@ a character string with the 3dFWHMx call
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_acf_params"></a>}}
-\if{latex}{\out{\hypertarget{method-get_acf_params}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx-get_acf_params"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx-get_acf_params}{}}}
 \subsection{Method \code{get_acf_params()}}{
 return the estimated ACF parameters for this run of data, averaged over volumes
 \subsection{Usage}{
@@ -122,8 +122,8 @@ a three-element vector containing the ACF estimates for the dataset, averaging
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_acf_by_radius"></a>}}
-\if{latex}{\out{\hypertarget{method-get_acf_by_radius}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx-get_acf_by_radius"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx-get_acf_by_radius}{}}}
 \subsection{Method \code{get_acf_by_radius()}}{
 return the estimated ACF parameters for this run of data
 \subsection{Usage}{
@@ -140,8 +140,8 @@ a three-element vector containing the ACF estimates for the dataset, averaging
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_fwhm_by_volume"></a>}}
-\if{latex}{\out{\hypertarget{method-get_fwhm_by_volume}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx-get_fwhm_by_volume"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx-get_fwhm_by_volume}{}}}
 \subsection{Method \code{get_fwhm_by_volume()}}{
 return the estimated ACF parameters for this run of data
 \subsection{Usage}{
@@ -158,8 +158,8 @@ a three-element vector containing the ACF estimates for the dataset, averaging
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_input_file"></a>}}
-\if{latex}{\out{\hypertarget{method-get_input_file}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx-get_input_file"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx-get_input_file}{}}}
 \subsection{Method \code{get_input_file()}}{
 return the input file (NIfTI) used for 3dFWHMx
 \subsection{Usage}{
@@ -171,8 +171,8 @@ a character string of the input file location
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_mask_file"></a>}}
-\if{latex}{\out{\hypertarget{method-get_mask_file}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx-get_mask_file"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx-get_mask_file}{}}}
 \subsection{Method \code{get_mask_file()}}{
 return the mask file used for 3dFWHMx estimation
 \subsection{Usage}{
@@ -184,8 +184,8 @@ a character string of the mask file location
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_outputs"></a>}}
-\if{latex}{\out{\hypertarget{method-get_outputs}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx-get_outputs"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx-get_outputs}{}}}
 \subsection{Method \code{get_outputs()}}{
 return the expected output files related to this 3dFWHMx object
 \subsection{Usage}{
@@ -197,8 +197,8 @@ a character vector containing expected output files
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-is_complete"></a>}}
-\if{latex}{\out{\hypertarget{method-is_complete}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx-is_complete"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx-is_complete}{}}}
 \subsection{Method \code{is_complete()}}{
 method to indicate whether 3dFWHMx has already run and completed for this input
 \subsection{Usage}{
@@ -210,8 +210,8 @@ TRUE if expected 3dFWHMx output file exists, FALSE if it does not
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-delete_outputs"></a>}}
-\if{latex}{\out{\hypertarget{method-delete_outputs}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx-delete_outputs"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx-delete_outputs}{}}}
 \subsection{Method \code{delete_outputs()}}{
 method to delete any/all files generated by this object
 \subsection{Usage}{
@@ -227,8 +227,8 @@ method to delete any/all files generated by this object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-afni_3dfwhmx-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dfwhmx-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

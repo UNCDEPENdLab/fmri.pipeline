@@ -11,16 +11,16 @@ Description of R_batch_sequence R6 class
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{R_batch_sequence$new()}}
-\item \href{#method-add}{\code{R_batch_sequence$add()}}
-\item \href{#method-submit}{\code{R_batch_sequence$submit()}}
-\item \href{#method-generate}{\code{R_batch_sequence$generate()}}
-\item \href{#method-clone}{\code{R_batch_sequence$clone()}}
+\item \href{#method-batch_sequence-new}{\code{R_batch_sequence$new()}}
+\item \href{#method-batch_sequence-add}{\code{R_batch_sequence$add()}}
+\item \href{#method-batch_sequence-submit}{\code{R_batch_sequence$submit()}}
+\item \href{#method-batch_sequence-generate}{\code{R_batch_sequence$generate()}}
+\item \href{#method-batch_sequence-clone}{\code{R_batch_sequence$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-batch_sequence-new"></a>}}
+\if{latex}{\out{\hypertarget{method-batch_sequence-new}{}}}
 \subsection{Method \code{new()}}{
 create a new R_batch_sequence object
 \subsection{Usage}{
@@ -38,8 +38,8 @@ create a new R_batch_sequence object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-add"></a>}}
-\if{latex}{\out{\hypertarget{method-add}{}}}
+\if{html}{\out{<a id="method-batch_sequence-add"></a>}}
+\if{latex}{\out{\hypertarget{method-batch_sequence-add}{}}}
 \subsection{Method \code{add()}}{
 add one or more R_batch_job objects to the sequence
 \subsection{Usage}{
@@ -55,8 +55,8 @@ add one or more R_batch_job objects to the sequence
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-submit"></a>}}
-\if{latex}{\out{\hypertarget{method-submit}{}}}
+\if{html}{\out{<a id="method-batch_sequence-submit"></a>}}
+\if{latex}{\out{\hypertarget{method-batch_sequence-submit}{}}}
 \subsection{Method \code{submit()}}{
 submit the job sequence to the scheduler or local compute
 \subsection{Usage}{
@@ -65,8 +65,8 @@ submit the job sequence to the scheduler or local compute
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-generate"></a>}}
-\if{latex}{\out{\hypertarget{method-generate}{}}}
+\if{html}{\out{<a id="method-batch_sequence-generate"></a>}}
+\if{latex}{\out{\hypertarget{method-batch_sequence-generate}{}}}
 \subsection{Method \code{generate()}}{
 Calls each job's $generate() method so that scripts can be examined without running the sequence
 \subsection{Usage}{
@@ -75,8 +75,8 @@ Calls each job's $generate() method so that scripts can be examined without runn
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-batch_sequence-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-batch_sequence-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

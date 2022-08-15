@@ -21,19 +21,19 @@ only run pTFCE on the positve tail (z > 0).}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{ptfce_spec$new()}}
-\item \href{#method-get_ptfce_calls}{\code{ptfce_spec$get_ptfce_calls()}}
-\item \href{#method-get_expected_files}{\code{ptfce_spec$get_expected_files()}}
-\item \href{#method-run}{\code{ptfce_spec$run()}}
-\item \href{#method-submit}{\code{ptfce_spec$submit()}}
-\item \href{#method-is_complete}{\code{ptfce_spec$is_complete()}}
-\item \href{#method-get_clusters}{\code{ptfce_spec$get_clusters()}}
-\item \href{#method-clone}{\code{ptfce_spec$clone()}}
+\item \href{#method-ptfce_spec-new}{\code{ptfce_spec$new()}}
+\item \href{#method-ptfce_spec-get_ptfce_calls}{\code{ptfce_spec$get_ptfce_calls()}}
+\item \href{#method-ptfce_spec-get_expected_files}{\code{ptfce_spec$get_expected_files()}}
+\item \href{#method-ptfce_spec-run}{\code{ptfce_spec$run()}}
+\item \href{#method-ptfce_spec-submit}{\code{ptfce_spec$submit()}}
+\item \href{#method-ptfce_spec-is_complete}{\code{ptfce_spec$is_complete()}}
+\item \href{#method-ptfce_spec-get_clusters}{\code{ptfce_spec$get_clusters()}}
+\item \href{#method-ptfce_spec-clone}{\code{ptfce_spec$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-ptfce_spec-new"></a>}}
+\if{latex}{\out{\hypertarget{method-ptfce_spec-new}{}}}
 \subsection{Method \code{new()}}{
 Create a new ptfce_spec object
 \subsection{Usage}{
@@ -96,8 +96,8 @@ Default is 10:00 (10 minutes).}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_ptfce_calls"></a>}}
-\if{latex}{\out{\hypertarget{method-get_ptfce_calls}{}}}
+\if{html}{\out{<a id="method-ptfce_spec-get_ptfce_calls"></a>}}
+\if{latex}{\out{\hypertarget{method-ptfce_spec-get_ptfce_calls}{}}}
 \subsection{Method \code{get_ptfce_calls()}}{
 method to return calls to external ptfce_zstat.R script for each zstat
 \subsection{Usage}{
@@ -114,8 +114,8 @@ pTFCE-corrected images in place. Default: FALSE.}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_expected_files"></a>}}
-\if{latex}{\out{\hypertarget{method-get_expected_files}{}}}
+\if{html}{\out{<a id="method-ptfce_spec-get_expected_files"></a>}}
+\if{latex}{\out{\hypertarget{method-ptfce_spec-get_expected_files}{}}}
 \subsection{Method \code{get_expected_files()}}{
 return the vector of expected output files
 \subsection{Usage}{
@@ -124,8 +124,8 @@ return the vector of expected output files
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-run"></a>}}
-\if{latex}{\out{\hypertarget{method-run}{}}}
+\if{html}{\out{<a id="method-ptfce_spec-run"></a>}}
+\if{latex}{\out{\hypertarget{method-ptfce_spec-run}{}}}
 \subsection{Method \code{run()}}{
 Run pTFCE in this compute environment. This is not supported at present!
 \subsection{Usage}{
@@ -142,8 +142,8 @@ method to submit all ptfce_zstat.R calls to a cluster based on the scheduler spe
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-submit"></a>}}
-\if{latex}{\out{\hypertarget{method-submit}{}}}
+\if{html}{\out{<a id="method-ptfce_spec-submit"></a>}}
+\if{latex}{\out{\hypertarget{method-ptfce_spec-submit}{}}}
 \subsection{Method \code{submit()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ptfce_spec$submit(force = FALSE)}\if{html}{\out{</div>}}
@@ -158,8 +158,8 @@ method to submit all ptfce_zstat.R calls to a cluster based on the scheduler spe
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-is_complete"></a>}}
-\if{latex}{\out{\hypertarget{method-is_complete}{}}}
+\if{html}{\out{<a id="method-ptfce_spec-is_complete"></a>}}
+\if{latex}{\out{\hypertarget{method-ptfce_spec-is_complete}{}}}
 \subsection{Method \code{is_complete()}}{
 returns \code{TRUE} if all expected pTFCE output files exist, \code{FALSE} if any output is missing
 \subsection{Usage}{
@@ -168,8 +168,8 @@ returns \code{TRUE} if all expected pTFCE output files exist, \code{FALSE} if an
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_clusters"></a>}}
-\if{latex}{\out{\hypertarget{method-get_clusters}{}}}
+\if{html}{\out{<a id="method-ptfce_spec-get_clusters"></a>}}
+\if{latex}{\out{\hypertarget{method-ptfce_spec-get_clusters}{}}}
 \subsection{Method \code{get_clusters()}}{
 for each input file, obtain 3dClusterize objects that reflect the pTFCE-corrected clusters
 \subsection{Usage}{
@@ -204,8 +204,8 @@ Note that even though pTFCE enhances clusters, you still see some very small clu
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-ptfce_spec-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-ptfce_spec-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

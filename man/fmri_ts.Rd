@@ -26,19 +26,19 @@ R6 class representing a multivariate time series object for fMRI analysis
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{fmri_ts$new()}}
-\item \href{#method-get_ts}{\code{fmri_ts$get_ts()}}
-\item \href{#method-add_keys}{\code{fmri_ts$add_keys()}}
-\item \href{#method-replace_vm}{\code{fmri_ts$replace_vm()}}
-\item \href{#method-get_kvars}{\code{fmri_ts$get_kvars()}}
-\item \href{#method-get_vmvec}{\code{fmri_ts$get_vmvec()}}
-\item \href{#method-export}{\code{fmri_ts$export()}}
-\item \href{#method-clone}{\code{fmri_ts$clone()}}
+\item \href{#method-fmri_ts-new}{\code{fmri_ts$new()}}
+\item \href{#method-fmri_ts-get_ts}{\code{fmri_ts$get_ts()}}
+\item \href{#method-fmri_ts-add_keys}{\code{fmri_ts$add_keys()}}
+\item \href{#method-fmri_ts-replace_vm}{\code{fmri_ts$replace_vm()}}
+\item \href{#method-fmri_ts-get_kvars}{\code{fmri_ts$get_kvars()}}
+\item \href{#method-fmri_ts-get_vmvec}{\code{fmri_ts$get_vmvec()}}
+\item \href{#method-fmri_ts-export}{\code{fmri_ts$export()}}
+\item \href{#method-fmri_ts-clone}{\code{fmri_ts$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-fmri_ts-new"></a>}}
+\if{latex}{\out{\hypertarget{method-fmri_ts-new}{}}}
 \subsection{Method \code{new()}}{
 Create a new fmri_ts object
 \subsection{Usage}{
@@ -60,8 +60,8 @@ Create a new fmri_ts object
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_ts"></a>}}
-\if{latex}{\out{\hypertarget{method-get_ts}{}}}
+\if{html}{\out{<a id="method-fmri_ts-get_ts"></a>}}
+\if{latex}{\out{\hypertarget{method-fmri_ts-get_ts}{}}}
 \subsection{Method \code{get_ts()}}{
 method to get rehydrated time series object with key values
 \subsection{Usage}{
@@ -77,8 +77,8 @@ method to get rehydrated time series object with key values
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-add_keys"></a>}}
-\if{latex}{\out{\hypertarget{method-add_keys}{}}}
+\if{html}{\out{<a id="method-fmri_ts-add_keys"></a>}}
+\if{latex}{\out{\hypertarget{method-fmri_ts-add_keys}{}}}
 \subsection{Method \code{add_keys()}}{
 method to add a variable in ts_data to the set of keying variables for further use
 \subsection{Usage}{
@@ -94,8 +94,8 @@ method to add a variable in ts_data to the set of keying variables for further u
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-replace_vm"></a>}}
-\if{latex}{\out{\hypertarget{method-replace_vm}{}}}
+\if{html}{\out{<a id="method-fmri_ts-replace_vm"></a>}}
+\if{latex}{\out{\hypertarget{method-fmri_ts-replace_vm}{}}}
 \subsection{Method \code{replace_vm()}}{
 method to replace one or more variable mappings in the object
 \subsection{Usage}{
@@ -112,8 +112,8 @@ the variable mapping with a new specification}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_kvars"></a>}}
-\if{latex}{\out{\hypertarget{method-get_kvars}{}}}
+\if{html}{\out{<a id="method-fmri_ts-get_kvars"></a>}}
+\if{latex}{\out{\hypertarget{method-fmri_ts-get_kvars}{}}}
 \subsection{Method \code{get_kvars()}}{
 return names of key variables
 \subsection{Usage}{
@@ -122,8 +122,8 @@ return names of key variables
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_vmvec"></a>}}
-\if{latex}{\out{\hypertarget{method-get_vmvec}{}}}
+\if{html}{\out{<a id="method-fmri_ts-get_vmvec"></a>}}
+\if{latex}{\out{\hypertarget{method-fmri_ts-get_vmvec}{}}}
 \subsection{Method \code{get_vmvec()}}{
 return variable mapping information
 \subsection{Usage}{
@@ -132,8 +132,8 @@ return variable mapping information
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-export"></a>}}
-\if{latex}{\out{\hypertarget{method-export}{}}}
+\if{html}{\out{<a id="method-fmri_ts-export"></a>}}
+\if{latex}{\out{\hypertarget{method-fmri_ts-export}{}}}
 \subsection{Method \code{export()}}{
 not currently used
 \subsection{Usage}{
@@ -149,8 +149,8 @@ not currently used
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-fmri_ts-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-fmri_ts-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

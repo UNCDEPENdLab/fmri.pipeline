@@ -12,15 +12,15 @@ R6 class for a list of 3dClustSim runs
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{afni_3dclustsim_list$new()}}
-\item \href{#method-submit}{\code{afni_3dclustsim_list$submit()}}
-\item \href{#method-get_objs}{\code{afni_3dclustsim_list$get_objs()}}
-\item \href{#method-clone}{\code{afni_3dclustsim_list$clone()}}
+\item \href{#method-afni_3dclustsim_list-new}{\code{afni_3dclustsim_list$new()}}
+\item \href{#method-afni_3dclustsim_list-submit}{\code{afni_3dclustsim_list$submit()}}
+\item \href{#method-afni_3dclustsim_list-get_objs}{\code{afni_3dclustsim_list$get_objs()}}
+\item \href{#method-afni_3dclustsim_list-clone}{\code{afni_3dclustsim_list$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-afni_3dclustsim_list-new"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclustsim_list-new}{}}}
 \subsection{Method \code{new()}}{
 create a new afni_3dclustsim_list object
 \subsection{Usage}{
@@ -29,8 +29,8 @@ create a new afni_3dclustsim_list object
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-submit"></a>}}
-\if{latex}{\out{\hypertarget{method-submit}{}}}
+\if{html}{\out{<a id="method-afni_3dclustsim_list-submit"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclustsim_list-submit}{}}}
 \subsection{Method \code{submit()}}{
 submit all jobs in this list
 \subsection{Usage}{
@@ -46,8 +46,8 @@ submit all jobs in this list
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get_objs"></a>}}
-\if{latex}{\out{\hypertarget{method-get_objs}{}}}
+\if{html}{\out{<a id="method-afni_3dclustsim_list-get_objs"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclustsim_list-get_objs}{}}}
 \subsection{Method \code{get_objs()}}{
 return the clustsim objects
 \subsection{Usage}{
@@ -56,8 +56,8 @@ return the clustsim objects
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-afni_3dclustsim_list-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclustsim_list-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{
