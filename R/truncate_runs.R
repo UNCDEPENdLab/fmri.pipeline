@@ -82,19 +82,19 @@ truncate_runs <- function(mr_df, gpa = NULL, subj_outdir = NULL, truncation_data
   }
 
   # first volume to use for analysis
-  mr_df$first_volume <- mr_df$drop_volumes + 1
+  mr_df$first_volume <- as.integer(mr_df$drop_volumes + 1L)
 
   # last volume to use for analysis
-  mr_df$last_volume <- last_volume
+  mr_df$last_volume <- as.integer(last_volume)
 
   # length of truncated file
-  final_volumes <- last_volume - mr_df$first_volume + 1
+  final_volumes <- last_volume - mr_df$first_volume + 1L
 
   # update run_volumes to reflect any drops and truncation
-  mr_df$run_volumes <- final_volumes
+  mr_df$run_volumes <- as.integer(final_volumes)
 
   # number of volumes that were truncated at the end
-  mr_df$truncate_volumes <- run_volumes - last_volume
+  mr_df$truncate_volumes <- as.integer(run_volumes - last_volume)
 
   # see whether truncation is needed/specified
   if (final_volumes < run_volumes) {
@@ -115,6 +115,7 @@ truncate_runs <- function(mr_df, gpa = NULL, subj_outdir = NULL, truncation_data
 
     mr_df$run_nifti <- get_mr_abspath(mr_df, "run_nifti")
     imgext <- file_ext(mr_df$run_nifti)
+
     fname <- glue_data("sub-{id}_ses-{session}_run-{run_number}_drop-{drop_volumes}_trunc-{truncate_volumes}{imgext}", .x = mr_df)
     img_odir <- ifelse(is.null(subj_outdir), dirname(mr_df$run_nifti), subj_outdir)
     trunc_file <- file.path(img_odir, fname)
@@ -123,7 +124,7 @@ truncate_runs <- function(mr_df, gpa = NULL, subj_outdir = NULL, truncation_data
       # create truncated image with fslroi, which uses 0-based indexing
       runFSLCommand(paste("fslroi", mr_df$run_nifti, trunc_file, mr_df$first_volume - 1, final_volumes))
     }
-    mr_df$run_nifti <- trunc_file
+    mr_df$run_nifti <- trunc_file # will always have type character
 
     # if (!is.null(gpa$confound_settings$exclude_run)) {
     #   # Need to recalculate run exclusion since this run may be newly excluded or re-included within the volumes retained

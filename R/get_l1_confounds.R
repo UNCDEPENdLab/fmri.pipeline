@@ -60,8 +60,8 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
 
   # use defaults if missing in run_df (ensure same return for every input)
   calculation_defaults <- data.frame(
-    orig_volumes = NA_integer_, first_volume = NA_integer_, last_volume = NA_integer_, 
-    truncate_volumes = NA_integer_, l1_confound_file = NA_character_, exclude_run = FALSE
+    orig_volumes = NA_integer_, first_volume = NA_integer_, last_volume = NA_integer_,
+    truncate_volumes = NA_integer_, l1_confound_file = NA_character_, exclude_run = FALSE, run_volumes = NA_integer_
   )
 
   run_df <- populate_defaults(run_df, calculation_defaults)

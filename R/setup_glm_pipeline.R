@@ -282,7 +282,14 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     lg$error("Problematic entries: ")
     lg$error("%s", capture.output(print(subject_data %>% dplyr::inner_join(subj_dupes, by=c("id", "session")))))
     stop(msg)
-  }  
+  }
+
+  # force as.character so that class attributes always match between missing runs and valid runs that are truncated (affects rbindlist)
+  # https://github.com/Rdatatable/data.table/issues/3911
+  if ("mr_dir" %in% names(subject_data)) subject_data$mr_dir <- as.character(subject_data$mr_dir)
+  if ("mr_dir" %in% names(run_data)) run_data$mr_dir <- as.character(run_data$mr_dir)
+  if ("run_nifti" %in% names(run_data)) run_data$run_nifti <- as.character(run_data$run_nifti)
+  if ("confound_input_file" %in% names(run_data)) run_data$confound_input_file <- as.character(run_data$confound_input_file)
 
   if (!is.null(l1_models)) {
     if (checkmate::test_string(l1_models) && l1_models[1L] == "prompt") {
