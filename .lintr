@@ -1,0 +1,7 @@
+linters: with_defaults(
+  line_length_linter(145), 
+  commented_code_linter = NULL,
+  infix_spaces_linter = NULL,
+  closed_curly_linter(allow_single_line = TRUE),
+  open_curly_linter(allow_single_line = TRUE)
+  )

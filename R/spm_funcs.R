@@ -29,9 +29,9 @@ spm_hrf <- function(TR, P) {
 
     ## default parameters
     ##-----------------------------------------------------------------------
-    fMRI_T = 16 #microtime resolution is 1/16th of TR
+    fMRI_T <- 16 #microtime resolution is 1/16th of TR
 
-    p = c(6, 16, 1, 1, 6, 0, 32)
+    p <- c(6, 16, 1, 1, 6, 0, 32)
 
     if (!missing(P)) {
         p[1:length(P)] = P
@@ -39,8 +39,8 @@ spm_hrf <- function(TR, P) {
 
     ## modelled hemodynamic response function - {mixture of Gammas}
     ##-----------------------------------------------------------------------
-    dt    = TR/fMRI_T
-    u     = 0:(p[7]/dt) - p[6]/dt #sampling grid of HRF in microtime units (e.g., 0:256 for default params and 2s TR)
+    dt    <- TR/fMRI_T
+    u     <- 0:(p[7]/dt) - p[6]/dt #sampling grid of HRF in microtime units (e.g., 0:256 for default params and 2s TR)
 
     ## MH: eliminated use of spm Gpdf in favor of built-in gamma PDF in R. Checked that this yields identical
     ## results, although the third parameter of spm_Gpdf is really rate, not shape.

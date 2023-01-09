@@ -23,23 +23,20 @@
 #'
 #'           Note. FSL double gamma has a1 = 6, a2 = 16, cc = 1/6. Not yet sure about b1 and b2.
 #' @param baseline_coef_order Default -1 (no baseline). If >= 0, then design will include polynomial trends
-#'    within each run (e.g. baseline_coef_order = 1 includes both an intercept and a linear trend as regressors)
-#' @param baseline_parameterization Defaults to "Legendre". This adds Legendre polynomials up to \code{baseline_coef_order} (e.g., 2).
-#'           The alternative is "orthogonal_polynomials", which uses \code{fmri.design} from the \code{fmri} package
-#'           to add polynomial regressors that are orthgonal to substantive design factors.
-#' @param run_volumes Expects a numeric vector containing the number of volumes per run. If just a single number is passed,
-#'           the function assumes all runs have this number of volumes. This parameter sets
-#'           the corresponding lengths of convolved regressors so that they match the MR data. Alternatively,
-#'           you can pass a character vector of relevant NIfTI filenames, one per run, and build_design_matrix will
-#'           calculate the number of volumes based on the 4th dimension (time) of the fMRI data. Finally, if you
-#'           do not pass in this argument, build_design_matrix will take a guess that the run should end 12 seconds
-#'           (or whatever you specifiy for \code{iti_post}) after the last event ends:
-#'           max(onset + duration + iti_post)/tr within each run.
+#'           within each run (e.g. baseline_coef_order = 1 includes both an intercept and a linear trend as regressors)
+#' @param baseline_parameterization Defaults to "Legendre". This adds Legendre polynomials up to
+#'           \code{baseline_coef_order} (e.g., 2). The alternative is "orthogonal_polynomials",
+#'           which uses \code{fmri.design} from the \code{fmri} package (now internal to fmri.pipeline) to add 
+#'           polynomial regressors that are orthogonal to substantive design factors.
+#' @param run_data a data.frame containing metadata about the runs for which we want to model the task design. This
+#'           data.frame should contain the columns run_number, run_volumes, run_nifti, and drop_volumes. If run_nifti
+#'           is provided, but run_volumes is not, then the number of volumes is looked up from the NIfTI header.
 #' @param drop_volumes By default, all volumes are retained. If specified, this can be a vector of the number of volumes
 #'           that will be removed from the \emph{beginning} of each convolved regressor. If you pass a single number (e.g., 3),
 #'           this number of volumes will be dropped from each run. This is useful if you have dropped the first n volumes
-#'           of your MR data, for example to handle problems with steady state magnetization.
-#' @param runs_to_output A numeric vector of runs to be output. By default, all runs are preserved.
+#'           of your MR data, for example to handle problems with steady state magnetization. If you include drop_volumes in
+#'           the \code{run_data} data.frame, this will be used over this setting.
+#' @param runs_to_output A numeric vector of run numbers to be output. By default, all runs are preserved.
 #'           This is used to model only a subset such as \code{c(1, 2, 6)}.
 #' @param plot By default (\code{TRUE}), \code{build_design_matrix} will plot the design matrix in the plot window of your R session.
 #'           If \code{FALSE}, the plot is not displayed, but the ggplot object is still provided in the $design_plot field.
@@ -49,6 +46,10 @@
 #'           dmBLOCK convention of TIME*PARAMETER:DURATION for each event. FSL files follow the three-column
 #'           format of onset, duration, value. And convolved files represent a given signal convolved with the
 #'           HRF such that the 1-column output is in volumes (i.e., one row per volume).
+#' @param keep_empty_regressors If TRUE, then a regressor that contains no events for a given run is still retained
+#'           as an all-zeros regressor in the convolved timing files and the FSL 3-column files. This is useful if
+#'           you want to include regressors that only occur for some subjects, but not others. That said, handling
+#'           contrasts involving these regressors is a more complicated matter.
 #' @param output_directory Where to output the timing files. By default, the function will output the timing files
 #'           to a folder called "run_timing" in the current working directory. If such a folder does not exist,
 #'           it will make a folder in your R session's current working directory.
@@ -82,6 +83,7 @@
 #'           run_volumes within that run. If you pass in a vector of .txt files containing additional regressors,
 #'           these will be read into R, truncated to run_volumes, and column-wise concatenated with
 #'           substantive regressors.
+#' @param lg An lgr object used for logging messages
 #'
 #' @details
 #'
@@ -101,15 +103,15 @@
 #'
 #' \preformatted{
 #'  > print(events)
-#'      event run trial onset duration
-#'        cue   1     1     4        2
-#'        cue   1     2     7        2
-#'    outcome   1     1     6      0.5
-#'    outcome   1     2   9.5      0.5
-#'        cue   2     1   1.2        2
-#'        cue   2     2    12        2
-#'    outcome   2     1     6      0.5
-#'    outcome   2     2   9.5      0.5
+#'      event run_number trial onset duration
+#'        cue          1     1     4        2
+#'        cue          1     2     7        2
+#'    outcome          1     1     6      0.5
+#'    outcome          1     2   9.5      0.5
+#'        cue          2     1   1.2        2
+#'        cue          2     2    12        2
+#'    outcome          2     1     6      0.5
+#'    outcome          2     2   9.5      0.5
 #' }
 #'
 #' Note that you can tack on other columns to \code{events} if it useful to you. Furthermore, if you want to test different
@@ -142,26 +144,33 @@
 #' The \code{value} element can be a single number (e.g., 1) in which case this height is used for all corresponding occurrences of a given event.
 #' Most commonly, a fixed value is useful for modeling a 'taskness' regressor, which captures a 0/1 representation of whether an event is occurring
 #' at a given moment in time. In conventional task-reated fMRI, this task indicator representation is then convolved with the HRF to model expected BOLD
-#' activity due to the occurrence of an event. Alternatively, \code{value} can be a data.frame containing \code{$run}, \code{$trial}, and \code{$value}
+#' activity due to the occurrence of an event. Alternatively, \code{value} can be a data.frame containing \code{$run_number}, \code{$trial}, and \code{$value}
 #' columns that specify the height of the regressor at each trial. This specification is more useful for a parametric regressor, as in model-based fMRI.
+#'
+#' Optionally, one or more within-subject factor columns can be included in the value data.frame and noted in the 
+#' \code{wi_factors} element of the signal. In this case, regressors for each level of the wi_factors will be generated as
+#' separate regressors.
+#' 
 #' Here is an example:
 #'
 #' \preformatted{
 #'   signals <- list(
-#'     pe=list(event="outcome", normalization="none", convmax_1=TRUE,
+#'     pe=list(event="outcome", normalization="none", convmax_1=TRUE, wi_factors="trustee",
 #'     value=data.frame(
-#'       run=rep(1,5),
+#'       run_number=rep(1,5),
 #'       trial=1:5,
-#'       value=c(0, 10.2, -11.1, 6, 2.4, 1.5)
+#'       value=c(10.2, -11.1, 6, 2.4, 1.5),
+#'       trustee=c("Good", "Good", "Bad", "Bad", "Neutral")
 #'     )
 #'   )
 #' }
 #'
-#' Here, the parametrically varying prediction error signal will be aligned at the "outcome" event, have a duration copied from the
-#' \code{$duration} column of \code{events}, and will have parametrically varying heights (e.g., 10.2 at trial 2) prior to convolution.
-#' Note that the value \code{data.frame} need not have an entry for every trial in the run. For example, if a given signal is only relevant
-#' or only occurs for some "outcome" events, the trial column might be something like \code{c(2, 6, 10)}, indicating that the parametric
-#' modulator is only modeled at those trials. This is achieved by joining \code{events} with the relevant signal using \code{trial} as a key.
+#' Here, the parametrically varying prediction error signal will be aligned at the "outcome" event, have a duration copied 
+#' from the \code{$duration} column of \code{events}, and will have parametrically varying heights (e.g., 10.2 at trial 1)
+#' prior to convolution. Note that the value \code{data.frame} need not have an entry for every trial in the run. For example,
+#' if a given signal is only relevant or only occurs for some "outcome" events, the trial column might be something like
+#' \code{c(2, 6, 10)}, indicating that the parametric modulator is only modeled at those trials. This is achieved by joining
+#' \code{events} with the relevant signal using \code{trial} as a key.
 #'
 #' The \code{$normalization} element handles the normalization of the HRF for each regressor. This can be:
 #' \enumerate{
@@ -213,12 +222,12 @@
 #'          additional signals, and polynomial baseline regressors, if specified. Each row reflects the predicted value for each volume.
 #'        \item \code{$design_unconvolved}: The unconvolved design matrices for each run. Same structure as \code{$design_convolved},
 #'          but prior to convolution with the HRF.
-#'        \item \code{$collin_raw}: A list containing information about the collinearity of regressors before convolution.
+#'        \item \code{$collin_events}: A list containing information about the collinearity of regressors before convolution.
 #'          At the highest level of the list, each element contains a run. At the second level of the list,
 #'          the first element contains the correlation matrix of the regressors and the second element provides
-#'          the variance inflation factor (VIF) associated with each regressor. Example: \code{design$collin_raw$run1$vif}
-#'        \item \code{$collin_convolve}: A list containing information about collinearity of the convolved regressors,
-#'          including substantive signals, additional regressors, and polynomial regressors. Follows the same structure as \code{$collin_raw}.
+#'          the variance inflation factor (VIF) associated with each regressor. Example: \code{design$collin_events$run1$vif}
+#'        \item \code{$collin_convolved}: A list containing information about collinearity of the convolved regressors,
+#'          including substantive signals, additional regressors, and polynomial regressors. Follows the same structure as \code{$collin_events}.
 #'        \item \code{$concat_onsets}: A list containing concatenated event onset times for each signal. Each signal is an element of the list containing
 #'          a vector of all onset times across runs. That is, the total time of run1 is added to onsets of run2 to support a combined analysis of all
 #'          runs, which is common in AFNI (e.g., using -concat or multiple files to -input).
@@ -230,11 +239,13 @@
 #' @importFrom orthopolynom legendre.polynomials polynomial.values
 #' @importFrom oro.nifti readNIfTI
 #' @importFrom ggplot2 ggplot
-#' @importFrom fmri fmri.design
 #' @importFrom car vif
 #' @importFrom stats as.formula cor lm residuals rnorm
 #' @importFrom utils read.table write.table
 #' @importFrom RNifti niftiHeader
+#' @importFrom checkmate assert_file_exists
+#' @importFrom rlang flatten
+#' @importFrom fs path_sanitize
 #'
 #' @author Michael Hallquist
 #' @author Alison Schreiber
@@ -286,14 +297,14 @@
 #'   #PPI example
 #'
 #'   events <- rbind(
-#'     data.frame(event="cue", run=1, trial=1:5, onset=c(5, 20, 50, 100, 150), duration=4),
-#'     data.frame(event="cue", run=2, trial=1:5, onset=c(15, 35, 60, 90, 105), duration=4)
+#'     data.frame(event="cue", run_number=1, trial=1:5, onset=c(5, 20, 50, 100, 150), duration=4),
+#'     data.frame(event="cue", run_number=2, trial=1:5, onset=c(15, 35, 60, 90, 105), duration=4)
 #'   )
 #'
 #'   signals <- list(
 #'     load=list(value=rbind(
-#'       data.frame(run=1, trial=1:5, value=1:5),
-#'       data.frame(run=2, trial=1:5, value=1:5)
+#'       data.frame(run_number=1, trial=1:5, value=1:5),
+#'       data.frame(run_number=2, trial=1:5, value=1:5)
 #'     ), event="cue", normalization="none"),
 #'     cue_evt=list(value=1, event="cue", normalization="none"),
 #'     cue_evt_ppi=list(value=1, event="cue", normalization="none", ts_multipliers="vs")
@@ -320,18 +331,56 @@ build_design_matrix <- function(
   hrf_parameters=c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35),
   baseline_coef_order=-1L, #don't include baseline by default
   baseline_parameterization="Legendre",
-  run_volumes=NULL, #vector of total fMRI volumes for each run (used for convolved regressors)
+  run_data = NULL, # data.frame containing run numbers, niftis, volumes, and dropped volumes
+  run_nifti_drop_applied = TRUE, # if TRUE, assume that drop_volumes was already removed
   drop_volumes=0L, #vector of how many volumes to drop from the beginning of a given run
   runs_to_output=NULL,
   plot=TRUE,
   write_timing_files=NULL,
   output_directory="run_timing",
+  keep_empty_regressors = TRUE,
   convolve_wi_run=TRUE, #whether to mean center parametric regressors within runs before convolution
   high_pass=NULL, #whether to apply a high-pass filter to the design matrix (e.g., to match fmri preprocessing)
   iti_post = 12,
   ts_multipliers=NULL, #time series regressors that can be multiplied against signals prior to convolution
-  additional_regressors = NULL #allow for additional regression text file to be implemented. need separate file for each
+  additional_regressors = NULL, #allow for additional regression text file to be implemented. need separate file for each
+  lg = NULL
 ) {
+
+  checkmate::assert_character(write_timing_files, null.ok=TRUE)
+  if (!is.null(write_timing_files)) { write_timing_files <- tolower(write_timing_files) } #always use lower case internally
+  checkmate::assert_subset(write_timing_files, c("convolved", "fsl", "afni", "spm"))
+
+  # validate run_data
+  checkmate::assert_data_frame(run_data)
+  if (!is.null(run_data$run_nifti)) { # verify the NIfTIs exist, if specified
+    checkmate::assert_file_exists(run_data$run_nifti)
+  }
+  checkmate::assert_integerish(run_data$run_volumes, lower = 1, null.ok = TRUE)
+  checkmate::assert_integerish(run_data$drop_volumes, lower = 0, null.ok = TRUE)
+  if (is.null(run_data$run_number)) {
+    message("No run_number column found in run_data. Assuming that runs numbers are sequential ascending and adding this column.")
+    run_data$run_number <- seq_len(nrow(run_data))
+  }
+  checkmate::assert_integerish(run_data$run_number, lower = 1)
+  checkmate::assert_integerish(drop_volumes, lower = 0)
+
+  if (is.null(lg)) {
+    lg <- lgr::get_logger()
+  }
+
+  # If drop_volumes is just 1 in length, assume it applies to all runs
+  # This will only have an effect if run_data does not already have a drop_volumes column
+  if (is.null(run_data$drop_volumes)) {
+    if (length(drop_volumes) == nrow(run_data)) {
+      run_data$drop_volumes <- drop_volumes # populate run-wise drops
+    } else if (length(drop_volumes) == 1L && is.numeric(drop_volumes) && drop_volumes[1L] > 0) {
+      lg$info("Using first element of drop_volumes for all runs: ", drop_volumes[1L])
+      run_data$drop_volumes <- rep(drop_volumes[1L], nrow(run_data))
+    } else {
+      run_data$drop_volumes <- 0
+    }
+  }
 
   #take a snapshot of arguments to build_design_matrix that we pass to subsidiary functions
   bdm_args <- as.list(environment(), all.names = TRUE)
@@ -347,48 +396,105 @@ build_design_matrix <- function(
   if (!"onset" %in% names(events)) { stop("events data.frame must contain onset column with the onset time in seconds") }
   if (!"duration" %in% names(events)) { stop("events data.frame must contain duration column with the event duration in seconds") }
 
-  if (!"run" %in% names(events)) {
-    message("No run column found in events. Assuming 1 run and adding this column")
-    events$run <- 1
+  if (!"run_number" %in% names(events)) {
+    lg$info("No run_number column found in events. Assuming run_number=1 and adding this column")
+    events$run_number <- 1
   }
 
-  if (any(events$duration < 0)) {
-    print(subset(events, duration < 0))
-    stop("Invalid negative durations included in events data.frame")
+  if (any(is.na(events$duration))) {
+    msg <- "Invalid missing (NA) durations included in events data.frame. Cannot continue."
+    lg$error(msg)
+    lg$error("%s", capture.output(print(subset(events, is.na(duration)))))
+    stop(msg)
+  } else if (any(events$duration < 0)) {
+    msg <- "Invalid negative durations included in events data.frame. Cannot continue."
+    lg$error(msg)
+    lg$error("%s", print(subset(events, duration < 0)))
+    stop(msg)
   }
 
-  if (any(events$onset < 0)) {
-    print(subset(events, onset < 0))
-    stop("Invalid negative onsets included in events data.frame")
+  if (any(is.na(events$onset))) {
+    msg <- "Invalid missing (NA) onsets included in events data.frame. Cannot continue."
+    lg$error(msg)
+    lg$error("%s", capture.output(print(subset(events, is.na(onset)))))
+    stop(msg)
+  } else if (any(events$onset < 0)) {
+    msg <- "Invalid negative onsets included in events data.frame"
+    lg$error(msg)
+    lg$error("%s", capture.output(print(subset(events, onset < 0))))
+    stop(msg)
   }
 
-  #merge the trial-indexed signals with the time-indexed events
-  #basically: put the events onto the time grid of the run based on the "event" element of the list
-  signals_aligned <- lapply(signals, function(s) {
-    if (is.null(s$event)) { stop("Signal does not have event element") }
+  # update run_volumes to reflect drops: elementwise subtraction of dropped volumes from full lengths
+  # GENERALLY: want drop_volumes to a) subtract from run_volumes and b) subtract tr*drop_volumes from timing
+  #   We should also assume that any volume-level input (ts files and confounds) should be shortened, too.
+  # The caveat is how to handle files that are already truncated. We'd need to *add* drop_volumes to offset.
+
+  # Internal flags for tracking how drop_volumes is applied. Not exposed to user for now
+  # At present, we only support the following:
+  #   - NIfTIs can already have drop_volumes applied (externally), or they can be truncated/dropped later (by other programs)
+  #   - timing is always shifted according to drop_volumes
+  #   - additional regressors are always assumed to be the original (untruncated) length, and volumes are dropped if requested
+  #   - ts_multipliers (PPI-style) are always assumed to be the original (untruncated) length, and volumes are dropped if requested
+
+  shift_nifti <- FALSE # if TRUE, we'd be on the hook for doing an fslroi x <drop_volumes> approach (not supported)
+  shift_timing <- TRUE # shift drop_volumes*tr from event onset times (would only be FALSE if user did the subtraction externally, which is not supported)
+  # shorten_volumes <- TRUE # subtract drop_volumes from run_volumes.
+  shorten_additional <- TRUE # whether to apply drop_volumes to additional regressors (would only be FALSE if user supplied confound files that already dropped these)
+  shorten_ts <- TRUE # whether to apply drop_volumes to ts regressors (would only be FALSE if user supplied confound files that already dropped these)
+
+  # make sure beta_series is populated with TRUE or FALSE (default)
+  signals <- lapply(signals, function(s) {
+    s$beta_series <- ifelse(isTRUE(s$beta_series), TRUE, FALSE) #no beta series by default
+    s
+  })
+
+  # expand_signal returns a list itself -- use flatten to make one big mega-list
+  signals_expanded <- rlang::flatten(unname(lapply(signals, expand_signal)))
+  names(signals_expanded) <- sapply(signals_expanded, "[[", "name")
+
+  # merge the trial-indexed signals with the time-indexed events
+  # basically: put the events onto the time grid of the run based on the "event" element of the list
+  signals_aligned <- lapply(signals_expanded, function(s) {
+    # signals_aligned <- lapply(signals, function(s) {
+    if (is.null(s$event)) {
+      msg <- "Signal does not have event element"
+      lg$error(msg)
+      lg$error("%s", capture.output(print(s)))
+      stop(msg)
+    }
+
     if (is.null(s$value)) {
-      message("Signal is missing a 'value' element. Adding 1 for value, assuming a unit-height regressor.")
+      lg$info("Signal is missing a 'value' element. Adding 1 for value, assuming a unit-height regressor.")
       s$value <- 1
     }
 
-    df_events <- dplyr::filter(events, event==s$event)
-    df_signal <- s$value #the signal data.frame for this signal
-    if (length(df_signal)==1L && is.numeric(df_signal)) { #task indicator-type regressor
+    join_cols <- c("run_number", "trial")
+    df_events <- dplyr::filter(events, event == s$event)
+    event_runs <- factor(sort(unique(df_events$run_number)))
+    df_signal <- s$value # the signal data.frame for this signal
+
+    if ("id" %in% names(df_events)) {
+      join_cols <- c(join_cols, "id")
+    }
+    if ("session" %in% names(df_events)) {
+      join_cols <- c(join_cols, "session")
+    }
+
+    if (length(df_signal) == 1L && is.numeric(df_signal)) { #task indicator-type regressor
       s_aligned <- df_events
       s_aligned$value <- df_signal #replicate requested height for all occurrences
     } else if (is.data.frame(df_signal)) {
-      if (!identical(sort(unique(df_events$run)), sort(unique(df_signal$run)))) {
-        missing_runs <- setdiff(df_events$run, df_signal$run) #setdiff discards duplicates
-        for (m in missing_runs) {
-          message("Missing value for event: ", s$event, " in run: ", as.character(m))
-          df_signal <- rbind(df_signal, data.frame(run=m, trial=1, value=0)) #populate an empty event for each missing run
-        }
-      }
-      s_aligned <- df_signal %>% dplyr::left_join(df_events, by=c("run", "trial")) %>% arrange(run, trial) #enforce match on signal side
+      s_aligned <- df_signal %>%
+        dplyr::left_join(df_events, by = join_cols) %>%
+        dplyr::arrange(run_number, trial) # enforce match on signal side
     } else { stop("Unknown data type for signal.") }
 
-    if (length(s$duration) > 1L) { stop("Don't know how to interpret multi-element duration argument for signal: ", paste0(s$duration, collapse=", ")) }
-    if(!is.null(s$duration)) {
+    if (length(s$duration) > 1L) {
+      stop("Don't know how to interpret multi-element duration argument for signal: ", paste0(s$duration, collapse = ", "))
+    }
+
+    if (!is.null(s$duration)) {
       if (is.numeric(s$duration)) {
         s_aligned$duration <- s$duration #replicate the scalar on all rows
       } else {
@@ -396,12 +502,15 @@ build_design_matrix <- function(
       }
     }
 
-    #transform to make dmat happy (runs x regressors 2-d list)
-    #dplyr::select will tolerate quoted names, which avoids R CMD CHECK complaints
-    retdf <- s_aligned %>% dplyr::select("trial", "onset", "duration", "value")
-    retsplit <- split(retdf, s_aligned$run)
-    names(retsplit) <- paste0("run", names(retsplit))
-
+    # transform to make dmat happy (runs x regressors 2-d list)
+    # dplyr::select will tolerate quoted names, which avoids R CMD CHECK complaints
+    retdf <- s_aligned %>%
+      dplyr::select("run_number", "trial", "onset", "duration", "value") %>%
+      mutate(run_number = factor(run_number, levels = event_runs)) %>%
+      setDT()
+    # use data.table split method to keep all levels and drop by column. sorted=TRUE also keeps things in run order
+    retsplit <- split(retdf, by="run_number", keep.by=FALSE, sorted=TRUE)
+    names(retsplit) <- paste0("run_number", names(retsplit))
     #tag the aligned signal with the event element so that we can identify which regressors are aligned to the same event later
     retsplit <- lapply(retsplit, function(rr) { attr(rr, "event") <- s$event; return(rr) })
 
@@ -409,18 +518,18 @@ build_design_matrix <- function(
   })
 
   #extract the normalization for each regressor into a vector
-  bdm_args$normalizations <- sapply(signals, function(s) {
+  bdm_args$normalizations <- sapply(signals_expanded, function(s) {
     ifelse(is.null(s$normalization), "none", s$normalization) #default to none
   })
 
   #extract whether to divide a given regressor into a beta series (one regressor per event)
-  bdm_args$beta_series <- sapply(signals, function(s) {
-    ifelse(is.null(s$beta_series), FALSE, TRUE) #no beta series by default
+  bdm_args$beta_series <- sapply(signals_expanded, function(s) {
+    ifelse(isTRUE(s$beta_series), TRUE, FALSE) #no beta series by default
   })
 
   #Extract whether to remove zero values from the regressor prior to convolution.
   #This is especially useful when mean centering before convolution.
-  bdm_args$rm_zeros <- sapply(signals, function(s) {
+  bdm_args$rm_zeros <- sapply(signals_expanded, function(s) {
     if (is.null(s$rm_zeros)) {
       TRUE #default to removing zeros before convolution
     } else {
@@ -433,7 +542,7 @@ build_design_matrix <- function(
   })
 
   #extract the convmax_1 settings for each regressor into a vector
-  bdm_args$convmax_1 <- sapply(signals, function(s) {
+  bdm_args$convmax_1 <- sapply(signals_expanded, function(s) {
     if (is.null(s$convmax_1)) {
       FALSE
     } else {
@@ -446,7 +555,7 @@ build_design_matrix <- function(
   })
 
   #determine whether to add a temporal derivative for each signal
-  bdm_args$add_derivs <- sapply(signals, function(s) {
+  bdm_args$add_derivs <- sapply(signals_expanded, function(s) {
     if (is.null(s$add_deriv)) {
       FALSE
     } else {
@@ -459,260 +568,172 @@ build_design_matrix <- function(
   })
 
   #define number of runs based off of the length of unique runs in the events data.frame
-  nruns <- length(unique(events$run))
-  run_niftis <- NULL
-  if (is.null(run_volumes)) {
-    #determine the last fMRI volume to be analyzed
-    run_volumes <- rep(0, nruns)
+  nruns <- length(unique(events$run_number))
 
-    for(i in 1:nruns) {
-      for (j in 1:length(signals_aligned)) {
-        currentdf <- signals_aligned[[j]][[i]] #jth signal, ith run (signals_aligned has signals at top level)
-
-        #estimate the last moment
-        highesttime <- ceiling(max(currentdf$onset + currentdf$duration + iti_post, na.rm=TRUE)/tr)
-        if (highesttime > run_volumes[i]) { run_volumes[i] <- highesttime } #update run_volumes for ith run only if this signal has later event
-      }
-    }
-
-    message("Assuming that last fMRI volume was 12 seconds after the onset of the last event.")
-    message(paste0("Resulting volumes: ", paste(run_volumes, collapse=", ")))
-
-  } else if (is.character(run_volumes)) {
-    message("Using NIfTI images to determine run lengths.")
-    run_niftis <- run_volumes
-    run_volumes_list <- c()
-    for( i in 1:length(run_volumes)) {
-      currentNifti <- run_volumes[i]
-      out <- niftiHeader(currentNifti)
-      rv <- out$dim[5]
-      run_volumes_list <- c(run_volumes_list, rv)
-    }
-    run_volumes <- run_volumes_list
-  } else if (is.numeric(run_volumes)) {
-    #replicate volumes for each run if a scalar is passed
-    if (length(run_volumes) == 1L) { run_volumes <- rep(run_volumes, nruns) }
-    stopifnot(length(run_volumes) == nruns)
-  } else {
-    stop("Don't know how to handle run_volumes: ", run_volumes)
-  }
+  # determine the number of volumes in each run based on inputs
+  run_data <- determine_run_volumes(run_data, nruns, run_nifti_drop_applied, tr, signals_aligned, lg)
 
   #determine which run fits should be output for fmri analysis
   if (is.null(runs_to_output)) {
     message("Assuming that all runs should be fit and run numbers are sequential ascending")
-    runs_to_output <- 1:length(run_volumes) #output each run
+    runs_to_output <- seq_along(run_data$run_volumes) #output each run
   }
 
-  if (length(drop_volumes) < length(run_volumes)) {
-    if (drop_volumes[1L] > 0) { message("Using first element of drop_volumes for all runs: ", drop_volumes[1L]) }
-    drop_volumes <- rep(drop_volumes[1L], length(run_volumes))
-  }
+  # read and process additional regressors (e.g., confounds) -- if not NULL, this should return a data.frame indexed by run
+  additional_regressors <- get_additional_regressors(additional_regressors, run_data$run_volumes, run_data$drop_volumes, shorten_additional, lg)
 
-  #For NIfTI input, assume that the .nii.gz is already truncated. Therefore, the number of volumes detected in the NIfTI
-  #must be adjusted *upward* by drop_volumes so that the drop is carried out properly
-  if (!is.null(run_niftis) && any(drop_volumes > 0)) {
-    message("Assuming that NIfTIs already have drop_volumes removed. Adjusting run_volumes accordingly")
-    run_volumes <- run_volumes + drop_volumes
-    print(data.frame(nifti=run_niftis, detected_volumes=run_volumes_list, run_volumes=run_volumes))
-  }
-
-  #handle additional regressors
-  if (is.character(additional_regressors)) {
-    additional_regressors_df <- data.frame()
-
-    for (i in 1:length(additional_regressors)) {
-      additional_regressors_currun <- read.table(additional_regressors[i])
-      additional_regressors_currun$run <- i
-      rv = run_volumes[i]
-      additional_regressors_currun <- dplyr::slice(additional_regressors_currun, (drop_volumes[i]+1):rv) %>% as.data.frame()
-      additional_regressors_df <- bind_rows(additional_regressors_df, additional_regressors_currun)
-    }
-  } else if (is.list(additional_regressors)) {
-    #assuming that a list of data.frames for each run of the data
-    #all that need to do is concatenate the data frames after filtering any obs that are above run_volumes
-    additional_regressors_df <- data.frame()
-    for(i in 1:length(additional_regressors)) {
-      additional_regressors_currun <- additional_regressors[[i]]
-      stopifnot(is.data.frame(additional_regressors_currun))
-      additional_regressors_currun$run <- i
-      rv = run_volumes[i]
-      message(paste0("Current run_volumes:", rv))
-      if(nrow(additional_regressors_currun) < rv) { stop("additional regressors have fewer observations than run_volumes") }
-      additional_regressors_currun <- dplyr::slice(additional_regressors_currun, (drop_volumes[i]+1):rv) %>% as.data.frame()
-      additional_regressors_df <- bind_rows(additional_regressors_df, additional_regressors_currun)
-    }
-  } else {
-    additional_regressors <- NULL
-  }
-
-  #handle time series modulator regressors
-  if (!is.null(ts_multipliers)) {
-    ts_multipliers_df <- data.frame()
-
-    for(i in 1:length(ts_multipliers)) {
-      if (is.character(ts_multipliers)) {
-        ts_multipliers_currun <- read.table(ts_multipliers[i]) #read in ith text file
-      } else {
-        ts_multipliers_currun <- ts_multipliers[[i]] #use ith element of list of data.frames
-      }
-
-      stopifnot(is.data.frame(ts_multipliers_currun))
-      #mean center PPI signals -- crucial for convolution to be sensible
-      ts_multipliers_currun <- as.data.frame(lapply(ts_multipliers_currun, function(x) { x - mean(x, na.rm=TRUE) } ))
-      ts_multipliers_currun$run <- i
-      rv = run_volumes[i]
-
-      #message(paste0("Current run_volumes:", rv))
-      if(nrow(ts_multipliers_currun) < rv) { stop("ts_multiplier regressor has fewer observations than run_volumes") }
-      ts_multipliers_currun <- dplyr::slice(ts_multipliers_currun, (drop_volumes[i]+1):rv) %>% as.data.frame()
-      ts_multipliers_df <- bind_rows(ts_multipliers_df, ts_multipliers_currun)
-    }
-  } else {
-    ts_multipliers <- NULL
-  }
+  ts_multipliers_df <- get_ts_multipliers(ts_multipliers, run_data, shorten_ts)
 
   #Add ts_multipliers to signals as needed. Will generate a list in which each element is a run
   #NB. This doesn't handle runs_to_output appropriately!!
-  bdm_args$ts_multiplier <- lapply(signals, function(s) {
-    if (is.null(s$ts_multiplier)) {
+  bdm_args$ts_multiplier <- lapply(signals_expanded, function(s) {
+    if (is.null(s$ts_multiplier) || isFALSE(s$ts_multiplier)) {
       return(NULL)
     } else {
       #split the relevant column of the ts_multipliers_df for this signal at run boundaries
-      ss <- split(ts_multipliers_df[[s$ts_multiplier]], ts_multipliers_df$run)
+      ss <- split(ts_multipliers_df[[s$ts_multiplier]], ts_multipliers_df$run_number)
       return(ss)
     }
   })
 
-  #Build the runs x signals 2-D list
-  #Note that we enforce dropped volumes (from beginning of run) below
-  #This is because fmri.stimulus gives odd behaviors (e.g. constant 1s) if an onset time is negative
-  dmat <- do.call(cbind, lapply(1:length(signals_aligned), function(signal) {
+  # Build the runs x signals 2-D list
+  # Note that we enforce dropped volumes (from beginning of run) below
+  # This is because fmri.stimulus gives odd behaviors (e.g. constant 1s) if an onset time is negative
+  dmat <- do.call(cbind, lapply(seq_along(signals_aligned), function(signal) {
     lapply(signals_aligned[[signal]], function(run) {
       mm <- as.matrix(run)
-      attr(mm, "event") <- attr(run, "event") #propagate event tag
+      attr(mm, "event") <- attr(run, "event") # propagate event tag
       return(mm)
     })
   }))
 
-  #only retain runs to be analyzed
-  dmat <- dmat[runs_to_output,,drop=FALSE]
-  run_volumes <- run_volumes[runs_to_output] #need to subset this, too, for calculations below to match
-  drop_volumes <- drop_volumes[runs_to_output] #need to subset this, too, for calculations below to match
-  if (!is.null(run_niftis)) { run_niftis <- run_niftis[runs_to_output] }
+  # enforce that run subsetting depends on having the runs present in the run_data object
+  stopifnot(all(runs_to_output %in% run_data$run_number))
+  run_data <- run_data %>% dplyr::filter(run_number %in% !!runs_to_output)
+
+  # use row names, rather than numeric positions, to enforce subsetting (e.g., noncontiguous runs in dmat)
+  dmat <- dmat[paste0("run_number", runs_to_output), , drop = FALSE]
+
+  # from this point forward, run_volumes and drop_volumes are local variables that reflect the runs that are retained
+  run_volumes <- run_data$run_volumes
+  drop_volumes <- run_data$drop_volumes
+  run_nifti <- run_data$run_nifti
 
   #run_volumes and drop_volumes are used by convolve_regressor to figure out the appropriate regressor length
   bdm_args$run_volumes <- run_volumes #copy into argument list
   bdm_args$drop_volumes <- drop_volumes #copy into argument list
 
-  #make sure the columns of the 2-D list are named by signal
+  # make sure the columns of the 2-D list are named by signal
   dimnames(dmat)[[2L]] <- names(signals_aligned)
 
-  #convert the trial-oriented dmat to a time-oriented dmat_convolved.
-  #also get an unconvolved version on the time grid for diagnostics.
-  dmat_convolved <- place_dmat_on_time_grid(dmat, convolve=TRUE, bdm_args)
-  dmat_unconvolved <- place_dmat_on_time_grid(dmat, convolve=FALSE, bdm_args)
+  # if volumes are being dropped (and shift-timing is TRUE), subtract the dropped volumes from the onset times.
+  dmat <- shift_dmat_timing(dmat, tr, drop_volumes, shift_timing)
 
-  #dmat_convolved should now be a 1-d runs list where each element is a data.frame of convolved regressors.
+  # concatenate regressors across runs by adding timing from MR files.
+  run_timing <- cumsum(run_volumes) * tr # timing in seconds of the start of successive runs
+
+  # convert the trial-oriented dmat to a time-oriented dmat_convolved.
+  # also get an unconvolved version on the time grid for diagnostics.
+  dmat_convolved <- place_dmat_on_time_grid(dmat, convolve = TRUE, run_timing = run_timing, bdm_args, lg)
+  dmat_unconvolved <- place_dmat_on_time_grid(dmat, convolve = FALSE, run_timing = run_timing, bdm_args, lg)
+
+  # dmat_convolved should now be a 1-d runs list where each element is a data.frame of convolved regressors.
   names(dmat_convolved) <- names(dmat_unconvolved) <- paste0("run", runs_to_output)
 
-  time_offset <- tr*drop_volumes #how much time is being dropped from the beginning of the run (used to change event onsets)
-  run_volumes <- run_volumes - drop_volumes #update run_volumes to reflect drops: elementwise subtraction of dropped volumes from full lengths
-
-  if (time_offset[1L] > 0) {
-    if (length(unique(time_offset)) == 1L) { to_print <- time_offset[1L]
-    } else { to_print <- paste(time_offset, collapse=", ") }
-    message("Based on drop_volumes and tr, subtracting ", to_print, "s from event onsets")
-  }
-
-  #Change the timing of the regressors in dmat according to drop_volumes
-  for (i in 1:dim(dmat)[1]) {
-    for (j in 1:dim(dmat)[2]) {
-      df <- dmat[[i,j]]
-      df[,"onset"] <- df[,"onset"] - time_offset[i]
-      if (min(df[,"onset"] < 0)) {
-        message("For run ", dimnames(dmat)[[1]][i], ", regressor ", dimnames(dmat)[[2]][j], ", there are ",
-                sum(df[,"onset"] < 0), " events before time 0")
-      }
-      dmat[[i,j]] <- df
-    }
-  }
-
   #add additional regressors to dmat_convolved here so that they are written out as part of the write_timing_files step
-  if(!is.null(additional_regressors)) {
-    for (i in 1:length(dmat_convolved)) {
-      #this is clunky, but necessary to make sure we grab the right additional signals (would need to refactor dmat_convolved to get it less clunky)
-      runnum <- as.numeric(sub("run(\\d+)", "\\1", names(dmat_convolved)[i], perl=TRUE))
-      additional_regressors_currun <- dplyr::filter(additional_regressors_df, run == runnum) %>% dplyr::select(-run)
+  if (!is.null(additional_regressors)) {
+    for (i in seq_along(dmat_convolved)) {
+      # this is clunky, but necessary to make sure we grab the right additional signals 
+      # (would need to refactor dmat_convolved to get it less clunky)
+      runnum <- as.numeric(sub("run_number(\\d+)", "\\1", names(dmat_convolved)[i], perl=TRUE))
+      additional_regressors_currun <- additional_regressors_df %>% 
+        dplyr::filter(run_number == !!runnum) %>%
+        dplyr::select(-run_number)
 
       #ensure that additional regressors are mean-centered
       additional_regressors_currun <- as.data.frame(lapply(additional_regressors_currun, function(x) { x - mean(x, na.rm=TRUE) } ))
-      dmat_convolved[[i]] <- cbind(dmat_convolved[[i]], additional_regressors_currun)
-      dmat_unconvolved[[i]] <- cbind(dmat_unconvolved[[i]], additional_regressors_currun)
+      dmat_convolved[[i]] <- dplyr::bind_cols(dmat_convolved[[i]], additional_regressors_currun)
+      dmat_unconvolved[[i]] <- dplyr::bind_cols(dmat_unconvolved[[i]], additional_regressors_currun)
     }
 
-    #additional_regressors_df_split <- split(additional_regressors_df, additional_regressors_df$run)
+    #additional_regressors_df_split <- split(additional_regressors_df, additional_regressors_df$run_number)
     #dmat_changed <- lapply(dmat, function(x) {cbind(x, additional_regressors_df_split[[x]])})
     #dmat_convolved <- cbind(dmat_convolved, additional_regressors_df)
   }
 
-  #Write timing files to disk for analysis by AFNI, FSL, etc.
+  # Write timing files to disk for analysis by AFNI, FSL, etc.
+  tf_convolved <- tf_convolved_concat <- tf_fsl <- tf_afni <- NULL
+  
   if (!is.null(write_timing_files)) {
     dir.create(output_directory, recursive=TRUE, showWarnings=FALSE)
 
     if ("convolved" %in% write_timing_files) {
-      #write convolved regressors
+      # write convolved regressors
+      tf_convolved <- matrix(NA_character_, nrow = dim(dmat)[1L], ncol = dim(dmat)[2L], dimnames=dimnames(dmat))
 
       conv_concat <- list()
-      lapply(1:length(dmat_convolved), function(r) {
-        lapply(1:length(dmat_convolved[[r]]), function(v) {
-          regName <- names(dmat_convolved[[r]])[v]
-          fname <- paste0(names(dmat_convolved)[r], "_", regName, ".1D")
-          toWrite <- round(dmat_convolved[[r]][[v]], 6)
-          conv_concat[[regName]] <<- c(conv_concat[[regName]], toWrite) #add for concatenated 1D file
-          write.table(toWrite, file=file.path(output_directory, fname), sep="\n", eol="\n", quote=FALSE, col.names=FALSE, row.names=FALSE)
+      lapply(seq_along(dmat_convolved), function(r) {
+        lapply(seq_along(dmat_convolved[[r]]), function(v) {
+          reg_name <- names(dmat_convolved[[r]])[v]
+          fname <- paste0(names(dmat_convolved)[r], "_", reg_name, ".1D")
+          to_write <- round(dmat_convolved[[r]][[v]], 6)
+          conv_concat[[reg_name]] <<- c(conv_concat[[reg_name]], to_write) #add for concatenated 1D file
+          ofile <- file.path(output_directory, fs::path_sanitize(fname, replacement = "."))
+          tf_convolved[r, v] <<- ofile
+          write.table(to_write,
+            file = ofile,
+            sep = "\n", eol = "\n", quote = FALSE, col.names = FALSE, row.names = FALSE
+          )
         })
       })
 
+      #tf_convolved_concat <- rep(NA_character_, length(conv_concat) %>% setNames(names(conv_concat))
+
       #write run-concatenated convolved regressors (for use in AFNI)
-      lapply(1:length(conv_concat), function(v) {
+      tf_convolved_concat <- sapply(seq_along(conv_concat), function(v) {
         fname <- paste0(names(conv_concat)[v], "_concat.1D")
-        write.table(conv_concat[[v]], file=file.path(output_directory, fname), sep="\n", eol="\n", quote=FALSE, col.names=FALSE, row.names=FALSE)
-      })
+        ofile <- file.path(output_directory, fs::path_sanitize(fname, replacement = "."))
+        #tf_convolved_concat[v] <<- ofile
+        write.table(conv_concat[[v]],
+          file = ofile,
+          sep = "\n", eol = "\n", quote = FALSE, col.names = FALSE, row.names = FALSE
+        )
+        return(ofile)
+      }) %>% setNames(names(conv_concat))
 
     }
 
-    if ("FSL" %in% write_timing_files) {
+    if ("fsl" %in% write_timing_files) {
+      tf_fsl <- matrix(NA_character_, nrow = dim(dmat)[1L], ncol = dim(dmat)[2L], dimnames = dimnames(dmat))
+
       for (i in 1:dim(dmat)[1L]) {
         for (reg in 1:dim(dmat)[2L]) {
-          regout <- dmat[[i,reg]][,c("onset", "duration", "value"), drop=FALSE]
-
-          #handle beta series outputs
-          if (isTRUE(bdm_args$beta_series[reg])) {
-            for (k in 1:nrow(regout)) {
-              #only write out a 3-column file for a non-zero event (regardless of rm_zeros)
-              if (isFALSE(abs(regout[k,"value"]) < 1e-5)) {
-                fname <- paste0("run", runs_to_output[i], "_", dimnames(dmat)[[2L]][reg], "_b", sprintf("%03d", k), "_FSL3col.txt")
-                write.table(regout[k,,drop=FALSE], file=file.path(output_directory, fname), sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
-              }
-            }
+          regout <- dmat[[i, reg]]
+          if (nrow(regout) == 0L) {
+            next
           } else {
-            if (center_values && !all(na.omit(regout[,"value"]) == 0.0)) {
-              #remove zero-value events from the regressor
-              regout <- regout[regout[,"value"] != 0, ]
-
-              #now mean center values (unless there is no variation, such as a task indicator function)
-              if (sd(regout[,"value"], na.rm=TRUE) > 0) { regout[,"value"] <- regout[,"value"] - mean(regout[,"value"], na.rm=TRUE) }
-            }
-
-            fname <- paste0("run", runs_to_output[i], "_", dimnames(dmat)[[2L]][reg], "_FSL3col.txt")
-            write.table(regout, file=file.path(output_directory, fname), sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
-
+            regout <- regout[, c("onset", "duration", "value"), drop = FALSE]
           }
+
+          if (center_values && !all(na.omit(regout[, "value"]) == 0.0)) {
+            #remove zero-value events from the regressor
+            regout <- regout[regout[, "value"] != 0, , drop = FALSE]
+
+            #now mean center values (unless there is no variation, such as a task indicator function)
+            if (nrow(regout) > 1L && sd(regout[, "value"], na.rm=TRUE) > 0) {
+              regout[, "value"] <- regout[, "value"] - mean(regout[, "value"], na.rm=TRUE)
+            }
+          }
+
+          fname <- paste0("run", runs_to_output[i], "_", dimnames(dmat)[[2L]][reg], "_FSL3col.txt")
+          ofile <- file.path(output_directory, fs::path_sanitize(fname, replacement = "."))
+          tf_fsl[i, reg] <- ofile
+          write.table(regout, file=ofile, sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
         }
       }
     }
 
-    if ("AFNI" %in% write_timing_files) {
+    if ("afni" %in% write_timing_files) {
       #TODO: Make this work for beta series outputs
       #use dmBLOCK-style regressors: time*modulation:duration. One line per run
 
@@ -737,41 +758,47 @@ build_design_matrix <- function(
       #   #unname(do.call(c, lapply(reg, function(run) { run[,"onset"]})))
       # })
 
-      #TODO: make this work for uneven numbers of events across regressors
+      # TODO: make this work for uneven numbers of events across regressors
+      # The apply returns a list in the case of uneven regressors, which crashes various things below
       #this will require some sort of outer_join approach using trial. I've now preserved trial as a field in dmat, but haven't solved this
       regonsets <- apply(dmat, 2, function(reg) {
-        unname(do.call(c, lapply(reg, function(run) { run[,"onset"]})))
+        unname(do.call(c, lapply(reg, function(run) { run[, "onset"]})))
       })
 
       regdurations <- apply(dmat, 2, function(reg) {
-        unname(do.call(c, lapply(reg, function(run) { run[,"duration"]})))
+        unname(do.call(c, lapply(reg, function(run) { run[, "duration"]})))
       })
 
-      #magical code from here: http://stackoverflow.com/questions/22993637/efficient-r-code-for-finding-indices-associated-with-unique-values-in-vector
-      first_onset_duration <- paste(regonsets[1,], regdurations[1,]) #use combination of onset and duration to determine unique dmBLOCK regressors
-      dt = as.data.table(first_onset_duration)[, list(comb=list(.I)), by=first_onset_duration] #just matches on first row (should work in general)
+      # magical code from here: http://stackoverflow.com/questions/22993637/efficient-r-code-for-finding-indices-associated-with-unique-values-in-vector
+      # use combination of onset and duration to determine unique dmBLOCK regressors
+      first_onset_duration <- paste(regonsets[1, ], regdurations[1, ])
+
+      # just matches on first row (should work in general)
+      dt <- as.data.table(first_onset_duration)[, list(comb=list(.I)), by=first_onset_duration]
 
       lapply(dt$comb, function(comb) {
-        combmat <- dmat[,comb, drop=F]
+        combmat <- dmat[, comb, drop=F]
         #onsets and durations are constant, amplitudes vary
         runvec <- c() #character vector of AFNI runs (one row per run)
         for (i in 1:dim(combmat)[1L]) {
-          runonsets <- combmat[[i,1]][,"onset"] #just use first regressor of combo to get vector onsets and durations (since combinations, by definition, share these)
-          rundurations <- combmat[[i,1]][,"duration"]
-          runvalues <- do.call(cbind, lapply(combmat[i,], function(reg) { reg[,"value"] }))
+          #just use first regressor of combo to get vector onsets and durations (since combinations, by definition, share these)
+          runonsets <- combmat[[i, 1]][, "onset"]
+          rundurations <- combmat[[i, 1]][, "duration"]
+          runvalues <- do.call(cbind, lapply(combmat[i,], function(reg) { reg[, "value"] }))
 
           #AFNI doesn't like us if we pass in the boxcar ourselves in the dmBLOCK format (since it creates this internally). Filter out.
-          indicatorFunc <- apply(runvalues, 2, function(col) { all(col == 1.0)} )
-          if (any(indicatorFunc)) { runvalues <- runvalues[,-1*which(indicatorFunc), drop=FALSE] }
+          indicator_func <- apply(runvalues, 2, function(col) { all(col == 1.0)} )
+          if (any(indicator_func)) { runvalues <- runvalues[, -1*which(indicator_func), drop=FALSE] }
 
-          #if the indicator regressor was the only thing present, revert to the notation TIME:DURATION notation for dmBLOCK (not TIME*PARAMETER:DURATION)
+          # if the indicator regressor was the only thing present, revert to the notation TIME:DURATION notation
+          # for dmBLOCK (not TIME*PARAMETER:DURATION)
           if (ncol(runvalues) == 0L) {
-            runvec[i] <- paste(sapply(1:length(runonsets), function(j) {
+            runvec[i] <- paste(sapply(seq_along(runonsets), function(j) {
               paste0(round(runonsets[j], 6), ":", round(rundurations[j], 6))
             }), collapse=" ")
           } else {
-            runvec[i] <- paste(sapply(1:length(runonsets), function(j) {
-              paste0(round(runonsets[j], 6), "*", paste(round(runvalues[j,], 6), collapse=","), ":", round(rundurations[j], 6))
+            runvec[i] <- paste(sapply(seq_along(runonsets), function(j) {
+              paste0(round(runonsets[j], 6), "*", paste(round(runvalues[j, ], 6), collapse=","), ":", round(rundurations[j], 6))
             }), collapse=" ")
           }
         }
@@ -782,95 +809,34 @@ build_design_matrix <- function(
     }
   }
 
-  #compute collinearity diagnostics on the unconvolved signals
-  collinearityDiag.raw <- apply(dmat, 1, function(run) {
-    #custom regressors are not guaranteed to have ntrials as the dimension. Remove them from raw diagnostics since they're not on the same trial grid
-    #rlengths <- sapply(run, length)
-    custom_reg <- grep("^custom_", names(run))
-    if (length(custom_reg) > 0L) { run <- run[-1*custom_reg]}
-
-    #check correlations among regressors for trial-wise estimates
-
-    #get the union of all trial numbers across regressors
-    utrial <- sort(unique(unlist(lapply(run, function(regressor) { regressor[,"trial"]}))))
-
-    #initialize a trial x regressor matrix
-    cmat <- matrix(NA, nrow=length(utrial), ncol=length(run), dimnames=list(trial=utrial, regressor=names(run)))
-
-    #populate the relevant values for each regressor at the appropriate trials
-    #need to convert the trial column to character so that the lookup goes to the dimnames, not numeric row positions
-    for (i in 1:length(run)) {
-      cmat[as.character(run[[i]][,"trial"]), names(run)[i]] <- run[[i]][,"value"]
-    }
-
-    cmat <- as.data.frame(cmat) #convert to a data.frame
-
-    #remove any constant columns (e.g., task indicator regressor for clock) so that VIF computation is sensible
-    zerosd <- sapply(cmat, sd, na.rm=TRUE)
-    cmat_noconst <- cmat[,!is.na(zerosd) & zerosd != 0.0, drop=FALSE]
-
-    if (ncol(cmat_noconst) == 0L) {
-      #if only task indicator regressors are included, then they cannot be collinear before convolution since there is no variability
-      return(list(r=NA_real_, vif=NA_real_))
-    } else {
-      corvals <- suppressWarnings(cor(cmat, use="pairwise.complete.obs")) #drop warnings about SD of 0 since we want it to populate NAs there.
-      vifMat <- data.frame(cbind(dummy=rnorm(nrow(cmat_noconst)), cmat_noconst)) #add dummy constant for vif
-      vifForm <- as.formula(paste("dummy ~ 1 +", paste(names(cmat_noconst), collapse=" + ")))
-
-      varInfl <- tryCatch(car::vif(lm(vifForm, data=vifMat)), error=function(e) { rep(NA, ncol(cmat_noconst)) }) #return NA if failure
-      return(list(r=corvals, vif=varInfl))
-    }
-  })
+  # compute collinearity diagnostics on the unconvolved signals
+  collin_diag_events <- get_collin_events(dmat)
 
   #compute collinearity diagnostics on the convolved signals
-  collinearityDiag.convolve <- lapply(dmat_convolved, function(run) {
+  collin_diag_convolved <- lapply(dmat_convolved, function(run) {
     corvals <- cor(run, use="pairwise.complete.obs")
-    vifMat <- data.frame(cbind(dummy=rnorm(nrow(run)), run)) #add dummy constant for vif
-    vifForm <- as.formula(paste("dummy ~ 1 +", paste(names(run), collapse=" + ")))
+    vif_mat <- data.frame(cbind(dummy=rnorm(nrow(run)), run)) #add dummy constant for vif
+    vif_form <- as.formula(paste("dummy ~ 1 +", paste(names(run), collapse=" + ")))
 
-    varInfl <- tryCatch(car::vif(lm(vifForm, data=vifMat)), error=function(e) { NA }) #return NA if failure
-    list(r=corvals, vif=varInfl)
+    var_infl <- tryCatch(car::vif(lm(vif_form, data=vif_mat)), error=function(e) { NA }) #return NA if failure
+    list(r=corvals, vif=var_infl)
   })
 
-  #add baseline terms to convolved design matrices
-  if (baseline_coef_order > -1L) {
-    dmat_convolved <- lapply(dmat_convolved, function(r) {
-      n <- names(r)
-      if (baseline_parameterization == "Legendre") {
-        #consistent with AFNI approach, use Legendre polynomials, which are centered at zero to allow for appropriate baseline
-        unnormalized.p.list <- legendre.polynomials( baseline_coef_order, normalized=FALSE )
-        #evaluate polynomial between -1 and 1, which is where its desirable centered behavior exists.
-        #although the functions are centered at 0, evaluating them on a given grid may lead to slight deviations from mean=0. Thus, center perfectly.
-        baseline <- polynomial.values(polynomials=unnormalized.p.list, x=seq(-1,1, length.out=nrow(r)))
-        baseline[2:length(baseline)] <- lapply(baseline[2:length(baseline)], function(v) { v - mean(v) }) #don't center constant!
-
-        names(baseline) <- paste0("base", 0:baseline_coef_order)
-        d <- cbind(r, baseline)
-      } else if (baseline_parameterization == "orthogonal_polynomials") {
-        #compute polynomials that are orthogonal to design effects
-        #this may be somewhat dubious. for example, a linear trend in a task regressor would be preserved because it is given preference over baseline
-        d <- data.frame(fmri.design(r, order=baseline_coef_order))
-        names(d) <- c(n, paste0("base", 0:baseline_coef_order))
-      } else {
-        stop("Don't know how to handle baseline_parameterization:", baseline_parameterization)
-      }
-
-      return(d)
-    })
-  }
-
-  #concatenate regressors across runs by adding timing from MR files.
-  runtiming <- cumsum(run_volumes)*tr #timing in seconds of the start of successive runs
+  # add baseline regressors to convolved design matrix, if requested
+  dmat_convolved <- add_baseline_regressors(dmat_convolved,
+    baseline_coef_order = baseline_coef_order,
+    baseline_parameterization = baseline_parameterization
+  )
 
   #Define concatenatenation of all events (e.g., in an AFNI-style setup)
   #Note that we want to add the run timing from the r-1 run to timing for run r.
   #Example: run 1 is 300 volumes with a TR of 2.0
   #  Thus, run 1 has timing 0s .. 298s, and the first volume of run 2 would be 300s
   design_concat <- lapply(1:dim(dmat)[2L], function(reg) {
-    thisreg <- dmat[,reg]
-    concat_reg <- do.call(rbind, lapply(1:length(thisreg), function(run) {
+    thisreg <- dmat[, reg]
+    concat_reg <- do.call(rbind, lapply(seq_along(thisreg), function(run) {
       timing <- thisreg[[run]]
-      timing[,"onset"] <- timing[,"onset"] + ifelse(run > 1, runtiming[run-1], 0)
+      timing[, "onset"] <- timing[, "onset"] + ifelse(run > 1, run_timing[run-1], 0)
       return(timing)
     }))
     attr(concat_reg, "event") <- attr(thisreg[[1]], "event") #propagate event alignment
@@ -880,20 +846,229 @@ build_design_matrix <- function(
   names(design_concat) <- dimnames(dmat)[[2L]]
 
   #just the onsets for each event
-  concat_onsets <- lapply(design_concat, function(x) { x[,"onset"] })
+  concat_onsets <- lapply(design_concat, function(x) { x[, "onset"] })
 
-  to_return <- list(design=dmat, design_concat=design_concat, design_convolved=dmat_convolved, design_unconvolved=dmat_unconvolved, collin_raw=collinearityDiag.raw,
-                   collin_convolve=collinearityDiag.convolve, concat_onsets=concat_onsets, run_niftis=run_niftis, run_volumes=run_volumes, run_number=runs_to_output, tr=tr)
+  timing_files <- list(convolved = tf_convolved, convolved_concat = tf_convolved_concat, fsl = tf_fsl, afni = tf_afni)
+
+  to_return <- list(
+    design = dmat, design_concat = design_concat, design_convolved = dmat_convolved,
+    design_unconvolved = dmat_unconvolved, collin_events = collin_diag_events,
+    collin_convolved = collin_diag_convolved, concat_onsets = concat_onsets, runs_to_output = runs_to_output,
+    run_nifti = run_nifti, run_volumes = run_volumes, drop_volumes = drop_volumes, tr = tr,
+    output_directory = output_directory, additional_regressors = additional_regressors,
+    timing_files = timing_files)
 
   to_return$design_plot <- visualize_design_matrix(concat_design_runs(to_return))
 
   class(to_return) <- c("list", "bdm") #tag as bdm object
-  if (plot == TRUE) { plot(to_return$design_plot) }
+  if (isTRUE(plot)) { plot(to_return$design_plot) }
   return(to_return)
 
 }
 
+# helper function to shift onset times based on dropped volumes
+shift_dmat_timing <- function(dmat, tr, drop_volumes = 0, shift_timing = TRUE) {
+  if (isFALSE(shift_timing) || drop_volumes == 0L) {
+    return(dmat)
+  } # return dmat unchanged
 
+  # how much time is being dropped from the beginning of the run (used to change event onsets)
+  time_offset <- tr * drop_volumes
+
+  if (time_offset[1L] > 0) {
+    if (length(unique(time_offset)) == 1L) {
+      to_print <- time_offset[1L]
+    } else {
+      to_print <- paste(time_offset, collapse = ", ")
+    }
+    message("Based on drop_volumes and tr, subtracting ", to_print, "s from event onsets")
+  }
+
+  # Shift the timing of the regressors in dmat according to drop_volumes
+  for (i in 1:dim(dmat)[1]) { # run
+    for (j in 1:dim(dmat)[2]) { # regressor
+      df <- dmat[[i, j]]
+      if (nrow(df) == 0L) next # empty regressor
+      df[, "onset"] <- df[, "onset"] - time_offset[i]
+      if (min(df[, "onset"] < 0)) {
+        message(
+          "For run ", dimnames(dmat)[[1]][i], ", regressor ", dimnames(dmat)[[2]][j], ", there are ",
+          sum(df[, "onset"] < 0), " events before time 0"
+        )
+      }
+      dmat[[i, j]] <- df
+    }
+  }
+
+  return(dmat)
+}
+
+# helper to lookup number of volumes in each run based on whether NIfTIs are passed in versus run_volumes vector
+determine_run_volumes <- function(run_data = NULL, nruns = NULL, run_nifti_drop_applied=TRUE, tr = NULL, signals_aligned, lg = NULL) {
+  checkmate::assert_data_frame(run_data)
+  checkmate::assert_integerish(nruns, lower = 1, len = 1L)
+
+  if (!is.null(run_data$run_nifti)) {
+    lg$info("Using NIfTI images to determine run lengths.")
+    run_volumes_detected <- sapply(run_data$run_nifti, function(xx) {
+      oro.nifti::readNIfTI(xx, read_data = FALSE)@dim_[5L]
+    }, USE.NAMES=FALSE)
+
+    # if user specified the number of volumes, check that this matches detected volumes
+    if (!is.null(run_data$run_volumes)) {
+      if (all.equal(run_data$run_volumes, run_volumes_detected)) {
+        # nothing to do at present
+      } else if (all.equal(run_volumes_detected + run_data$drop_volumes, run_data$run_volumes)) {
+        lg$info("Number of volumes detected + run_data$drop_volumes == run_data$run_volumes. Thus, assuming run_nifti_drop_applied == TRUE.")
+        run_nifti_drop_applied <- TRUE
+      } else {        
+        lg$warn("Detected and provided run volumes do not match.")
+        lg$warn("%s", capture.output(print(cbind(run_volumes = run_data$run_volumes, run_volumes_detected = run_volumes_detected))))
+      }
+    }
+
+    # For NIfTI input, if run_nifti_drop_applied == TRUE, assume that the .nii.gz is already truncated. 
+    # Therefore, the number of volumes detected in the NIfTI must be adjusted *upward* by run_data$drop_volumes so that the drop is carried out properly
+    if (any(run_data$drop_volumes > 0) && isTRUE(run_nifti_drop_applied)) {
+      lg$info("NIfTIs already have run_data$drop_volumes removed. Thus, adjusting run_data$run_volumes upward accordingly.")
+      run_data$run_volumes <- run_volumes_detected + run_data$drop_volumes
+      #print(data.frame(nifti=run_data$run_nifti, run_volumes_detected=run_volumes_detected, run_volumes=run_data$run_volumes))
+    } else {
+      run_data$run_volumes <- run_volumes_detected
+    }
+  } else if (is.null(run_data$run_volumes)) {
+    #determine the last fMRI volume to be analyzed
+    run_data$run_volumes <- rep(0, nruns)
+
+    for (i in 1:nruns) {
+      for (j in seq_along(signals_aligned)) {
+        currentdf <- signals_aligned[[j]][[i]] #jth signal, ith run (signals_aligned has signals at top level)
+
+        #estimate the last moment
+        highesttime <- ceiling(max(currentdf$onset + currentdf$duration + iti_post, na.rm=TRUE)/tr)
+
+        #update run_data$run_volumes for ith run only if this signal has later event
+        if (highesttime > run_data$run_volumes[i]) { run_data$run_volumes[i] <- highesttime }
+      }
+    }
+
+    lg$info(sprintf("Assuming that last fMRI volume was %.1f seconds after the onset of the last event.", iti_post))
+    lg$info(paste0("Resulting volumes: ", paste(run_data$run_volumes, collapse=", ")))
+
+  } else if (is.numeric(run_data$run_volumes)) {
+    #replicate volumes for each run if a scalar is passed
+    if (length(run_data$run_volumes) == 1L) { run_data$run_volumes <- rep(run_data$run_volumes, nruns) }
+    stopifnot(length(run_data$run_volumes) == nruns)
+  } else {
+    msg <- sprintf("Don't know how to handle run_data$run_volumes: %s", run_data$run_volumes)
+    lg$error(msg)
+    stop(msg)
+  }
+
+  # Shorten number of volumes based on the number of volumes that are dropped
+  # run_volumes should always be the final number of volumes after drops are applied
+  run_data$run_volumes <- run_data$run_volumes - run_data$drop_volumes
+
+  return(run_data)
+}
+
+# helper function to process confound/additional regressors into a single data.frame, dropping volumes if requested
+get_additional_regressors <- function(additional_regressors, run_volumes, drop_volumes = 0, shorten_additional = TRUE, lg = NULL) {
+  # handle additional volume-wise regressors (e.g., confounds)
+  if (is.null(additional_regressors)) {
+    return(NULL)
+  } # nothing to do
+
+  # if user provides a list of read each dataset into a list
+  if (is.character(additional_regressors)) {
+    stopifnot(all(file.exists(additional_regressors))) # enforce existence of these files
+    additional_regressors <- lapply(additional_regressors, data.table::fread, data.table = FALSE)
+  }
+
+  if (!is.list(additional_regressors)) {
+    msg <- "Cannot process additional_regressors because it is not a list"
+    lg$error(msg)
+    stop(msg)
+  }
+
+  if (length(additional_regressors) != length(run_volumes)) {
+    msg <- glue("Number of elements in additional_regressors: {length(additional_regressors)} does not much length of run_volumes: {length(run_volumes)}")
+    lg$error(msg)
+    stop(msg)
+  }
+
+  # process list of regressors (one element per run)
+  # all that need to do is concatenate the data frames after filtering any obs that are above run_volumes
+  additional_regressors_df <- data.frame()
+
+  for (i in seq_along(additional_regressors)) {
+    additional_regressors_currun <- additional_regressors[[i]]
+    stopifnot(is.data.frame(additional_regressors_currun))
+    additional_regressors_currun$run_number <- i
+
+    # define which rows of the dataset to keep based on drop_volumes settings
+    if (isTRUE(shorten_additional)) {
+      rv <- 1:run_volumes[i] + drop_volumes[i]
+    } else {
+      rv <- 1:run_volumes[i]
+    }
+
+    # message(paste0("Current run_volumes:", rv))
+    if (nrow(additional_regressors_currun) < length(rv)) {
+      msg <- glue("additional_regressors have fewer observations: {nrow(additional_regressors_currun)} than run_volumes: {length(rv)}")
+      lg$error(msg)
+      stop(msg)
+    }
+
+    additional_regressors_currun <- additional_regressors_currun %>%
+      dplyr::slice(rv) %>%
+      as.data.frame()
+    additional_regressors_df <- dplyr::bind_rows(additional_regressors_df, additional_regressors_currun)
+  }
+
+  return(additional_regressors_df)
+}
+
+# helper function to read in run-wise time series that will be multiplied against convolved regressors (PPI)
+get_ts_multipliers <- function(ts_multipliers = NULL, run_data, shorten_ts) {
+  # handle time series modulator regressors
+  if (!is.null(ts_multipliers)) {
+    ts_multipliers_df <- data.frame()
+
+    for (i in seq_along(ts_multipliers)) {
+      if (is.character(ts_multipliers)) {
+        ts_multipliers_currun <- read.table(ts_multipliers[i]) # read in ith text file
+      } else {
+        ts_multipliers_currun <- ts_multipliers[[i]] # use ith element of list of data.frames
+      }
+
+      stopifnot(is.data.frame(ts_multipliers_currun))
+      # mean center PPI signals -- crucial for convolution to be sensible
+      ts_multipliers_currun <- as.data.frame(lapply(ts_multipliers_currun, function(x) {
+        x - mean(x, na.rm = TRUE)
+      }))
+      ts_multipliers_currun$run_number <- i
+
+      # define which rows of the dataset to keep based on drop_volumes settings
+      if (isTRUE(shorten_ts)) {
+        rv <- 1:run_data$run_volumes[i] + run_data$drop_volumes[i]
+      } else {
+        rv <- 1:run_data$run_volumes[i]
+      }
+
+      # message(paste0("Current run_volumes:", rv))
+      if (nrow(ts_multipliers_currun) < length(rv)) {
+        stop("ts_multiplier regressor has fewer observations than run_volumes")
+      }
+      ts_multipliers_currun <- dplyr::slice(ts_multipliers_currun, rv) %>% as.data.frame()
+      ts_multipliers_df <- dplyr::bind_rows(ts_multipliers_df, ts_multipliers_currun)
+    }
+  } else {
+    ts_multipliers_df <- NULL
+  }
+
+  return(ts_multipliers_df)
+}
 
 #Example Data Set that can be used to visualize what build design matrix expects
 # source("fmri_utility_fx.R")
@@ -901,12 +1076,12 @@ build_design_matrix <- function(
 # events <- dplyr::bind_rows(data.frame(event="cue",
 #   rbind(
 #     data.frame(
-#       run=1,
+#       run_number=1,
 #       trial=1:50,
 #       onset=cumsum(rpois(50, lambda = 2)),
 #       duration=rep(2, 50), custom_dur=abs(rnorm(50))),
 #     data.frame(
-#       run=2,
+#       run_number=2,
 #       trial=1:50,
 #       onset=cumsum(rpois(50, lambda = 2)),
 #       duration=rep(2, 50), custom_dur=abs(rnorm(50)))
@@ -914,12 +1089,12 @@ build_design_matrix <- function(
 #   data.frame(event="outcome",
 #              rbind(
 #     data.frame(
-#       run=1,
+#       run_number=1,
 #       trial=1:50,
 #       onset=cumsum(rpois(50, lambda = 2)),
 #       duration=rep(2, 50)),
 #     data.frame(
-#       run=2,
+#       run_number=2,
 #       trial=1:50,
 #       onset=cumsum(rpois(50, lambda = 2)),
 #       duration=rep(2, 50))
@@ -927,8 +1102,8 @@ build_design_matrix <- function(
 # )
 #
 # signals <- list(
-#   ev=list(value=rbind(data.frame(run=1, trial=1:50, value=rnorm(50)), data.frame(run=2, trial=1:50, value=rnorm(50))), event="cue", duration="custom_dur", normalization="evtmax_1"),
-#   pe=list(value=rbind(data.frame(run=1, trial=1:50, value=rnorm(50)), data.frame(run=2, trial=1:50, value=rnorm(50))), event="outcome", duration=1)
+#   ev=list(value=rbind(data.frame(run_number=1, trial=1:50, value=rnorm(50)), data.frame(run_number=2, trial=1:50, value=rnorm(50))), event="cue", duration="custom_dur", normalization="evtmax_1"),
+#   pe=list(value=rbind(data.frame(run_number=1, trial=1:50, value=rnorm(50)), data.frame(run_number=2, trial=1:50, value=rnorm(50))), event="outcome", duration=1)
 # )
 #
 #
@@ -957,3 +1132,5 @@ build_design_matrix <- function(
 # dnuisrun1 <- dnuis$design_convolved$run1
 # dnuisrun1$time <- 1:nrow(dnuisrun1)
 # ggplot(dnuisrun1, aes(x = time, y = wm)) + geom_line(size = 0.8)
+
+

@@ -1,20 +1,58 @@
 Package: fmri.pipeline
 Type: Package
-Title: Analysis of fMRI data on HPC clusters
-Version: 0.1
-Date: 2021-03-07
+Title: Analysis of fMRI Data on HPC clusters
+Version: 0.2
+Date: 2022-02-14
 Authors@R: c(person("Michael", "Hallquist", role = c("aut", "cre"),
     email = "michael.hallquist@gmail.com"))
 Maintainer: Michael Hallquist <michael.hallquist@gmail.com>
-Maintainer: Who to complain to <yourfault@somewhere.net>
-Description: More about what it does (maybe more than one line)
+Description: Setup of GLM and deconvolution analyses for large-scale analyses
+  of fMRI data.
 License: GPL-3
 Encoding: UTF-8
 LazyLoad: yes
 LazyData: yes
-RoxygenNote: 7.1.1
+RoxygenNote: 7.2.0
+Depends: R (>= 3.5.0)
 Imports:
-  dplyr,
-  data.table,
-  lgr,
-  checkmate
+    DBI,
+    RSQLite,
+    Rcpp,
+    R.utils,
+    RNifti,
+    anytime,
+    broom.mixed,
+    cowplot,
+    checkmate,
+    dplyr,
+    data.table,
+    doParallel,
+    doFuture,
+    emmeans,
+    foreach,
+    fs,
+    future,
+    future.batchtools,
+    ggplot2,
+    ggnewscale,
+    glue,
+    gsubfn,
+    oro.nifti,
+    orthopolynom,
+    lgr,
+    lubridate,
+    lme4,
+    lmerTest,
+    purrr,
+    rlang,
+    signal,
+    stringr,
+    tidyr,
+    tibble,
+    tidyselect,
+    yaml
+Suggests:
+  brms
+LinkingTo:
+    Rcpp,
+    RcppArmadillo

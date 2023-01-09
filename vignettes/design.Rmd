@@ -1,0 +1,348 @@
+---
+title: "fmri.pipeline overview and design"
+author: "Michael Hallquist"
+date: "30 Jul 2021"
+output:
+  html_document:
+    code_folding: show
+    df_print: kable
+    mathjax: default
+    number_sections: yes
+    theme: spacelab
+    toc: yes
+  pdf_document:
+    code_folding: show
+    df_print: kable
+    number_sections: yes
+    toc: yes
+    toc_depth: 4
+---
+
+# Overview of pipeline setup
+
+In `fmri.pipeline`, the primary mechanism for setting up a GLM analysis for a dataset is the `setup_glm_pipeline` function. Users are expected to provide information about subject `id`, `session`, and `run_number`. At present, fmri.pipeline is built to conduct GLM analyses for a single fMRI task, as opposed to allowing you to analyze all tasks from a given study in a single command. If you have many tasks, simply setup a GLM pipeline for each one and then run them in turn.
+
+## Key constructs in fmri.pipeline nomenclature
+
+- `id`: A character string or number that uniquely identifies a single subject in the dataset.
+- `session`: A character string or number that refers to the occasion on which the data were acquired. This is only relevant to datasets where you scan subjects in multiple sessions such as a longitudinal study. If you do not provide `session` in your input data, `fmri.pipeline` will add a session value of 1 to all subjects.
+- `run_number`: An integer referring to the repetition number of a task run for a single subject. For example, if subjects complete four runs of the same task, then the first run is 1, and the fourth run is 4.
+- `trial`: The sequential order in which task trials were presented, spanning across runs. For example, if each run run has 60 trials and there are 3 runs, `trial` should be numbered 1:60 in run 1, 61:120 in run 2, and 121:180 in run 3.
+- `run_trial`: At present, not fully developed because it's not especially useful as a general construct. But the idea is to have a run-specific trial number that does not depend on other runs. For example, if there are 25 trials in 2 runs, `run_trial` would be 1:25 in each run.
+- `run_nifti`: This field should be present in `$run_data` and specify the NIfTI file name for the run. Ideally, this should be a file name, but not a relative or absolute path. That said, it is up to you. If an absolute path is provided, it will be used. If a file name (e.g., `sub-102_task_processed.nii.gz`) or relative path and filename (e.g., `task_faces/sub-102_task_processed.nii.gz`) is provided, it is assumed to exist within the `mr_dir` for the run and will be combined with that path.
+- `mr_dir`: The directory containing fMRI data for either a subject or a run. This is primarily used in `$run_data` to indicate the directory where `$run_nifti` is located. If relative paths are provided for other columns such as `$l1_confound_file`, it is assumed that these are also located in `$mr_dir`.
+
+
+## Input data structures to fmri.pipeline
+
+This function expects data at three levels of resolution:
+
+### `$trial_data`
+
+A data.frame of trial-varying variables including trial onset times, trial durations, and any parametric modulators that should be convolved with the HRF. This data.frame should stack data for all runs and subjects on rows (i.e., long form), using the `id`, `session`, `run_number`, and `trial` columns to uniquely identify each row. Any variables in this data.frame can be introduced as onset, duration, or value components of a given HRF-convolved regressor.
+
+*Example*:
+
+```
+id  session   run_number   trial   face_onset   decision_RT   outcome_onset
+1         1            1       1        15.99         17.12           17.42
+1         1            1       2        21.54         22.29           22.60
+...     ...          ...     ...          ...           ...             ...
+1         1            2       1        12.11         14.94           15.24
+1         1            2       2        22.76         23.51           23.82
+...     ...          ...     ...          ...           ...             ...
+2         1            1       1         9.60         12.51           12.81
+2         1            1       2        16.91         21.10           21.40
+...     ...          ...     ...          ...           ...             ...
+```
+
+### `$run_data`
+
+A data.frame containing variables that uniquely identify each run, including `id`, `session`, and `run_number`, as well as covariates such as a run-varying condition (e.g., mostly happy faces in run 1, mostly angry faces in run 2). Any covariates in this data.frame can be incorporated into level 2 (i.e,. subject-level) GLM analysis.
+
+*Example*:
+
+```
+id  session   run_number   primary_emo
+1         1            1         anger
+1         1            2           sad
+1         1            3         happy
+1         1            4       fearful
+2         1            1           sad
+2         1            2         happy
+2         1            3         anger
+2         1            4       fearful
+...     ...          ...           ...
+```
+
+In general, we recommend providing paths to NIfTI, confound, and motion parameter files directly as part of `$run_data` since this requires you to
+setup and verify that these are exactly what you wish to analyze. Alternatively, you can use the approach of providing a regular expression
+for NIfTI images using `$fmri_file_regex`. See section below entitled "Providing file inputs to fmri.pipeline". If you wish to provide the file 
+inputs directly (recommended), then you can add additional columns to `$run_data`. Specifically, these fields are crucial:
+
+- `$run_nifti`: Relative or absolute path to the preprocessed NIfTI image to be analyzed for each run
+- `$motion_params_file`: Relative or absolute path to text file containing 6 motion parameters derived from motion coregistration (should be
+     volumes x regressors)
+- `$confound_input_file`: Relative or absolute path to text file containing all possible confounds that you wish to be included in l1 models.
+- `$mr_dir`: This is the directory containing run-level files. If provided, then all relative paths in `$run_nifti`, `$motion_params_file`, and
+     `$confound_input_file` are assumed to be relative to `$mr_dir`. This reduces the number of long paths in `$run_data` if data are organized
+     in subject or run folders.
+
+*Example with MRI file locations*:
+
+```
+id  session   run_number   primary_emo                                mr_dir            run_nifti  motion_params_file  confound_input_file
+1         1            1         anger  /proj/lab/studies/go_no_go/sub1/run1  preproc_run1.nii.gz          motion.par    run_confounds.txt
+1         1            2           sad  /proj/lab/studies/go_no_go/sub1/run2  preproc_run2.nii.gz          motion.par    run_confounds.txt
+1         1            3         happy  /proj/lab/studies/go_no_go/sub1/run3  preproc_run3.nii.gz          motion.par    run_confounds.txt
+1         1            4       fearful  /proj/lab/studies/go_no_go/sub1/run4  preproc_run4.nii.gz          motion.par    run_confounds.txt
+2         1            1           sad  /proj/lab/studies/go_no_go/sub2/run1  preproc_run1.nii.gz          motion.par    run_confounds.txt
+2         1            2         happy  /proj/lab/studies/go_no_go/sub2/run2  preproc_run2.nii.gz          motion.par    run_confounds.txt
+2         1            3         anger  /proj/lab/studies/go_no_go/sub2/run3  preproc_run3.nii.gz          motion.par    run_confounds.txt
+2         1            4       fearful  /proj/lab/studies/go_no_go/sub2/run4  preproc_run4.nii.gz          motion.par    run_confounds.txt
+...     ...          ...           ...
+```
+
+In this case, the path to the NIfTI for id 1, session 1, run_number 1 would be: `/proj/lab/studies/go_no_go/sub1/run1/preproc_run1.nii.gz`.
+(This combines mr_dir with run_nifti).
+
+Alternatively, you can mix and match relative and absolute paths if data structures are somewhat irregular. For example:
+
+```
+id  session   run_number   primary_emo                                mr_dir            run_nifti  motion_params_file  confound_input_file
+1         1            1         anger                                    NA            /home/michael/sub1_reprocessed.nii.gz motion.par    run_confounds.txt
+1         1            2           sad  /proj/lab/studies/go_no_go/sub1/run2  preproc_run2.nii.gz          motion.par    run_confounds.txt
+```
+
+
+### `$subject_data`
+
+A data.frame containing variables that uniquely identify each subject and occasion, as well as person/occasion characteristics that can be included in sample-level analyses of individual differences. Examples of variables that could be in `$subject_data` include mean framewise displacement for each subject (nuisance covariate), age, sex, personality variables, or external cognitive measures (e.g., digit span). Any covariate in this data.frame can be incorporated into level 3 (i.e., sample-level) GLM analysis.
+
+*Example*:
+
+```
+id  session    age  sex   impulsivity_score
+1         1   15.1    F                19.2
+1         2   17.5    F                26.7
+2         1   13.6    M                31.0
+2         2   14.8    M                29.6
+...      ...   ...  ...                 ...
+```
+
+# Building GLM models for each level of analysis
+
+For fmri.pipeline to setup and estimate GLM models, the user first specifies what models should be fit at each level of the analysis (for background, see Overview of GLM levels below). These can be provided as model sets using the `l1_models`, `l2_models`, and `l3_models` arguments to `setup_glm_pipeline`. If the user specifies `"prompt"` as the argument for any of these levels, the pipeline will walk the user through the model setup. In general, this is the right approach since the internal structure of the model objects is a bit unintuitive. That said, you can specify the models in advance (before `setup_glm_pipeline`) or you can call `build_l1_models`, `build_l2_models`, or `build_l3_models` after `setup_glm_pipeline`.
+
+A major asset of using `fmri.pipeline` is that it handles model estimation for any combination of models across levels. The pipeline is built to fit all combination of level 1, level 2, and level 3 models for a given dataset. 
+
+For example, consider a scenario where one level 1 model includes a parametric modulator for working memory load, while another model only includes onsets for the encoding and retrieval phases of the task. Likewise, if runs vary in terms of average difficulty, one level 2 model might include the average as a continuous covariate, while another might treat average difficulty as a categorical variable (aka factor) so that nonlinearities can be examined. Finally, in the level 3 specification, one model might include nonverbal intelligence as a covariate, while another includes both age and nonverbal intelligence as covariates. In this case, `fmri.pipeline` will fit all eight model combinations (2 level 1 x 2 level 2 x 2 level 3) and provide labeled outputs for each.
+
+# Naming outputs files and folders
+
+The default file and folder structure of `fmri.pipeline` generally follows the Brain Imaging Data Structure (BIDS) specification, though somewhat loosely. That said, the user can exert considerable control over the output structure by changing the contents of the `$output_locations` list in the `gpa` object. The general idea is that the output locations can include dynamic expressions (based on the R `glue` package) that are evaluated in the appropriate context to generate the proper output file/folder. For example, this is the default expression for first-level FEAT directories (`$feat_l1_directory`):
+
+```
+"{gpa$output_directory}/feat_l1/sub-{id}/ses-{session}/{l1_model_name}"
+```
+
+Anything in curly braces is evaluated at the time of execution, allowing for the right id, session, model name, etc. to be included.
+
+TODO: Create a helper function like `gpa <- setup_output_locations(gpa)` that conducts a simple walkthrough like `build_l1_models`.
+
+Here is a description of the fields in this list:
+
+- feat_sub_directory: The location of FEAT outputs for a single subject [Is this a good idea if the user can provide anything for feat_l1?]
+- feat_ses_directory: The location of FEAT outputs for a single session (of one subject)
+
+
+
+[Use of glue etc.]
+
+# Overview of GLM levels used in fMRI analysis
+
+In data science terms, task fMRI data are fundamentally multilevel or 'clustered.' That is, timepoints are specific to a given run
+and task runs are nested within subject. Whereas many multilevel structures are analyzed using multilevel regression models, this is challenging in fMRI data for a couple of reasons. First, run-level data are time series data that have complex temporal characteristics (e.g., slow autocorrelation) that must be addressed by strategies like prewhitening or the inclusion of autocorrelation and moving average parameters that mitigate the risk of spurious and anticonservative statistical tests that would result from a simple ordinary least squares model. Second, we have the challenge of carrying forward parameter estimates in the run-level models for group analysis. The simple fixed-effects approach would be to include only the parameter estimates (aka 'betas') -- one per subject. What if one subject has very precise betas (small standard errors) and another has very noisy betas (large standard errors)? The approach of carrying forward betas alone does not incorporate these uncertainties, so noisy and precise betas are treated the same.
+
+Given these challenges, most fMRI software adopts the approach of separating out the estimation of activation statistics across the run, subject, and sample levels. Ideally, such an approach should propagate uncertainty estimates (usually, standard errors) from one level of the model to the next. This is analogous to meta-analyses where pooled estimates of an effect (e.g., the mean effect size for a cognitive-behavioral therapy) are weighted (inversely) by the standard error from each individual study.
+
+At present (July 2021), `fmri.pipeline` is designed with a general structure to support GLM analyses using any software, including AFNI, FSL, SPM, and R. However, the machinery is built out for FSL FEAT, which I think has some of the best features in terms of parameter estimation (e.g., Tukey tapering for prewhitening and Bayesian incorporation of lower-level standard errors in group analyses).
+
+FSL adopts the approach of analyzing each run of fMRI data in a separate GLM model. This is called a 'first-level' analysis (aka Level 1) and, fundamentally, is a time series analysis in which design regressors are convolved with a hemodynamic response function (HRF) and associations between these regressors and the BOLD are estimated for each voxel. If a subject has multiple runs of the same task, these are integrated by combining parameter estimates using a fixed-effects weighted (by standard errors) estimation approach. This yields a voxelwise estimate for each level 1 regressor (e.g., occurrence of a stimulus type) that can be carried forward for group analysis.
+
+The combination of runs for a single subject is called a 'second-level' (aka Level 2) analysis. In addition to simply averaging first-level regressors, level 2 analyses can incorporate between-run regressors that capture categorical or continuous predictors of run-to-run differences. For example, if one expects decreases in task-related activation with each additional run (task familiarity, habituation), the linear effect of run can be included as a regressor in the level 2 model. Or if a design factor varies from one run to the next (e.g., run 1 is cat pictures and run 2 is dog pictures), these can be incorporated as a dummy codes at level 2 that capture between-condition differences.
+
+The simplest and most common model at Level 2 is a simple intercept-only model in which only an intercept is included in the GLM design matrix. This model yields the weighted combination of run-level estimates for each contrast estimated at level 1. If there are no between-run predictors of interest, the intercept-only model is sufficient to prepare the data for 'third-level' (aka Level 3) analysis, which estimates effects in the overall sample.
+
+For comparison, some software packages (e.g., AFNI), concatenate all runs together and include run-specific baseline regressors to control for intensity and drift differences from one run to the next. In a concatenated approach, there are only two levels: a subject-level analysis and a sample-level analysis. Throughout fmri.pipeline, we adopt the nomenclature of a three-level perspective on fMRI data.
+
+To sum up:
+
+- Level 1 is a *run-level* analysis of the BOLD time series. The design matrix typically includes convolved regressors that represent task-related events. Parameters are estimated for each run separately.
+- Level 2 is a *subject-level* analysis that integrates Level 1 effects across all runs. Level 2 design matrices can also include regressors that capture between-run manipulations or covariates.
+- Level 3 is a *sample-level* analysis that estimates effects across all subjects. The design matrix includes between-subjects predictors (e.g., Age or trait anxiety) of task-related activation.
+
+## Distinction between two-level and three-level analyses
+
+In some designs, we may have only one run of a task, which may include multiple conditions or blocks that are nevertheless acquired as a contiguous BOLD timeseries. In this case, there is no need for a second-level analysis that combines parameter estimates from multiple runs.
+
+Thus, in `fmri.pipeline`, if only a single run of data exists per subject, the user will build and fit level 1 and level 3 models, but there will not be any level 2 models. I suppose you could say that level 2 should be the sample-level analysis in this case, but for consistency, I have adopted a fixed nomenclature: level 1 is for runs, level 2 is for combining runs within subject, and level 3 is for sample analysis. For single-run analyses, the user simply skips the level 2 model specification step.
+
+For multi-run data, the user will specify level 1, level 2, and level 3 models.
+
+# fMRI confounds
+
+## Populating
+
+## Elements of gpa$confound_settings
+
+- motion_params_file: 
+
+## Motion parameters
+
+If a `$motion_params_file` is provided, then this file will be read for each subject and the 6 motion parameters will be encoded as columns of a data.frame using the following nomenclature:
+
+- `rx`: rotation in the x dimension
+- `ry`: rotation in the y dimension
+- `rz`: rotation in the z dimension
+- `tx`: translation in the x dimension
+- `ty`: translation in the y dimension
+- `tz`: translation in the z dimension
+
+From these 6 parameters, we can also derive the first-order difference (aka temporal derivative), which is the change in each parameter relative to the previous volume. These motion parameters will have the prefix 'd' to indicate that they are derivatives, such as `drx`.
+
+We can also obtain the quadratic versions of any of these parameters by squaring them. Quadratic motion parameters have the prefix 'q', such as `qdrx`, which is the square of the change in rotation in the x dimension.
+
+These considerations are elaborated in Satterthwaite et al., 2013, NeuroImage and in Ciric et al., 2017, NeuroImage. For example, when people talk about the 24-parameter motion regressors approach, they are referring to all of the above:
+
+`rx, ry, rz, tx, ty, tz, qrx, qry, qrz, qtx, qty, qtz, drx, dry, drz, dtx, dty, dtz, dqrx, dqry, dqrz, dqtx, dqty, dqtz`
+
+
+## Spike regressors
+
+One way to control for head movement artifacts in GLMs is to include regressors in the design matrix that absorb all unique variance for a volume in which the participant moved her/his head. These regressors are sometimes called 'spike regressors' because they have a value of 1 at the moment of movement and values of 0 for all other volumes. This coding scheme leads the variance attributable to that volume to be captured by the spike regressor, as opposed to substantive regressors from the task. See Siegel et al., 2014, Human Brain Mapping, for additional details.
+
+In fmri.pipeline, spike regressors can be added by specifying a `$spike_volumes` expression in `$confound_settings`. This R expression is evaluated against the motion parameters for the subject, which can include any of the 24 possible motion parameters above plus the framewise displacement (called `FD` by the pipeline). Any volume for which the `$spike_volumes` expression is TRUE will yield a spike regressor to effectively censors that timepoint from estimates of other regressors.
+
+Notably, the expression can be amended to censor volumes that precede or follow the volume for which `$spike_volumes` was TRUE. For example, when a spike occurs, if you would like to remove the previous two volumes, as well as the following volume, you can use the syntax:
+
+```
+gpa$confound_settings$spike_volumes <- "-2:1; FD > 0.9"
+```
+
+The expression preceding the semi-colon denotes which volumes around the spike should be censored. This expression uses R's vector notation, so
+you can use a range like -1:1 (-1, 0, 1) or you can use a comma-separated list to be more specific. So, the syntax `-1,2` would censor the preceding volume (-1), and two volumes in the future (2), but not the volume at which the spike occurred (0) or the following volume (1).
+
+If you do not provide a range expression, spike regressors will only be generated for volumes at which the spike occurred (0):
+
+```
+gpa$confound_settings$spike_volumes <- "FD > 0.9"
+```
+
+You can also provide multiple definitions for spikes, which will be evaluated and added to the confounds:
+
+```
+gpa$confound_settings$spike_volumes <- c(fd0p9 = "-1,0; FD > 0.9", big_translate = "tx > 2 | ty > 2 | tz > 2")
+```
+
+# Overview of GPA structure
+
+# Providing file inputs to fmri.pipeline
+
+TODO: Cover the direct `$run_data` approach versus the regex approach.
+
+# Output structure for FEAT group analysis
+
+The folder and file naming scheme for FEAT group analysis outputs is controlled by two settings in: `gpa$output_locations`. Here are the settings with
+their defaults: 
+
+```
+gpa$output_locations$feat_l3_directory = "{gpa$output_directory}/feat_l3/L1m-{l1_model}/L2m-{l2_model}_l2c-{l2_contrast}/L3m-{l3_model}"
+gpa$output_locations$feat_l3_fsf = "FEAT_l1c-{l1_contrast}.fsf"
+```
+
+Note that these use `glue()` syntax, which evaluates the expressions in curly braces at the time they are run, dynamically substituting the
+correct values for each combination fo models (this occurs in `fsl_l3_model.R`).
+
+Under these defaults, the resulting directories will look like this:
+
+```
+feat_l3/L1m-abspe/L2m-runavg_l2c-overall/L3m-age/FEAT_l1c-EV_abspe.gfeat
+feat_l3/L1m-abspe/L2m-runavg_l2c-overall/L3m-age/FEAT_l1c-EV_clock.gfeat
+feat_l3/L1m-abspe/L2m-runavg_l2c-overall/L3m-age/FEAT_l1c-EV_feedback.gfeat
+```
+
+In this case, the regressors in the first level model `abspe` are `clock`, `feedback`, and `abspe`.
+
+If you have a single-run analysis, you will not have a level 2 model, so that part of the naming scheme will be omitted.
+
+## l1_model_setup
+
+After running setup_l1_models, the gpa object will now have a new element called $l1_model_setup. This contains the following sub-elements:
+
+- `metadata`: A data.frame containing information about the imaging file inputs and confounds for level 1 analysis.
+- `fsl`: A data.frame with one row for every run that is analyzed with a given level 1 model using FSL. This will usually be something like n_l1_models x n_runs in length.
+- `spm`: Not implemented yet
+- `afni`: Not implemented yet
+
+### metadata
+
+The structure of this data.frame is:
+
+- `id`: The subject id
+- `session`: The session number
+- `run_number`: The run number for a given dataset
+- `run_nifti`: The nifti file that was used for level 1 analysis
+- `l1_confound_file`: The run confounds file that should be included in the level 1 GLM model
+- `run_volumes`: The number of volumes in the run_nifti that is analyzed
+- `orig_volumes`: The number of volumes that were in run_nifti prior to drops and truncation
+- `last_onset`: The time (in seconds) of the last event onset for this run
+- `last_offset`: The time (in seconds) of the last event offset for this run
+- `drop_volumes`: The number of volumes that have been dropped from the beginning of the NIfTI file
+- `truncate_volumes`: The number of volumes that have been truncated at the end of the NIfTI file based on the `$truncate_run` setting.
+- `exclude_run`: Whether the run was excluded from higher-level analysis
+
+# parallel compute settings
+
+The pipeline uses parallel processing at various points to reduce the total time needed to complete all analyses. That said,
+the steps vary in the number of total jobs that are required. For example, in FSL, a single run of data is analyzed by a single
+FEAT job. Thus, if you have 100 subjects who have 5 runs and are analyzed using 4 different level 1 models, you have 100*5*4 = 2000
+jobs that need to be completed. By comparison, the number of level 3 analyses is much smaller since you have only a few jobs for each group
+model of interest.
+
+There are two ways to parallelize computation: 1. use multiple cores within a single compute job, and 2. distribute computations to a set of
+independent jobs on the scheduler. These are not mutually exclusive approaches. For example, if you have 1000 models that you need to estimate
+with Markov Chain Monte Carlo (MCMC) sampling, the number of samples can be increased for a single model by having multiple
+chains for each model, and each chain can be parked on a separate core on a single computer. So, if I use 4 cores per model to increase my samples,
+but I have 1000 models to run, I would likely submit 1000 jobs to the HPC scheduler (using sbatch on SLURM or qsub on TORQUE), and each job
+would request 4 compute cores. My additional details about these considerations are here: https://psu-psychology.github.io/r-bootcamp-2018/talks/parallel_r.html.
+
+In order to accommodate these different parallelization needs and to handle differences in compute times and wait times across
+high-performance cluster environments, the `$parallel_settings` field of the `$gpa` object allows the user to specify how much
+time and how many cores are needed for each step of the pipeline. There are defaults (noted below), but you are encouraged to adjust these values
+if you find your models are taking much longer or shorter to run.
+
+## Compute time settings
+
+These settings control how much time is requested on the scheduler for a given step. These are all elements within the `gpa$parallel` structure.
+
+### FSL
+
+- `$fsl$l1_feat_time`: The compute time requested for a FEAT level 1 analysis of one run. Default: 10 hours
+- `$fsl$l2_feat_time`: The compute time requested for a FEAT level 2 analysis of one subject. Default: 2 hours
+- `$fsl$l3_feat_time`: The compute time requested for a FEAT level 3 analysis of one group model. Default: 24 hours
+
+- `$fsl$l1_feat_alljobs_time`: The total time requested for the scheduler to run all level 1 FEAT jobs. Default: 72 hours
+- `$fsl$l2_setup_run_time`: The total time for all FEAT level 2 jobs to be setup and run. Default: 14 hours
+- `$fsl$l3_setup_run_time`: The total time for all FEAT level 3 jobs to be setup and run. Default: 80 hours
+
+## Memory settings
+
+- `$fsl$l1_feat_memgb`: The number of gigabytes of memory requested for each 
+
+```
+
+## SELF NOTES
+
+1. Finalize pipeline configuration now enforces that l1, l2, and l3 models are in place. This is necessary to handle run truncation.
+
