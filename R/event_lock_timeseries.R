@@ -72,7 +72,7 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
       if (any(evts > evt_onset)) { evt_after <- min(evts[evts > evt_onset]) } #nearest future event
     }
 
-    if (is.na(evt_onset)) { next } #times are missing for some events on early trials (like rt_vmax_cum)
+    if (is.na(evt_onset)) next #times are missing for some events on early trials (like rt_vmax_cum)
     ts_data$evt_time <- ts_data[[ vm[["time"]] ]] - evt_onset
 
     #add time on either side of interpolation grid to have preceding time points that inform linear interp
@@ -80,10 +80,10 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
     trial_ts <- ts_data %>% filter(evt_time >= time_before + pad_before & evt_time <= time_after + pad_after)
 
     #enforce colliding preceding event
-    if (evt_before > -Inf) { trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) > evt_before) }
+    if (evt_before > -Inf) trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) > evt_before)
 
     #enforce colliding subsequent event
-    if (evt_after < Inf) { trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) < evt_after) }
+    if (evt_after < Inf) trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) < evt_after)
 
     #populate trial field
     trial_ts[[ vm[["trial"]] ]] <- if (nrow(trial_ts) > 0L) { trials[t] } else { numeric(0) } #allow for a zero-row df
@@ -148,7 +148,7 @@ get_medusa_interpolated_ts <- function(fmri_obj, event=NULL, time_before=-3.0, t
     event = event, time_before = time_before, time_after = time_after,
     pad_before = pad_before, pad_after = pad_after, collide_before = collide_before, collide_after = collide_after
   )
-  
+
   #need to interpolate by key variables
   interpolated_epochs <- interpolate_fmri_epochs(talign, time_before=time_before, time_after=time_after,
     output_resolution=output_resolution, group_by=group_by)  
@@ -288,7 +288,11 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
   # in wide format. This allows .SD to refer to the entire data.table per grouped chunk
 
   interp_dt <- a_obj$get_ts(orig_names=TRUE) %>%
-    melt(measure.vars=a_obj$vm$value, variable.name=".vkey", values.name="value")
+    data.table::melt(measure.vars=a_obj$vm$value, variable.name=".vkey", values.name="value")
+
+  # debugging problem with 'by' not being recognized because interp_dt is somehow a data.frame, not data.table
+  cat(glue("Class of interp_dt is {class(interp_dt)}"), "\n")
+  #setDT(interp_dt)
 
   interp_dt <- interp_dt[, interpolate_worker(.SD), by=c(".vkey", group_by)]
 
@@ -479,8 +483,8 @@ run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = l
     }
 
     if (!"output_resolution" %in% names(alignments[[aa]])) {
-      message(glue("For alignment {names(alignments)[aa]}, defaulting output_resolution (sampling rate) of 1.0"))
-      alignments[[aa]]$output_resolution <- 1.0
+      message(glue("For alignment {names(alignments)[aa]}, defaulting output_resolution (sampling rate) of {tr}"))
+      alignments[[aa]]$output_resolution <- tr
     } else {
       checkmate::assert_number(alignments[[aa]]$output_resolution, lower = 0.01, upper = 1e2)
     }

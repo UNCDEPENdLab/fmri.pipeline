@@ -192,7 +192,7 @@ voxelwise_deconvolution <- function(
           cbind(matrix(0, nrow = nrow(to_deconvolve), ncol = hrf_pad)) %>%
           as.matrix()
       }
-      
+
       #test1 <- deconvolve_nlreg(to_deconvolve[117,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
       #test2 <- deconvolve_nlreg(to_deconvolve[118,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
 
@@ -207,7 +207,7 @@ voxelwise_deconvolution <- function(
         }
       } else if (algorithm == "bush2011") {
         # This should use the new internal RcppArmadillo function
-        # Rcpp function is time x voxels... tranpose inputs and outputs to match voxels x time expectations
+        # Rcpp function is time x voxels... transpose inputs and outputs to match voxels x time expectations
         alg_input <- t(alg_input)
         deconv_mat <- tryCatch(deconvolve_nlreg(BOLDobs = alg_input, kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon, beta=decon_settings$beta),
           error=function(e) {
