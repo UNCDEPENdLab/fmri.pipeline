@@ -43,7 +43,10 @@ arma::mat deconvolve_nlreg(arma::mat BOLDobs, const arma::vec& kernel,
   //mat must be timepoints x signals (e.g., regions)
   int N = BOLDobs.n_rows;
   int P = BOLDobs.n_cols;
-
+  
+  // When only a few timepoints are passed in, the algorithm can crash, likely because of an undiagnosed negative indexing problem
+  if (N < 8) stop("Need at least 8 timepoints to have hope of meaningful deconvolution");
+  
   //Calc simulation steps related to simulation time
   int K = kernel.n_elem;
   int A = K - 1 + N;

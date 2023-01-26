@@ -83,18 +83,18 @@ voxelwise_deconvolution <- function(
 
     atlas_files <- mask
   }
-
+  
   zero_thresh <- 1e-4 #for binarizing/indexing
   atlas_imgs <- lapply(atlas_files, readNIfTI, reorient=FALSE)
   if (!is.null(mask)) {
     checkmate::assert_file_exists(mask)
     mask <- readNIfTI(mask, reorient=FALSE) #go from mask as character to the mask image itself
-
+    
     #ensure that mask is binary
     mask[mask < zero_thresh] <- 0.0
     mask[mask >= zero_thresh] <- 1.0
   }
-
+  
   #setup cluster
   if (nprocs > 1) {
     cl <- makeCluster(nprocs)
@@ -112,25 +112,38 @@ voxelwise_deconvolution <- function(
   for (ai in seq_along(atlas_files)) {
     cat("Working on atlas: ", atlas_files[ai], "\n")
     aimg <- atlas_imgs[[ai]]
-
+    
     if (!is.null(mask)) { aimg <- aimg*mask } #multiply against binary mask to apply it
-
+    
+    
     #get indices of mask within matrix (ijk)
     a_indices <- which(aimg > zero_thresh, arr.ind=TRUE)
-
-    #look up spatial coordinates of voxels in atlas (xyz)
-    a_coordinates <- cbind(a_indices, t(apply(a_indices, 1, function(r) { translateCoordinate(i=r, nim=aimg, verbose=FALSE) })))
+    
+    ## allow a 2d matrix to be passed, add additional slice column that creates 3d mat with a single slice. 
+    if(ncol(a_indices) == 2){
+      cat("Converting 2d atlas to a single 3d slice\n")
+      a_indices <- cbind(a_indices, rep(1, nrow(a_indices))); colnames(a_indices)[3] <- "slice"  
+      #look up spatial coordinates of voxels in atlas (xyz)
+      a_coordinates <- cbind(a_indices, t(apply(a_indices, 1, function(r) { translateCoordinate(i=r, nim=aimg, verbose=FALSE) })))
+      ## drop k for later indexing
+      a_indices <- a_indices[,-3]
+    } else{
+      #look up spatial coordinates of voxels in atlas (xyz)
+      a_coordinates <- cbind(a_indices, t(apply(a_indices, 1, function(r) { translateCoordinate(i=r, nim=aimg, verbose=FALSE) })))
+    }
+    
     a_coordinates <- as.data.frame(a_coordinates) %>%
       setNames(c("i", "j", "k", "x", "y", "z")) %>%
       dplyr::mutate(vnum = 1:n(), atlas_value = aimg[a_indices], atlas_name = basename(atlas_files[ai])) %>%
       mutate(across(c(x, y, z), ~round(.x, 2))) %>%
       dplyr::select(vnum, atlas_value, everything())
-
+    
     #setup output subdirectories for deconvolved files, named according to atlas
     atlas_img_name <- basename(sub(".nii(.gz)*", "", atlas_files[ai], perl=TRUE))
     dir.create(file.path(out_dir, atlas_img_name, "deconvolved"), showWarnings=FALSE, recursive=TRUE)
     if (isTRUE(save_original_ts)) { dir.create(file.path(out_dir, atlas_img_name, "original"), showWarnings=FALSE, recursive=TRUE) }
-
+    
+    
     #set a default filename based on the nifti -- hopefully this will not collide with other subjects/runs
     if (is.null(out_file_expression)) {
       out_file_expression <- expression(paste0(gsub("[/\\]", ".", niftis[si]), "_", atlas_img_name))
@@ -156,10 +169,15 @@ voxelwise_deconvolution <- function(
         message("Deconvolved file already exists: ", out_name)
         return(NULL)
       }
-
+      
       cat("  Deconvolving subject: ", niftis[si], "\n")
       dump_out <- tempfile()
-      afnistat <- run_afni_command(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]))
+      
+      if(!is.null(afni_dir)){
+        afnistat <- runAFNICommand(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]), afnidir = afni_dir)
+      } else{
+        afnistat <- runAFNICommand(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]))
+      }
       ts_out <- data.table::fread(dump_out) #read time series
 
       # to_deconvolve is a voxels x time matrix
@@ -195,7 +213,7 @@ voxelwise_deconvolution <- function(
 
       #test1 <- deconvolve_nlreg(to_deconvolve[117,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
       #test2 <- deconvolve_nlreg(to_deconvolve[118,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
-
+      # browser()
       if (algorithm == "bush2015") {
         #use R implementation of Bush 2015 algorithm
         deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("dependlab")) %do% {
@@ -225,17 +243,18 @@ voxelwise_deconvolution <- function(
             if (ss["machine"] == "x86_64") {
               #decon_bin <- system.file("bin", "linux_x64", "deconvolvefilter", package = "fmri.pipeline")
               decon_bin <- "/proj/mnhallqlab/users/michael/fmri.pipeline/inst/bin/linux_x64/deconvolvefilter"
+              # decon_bin <- "~/ll/users/michael/fmri.pipeline/inst/bin/linux_x64/deconvolvefilter"
             }
           }
         } else {
           decon_bin <- decon_settings$bush2011_binary
         }
-
+        
         if (is.null(decon_bin)) {
           alg_input <- as.matrix(data.table::fread(temp_i))
           deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("dependlab")) %do% {
             reg <- tryCatch(deconvolve_nlreg(as.vector(vox_ts), kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon),
-              error=function(e) { cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE); return(rep(NA, length(vox_ts))) })
+                            error=function(e) { cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE); return(rep(NA, length(vox_ts))) })
             return(reg)
           }
         } else {
@@ -250,13 +269,13 @@ voxelwise_deconvolution <- function(
             deconv_mat <- matrix(NA, nrow=nrow(to_deconvolve), ncol=ncol(to_deconvolve))
           } else {
             deconv_mat <- as.matrix(read.table(temp_o, header=FALSE)) %>% unname()  #remove names to avoid confusion in melt
-
+            
             #NB. 17Apr2019. I modified the compiled C++ program to chop the leading zeros itself for all outputs (rather than leaving the leading hrf_pad)
             #deconv_mat <- deconv_mat[,c(-1*1:hrf_pad, seq(-ncol(deconv_mat), -ncol(deconv_mat)+hrf_pad-1))] #trim leading and trailing padding
           }
         }
       }
-
+      
       #trim hrf end-padding for both C++ and R variants
       deconv_mat <- deconv_mat[, c(seq(-ncol(deconv_mat), -ncol(deconv_mat)+hrf_pad-1))] #trim trailing padding added above
 
@@ -293,7 +312,7 @@ voxelwise_deconvolution <- function(
         readr::write_csv(orig_df, file = out_name)
       }
     }
-
+    
     #write metadata as single data.frame that can be merged selectively, cutting down on storage demands in individual files
     if (!is.null(add_metadata)) {
       out_name <- file.path(out_dir, atlas_img_name, paste0(atlas_img_name, "_metadata.csv"))
@@ -301,6 +320,7 @@ voxelwise_deconvolution <- function(
     }
 
   }
-
+  
   return(invisible(NULL))
+  
 }
