@@ -1077,10 +1077,11 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #'   atlas that overlaps sufficiently with the map from 3dClusterize
     #' @param atlas_file A NIfTI file containing parcels or perhaps meta-analytic statistics
     #' @param atlas_lower_threshold Only retain values greater than this threshold in the comparison against the clusters. Default: 0
-    #' @param atlas_upper_threshold Only retain values less than this threshold in the comparison against the clusters. 
-    #'   Default: Inf (retain all high values)
+    #' @param atlas_upper_threshold Only retain values less than this threshold in the comparison against the clusters.
+    #'   Default: Inf (retain all ROIs above the lower threshold)
     #' @param minimum_overlap The proportion overlap of an atlas parcel with a cluster required for the parcel to be retained.
-    #'   Default: 0.8
+    #'   Default: 0.8. If an integer > 1 is provided, then the function treats this as the minimum number of *voxels* that
+    #'   must overlap between the parcel and the data-derived cluster.
     #' @param mask_by_overlap If TRUE, only voxels in the atlas that overlapped with a cluster are retained. In essence,
     #'   this erodes the retained atlas parcels to only include voxels that were in a cluster. Default: FALSE
     #' @param output_atlas the name/location of the file to output containing the subset of parcels in \code{atlas_file} that
@@ -1095,7 +1096,14 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         return(invisible(self))
       }
 
-      checkmate::assert_number(minimum_overlap, lower = 0.01, upper = 1.0)
+      if (checkmate::test_number(minimum_overlap, lower = 0.01, upper = 1.0)) {
+        use_proportion <- TRUE
+      } else if (checkmate::test_integerish(minimum_overlap, lower=2, len=1L)) {
+        use_proportion <- FALSE
+        minimum_overlap <- as.integer(minimum_overlap)
+      } else {
+        stop("minimum_overlap must be either a 0.01 -- 1.0 proportion or a > 1 number of voxels")
+      }
       checkmate::assert_logical(mask_by_overlap, len=1L)
       clust_file <- self$get_outputs()$cluster_map
       if (is.na(clust_file)) {
@@ -1157,12 +1165,12 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         nvox_overlap[ii] <- sum(clust_match)
         prop_overlap[ii] <- nvox_overlap[ii] / sum(at)
 
-        if (prop_overlap[ii] >= minimum_overlap) {
+        if ((isTRUE(use_proportion) && prop_overlap[ii] >= minimum_overlap) ||
+          (isFALSE(use_proportion) && nvox_overlap >= minimum_overlap)) {
           meets_criteria[ii] <- TRUE
         } else {
           meets_criteria[ii] <- FALSE
         }
-
       }
 
       good_vals <- uvals[meets_criteria]
@@ -1178,14 +1186,14 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
           roi_val = uvals, prop_overlap = prop_overlap, retained = meets_criteria,
           nvox_overlap = nvox_overlap, nvox_parcel = nvox_parcel
         )
-        
+
         if (isTRUE(mask_by_overlap)) {
           at_mod <- at_mod * clust_bin # mask out retained atlas voxels that did not overlap with a cluster
         }
 
         # add voxels retained (if masked by overlap)
         overlap_df$nvox_retained <- sapply(overlap_df$roi_val, function(x) sum(at_mod == x))
-       
+
         extract_roi_stats <- FALSE
         stats_file <- self$get_outputs()$cluster_masked_data
         if (!is.null(roi_stats) && checkmate::test_file_exists(stats_file)) {
