@@ -266,7 +266,7 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   if (is.null(gpa$parallel$fsl$l3_feat_memgb)) gpa$parallel$fsl$l3_feat_memgb <- "32" # 32 GB by default
   if (is.null(gpa$parallel$fsl$l3_feat_cpusperjob)) gpa$parallel$fsl$l3_feat_cpusperjob <- 16 # cpus used to process all slices
 
-  if (is.null(gpa$parallel$fsl$compute_environment) && isTRUE(grepl("longleaf", gpa$nodename))) {
+  if (is.null(gpa$parallel$fsl$compute_environment) && isTRUE(grepl("(longleaf|ll\\.unc\\.edu)", gpa$nodename))) {
     lg$info("Using default FSL compute environment for UNC Longleaf")
     gpa$parallel$fsl$compute_environment <- c(
       "module unload fsl", # remove any current fsl module
@@ -274,7 +274,7 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
     )
   }
 
-  if (is.null(gpa$parallel$afni$compute_environment) && isTRUE(grepl("longleaf", gpa$nodename))) {
+  if (is.null(gpa$parallel$afni$compute_environment) && isTRUE(grepl("(longleaf|ll\\.unc\\.edu)", gpa$nodename))) {
     lg$info("Using default AFNI compute environment for UNC Longleaf")
     gpa$parallel$afni$compute_environment <- c(
       "module unload afni", # remove any current afni module

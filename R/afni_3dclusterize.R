@@ -1166,7 +1166,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         prop_overlap[ii] <- nvox_overlap[ii] / sum(at)
 
         if ((isTRUE(use_proportion) && prop_overlap[ii] >= minimum_overlap) ||
-          (isFALSE(use_proportion) && nvox_overlap >= minimum_overlap)) {
+          (isFALSE(use_proportion) && nvox_overlap[ii] >= minimum_overlap)) {
           meets_criteria[ii] <- TRUE
         } else {
           meets_criteria[ii] <- FALSE
@@ -1198,11 +1198,13 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
         stats_file <- self$get_outputs()$cluster_masked_data
         if (!is.null(roi_stats) && checkmate::test_file_exists(stats_file)) {
           stats_nii <- RNifti::readNifti(stats_file)
+
+          # NA zero values in cluster-masked statistics since these will bias/invalidate stastistic
+          # We want to get mean, min, max of voxels that survive in the cluster-masked data, not those masked out (0)
+          stats_nii[abs(stats_nii) < 1e-5] <- NA
           extract_roi_stats <- TRUE
-          #roi_stats <- list()
-          #clust_stats <- 
           roi_data <- list()
-          
+
           for (ff in roi_stats) {
             if (ff == "mean") {
               roi_data[["mean"]] <- tapply(stats_nii, at_mod, mean, na.rm=TRUE)[-1L] # remove 0 values
