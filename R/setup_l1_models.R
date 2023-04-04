@@ -30,7 +30,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   checkmate::assert_subset(c("id", "session", "run_number", "run_nifti", "exclude_run"), names(gpa$run_data)) # required columns
 
   #if no model subset is requested, output all models
-  if (is.null(l1_model_names)) { l1_model_names <- names(gpa$l1_models$models) }
+  if (is.null(l1_model_names)) l1_model_names <- names(gpa$l1_models$models)
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
   lg$set_threshold(gpa$lgr_threshold)
@@ -61,6 +61,9 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   }
 
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
+  # all_subj_l1_list <- lapply(seq_len(nrow(gpa$subject_data)), function(ii) {
+  #   subj_df <- gpa$subject_data[ii, ]
+
   all_subj_l1_list <- foreach(subj_df = iter(gpa$subject_data, by="row"), .inorder=FALSE, .packages=c("dplyr", "fmri.pipeline"),
     .export=c("truncate_runs", "fsl_l1_model", "get_mr_abspath",
     "get_output_directory", "runFSLCommand", "get_feat_status", "add_custom_feat_syntax")) %dopar% {
@@ -90,9 +93,14 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         lg$warn("Unable to find any preprocessed fMRI files in dir: %s", subj_mr_dir)
         return(NULL)
       } else if (any(!file.exists(run_nifti))) {
+        nii_present <- file.exists(run_nifti)
         lg$warn("Could not find some of the expected preprocessed fMRI files. These will be dropped.")
-        lg$warn("Missing: %s", run_nifti[!file.exists(run_nifti)])
-        run_nifti <- run_nifti[file.exists(run_nifti)]
+        lg$warn("Missing: %s", run_nifti[!nii_present])
+        run_nifti <- run_nifti[nii_present]
+        mr_run_nums <- mr_run_nums[nii_present]
+        l1_confound_files <- l1_confound_files[nii_present]
+        run_volumes <- run_volumes[nii_present]
+        exclude_run <- exclude_run[nii_present]
       } else {
         lg$debug(paste("MR files to analyze:", run_nifti)) #log files that were found
       }
@@ -106,13 +114,13 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         })
       )
 
-      # lookup subject directory for placing truncated files
-      subj_output_directory <- get_output_directory(id = subj_id, session = subj_session, gpa = gpa, create_if_missing = FALSE, what = "sub")
+      # lookup subject directory for placing truncated files (now handled upstream)
+      # subj_output_directory <- get_output_directory(id = subj_id, session = subj_session, gpa = gpa, create_if_missing = FALSE, what = "sub")
 
       # initialize mr data frame with elements of $run_data
       mr_df <- data.frame(
         id = subj_id, session = subj_session, run_number = mr_run_nums, run_nifti, l1_confound_file = l1_confound_files,
-        run_volumes = run_volumes, exclude_run, row.names=NULL
+        run_volumes, exclude_run, row.names=NULL
       )
 
       # Tracking list containing data.frames for each software, where we expect one row per run-level model (FSL)
@@ -169,7 +177,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
           }
         } else {
           t_out <- gpa$glm_software
-          if (isTRUE(gpa$use_preconvolve)) { t_out <- c("convolved", t_out) } #compute preconvolved regressors
+          if (isTRUE(gpa$use_preconvolve)) t_out <- c("convolved", t_out) #compute preconvolved regressors
           bdm_args <- gpa$additional$bdm_args
           bdm_args$events <- m_events
           bdm_args$signals <- m_signals
@@ -186,11 +194,11 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
             return(NULL)
           })
 
-          save(d_obj, bdm_args, mr_df, mr_run_nums, subj_mr_dir, run_nifti, run_volumes, l1_confound_files,
-            subj_id, subj_session, this_model, file = bdm_out_file
+          save(d_obj, bdm_args, mr_df, mr_run_nums, subj_mr_dir, run_nifti, run_volumes, exclude_run, nvoxels,
+           l1_confound_files, subj_id, subj_session, this_model, file = bdm_out_file
           )
 
-          if (is.null(d_obj)) { next } #skip to next iteration on error
+          if (is.null(d_obj)) next #skip to next iteration on error
         }
 
         if ("fsl" %in% gpa$glm_software) {
@@ -218,13 +226,13 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
         #TODO: finalize SPM approach
         if ("spm" %in% gpa$glm_software) {
-          #Setup spm run-level models for each combination of signals
-          spm_files <- tryCatch(spm_l1_model(d_obj, gpa, this_model, run_nifti),
-            error=function(e) {
-              lg$error("Problem running spm_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)
-              lg$error("Error message: %s", as.character(e))
-              return(NULL)
-            })
+          # Setup spm run-level models for each combination of signals
+          # spm_files <- tryCatch(spm_l1_model(d_obj, gpa, this_model, run_nifti),
+          #   error=function(e) {
+          #     lg$error("Problem running spm_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)
+          #     lg$error("Error message: %s", as.character(e))
+          #     return(NULL)
+          #   })
 
         }
       }

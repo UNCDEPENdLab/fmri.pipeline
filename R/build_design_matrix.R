@@ -91,11 +91,12 @@
 #' the unconvolved and convolved regressors, collinearity diagnostics, the number of volumes
 #' modeled in each run, and a plot of the design.
 #'
-#' The basic logic of the inputs to build_design_matrix is that task-related fMRI designs are organized around a set of events that occur in time and
-#' have a specific duration. Furthermore, for a given event, it could be a 0/1 non-occurrence versus occurrence representation, \emph{or} the event could
-#' be associated with a specific parametric value such as working memory load, reward prediction error, or expected value. These parametric effects
-#' are aligned in time with an event, but there may be multiple predictions for a given event. For example, we may align a 0/1 regressor and a
-#' reward prediction error the outcome phase of a task.
+#' The basic logic of the inputs to build_design_matrix is that task-related fMRI designs are organized around a set of events
+#' that occur in time and have a specific duration. Furthermore, for a given event, it could be a 0/1 non-occurrence versus
+#' occurrence representation, \emph{or} the event could be associated with a specific parametric value such as working memory
+#' load, reward prediction error, or expected value. These parametric effects are aligned in time with an event, but there
+#' may be multiple predictions for a given event. For example, we may align a 0/1 regressor and a reward prediction error
+#' the outcome phase of a task.
 #'
 #' Thus, the function abstracts timing-related information into \code{events} and signals, whether parametric or binary, into the \code{signals}.
 #'
@@ -375,10 +376,10 @@ build_design_matrix <- function(
     if (length(drop_volumes) == nrow(run_data)) {
       run_data$drop_volumes <- drop_volumes # populate run-wise drops
     } else if (length(drop_volumes) == 1L && is.numeric(drop_volumes) && drop_volumes[1L] > 0) {
-      lg$info("Using first element of drop_volumes for all runs: ", drop_volumes[1L])
+      lg$info(glue("Using first element of drop_volumes for all runs: {drop_volumes[1L]}"))
       run_data$drop_volumes <- rep(drop_volumes[1L], nrow(run_data))
     } else {
-      run_data$drop_volumes <- 0
+      run_data$drop_volumes <- 0L
     }
   }
 
@@ -386,9 +387,9 @@ build_design_matrix <- function(
   bdm_args <- as.list(environment(), all.names = TRUE)
   #validate events data.frame
 
-  if (is.null(events)) { stop("You must pass in an events data.frame. See ?build_design_matrix for details.") }
-  if (is.null(signals)) { stop("You must pass in a signals list. See ?build_design_matrix for details.") }
-  if (is.null(tr)) { stop("You must pass in the tr (repetition time) in seconds. See ?build_design_matrix for details.") }
+  if (is.null(events)) stop("You must pass in an events data.frame. See ?build_design_matrix for details.")
+  if (is.null(signals)) stop("You must pass in a signals list. See ?build_design_matrix for details.")
+  if (is.null(tr)) stop("You must pass in the tr (repetition time) in seconds. See ?build_design_matrix for details.")
 
   stopifnot(inherits(events, "data.frame"))
   if (!"event" %in% names(events)) { stop("events data.frame must contain event column with the name of the event") }
@@ -706,8 +707,8 @@ build_design_matrix <- function(
     if ("fsl" %in% write_timing_files) {
       tf_fsl <- matrix(NA_character_, nrow = dim(dmat)[1L], ncol = dim(dmat)[2L], dimnames = dimnames(dmat))
 
-      for (i in 1:dim(dmat)[1L]) {
-        for (reg in 1:dim(dmat)[2L]) {
+      for (i in seq_len(dim(dmat)[1L])) {
+        for (reg in seq_len(dim(dmat)[2L])) {
           regout <- dmat[[i, reg]]
           if (nrow(regout) == 0L) {
             next
@@ -780,7 +781,7 @@ build_design_matrix <- function(
         combmat <- dmat[, comb, drop=F]
         #onsets and durations are constant, amplitudes vary
         runvec <- c() #character vector of AFNI runs (one row per run)
-        for (i in 1:dim(combmat)[1L]) {
+        for (i in seq_len(dim(combmat)[1L])) {
           #just use first regressor of combo to get vector onsets and durations (since combinations, by definition, share these)
           runonsets <- combmat[[i, 1]][, "onset"]
           rundurations <- combmat[[i, 1]][, "duration"]
@@ -788,7 +789,7 @@ build_design_matrix <- function(
 
           #AFNI doesn't like us if we pass in the boxcar ourselves in the dmBLOCK format (since it creates this internally). Filter out.
           indicator_func <- apply(runvalues, 2, function(col) { all(col == 1.0)} )
-          if (any(indicator_func)) { runvalues <- runvalues[, -1*which(indicator_func), drop=FALSE] }
+          if (any(indicator_func)) runvalues <- runvalues[, -1*which(indicator_func), drop=FALSE]
 
           # if the indicator regressor was the only thing present, revert to the notation TIME:DURATION notation
           # for dmBLOCK (not TIME*PARAMETER:DURATION)
@@ -832,7 +833,7 @@ build_design_matrix <- function(
   #Note that we want to add the run timing from the r-1 run to timing for run r.
   #Example: run 1 is 300 volumes with a TR of 2.0
   #  Thus, run 1 has timing 0s .. 298s, and the first volume of run 2 would be 300s
-  design_concat <- lapply(1:dim(dmat)[2L], function(reg) {
+  design_concat <- lapply(seq_len(dim(dmat)[2L]), function(reg) {
     thisreg <- dmat[, reg]
     concat_reg <- do.call(rbind, lapply(seq_along(thisreg), function(run) {
       timing <- thisreg[[run]]
@@ -868,7 +869,7 @@ build_design_matrix <- function(
 
 # helper function to shift onset times based on dropped volumes
 shift_dmat_timing <- function(dmat, tr, drop_volumes = 0, shift_timing = TRUE) {
-  if (isFALSE(shift_timing) || drop_volumes == 0L) {
+  if (isFALSE(shift_timing) || all(drop_volumes == 0L)) {
     return(dmat)
   } # return dmat unchanged
 
@@ -885,8 +886,8 @@ shift_dmat_timing <- function(dmat, tr, drop_volumes = 0, shift_timing = TRUE) {
   }
 
   # Shift the timing of the regressors in dmat according to drop_volumes
-  for (i in 1:dim(dmat)[1]) { # run
-    for (j in 1:dim(dmat)[2]) { # regressor
+  for (i in seq_len(dim(dmat)[1])) { # run
+    for (j in seq_len(dim(dmat)[2])) { # regressor
       df <- dmat[[i, j]]
       if (nrow(df) == 0L) next # empty regressor
       df[, "onset"] <- df[, "onset"] - time_offset[i]
@@ -927,8 +928,9 @@ determine_run_volumes <- function(run_data = NULL, nruns = NULL, run_nifti_drop_
       }
     }
 
-    # For NIfTI input, if run_nifti_drop_applied == TRUE, assume that the .nii.gz is already truncated. 
-    # Therefore, the number of volumes detected in the NIfTI must be adjusted *upward* by run_data$drop_volumes so that the drop is carried out properly
+    # For NIfTI input, if run_nifti_drop_applied == TRUE, assume that the .nii.gz is already truncated.
+    # Therefore, the number of volumes detected in the NIfTI must be adjusted *upward* 
+    #   by run_data$drop_volumes so that the drop is carried out properly.
     if (any(run_data$drop_volumes > 0) && isTRUE(run_nifti_drop_applied)) {
       lg$info("NIfTIs already have run_data$drop_volumes removed. Thus, adjusting run_data$run_volumes upward accordingly.")
       run_data$run_volumes <- run_volumes_detected + run_data$drop_volumes

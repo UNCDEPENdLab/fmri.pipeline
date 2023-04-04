@@ -278,7 +278,7 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
     lg$info("Using default AFNI compute environment for UNC Longleaf")
     gpa$parallel$afni$compute_environment <- c(
       "module unload afni", # remove any current afni module
-      "module load afni/21.3.04" # load latest version (2021)
+      "module load afni/23.0.07" # load latest version (2023)
     )
   }
 
