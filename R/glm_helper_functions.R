@@ -20,7 +20,7 @@
 #' @examples
 #'
 #' \dontrun{
-#' runAFNICommand("3dcopy test_data copy_data")
+#' run_afni_command("3dcopy test_data copy_data")
 #' }
 run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo = TRUE, omp_num_threads=1L, ...) {
   checkmate::assert_string(args, null.ok = FALSE)
@@ -47,9 +47,9 @@ run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo 
   Sys.setenv(AFNIDIR=afnidir) #export to R environment
   afnisetup <- paste0("AFNIDIR=", afnidir, "; PATH=${AFNIDIR}:${PATH}; DYLD_FALLBACK_LIBRARY_PATH=${AFNIDIR}; ${AFNIDIR}/")
   afnicmd  <- paste0(afnisetup, args)
-  if (!is.null(stdout)) { afnicmd <- paste(afnicmd, ">", stdout) }
-  if (!is.null(stderr)) { afnicmd <- paste(afnicmd, "2>", stderr) }
-  if (echo) { cat("AFNI command:", afnicmd, "\n") }
+  if (!is.null(stdout)) afnicmd <- paste(afnicmd, ">", stdout)
+  if (!is.null(stderr)) afnicmd <- paste(afnicmd, "2>", stderr)
+  if (echo) cat("AFNI command:", afnicmd, "\n")
   retcode <- system(afnicmd, ...)
   if (omp_num_threads > 1L && cur_threads != "") {
     Sys.setenv(OMP_NUM_THREADS = cur_threads) # reset threads
@@ -60,7 +60,7 @@ run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo 
 
 #wrapper for running an fsl command safely within R
 #if FSL does not have its configuration setup properly, commands such as feat don't work, or hang strangely
-runFSLCommand <- function(args, fsldir=NULL, stdout=NULL, stderr=NULL) {
+run_fsl_command <- function(args, fsldir=NULL, stdout=NULL, stderr=NULL) {
   #look for FSLDIR in system environment if not passed in
   if (is.null(fsldir)) {
     #check for FSLDIR in sourced .bashrc
@@ -68,30 +68,136 @@ runFSLCommand <- function(args, fsldir=NULL, stdout=NULL, stderr=NULL) {
     if (file.exists("~/.profile")) {
       bashrc_fsldir <- system("source ~/.profile && echo $FSLDIR", intern=TRUE)
     }
-    
+
     #check for FSLDIR in current environment
     env <- system("env", intern=TRUE)
     if (length(fsldir <- grep("^FSLDIR=", env, value=TRUE)) > 0L) {
       fsldir <- sub("^FSLDIR=", "", fsldir)
     } else if (!identical(bashrc_fsldir, character(0))) {
-      fsldir <- bashrc_fsldir      
+      fsldir <- bashrc_fsldir
     } else {
       warning("FSLDIR not found in environment. Defaulting to /usr/local/fsl.")
       fsldir <- "/usr/local/fsl"
     }
   }
-  
+
   #Sys.setenv(LD_LIBRARY_PATH="/gpfs/group/mnh5174/default/sw/openblas/lib")
   Sys.setenv(FSLDIR=fsldir) #export to R environment
   fslsetup=paste0("FSLDIR=", fsldir, "; PATH=${FSLDIR}/bin:${PATH}; . ${FSLDIR}/etc/fslconf/fsl.sh; ${FSLDIR}/bin/")
   fslcmd=paste0(fslsetup, args)
-  if (!is.null(stdout)) { fslcmd=paste(fslcmd, ">", stdout) }
-  if (!is.null(stderr)) { fslcmd=paste(fslcmd, "2>", stderr) }
+  if (!is.null(stdout)) fslcmd=paste(fslcmd, ">", stdout)
+  if (!is.null(stderr)) fslcmd=paste(fslcmd, "2>", stderr)
   cat("FSL command: ", fslcmd, "\n")
   retcode <- system(fslcmd)
   return(retcode)
 }
 
+# Internal function used to get the commands that should be included in batch submission scripts
+# to setup the compute environment.
+# @param gpa a glm_pipeline_arguments object
+# @param what which programs to pull from the compute environment. If not specified, it pulls all
+#   programs. At present, the options are "global" (only global setup), "fsl", "afni", and "r".
+get_compute_environment <- function(gpa, what="all") {
+  # always include global
+  compute_string <- gpa$parallel$compute_environment$global
+
+  if (any(what %in% c("all", "fsl"))) {
+    compute_string <- c(compute_string, gpa$parallel$compute_environment$fsl)
+  }
+
+  if (any(what %in% c("all", "afni"))) {
+    compute_string <- c(compute_string, gpa$parallel$compute_environment$afni)
+  }
+
+  if (any(what %in% c("all", "r"))) {
+    compute_string <- c(compute_string, gpa$parallel$compute_environment$r)
+  }
+
+  return(compute_string)
+}
+
+# write a small test script for the programs used in the compute environment
+# currently capable of testing FSL, R, and AFNI
+test_compute_environment <- function(gpa, what="all") {
+  #"set -x",
+  prog_str <- c(
+    "#!/bin/bash", "checks_passed=1", "",
+    "echo 'Checking the compute environment settings'",
+    "echo '-----------------------------------------'",
+    get_compute_environment(gpa, what = what)
+  )
+
+  if (any(what %in% c("all", "afni"))) {
+    prog_str <- c(
+      prog_str,
+      "afni_loc=$(command -v afni)
+      [ $? -eq 0 ] && afni_exists=1 || afni_exists=0
+      if [ $afni_exists -eq 0 ]; then
+        echo 'Cannot find afni!'
+        checks_passed=0
+      else
+        echo \"afni found: ${afni_loc}\"
+      fi"
+    )
+  }
+
+  if (any(what %in% c("all", "fsl"))) {
+    prog_str <- c(
+      prog_str,
+      "feat_loc=$(command -v feat)
+      [ $? -eq 0 ] && feat_exists=1 || feat_exists=0
+      if [ $feat_exists -eq 0 ]; then
+        echo 'Cannot find FSL feat!'
+        checks_passed=0
+      else
+        echo \"feat found: ${feat_loc}\"
+      fi
+      if [ -n \"$FSLDIR\" ]; then
+        echo \"FSLDIR set: $FSLDIR\"
+      else
+        echo 'FSLDIR is not set. This is necessary for FSL setup.'
+        checks_passed=0
+      fi
+      "
+    )
+  }
+
+  if (any(what %in% c("all", "r"))) {
+    prog_str <- c(
+      prog_str,
+      "r_loc=$(command -v R)
+      [ $? -eq 0 ] && r_exists=1 || r_exists=0
+      if [ $r_exists -eq 0 ]; then
+        echo 'Cannot find R!'
+        checks_passed=0
+      else
+        echo \"R found: ${r_loc}\"
+      fi
+      "
+    )
+  }
+
+  prog_str <- c(
+    prog_str,
+    "
+    if [ $checks_passed -eq 0 ]; then
+      echo 'One or more checks failed. Please fix the problems!'
+      exit 1
+    else
+      echo 'All checks passed. Please still verify that the program locations match your expectations!'
+    fi
+    "
+  )
+
+  check_script <- tempfile(pattern="chk")
+  writeLines(prog_str, check_script)
+  res <- suppressWarnings(system(paste("bash", check_script), intern = TRUE))
+  cat(res, sep = "\n")
+  exit_code <- attr(res, "status")
+  if (!is.null(exit_code) && exit_code == 1) {
+    stop("One or more problems were detected in the compute environment. Setup cannot continue.")
+  }
+}
 
 #' internal function for getting a file extension that may include a compressed ending
 #' this is adapted from neurobase::file_imgext, but extended for other file types
@@ -321,13 +427,13 @@ generateRunMask <- function(mr_files, outdir=getwd(), outfile="runmask") {
   if (file.exists(file.path(outdir, paste0(outfile, ".nii.gz")))) { return(invisible(NULL)) }
   ##generate mask of mr_files where temporal min is > 0 for all runs
   for (f in seq_along(mr_files)) {
-    runFSLCommand(paste0("fslmaths ", mr_files[f], " -Tmin -bin ", outdir, "/tmin", f))#, fsldir="/usr/local/ni_tools/fsl")
+    run_fsl_command(paste0("fslmaths ", mr_files[f], " -Tmin -bin ", outdir, "/tmin", f))#, fsldir="/usr/local/ni_tools/fsl")
   }
 
   ##sum mins together over runs and threshold at number of runs
-  runFSLCommand(paste0("fslmaths ", paste(paste0(outdir, "/tmin", seq_along(mr_files)), collapse=" -add "), " ", outdir, "/tminsum"))#, fsldir="/usr/local/ni_tools/fsl")
-  runFSLCommand(paste0("fslmaths ", outdir, "/tminsum -thr ", length(mr_files), " -bin ", outdir, "/", outfile))#, fsldir="/usr/local/ni_tools/fsl")
-  runFSLCommand(paste0("imrm ", outdir, "/tmin*"))#, fsldir="/usr/local/ni_tools/fsl") #cleanup 
+  run_fsl_command(paste0("fslmaths ", paste(paste0(outdir, "/tmin", seq_along(mr_files)), collapse=" -add "), " ", outdir, "/tminsum"))#, fsldir="/usr/local/ni_tools/fsl")
+  run_fsl_command(paste0("fslmaths ", outdir, "/tminsum -thr ", length(mr_files), " -bin ", outdir, "/", outfile))#, fsldir="/usr/local/ni_tools/fsl")
+  run_fsl_command(paste0("imrm ", outdir, "/tmin*"))#, fsldir="/usr/local/ni_tools/fsl") #cleanup 
 }
 
 #compute the mean of each cluster in roimask
@@ -381,7 +487,7 @@ get_beta_series <- function(inputs, roimask, n_bs=50) {
 
       #in testing, it is faster to use readNIfTI to read each cope file individually (7.5s) than to use fslmerge + readNIfTI on the 4d (13s)
       #concat_file <- tempfile()
-      #system.time(runFSLCommand(paste("fslmerge -t", concat_file, paste(copes, collapse=" "))))
+      #system.time(run_fsl_command(paste("fslmerge -t", concat_file, paste(copes, collapse=" "))))
       #system.time(cout <- readNIfTI(concat_file, reorient=FALSE)@.Data)
 
       cout <- do.call(abind, list(along=4, lapply(copes, function(x) { readNIfTI(x, reorient=FALSE)@.Data })))
@@ -1118,7 +1224,7 @@ lookup_run_volumes <- function(nifti) {
   if (!file.exists(nifti)) return(NA_integer_)
 
   # fslval is much faster than any internal R command. Use it, if possible
-  # TODO: Make this more robust, more like runFSLCommand with path expectations
+  # TODO: Make this more robust, more like run_fsl_command with path expectations
   has_fslval <- system2("which", "fslval", stdout = FALSE, stderr = FALSE)
   has_fslval <- ifelse(has_fslval == 0L, TRUE, FALSE)
   if (isTRUE(has_fslval)) {
@@ -1147,7 +1253,7 @@ lookup_nvoxels <- function(nifti) {
   if (!file.exists(nifti)) return(NA_integer_)
 
   # fslval is much faster than any internal R command. Use it, if possible
-  # TODO: Make this more robust, more like runFSLCommand with path expectations
+  # TODO: Make this more robust, more like run_fsl_command with path expectations
   # TODO: should probably have a single global lookup for fslval in gpa (finalize step)
   has_fslval <- system2("which", "fslval", stdout = FALSE, stderr = FALSE)
   has_fslval <- ifelse(has_fslval == 0L, TRUE, FALSE)
@@ -1180,7 +1286,7 @@ lookup_dim <- function(nifti) {
   if (!file.exists(nifti)) return(ret_vec)
 
   # fslval is much faster than any internal R command. Use it, if possible
-  # TODO: Make this more robust, more like runFSLCommand with path expectations
+  # TODO: Make this more robust, more like run_fsl_command with path expectations
   # TODO: should probably have a single global lookup for fslval in gpa (finalize step)
   has_fslval <- system2("which", "fslval", stdout = FALSE, stderr = FALSE)
   has_fslval <- ifelse(has_fslval == 0L, TRUE, FALSE)

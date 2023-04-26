@@ -212,9 +212,7 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
 
   if (is.null(gpa$parallel$slurm)) gpa$parallel$slurm <- list()
   if (is.null(gpa$parallel$torque)) gpa$parallel$torque <- list()
-  if (is.null(gpa$parallel$batch_code)) {
 
-  }
   if (gpa$scheduler == "slurm") {
     if (is.null(gpa$parallel$sched_args)) {
       # Jan 2022: turns out Longleaf doesn't want us to use a partition by default!
@@ -242,10 +240,15 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
 
   # 80 hours for all L3 analyses to clear scheduler (all jobs)
   if (is.null(gpa$parallel$l3_setup_run_time)) gpa$parallel$l3_setup_run_time <- "80:00:00"
-  if (is.null(gpa$parallel$compute_environment) && isTRUE(grepl("longleaf", gpa$nodename))) {
+  if (is.null(gpa$parallel$compute_environment$global) && isTRUE(grepl("(longleaf|ll\\.unc\\.edu)", gpa$nodename))) {
+    lg$info("Using default global compute environment for UNC Longleaf")
+    gpa$parallel$compute_environment$global <- "module use /proj/mnhallqlab/sw/modules"
+  }
+
+  if (is.null(gpa$parallel$compute_environment$r) && isTRUE(grepl("(longleaf|ll\\.unc\\.edu)", gpa$nodename))) {
     lg$info("Using default R compute environment for UNC Longleaf")
-    gpa$parallel$compute_environment <- c(
-      "module use /proj/mnhallqlab/sw/modules",
+    gpa$parallel$compute_environment$r <- c(
+      "module unload r",
       "module load r/4.2.1"
     )
   }
@@ -266,28 +269,21 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   if (is.null(gpa$parallel$fsl$l3_feat_memgb)) gpa$parallel$fsl$l3_feat_memgb <- "32" # 32 GB by default
   if (is.null(gpa$parallel$fsl$l3_feat_cpusperjob)) gpa$parallel$fsl$l3_feat_cpusperjob <- 16 # cpus used to process all slices
 
-  if (is.null(gpa$parallel$fsl$compute_environment) && isTRUE(grepl("(longleaf|ll\\.unc\\.edu)", gpa$nodename))) {
+  if (is.null(gpa$parallel$compute_environment$fsl) && isTRUE(grepl("(longleaf|ll\\.unc\\.edu)", gpa$nodename))) {
     lg$info("Using default FSL compute environment for UNC Longleaf")
-    gpa$parallel$fsl$compute_environment <- c(
+    gpa$parallel$compute_environment$fsl <- c(
       "module unload fsl", # remove any current fsl module
       "module load fsl/6.0.4" # load latest version (2021)
     )
   }
 
-  if (is.null(gpa$parallel$afni$compute_environment) && isTRUE(grepl("(longleaf|ll\\.unc\\.edu)", gpa$nodename))) {
+  if (is.null(gpa$parallel$compute_environment$afni) && isTRUE(grepl("(longleaf|ll\\.unc\\.edu)", gpa$nodename))) {
     lg$info("Using default AFNI compute environment for UNC Longleaf")
-    gpa$parallel$afni$compute_environment <- c(
+    gpa$parallel$compute_environment$afni <- c(
       "module unload afni", # remove any current afni module
       "module load afni/23.0.07" # load latest version (2023)
     )
   }
-
-  # old ICS-ACI settings
-  # "source /gpfs/group/mnh5174/default/lab_resources/ni_path.bash",
-  # "module unload fsl", #make sure that the ni_path version of FSL is unloaded
-  # "#module load \"openblas/0.2.20\" >/dev/null 2>&1",
-  # "module load \"fsl/6.0.1\" >/dev/null 2>&1",
-  # "module load gsl/2.5", #for dependlab R package to work (some new dependency)
 
   if (is.null(gpa$parallel$fsl$slurm_l1_array)) {
 

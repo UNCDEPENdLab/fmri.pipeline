@@ -41,7 +41,7 @@ l3_model_names = "prompt", glm_software = NULL) {
     n_nodes = 1, n_cpus = 1, wall_time = gpa$parallel$finalize_time,
     mem_total = "16G",
     r_code = "gpa <- finalize_pipeline_configuration(gpa)", r_packages = "fmri.pipeline",
-    batch_code = gpa$parallel$compute_environment,
+    batch_code = get_compute_environment(gpa),
     scheduler_options = gpa$parallel$sched_args
   )
 
@@ -61,7 +61,7 @@ l3_model_names = "prompt", glm_software = NULL) {
   # L2 jobs should start. The new approach is to keep the parent job active until all children complete. This is
   # implemented by wait_for_children in R_batch_job. Here, we run the l1 model setup, the launch all feat runs in batch
   # jobs and wait for all of these to complete before the l1_setup_batch (parent) job completes.
-  
+
   if (!is.null(model_list$l1_model_names)) {
     # batch job for setting up l1 models -- calls setup_l1_models to create relevant FSFs
       l1_setup_batch <- f_batch$copy(

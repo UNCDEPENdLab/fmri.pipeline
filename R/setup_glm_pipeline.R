@@ -352,5 +352,8 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   # populate $parallel
   gpa <- setup_parallel_settings(gpa, lg)
 
+  # verify compute environment
+  test_compute_environment(gpa)
+
   return(gpa)
 }

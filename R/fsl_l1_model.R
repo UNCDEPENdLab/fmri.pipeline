@@ -193,7 +193,7 @@ fsl_l1_model <- function(
     cl_fork <- parallel::makeForkCluster(nnodes=nnodes)
     runfeat <- function(fsf) {
       runname <- basename(fsf)
-      runFSLCommand(paste("feat", fsf), stdout=file.path(dirname(fsf), paste0("feat_stdout_", runname)),
+      run_fsl_command(paste("feat", fsf), stdout=file.path(dirname(fsf), paste0("feat_stdout_", runname)),
         stderr=file.path(dirname(fsf), paste0("feat_stderr_", runname)))
     }
 

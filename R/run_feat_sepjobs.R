@@ -161,7 +161,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       sched_args_to_header(gpa), # analysis-level SBATCH directives
       "",
       "",
-      gpa$parallel$fsl$compute_environment,
+      get_compute_environment(gpa, "fsl"),
       "",
       "cd $SLURM_SUBMIT_DIR"
     )
@@ -177,7 +177,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       sched_args_to_header(gpa), # analysis-level PBS directives
       "",
       "",
-      gpa$parallel$fsl$compute_environment,
+      get_compute_environment(gpa, "fsl"),
       "",
       "cd $PBS_O_WORKDIR"
     )

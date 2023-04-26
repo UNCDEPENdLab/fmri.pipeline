@@ -59,7 +59,6 @@ simulate_null_3dttest <- R6::R6Class("simulate_null_3dttest",
           "unlink(c(job_output_files, sub('\\\\.nii\\\\.gz$', '.minmax.1D', job_output_files)))" # job_output_files shuttled to batch job environment
         ),
         batch_directory = dirname(private$residuals_file) # need to fix this if we ever move away from residuals-only approach
-        
       )
 
       return(private$perm_batch)

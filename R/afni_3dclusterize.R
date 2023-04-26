@@ -844,7 +844,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
           temp_clust_1d <- tempfile(pattern = "tmpclust", fileext = ".1D")
           temp_clust_nii <- tempfile(pattern = "tmpclust", fileext = ".nii.gz")
 
-          runFSLCommand(glue("fslmaths {private$pvt_pref_map} -uthr {roi_val} -thr {roi_val} -bin {temp_mask}"))
+          run_fsl_command(glue("fslmaths {private$pvt_pref_map} -uthr {roi_val} -thr {roi_val} -bin {temp_mask}"))
 
           # clusterize within mask
           sobj$mask <- temp_mask

@@ -60,7 +60,7 @@ voxelwise_deconvolution <- function(
     epsilon = .005, #convergence criterion (default)
     beta = 60, #best from Bush 2015 update
     kernel = spm_hrf(TR)$hrf, #canonical SPM difference of gammas
-    n_resample = 25)) { #for Bush 2015 only
+    n_resample = 25), afni_dir=NULL) { #for Bush 2015 only
 
   sapply(niftis, checkmate::assert_file_exists)
   checkmate::assert_data_frame(add_metadata, nrows=length(niftis), null.ok=TRUE)
@@ -174,9 +174,9 @@ voxelwise_deconvolution <- function(
       dump_out <- tempfile()
       
       if(!is.null(afni_dir)){
-        afnistat <- runAFNICommand(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]), afnidir = afni_dir)
+        afnistat <- run_afni_command(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]), afnidir = afni_dir)
       } else{
-        afnistat <- runAFNICommand(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]))
+        afnistat <- run_afni_command(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]))
       }
       ts_out <- data.table::fread(dump_out) #read time series
 
