@@ -27,6 +27,9 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
     gpa$sqlite_con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
   }
 
+  # final checks on compute environment now that we're running inside the compute environment
+  test_compute_environment(gpa, stop_on_fail=TRUE)
+
   # l1 models must be specified to get started (hard enforcement)
   if (!checkmate::test_class(gpa$l1_models, "l1_model_set")) {
     msg <- "Could not find valid $l1_models specification in gpa. Be sure to run build_l1_models() before proceeding!"

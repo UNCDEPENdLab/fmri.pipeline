@@ -118,7 +118,7 @@ get_compute_environment <- function(gpa, what="all") {
 
 # write a small test script for the programs used in the compute environment
 # currently capable of testing FSL, R, and AFNI
-test_compute_environment <- function(gpa, what="all") {
+test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
   #"set -x",
   prog_str <- c(
     "#!/bin/bash", "checks_passed=1", "",
@@ -181,7 +181,7 @@ test_compute_environment <- function(gpa, what="all") {
     prog_str,
     "
     if [ $checks_passed -eq 0 ]; then
-      echo 'One or more checks failed. Please fix the problems!'
+      echo 'One or more checks failed.'
       exit 1
     else
       echo 'All checks passed. Please still verify that the program locations match your expectations!'
@@ -195,7 +195,11 @@ test_compute_environment <- function(gpa, what="all") {
   cat(res, sep = "\n")
   exit_code <- attr(res, "status")
   if (!is.null(exit_code) && exit_code == 1) {
-    stop("One or more problems were detected in the compute environment. Setup cannot continue.")
+    if (stop_on_fail) {
+      stop("One or more problems were detected in the compute environment. Setup cannot continue.")
+    } else {
+      warning("One or more problems were detected in the compute environment. The pipeline may fail if these are not resolved.")
+    }
   }
 }
 
