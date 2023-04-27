@@ -120,7 +120,25 @@ R_batch_job <- R6::R6Class("batch_job",
 
     # write code to be executed
     write_compute_file = function() {
-      syntax <- c()
+      syntax <- c(
+        "cat(paste('Job start time:', Sys.time(), '\n'))"
+      )
+
+      if (isTRUE(self$print_session_info)) {
+        syntax <- c(
+          syntax,
+          "print(sessionInfo())",
+          "print(Sys.info())"
+        )
+      }
+
+      if (isTRUE(self$print_environment)) {
+        syntax <- c(
+          syntax,
+          "print(Sys.getenv())"
+        )
+      }
+
       if (!is.null(self$r_packages)) {
         syntax <- c(
           syntax,
@@ -172,6 +190,10 @@ R_batch_job <- R6::R6Class("batch_job",
             self$post_children_r_code
           )
         }
+
+        syntax <- c(
+          "cat(paste('Job end time:', Sys.time(), '\n'))"
+        )
       }
       message("Writing R script to: ", private$get_compute_file_name())
       writeLines(syntax, con = private$get_compute_file_name())
@@ -267,6 +289,14 @@ R_batch_job <- R6::R6Class("batch_job",
     #'    This is mostly relevant to the 'local' scheduler.
     repolling_interval = 300, # seconds
 
+    #' @field print_session_info If TRUE, print the `sessionInfo()` and `Sys.info()` when the job starts. Useful for debugging
+    #'   problems with the compute environment or R installation.
+    print_session_info = TRUE,
+
+    #' @field print_environment If TRUE, print the `Sys.getenv()` when the job starts. This can produce a lot of output,
+    #'   but can be useful if certain environment variables are not being found when your job runs, leading it to fail.
+    print_environment = FALSE,
+
     #' @description Create a new R_batch_job object for execution on an HPC cluster
     #' @param batch_directory The location of batch scripts to be generated
     #' @param parent_jobs A vector of one or more job ids that are parents to this job. This can be a named vector, to
@@ -292,11 +322,14 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param output_rdata_file The name of the environment to be saved at the end of the R batch execution
     #' @param scheduler_options A character vector of scheduler options to be added to the header of the batch script
     #' @param repolling_interval The number of seconds to wait before rechecking whether parent jobs have completed
+    #' @param print_session_info If TRUE (default), print information about the R environment `sessionInfo()` and
+    #'   compute environment `Sys.info()` when the job starts.
+    #' @param print_environment If TRUE, print the session environment via `Sys.getenv()` when the job starts. Default: FALSE.
     initialize = function(batch_directory = NULL, parent_jobs = NULL, job_name = NULL, n_nodes = NULL, n_cpus = NULL,
                           wall_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL, r_script = NULL,
                           post_children_r_code = NULL, batch_code = NULL, r_packages = NULL, scheduler = NULL, wait_for_children = NULL,
                           input_rdata_file = NULL, input_objects = NULL, output_rdata_file = NULL,
-                          scheduler_options = NULL, repolling_interval = NULL) {
+                          scheduler_options = NULL, repolling_interval = NULL, print_session_info = TRUE, print_environment = FALSE) {
 
       if (!is.null(batch_directory)) {
         self$batch_directory <- batch_directory
@@ -403,6 +436,14 @@ R_batch_job <- R6::R6Class("batch_job",
         stopifnot(wait_for_children == TRUE) # don't let the user try it
         checkmate::assert_multi_class(post_children_r_code, c("expression", "character"))
         self$post_children_r_code <- as.character(post_children_r_code)
+      }
+
+      if (checkmate::test_logical(print_session_info, len=1L)) {
+        self$print_session_info <- print_session_info
+      }
+
+      if (checkmate::test_logical(print_environment, len=1L)) {
+        self$print_environment <- print_environment
       }
     },
 
