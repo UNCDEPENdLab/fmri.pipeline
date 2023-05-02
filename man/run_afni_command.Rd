@@ -17,13 +17,17 @@ run_afni_command(
 \arguments{
 \item{args}{AFNI command string to be run}
 
-\item{afnidir}{Location of AFNI installation. If NULL, the function will serach the environment for AFNIDIF}
+\item{afnidir}{Location of AFNI installation. If NULL, the function will search the environment for AFNIDIR or afni on PATH}
 
-\item{stdout}{File target for redirecting stdout. If NULL, stdout will not be captured}
+\item{stdout}{File target for redirecting stdout. If NULL, stdout will not be written to file.}
 
-\item{stderr}{File target for redirecting stderr. If NULL, stderr will not be captured}
+\item{stderr}{File target for redirecting stderr. If NULL, stderr will not be written to file.}
 
-\item{echo}{Whether to print AFNI command to the screen}
+\item{echo}{Whether to print AFNI command to the screen. Default: TRUE}
+
+\item{omp_num_threads}{sets the number of OpenMP threads used for this AFNI command (if supported)}
+
+\item{...}{Arguments passed through to the `system` command.}
 }
 \value{
 The exit status of the executed AFNI command. 0 for success, non-zero for failure
@@ -32,12 +36,12 @@ The exit status of the executed AFNI command. 0 for success, non-zero for failur
 Wrapper for running an AFNI command safely within R
 }
 \details{
-This command ensures that AFNI comamnds are in the system PATH
+This command ensures that AFNI commands are run in an environment that is setup correctly
 }
 \examples{
 
 \dontrun{
-runAFNICommand("3dcopy test_data copy_data")
+run_afni_command("3dcopy test_data copy_data")
 }
 }
 \author{

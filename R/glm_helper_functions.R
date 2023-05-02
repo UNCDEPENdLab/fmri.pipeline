@@ -1,18 +1,18 @@
-#cutting down on redundancy across glm setup scripts
-
 #' Wrapper for running an AFNI command safely within R
 #'
 #' @param args AFNI command string to be run
-#' @param afnidir Location of AFNI installation. If NULL, the function will serach the environment for AFNIDIF
-#' @param stdout File target for redirecting stdout. If NULL, stdout will not be captured
-#' @param stderr File target for redirecting stderr. If NULL, stderr will not be captured
-#' @param echo Whether to print AFNI command to the screen
+#' @param afnidir Location of AFNI installation. If NULL, the function will search the environment for AFNIDIR or afni on PATH
+#' @param stdout File target for redirecting stdout. If NULL, stdout will not be written to file.
+#' @param stderr File target for redirecting stderr. If NULL, stderr will not be written to file.
+#' @param echo Whether to print AFNI command to the screen. Default: TRUE
+#' @param omp_num_threads sets the number of OpenMP threads used for this AFNI command (if supported)
+#' @param ... Arguments passed through to the `system` command.
 #'
 #' @return The exit status of the executed AFNI command. 0 for success, non-zero for failure
 #'
 #' @details
 #'
-#' This command ensures that AFNI comamnds are in the system PATH
+#' This command ensures that AFNI commands are run in an environment that is setup correctly
 #'
 #' @author Michael Hallquist
 #' @export
@@ -25,23 +25,34 @@
 run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo = TRUE, omp_num_threads=1L, ...) {
   checkmate::assert_string(args, null.ok = FALSE)
   checkmate::assert_string(afnidir, null.ok = TRUE)
-  checkmate::assert_logical(echo, len = 1L)
   if (!is.null(afnidir)) checkmate::assert_directory_exists(afnidir)
-  checkmate::assert_integerish(omp_num_threads, lower=1, len=1)
-  #look for AFNIDIR in system environment if not passed in
+
+  checkmate::assert_string(stdout, null.ok = TRUE)
+  checkmate::assert_string(stderr, null.ok = TRUE)
+  checkmate::assert_logical(echo, len = 1L)
+  checkmate::assert_integerish(omp_num_threads, lower = 1, len = 1)
+
   if (is.null(afnidir)) {
-    env <- system("env", intern=TRUE)
-    if (length(afnidir <- grep("^AFNIDIR=", env, value=TRUE)) > 0L) {
-      afnidir <- sub("^AFNIDIR=", "", afnidir)
-    } else {
-      warning("AFNIDIR not found in environment. Defaulting to ", paste0(normalizePath("~/"), "/afni"))
-      afnidir <- paste0(normalizePath("~/"), "/afni")
+    # look for AFNIDIR in system environment if not passed in
+    afnidir <- Sys.getenv("AFNIDIR")
+    if (isFALSE(nzchar(afnidir))) {
+      # look for location of afni binary on PATH
+      afni_loc <- system("command -v afni", intern = TRUE)
+      exit_code <- attr(afni_loc, "status")
+      if (!is.null(exit_code) && exit_code == 1) {
+        warning("Could not find afni using AFNIDIR or system PATH. Defaulting to ", paste0(normalizePath("~/"), "/abin"))
+        afnidir <- paste0(normalizePath("~/"), "/abin")
+      } else {
+        afnidir <- dirname(afni_loc)
+      }
     }
   }
 
+  checkmate::assert_file_exists(file.path(afnidir, "afni")) # make sure afni actually exists in this folder
+
   cur_threads <- Sys.getenv("OMP_NUM_THREADS")
   if (omp_num_threads > 1L) {
-    if (isTRUE(echo)) { cat("Setting OMP_NUM_THREADS to:", omp_num_threads, "\n") }
+    if (isTRUE(echo)) cat("Setting OMP_NUM_THREADS to:", omp_num_threads, "\n")
     Sys.setenv(OMP_NUM_THREADS = omp_num_threads) # setup OMP threads
   }
   Sys.setenv(AFNIDIR=afnidir) #export to R environment
@@ -49,7 +60,7 @@ run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo 
   afnicmd  <- paste0(afnisetup, args)
   if (!is.null(stdout)) afnicmd <- paste(afnicmd, ">", stdout)
   if (!is.null(stderr)) afnicmd <- paste(afnicmd, "2>", stderr)
-  if (echo) cat("AFNI command:", afnicmd, "\n")
+  if (isTRUE(echo)) cat("AFNI command:", afnicmd, "\n")
   retcode <- system(afnicmd, ...)
   if (omp_num_threads > 1L && cur_threads != "") {
     Sys.setenv(OMP_NUM_THREADS = cur_threads) # reset threads
@@ -58,37 +69,75 @@ run_afni_command <- function(args, afnidir=NULL, stdout=NULL, stderr=NULL, echo 
 }
 
 
-#wrapper for running an fsl command safely within R
-#if FSL does not have its configuration setup properly, commands such as feat don't work, or hang strangely
-run_fsl_command <- function(args, fsldir=NULL, stdout=NULL, stderr=NULL) {
-  #look for FSLDIR in system environment if not passed in
-  if (is.null(fsldir)) {
-    #check for FSLDIR in sourced .bashrc
-    bashrc_fsldir <- character(0)
-    if (file.exists("~/.profile")) {
-      bashrc_fsldir <- system("source ~/.profile && echo $FSLDIR", intern=TRUE)
-    }
+#' Wrapper for running an FSL command safely within R
+#'
+#' @param args FSL command string to be run
+#' @param fsldir Location of FSL installation. If NULL, the function will search the environment for FSLDIR or FSL commands in the PATH
+#' @param stdout File target for redirecting stdout. If NULL, stdout will not be captured
+#' @param stderr File target for redirecting stderr. If NULL, stderr will not be captured
+#' @param echo Whether to print FSL command to the screen. Default: TRUE
+#' @param ... Arguments passed through to the `system` command.
+#'
+#' @return The exit status of the executed FSL command. 0 for success, non-zero for failure
+#'
+#' @details
+#'
+#' This command ensures that FSL command are run in an environment with FSL setup correctly.
+#'
+#' @author Michael Hallquist
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' run_fsl_command("fslmaths test_data copy_data")
+#' }
+run_fsl_command <- function(args, fsldir = NULL, stdout = NULL, stderr = NULL, echo = TRUE, ...) {
+  checkmate::assert_string(args, null.ok = FALSE)
+  checkmate::assert_string(fsldir, null.ok = TRUE)
+  if (!is.null(fsldir)) checkmate::assert_directory_exists(fsldir)
 
-    #check for FSLDIR in current environment
-    env <- system("env", intern=TRUE)
-    if (length(fsldir <- grep("^FSLDIR=", env, value=TRUE)) > 0L) {
-      fsldir <- sub("^FSLDIR=", "", fsldir)
-    } else if (!identical(bashrc_fsldir, character(0))) {
-      fsldir <- bashrc_fsldir
-    } else {
-      warning("FSLDIR not found in environment. Defaulting to /usr/local/fsl.")
-      fsldir <- "/usr/local/fsl"
+  checkmate::assert_string(stdout, null.ok = TRUE)
+  checkmate::assert_string(stderr, null.ok = TRUE)
+  checkmate::assert_logical(echo, len = 1L)
+
+  if (is.null(fsldir)) {
+    # look for FSLDIR in system environment if not passed in
+    fsldir <- Sys.getenv("FSLDIR")
+    if (isFALSE(nzchar(fsldir))) {
+      # check for FSLDIR in .bashrc or .profile
+      bashrc_fsldir <- ""
+      if (file.exists("~/.profile")) {
+        bashrc_fsldir <- system("source ~/.profile && echo $FSLDIR", intern = TRUE)
+      }
+
+      if (nzchar(bashrc_fsldir) && file.exists("~/.bashrc")) {
+        bashrc_fsldir <- system("source ~/.bashrc && echo $FSLDIR", intern = TRUE)
+      }
+
+      # Fallback: look for location of fsl feat on PATH
+      if (nzchar(bashrc_fsldir)) {
+        feat_loc <- system("command -v feat", intern = TRUE)
+        exit_code <- attr(feat_loc, "status")
+        if (!is.null(exit_code) && exit_code == 1) {
+          warning("Could not find FSL using FSLDIR or system PATH. Defaulting to Defaulting to /usr/local/fsl.")
+          fsldir <- "/usr/local/fsl"
+        } else {
+          fsldir <- dirname(dirname(feat_loc))
+        }
+      }
     }
   }
 
+  checkmate::assert_file_exists(file.path(fsldir, "bin", "feat")) # make sure FSL actually exists in this folder
+
   #Sys.setenv(LD_LIBRARY_PATH="/gpfs/group/mnh5174/default/sw/openblas/lib")
   Sys.setenv(FSLDIR=fsldir) #export to R environment
-  fslsetup=paste0("FSLDIR=", fsldir, "; PATH=${FSLDIR}/bin:${PATH}; . ${FSLDIR}/etc/fslconf/fsl.sh; ${FSLDIR}/bin/")
-  fslcmd=paste0(fslsetup, args)
-  if (!is.null(stdout)) fslcmd=paste(fslcmd, ">", stdout)
-  if (!is.null(stderr)) fslcmd=paste(fslcmd, "2>", stderr)
-  cat("FSL command: ", fslcmd, "\n")
-  retcode <- system(fslcmd)
+  fslsetup <- paste0("FSLDIR=", fsldir, "; PATH=${FSLDIR}/bin:${PATH}; . ${FSLDIR}/etc/fslconf/fsl.sh; ${FSLDIR}/bin/")
+  fslcmd <- paste0(fslsetup, args)
+  if (!is.null(stdout)) fslcmd <- paste(fslcmd, ">", stdout)
+  if (!is.null(stderr)) fslcmd <- paste(fslcmd, "2>", stderr)
+  if (isTRUE(echo)) cat("FSL command: ", fslcmd, "\n")
+  retcode <- system(fslcmd, ...)
   return(retcode)
 }
 
@@ -1722,7 +1771,7 @@ setdiff_list_combn <- function(l) {
 #' @details The files should generally have a name like
 #'   sub-220256_task-ridl3_space-MNI152NLin2009cAsym_desc-preproc_bold_postprocessed.nii.gz
 #'   and be located in a folder like: /proj/mnhallqlab/proc_data/sub-220256/func/
-#'   where 'func' is the \code{modality}, 'task' is the \code{type], 'ridl' is the \code{task_name}, and
+#'   where 'func' is the \code{modality}, 'task' is the \code{type}, 'ridl' is the \code{task_name}, and
 #'   '_postprocessed' is the \code{suffix}.
 #' @importFrom dplyr bind_rows
 #' @export

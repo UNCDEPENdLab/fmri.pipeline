@@ -18,7 +18,8 @@ voxelwise_deconvolution(
   save_original_ts = TRUE,
   algorithm = "bush2011",
   decon_settings = list(nev_lr = 0.01, epsilon = 0.005, beta = 60, kernel =
-    spm_hrf(TR)$hrf, n_resample = 25)
+    spm_hrf(TR)$hrf, n_resample = 25),
+  afni_dir = NULL
 )
 }
 \arguments{
@@ -54,9 +55,9 @@ version of the algorithm to support whole-brain processing.}
 \item{decon_settings}{A list of settings passed to the deconvolution algorithm. If you have a compiled deconvolvefilter binary,
 pass it as \code{bush2011_binary}, which will be used in deconvolution.}
 
-\item{atlas}{an optional character vector specifying voxels used in deconvolution. If omitted, perform whole-brain deconvolution}
-
 \item{afni_dir}{Full path to directory containing AFNI binaries (this function uses 3dMaskdump).}
+
+\item{atlas}{an optional character vector specifying voxels used in deconvolution. If omitted, perform whole-brain deconvolution}
 }
 \value{
 Nothing (invisible NULL).

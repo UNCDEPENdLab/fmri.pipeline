@@ -166,11 +166,12 @@ The function outputs a list containing key aspects of the fMRI design, including
 the unconvolved and convolved regressors, collinearity diagnostics, the number of volumes
 modeled in each run, and a plot of the design.
 
-The basic logic of the inputs to build_design_matrix is that task-related fMRI designs are organized around a set of events that occur in time and
-have a specific duration. Furthermore, for a given event, it could be a 0/1 non-occurrence versus occurrence representation, \emph{or} the event could
-be associated with a specific parametric value such as working memory load, reward prediction error, or expected value. These parametric effects
-are aligned in time with an event, but there may be multiple predictions for a given event. For example, we may align a 0/1 regressor and a
-reward prediction error the outcome phase of a task.
+The basic logic of the inputs to build_design_matrix is that task-related fMRI designs are organized around a set of events
+that occur in time and have a specific duration. Furthermore, for a given event, it could be a 0/1 non-occurrence versus
+occurrence representation, \emph{or} the event could be associated with a specific parametric value such as working memory
+load, reward prediction error, or expected value. These parametric effects are aligned in time with an event, but there
+may be multiple predictions for a given event. For example, we may align a 0/1 regressor and a reward prediction error
+the outcome phase of a task.
 
 Thus, the function abstracts timing-related information into \code{events} and signals, whether parametric or binary, into the \code{signals}.
 

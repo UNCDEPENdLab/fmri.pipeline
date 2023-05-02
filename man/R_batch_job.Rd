@@ -68,6 +68,12 @@ or #PBS headings, depending on the scheduler, and are ignored if the scheduler i
 
 \item{\code{repolling_interval}}{The number of seconds to wait between successive checks on whether parent jobs have completed.
 This is mostly relevant to the 'local' scheduler.}
+
+\item{\code{print_session_info}}{If TRUE, print the `sessionInfo()` and `Sys.info()` when the job starts. Useful for debugging
+problems with the compute environment or R installation.}
+
+\item{\code{print_environment}}{If TRUE, print the `Sys.getenv()` when the job starts. This can produce a lot of output,
+but can be useful if certain environment variables are not being found when your job runs, leading it to fail.}
 }
 \if{html}{\out{</div>}}
 }
@@ -111,7 +117,9 @@ Create a new R_batch_job object for execution on an HPC cluster
   input_objects = NULL,
   output_rdata_file = NULL,
   scheduler_options = NULL,
-  repolling_interval = NULL
+  repolling_interval = NULL,
+  print_session_info = TRUE,
+  print_environment = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -162,6 +170,11 @@ This is mutually exclusive with input_rdata_file at present.}
 \item{\code{scheduler_options}}{A character vector of scheduler options to be added to the header of the batch script}
 
 \item{\code{repolling_interval}}{The number of seconds to wait before rechecking whether parent jobs have completed}
+
+\item{\code{print_session_info}}{If TRUE (default), print information about the R environment `sessionInfo()` and
+compute environment `Sys.info()` when the job starts.}
+
+\item{\code{print_environment}}{If TRUE, print the session environment via `Sys.getenv()` when the job starts. Default: FALSE.}
 }
 \if{html}{\out{</div>}}
 }

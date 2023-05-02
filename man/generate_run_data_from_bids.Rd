@@ -31,5 +31,9 @@ a data.frame containing all run_nifti and confound_input_file results for subjec
 initial function to generate a run_data object from a BIDS-compliant folder
 }
 \details{
-
+The files should generally have a name like
+  sub-220256_task-ridl3_space-MNI152NLin2009cAsym_desc-preproc_bold_postprocessed.nii.gz
+  and be located in a folder like: /proj/mnhallqlab/proc_data/sub-220256/func/
+  where 'func' is the \code{modality}, 'task' is the \code{type}, 'ridl' is the \code{task_name}, and
+  '_postprocessed' is the \code{suffix}.
 }
