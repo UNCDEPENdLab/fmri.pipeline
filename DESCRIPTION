@@ -52,7 +52,9 @@ Imports:
     tidyselect,
     yaml
 Suggests:
-  brms
+    brms,
+    testthat (>= 3.0.0)
 LinkingTo:
     Rcpp,
     RcppArmadillo
+Config/testthat/edition: 3
