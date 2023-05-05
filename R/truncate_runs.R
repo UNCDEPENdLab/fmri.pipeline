@@ -61,7 +61,7 @@ truncate_runs <- function(mr_df, gpa = NULL, subj_outdir = NULL, truncation_data
       } else if (checkmate::test_logical(last_volume)) {
         # if we have a vector of logicals (more common, probably), find the volume before the first TRUE occurs
         # only truncate if any of the volumes evaluates to TRUE in the truncation expression (otherwise stick with default of last volume)
-        if (any(last_volume == TRUE)) {
+        if (any(last_volume == TRUE, na.rm=TRUE)) {
           last_volume <- min(which(last_volume == TRUE)) - 1
         } else {
           last_volume <- run_volumes
@@ -74,7 +74,7 @@ truncate_runs <- function(mr_df, gpa = NULL, subj_outdir = NULL, truncation_data
           last_volume, run_volumes, run_volumes
         )
         last_volume <- run_volumes
-      } else if (last_volume < 3) {
+      } else if (last_volume < 10) {
         lg$warn("truncate_run expression evaluated to %d, which is awfully low! Falling back to %d", last_volume, mr_df$run_volumes)
         last_volume <- run_volumes
       }

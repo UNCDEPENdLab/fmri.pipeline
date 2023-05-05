@@ -4,10 +4,12 @@
 \alias{populate_last_events}
 \title{Internal function to add last_onset and last_offset columns to gpa$run_data based on events in l1_models}
 \usage{
-populate_last_events(gpa)
+populate_last_events(gpa, lg)
 }
 \arguments{
 \item{gpa}{a \code{glm_pipeline_arguments} object containing valid $run_data and $l1_models objects}
+
+\item{lg}{a Logger object for logging results}
 }
 \value{
 a modified copy of gpa with $run_data populated with last_offset and last_onset columns (times in seconds)

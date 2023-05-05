@@ -604,11 +604,12 @@ names_to_internal <- function(df, vm) {
 
   # convert variable names to internal constructs via the variable mapping
   vm_present <- vm[which(vm %in% nm)]
-  vm_pos <- sapply(vm_present, function(x) { which(nm == x)[1] })
-  nm[vm_pos] <- names(vm_present)
+  if (length(vm_present) > 0L) {
+    vm_pos <- sapply(vm_present, function(x) which(nm == x)[1])
+    nm[vm_pos] <- names(vm_present)
+  }
 
   return(nm)
-
 }
 
 #' small helper function to pull absolute paths to a given column in run_data or trial_data
@@ -722,23 +723,39 @@ calculate_subject_exclusions <- function(gpa) {
 
 #' Internal function to add last_onset and last_offset columns to gpa$run_data based on events in l1_models
 #' @param gpa a \code{glm_pipeline_arguments} object containing valid $run_data and $l1_models objects
+#' @param lg a Logger object for logging results
 #' @details The last_onset and last_offset columns are calculated for each run based on the timing of all
 #'   events in the $l1_models$events list. These are then used to facilitate run truncation if the user
 #'   requests truncation after a final onset or offset.
 #' @return a modified copy of gpa with $run_data populated with last_offset and last_onset columns (times in seconds)
 #' @keywords internal
 #' @importFrom dplyr summarize group_by left_join
-populate_last_events <- function(gpa) {
+populate_last_events <- function(gpa, lg) {
   # get all events as a long data.frame
   m_events <- data.table::rbindlist(lapply(gpa$l1_models$events, function(this_event) this_event$data))
+
+  # default to 0 ISI if column is missing (shouldn't happen under normal circumstances)
+  if (!"isi" %in% names(m_events)) m_events[, isi := 0]
+
+  # convert NA values for ISI to zero with message
+  na_isi <- is.na(m_events$isi)
+
+  if (all(na_isi)) {
+    lg$debug("In populate_last_events, all ISIs are NA. Converting to 0")
+    m_events[, isi := 0]
+  } else if (any(na_isi)) {
+    lg$debug("Changing NA ISIs to 0 for the following cases: ")
+    lg$debug("%s", capture.output(print(m_events[na_isi, c("id", "session", "run_number", "event", "trial")], nrows = 1e5)))
+    m_events$isi[na_isi] <- 0
+  }
 
   last_events <- m_events %>%
     group_by(id, session, run_number) %>%
     dplyr::summarize(
       last_event_idx = which.max(onset),
-      last_event = event[last_event_idx],      
+      last_event = event[last_event_idx],
       last_onset = max(onset, na.rm = TRUE), 
-      last_offset = max(onset + duration, na.rm = TRUE), 
+      last_offset = max(onset + duration, na.rm = TRUE),
       last_isi = isi[last_event_idx],
       .groups="drop")
 

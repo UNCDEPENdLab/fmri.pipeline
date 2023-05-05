@@ -474,7 +474,7 @@ finalize_confound_settings <- function(gpa, lg) {
   # }, mc.cores = gpa$parallel$finalize_cores)
 
   # add onset + offset + isi data to run_data so that get_l1_confounds can handle run truncation appropriately
-  gpa <- populate_last_events(gpa)
+  gpa <- populate_last_events(gpa, lg)
 
   # for each run, calculate confounds, exclusions, and truncation
   run_list <- lapply(seq_len(nrow(gpa$run_data)), function(ii) {

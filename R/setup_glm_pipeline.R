@@ -60,7 +60,8 @@
 #'
 #' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
 #'    test_string test_class
-#' @importFrom dplyr mutate_at group_by select vars inner_join filter count is_grouped_df ungroup
+#' @importFrom dplyr mutate_at group_by select vars inner_join filter count is_grouped_df ungroup n_distinct
+#' @importFrom tidyselect everything
 #' @export
 setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm",
                                output_directory = file.path(getwd(), analysis_name),
@@ -101,6 +102,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                  feat_l1_args = list(z_thresh = 1.96, prob_thresh = .05)
                                ),
                                lgr_threshold = "info") {
+
   checkmate::assert_string(analysis_name) # must be scalar string
   checkmate::assert_subset(scheduler, c("slurm", "sbatch", "torque", "qsub", "local", "sh"), empty.ok = FALSE)
   checkmate::assert_data_frame(subject_data, null.ok = TRUE)
@@ -154,24 +156,8 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   default_vm[names(vm)] <- vm # override defaults with user inputs
   vm <- default_vm # reassign full vm
 
-  # having trial_data as grouped can cause problems (e.g., having the grouping variable unexpectedly come back as a column in select)
-  if (is_grouped_df(trial_data)) trial_data <- trial_data %>% ungroup()
-
-  # code default session of 1, if missing
-  if (!vm["session"] %in% names(trial_data)) {
-    trial_data[[vm["session"]]] <- 1
-  }
-
-  # code default run of 1, if missing
-  if (!vm["run_number"] %in% names(trial_data)) {
-    trial_data[[vm["run_number"]]] <- 1
-  }
-
-  # enforce id column in trial_data
-  stopifnot(vm["id"] %in% names(trial_data))
-
-  # rename columns of trial data frame to use internal nomenclature (trial_data modified in place)
-  names(trial_data) <- names_to_internal(trial_data, vm)
+  # validate completeness of trial data
+  trial_data <- validate_input_data(trial_data, vm, lg, level="trial")
 
   # whether to run a 2-level or 3-level analysis
   multi_run <- ifelse(length(unique(trial_data$run_number)) > 1L, TRUE, FALSE)
@@ -179,71 +165,55 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   # create run data, if needed
   if (is.null(run_data)) {
     lg$info("Distilling run_data object from trial_data by finding variables that vary at run level")
+    idcols <- vm[c("id", "session", "run_number")]
 
     variation_df <- trial_data %>%
-      group_by(id, session, run_number) %>%
-      mutate_at(vars(everything()), ~ length(unique(.))) %>%
-      ungroup()
+      dplyr::select(-!!idcols) %>%
+      aggregate(by = trial_data[, idcols], FUN = n_distinct)
 
     # should include the id and run columns
     one_cols <- names(which(sapply(variation_df, function(col) {
       all(col == 1)
     }) == TRUE))
 
-    lg$info(paste0("Retaining columns: ", paste(one_cols, collapse = ", ")))
+    keepcols <- union(idcols, one_cols)
+    lg$info("Retaining columns: %s", paste(keepcols, collapse = ", "))
 
-    # at present, this will keep all subject-level covariates, too. Maybe correct later?
-    run_data <- trial_data %>%
-      select(!!one_cols) %>%
-      group_by(id, session, run_number) %>%
-      filter(row_number() == 1) %>%
-      ungroup()
-  } else {
-    # if we are working from an external run_data object, rename variables
-    # rename columns of run data frame to use internal nomenclature
-    names(run_data) <- names_to_internal(run_data, vm)
+    # Retain first row for each combination of idcols, keep all columns that vary at run level
+    run_data <- trial_data[!duplicated(trial_data[, keepcols]), keepcols, drop=FALSE]
   }
 
-  # having run_data as grouped can cause problems (e.g., having the grouping variable unexpectedly come back as a column in select)
-  if (is_grouped_df(run_data)) run_data <- run_data %>% ungroup()
-
-  stopifnot("id" %in% names(run_data))
-  if (!"session" %in% names(run_data)) run_data$session <- 1
+  # check completeness of run data and correct any data expectation problems
+  run_data <- validate_input_data(run_data, vm, lg, level="run")
 
   # create subject data
   if (is.null(subject_data)) {
     lg$info("Distilling subject_data object from trial_data by finding variables that vary at subject level")
+    idcols <- vm[c("id", "session")]
 
     variation_df <- trial_data %>%
-      group_by(id, session) %>%
-      mutate_at(vars(everything()), ~ length(unique(.))) %>%
-      ungroup()
+      dplyr::select(-!!idcols) %>%
+      aggregate(by = trial_data[, idcols], FUN = n_distinct)
 
     # should include the id column itself
     one_cols <- names(which(sapply(variation_df, function(col) {
       all(col == 1)
     }) == TRUE))
 
-    message("Retaining columns: ", paste(one_cols, collapse = ", "))
+    keepcols <- union(idcols, one_cols)
+    lg$info("Retaining columns: ", paste(one_cols, collapse = ", "))
 
-    subject_data <- trial_data %>%
-      select(!!one_cols) %>%
-      group_by(id, session) %>%
-      filter(row_number() == 1) %>%
-      ungroup()
-  } else {
-    # if we are working from an external run_data object, rename variables
-    # rename columns of run data frame to use internal nomenclature (run_data modified in place)
-    names(subject_data) <- names_to_internal(subject_data, vm)
+    # Retain first row for each combination of idcols, keep all columns that vary at subject level
+    subject_data <- trial_data[!duplicated(trial_data[, keepcols]), keepcols, drop = FALSE]
   }
 
-  # having subject_data as grouped can cause problems (e.g., having the grouping variable unexpectedly come back as a column in select)
-  if (is_grouped_df(subject_data)) subject_data <- subject_data %>% ungroup()
+  # check completeness of subject data and correct any data expectation problems
+  subject_data <- validate_input_data(subject_data, vm, lg, level="subject")
 
-  # can't really get traction without this!
-  stopifnot("mr_dir" %in% names(subject_data))
-  stopifnot("id" %in% names(subject_data))
-  if (!"session" %in% names(subject_data)) subject_data$session <- 1
+  # convert all names to internal conventions from this point forward
+  names(trial_data) <- names_to_internal(trial_data, vm)
+  names(run_data) <- names_to_internal(run_data, vm)
+  names(subject_data) <- names_to_internal(subject_data, vm)
 
   # TODO: should probably look at names in subject, run, and trial data to make sure they all line up
 
@@ -356,4 +326,32 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   test_compute_environment(gpa, stop_on_fail=FALSE)
 
   return(gpa)
+}
+
+# helper function to verify contents of subject, trial, and run data
+validate_input_data <- function(df, vm, lg, level = "trial") {
+  checkmate::assert_data_frame(df)
+
+  # having a grouped data.frame can cause problems (e.g., having the grouping variable unexpectedly come back as a column in select)
+  if (is_grouped_df(df)) df <- df %>% ungroup()
+
+  # enforce id column in trial_data
+  if (!vm["id"] %in% names(df)) {
+    msg <- sprintf("Cannot find expected id column %s in %s data. Is your variable mapping (vm) correct?", vm["id"], level)
+    lg$error(msg)
+    stop(msg)
+  }
+
+  if (!vm["session"] %in% names(df)) {
+    lg$debug("Adding session = 1 to %s data", level)
+    df[[vm["session"]]] <- 1L
+  }
+
+  # for trial and run data, code default run_number of 1, if missing
+  if (level != "subject" && !vm["run_number"] %in% names(df)) {
+    lg$debug("Adding run_number = 1 to %s data", level)
+    df[[vm["run_number"]]] <- 1L
+  }
+
+  return(df)
 }
