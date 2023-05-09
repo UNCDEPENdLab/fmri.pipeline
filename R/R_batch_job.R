@@ -192,6 +192,7 @@ R_batch_job <- R6::R6Class("batch_job",
         }
 
         syntax <- c(
+          syntax,
           "cat(paste('Job end time:', Sys.time(), '\n'))"
         )
       }
