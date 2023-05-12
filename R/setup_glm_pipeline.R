@@ -159,9 +159,6 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   # validate completeness of trial data
   trial_data <- validate_input_data(trial_data, vm, lg, level="trial")
 
-  # whether to run a 2-level or 3-level analysis
-  multi_run <- ifelse(length(unique(trial_data$run_number)) > 1L, TRUE, FALSE)
-
   # create run data, if needed
   if (is.null(run_data)) {
     lg$info("Distilling run_data object from trial_data by finding variables that vary at run level")
@@ -214,6 +211,9 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   names(trial_data) <- names_to_internal(trial_data, vm)
   names(run_data) <- names_to_internal(run_data, vm)
   names(subject_data) <- names_to_internal(subject_data, vm)
+
+  # whether to run a 2-level or 3-level analysis
+  multi_run <- ifelse(length(unique(trial_data$run_number)) > 1L, TRUE, FALSE)
 
   # TODO: should probably look at names in subject, run, and trial data to make sure they all line up
 
