@@ -163,7 +163,7 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
 # calls sacct with a job list
 slurm_job_status <- function(job_ids = NULL, user = NULL, sacct_format = "jobid,submit,timelimit,start,end,state") {
   if (!is.null(job_ids)) {
-    jstring <- paste0("-j", paste(job_ids, collapse = ","))
+    jstring <- paste("-j", paste(job_ids, collapse = ","))
   } else {
     jstring <- ""
   }
