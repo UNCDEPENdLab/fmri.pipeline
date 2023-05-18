@@ -5,7 +5,7 @@ get_trial_df <- function(test_dir="/proj/mnhallqlab/projects/fmri.pipeline_test_
   return(trial_df)
 }
 
-get_subj_df <- function(test_dir = "pipeline_test_data") {
+get_subj_df <- function(test_dir = "/proj/mnhallqlab/projects/fmri.pipeline_test_data") {
   #subj_df <- data.table::fread(file.path(test_dir, "mmy3_demographics.tsv"), data.table = FALSE)
   subj_df <- read.table(file.path(test_dir, "mmy3_demographics.tsv"), header=TRUE)
   return(subj_df)
