@@ -1,11 +1,11 @@
 proj_dir <- "/proj/mnhallqlab/projects/fmri.pipeline_test_data"
 
-get_trial_df <- function(test_dir="/proj/mnhallqlab/projects/fmri.pipeline_test_data") {
+get_trial_df <- function(test_dir="testdata/sample_trial_data.csv") {
   trial_df <- data.table::fread(file.path(test_dir, "mmy3_trial_df_selective_groupfixed.csv"))
   return(trial_df)
 }
 
-get_subj_df <- function(test_dir = "/proj/mnhallqlab/projects/fmri.pipeline_test_data") {
+get_subj_df <- function(test_dir = "testdata/sample_subject_data.csv") {
   #subj_df <- data.table::fread(file.path(test_dir, "mmy3_demographics.tsv"), data.table = FALSE)
   subj_df <- read.table(file.path(test_dir, "mmy3_demographics.tsv"), header=TRUE)
   return(subj_df)
