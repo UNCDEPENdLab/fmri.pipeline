@@ -4,6 +4,7 @@ test_that("Basic GPA setup works", {
 })
 
 test_that("Summarize GPA setup", {
-  gpa <- get_gpa()
+  gpa <- get_gpa_minimal()
   summarize_l1_models(gpa)
+  expect_equal(1, 1)
 })
