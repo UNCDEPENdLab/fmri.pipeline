@@ -11,6 +11,20 @@ get_subj_df <- function(test_dir = "testdata/sample_subject_data.csv") {
   return(subj_df)
 }
 
+#' Provide a minimal instantiation of the gpa list
+#' 
+#' @return a minimal gpa list
+get_gpa_minimal <- function() {
+  setup_glm_pipeline(
+    analysis_name = "gpa_tests",
+    output_directory = tempdir(),
+    subject_data = data.frame(id=c(1, 2, 3)),
+    trial_data = data.frame(id=c(1, 2, 3)),
+    tr = 1.0,
+    l1_models=NULL
+  )
+}
+
 get_gpa <- function(
     scheduler = "slurm", drop_volumes = 2,
     exclude_run = "max(FD) > 5 | sum(FD > .9)/length(FD) > .10",
