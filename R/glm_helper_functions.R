@@ -1827,3 +1827,12 @@ generate_run_data_from_bids <- function(bids_dir, modality="func", type="task", 
 
   dplyr::bind_rows(slist)
 }
+
+
+#' Takes in a gpa list in any state and dumps its content to yaml format to be read in later.
+#' @param gpa the gpa list
+#' @importFrom dplyr
+#' @export
+dump_to_yaml <- function(gpa) {
+  FALSE
+}
