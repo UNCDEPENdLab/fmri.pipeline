@@ -56,6 +56,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// do_convolve
+arma::vec do_convolve(const arma::vec& input, const arma::vec& kernel, int phase, const int renorm);
+RcppExport SEXP _fmri_pipeline_do_convolve(SEXP inputSEXP, SEXP kernelSEXP, SEXP phaseSEXP, SEXP renormSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::vec& >::type input(inputSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type kernel(kernelSEXP);
+    Rcpp::traits::input_parameter< int >::type phase(phaseSEXP);
+    Rcpp::traits::input_parameter< const int >::type renorm(renormSEXP);
+    rcpp_result_gen = Rcpp::wrap(do_convolve(input, kernel, phase, renorm));
+    return rcpp_result_gen;
+END_RCPP
+}
 // dsigmoid
 arma::vec dsigmoid(const arma::vec& x, double beta);
 RcppExport SEXP _fmri_pipeline_dsigmoid(SEXP xSEXP, SEXP betaSEXP) {
@@ -65,6 +79,19 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const arma::vec& >::type x(xSEXP);
     Rcpp::traits::input_parameter< double >::type beta(betaSEXP);
     rcpp_result_gen = Rcpp::wrap(dsigmoid(x, beta));
+    return rcpp_result_gen;
+END_RCPP
+}
+// gammapdf
+arma::vec gammapdf(const arma::vec& vals, const float mu, const float var);
+RcppExport SEXP _fmri_pipeline_gammapdf(SEXP valsSEXP, SEXP muSEXP, SEXP varSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::vec& >::type vals(valsSEXP);
+    Rcpp::traits::input_parameter< const float >::type mu(muSEXP);
+    Rcpp::traits::input_parameter< const float >::type var(varSEXP);
+    rcpp_result_gen = Rcpp::wrap(gammapdf(vals, mu, var));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -109,7 +136,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_fmri_pipeline_convolve_cpp", (DL_FUNC) &_fmri_pipeline_convolve_cpp, 2},
     {"_fmri_pipeline_convolve_double_gamma", (DL_FUNC) &_fmri_pipeline_convolve_double_gamma, 6},
     {"_fmri_pipeline_deconvolve_nlreg", (DL_FUNC) &_fmri_pipeline_deconvolve_nlreg, 7},
+    {"_fmri_pipeline_do_convolve", (DL_FUNC) &_fmri_pipeline_do_convolve, 4},
     {"_fmri_pipeline_dsigmoid", (DL_FUNC) &_fmri_pipeline_dsigmoid, 2},
+    {"_fmri_pipeline_gammapdf", (DL_FUNC) &_fmri_pipeline_gammapdf, 3},
     {"_fmri_pipeline_generate_feature", (DL_FUNC) &_fmri_pipeline_generate_feature, 2},
     {"_fmri_pipeline_generate_feature_armadillo", (DL_FUNC) &_fmri_pipeline_generate_feature_armadillo, 2},
     {"_fmri_pipeline_sigmoid", (DL_FUNC) &_fmri_pipeline_sigmoid, 2},

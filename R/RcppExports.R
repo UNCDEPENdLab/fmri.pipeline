@@ -73,6 +73,22 @@ deconvolve_nlreg <- function(BOLDobs, kernel, nev_lr = .01, epsilon = .005, beta
     .Call(`_fmri_pipeline_deconvolve_nlreg`, BOLDobs, kernel, nev_lr, epsilon, beta, normalize, trim_kernel)
 }
 
+#' Internal port of fsl do_convolve
+#'
+#' @name do_convolve
+#' @param input the input
+#' @param kernel the kernel to convolve
+#' @param phase an integer for phase-shifting the HRF
+#' @param renorm boolean indicating whether to renormalize the output by the sum
+#' @return A vector containing the convolution of input and kernel
+#'
+#' @details This is an internal function used for testing alignment with FSL HRF convolution
+NULL
+
+do_convolve <- function(input, kernel, phase = 0L, renorm = TRUE) {
+    .Call(`_fmri_pipeline_do_convolve`, input, kernel, phase, renorm)
+}
+
 #' Dsigmoid transform
 #'
 #' @name dsigmoid
@@ -83,6 +99,10 @@ NULL
 
 dsigmoid <- function(x, beta = 1) {
     .Call(`_fmri_pipeline_dsigmoid`, x, beta)
+}
+
+gammapdf <- function(vals, mu, var) {
+    .Call(`_fmri_pipeline_gammapdf`, vals, mu, var)
 }
 
 #' This function creates K shifts of a neural events vector according to the kernel length, K.
