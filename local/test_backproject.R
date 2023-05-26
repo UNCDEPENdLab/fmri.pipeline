@@ -37,7 +37,7 @@ for (ff in rdfiles) {
   
   to_analyze <- to_analyze %>% left_join(orig) %>% 
     filter(term != "(Intercept)" & substr(term,1,3) != "sd_") #not interesting
-
+  
   backproject_medusa(to_analyze, brain_mask = mm, plot_cols=c("estimate", "statistic", "p.value", "p_fdr"),
                      parcel_col="roinum", ncpus=5,
                      time_col="t", effect_col="term", output_dir=odir)
@@ -72,9 +72,9 @@ library(microbenchmark)
 
 microbenchmark(
   baser={
-  png("test.png", res=300, width=8, height=8, units="in")
-  image(anat[,,70])
-  dev.off()
+    png("test.png", res=300, width=8, height=8, units="in")
+    image(anat[,,70])
+    dev.off()
   },
   ggplotr={
     vv <- reshape2::melt(anat)
@@ -86,97 +86,28 @@ microbenchmark(
   }
 )
 
+source("/Users/hallquist/Data_Analysis/r_packages/fmri.pipeline/R/ggbrain.R")
 
-#' Plot fMRI data on an underlay image
-#' 
-#' @param underlay a 3D nifti image used for the image underlay (default b/w)
-#' @param overlay a 4D nifti image used for plotting stats on underlay (color)
-#' @param color_col a position in the 4th dim of overlay use to color plots
-#' @param alpha_col a position in the 4th dim of overlay use to set alpha transparency of plots
-#' @param underlay_colorscale A ggplot scale_fill_* function call used for coloration of underlay
-#' @param overlay_colorscale A ggplot scale_fill_* function call used for coloration of overlay
-ggbrain <- function(underlay=NULL, overlay=NULL, 
-                    color_col=NULL, alpha_col=NULL,
-                    underlay_colorscale=scale_fill_gradient(low="grey10", high="grey90"),
-                    overlay_colorscale=scale_fill_gradient2(midpoint = 0, low = "blue", mid="grey90", high="red"),
-                    axial_slices=c(.25, .50, .75),
-                    sagittal_slices=c(.25, .50, .75),
-                    coronal_slices=c(.25, .50, .75),
-                    remove_null_space=TRUE
-                    )
+setwd("/Volumes/GoogleDrive/My Drive/SCEPTIC_fMRI/wholebrain_betas/L1m-entropy_wiz")
+pdf("entropy_wb_ptfce.pdf", width=11, height=5)
+#png("example_plot.png", width=11, height=5, units="in", res=600)
+# ggbrain(underlay="template_brain.nii", overlay = "zstat6_ptfce_fwep_0.05_1mm.nii.gz", axial_slices = list(xyz=c(58)), 
+#         remove_null_space = TRUE, pos_thresh = 5, neg_thresh = -5, background_color = "black", text_color = "white") # already thresholded by ptfce
 
-{
-  checkmate::assert_file_exists(underlay)
-  checkmate::assert_file_exists(overlay)
-  
-  underlay <- oro.nifti::readNIfTI(underlay, reorient = FALSE)
-  overlay <- oro.nifti::readNIfTI(overlay, reorient = FALSE)
-  
-  #if overlay only has positive values, use
-  #scale_fill_gradient(low = "grey90", high="red")
-  
-  #if overlay only has negative values, use
-  #scale_fill_gradient(low = "grey90", high="blue")
-  
-  #verify that i,j,k (1,2,3) dimensions of underlay match dimensions of overlay
-  stopifnot(identical(dim(underlay)[1:3], dim(overlay)[1:3]))
-  
-  if (isTRUE(remove_null_space)) {
-    nzpos <- which(underlay != 0, arr.ind=TRUE)
-    minx <- min(nzpos[,1]) - 1 #subtract one to give a small null space
-    maxx <- max(nzpos[,1]) + 1
-    miny <- min(nzpos[,2]) - 1
-    maxy <- max(nzpos[,2]) + 1
-    minz <- min(nzpos[,3]) - 1
-    maxz <- max(nzpos[,3]) + 1
-  
-    xrange <- min(nzpos[,1]):max(nzpos[,1])
-    yrange <- min(nzpos[,2]):max(nzpos[,2])
-    zrange <- min(nzpos[,3]):max(nzpos[,3])
-      
-    #trim images
-    underlay <- underlay[minx:maxx, miny:maxy, minz:maxz]
-    overlay <- overlay[minx:maxx, miny:maxy, minz:maxz]
-  } else {
-    allpos <- which(underlay != Inf, arr.ind=TRUE)
-    xrange <- min(allpos[,1]):max(allpos[,1])
-    yrange <- min(allpos[,2]):max(allpos[,2])
-    zrange <- min(allpos[,3]):max(allpos[,3])
-  }
-  
-  #validate 0-1 bounds on arguments: axial_slices, sagittal_slices, coronal_slices
-  anat_slices <- list(
-    sagittal=aperm(underlay[unique(floor(quantile(xrange, sagittal_slices))),,], c(1,2,3)),
-    coronal=aperm(underlay[,unique(floor(quantile(yrange, coronal_slices))),], c(2,1,3)),
-    axial=aperm(underlay[,,unique(floor(quantile(zrange, axial_slices)))], c(3,1,2))
-  )
-  
-  anat_slices <- dplyr::bind_rows(lapply(seq_along(anat_slices), function(ll) {
-    df <- reshape2::melt(anat_slices[[ll]], varnames=c("slice", "dim1", "dim2"))
-    df$type <- names(anat_slices)[ll]
-    
-    #uniquely identify slices by number and type
-    df$slice <- paste0(substr(names(anat_slices)[ll],1,1), df$slice)
-    return(df)
-  }))
-  
-  slice_plots <- ggplot(anat_slices, aes(x=dim1, y=dim2, fill=value)) +
-      geom_tile() + coord_fixed() + theme_void() +
-      scale_fill_gradient(low="grey10", high="grey90") +
-      facet_wrap(~slice) + guides(fill=FALSE)
-  
-  plot(slice_plots)
-  
-  #facet_wrap the slices, allow background color to be set as argument
-  #also squish the panels together with no spacing to form contiguous image
-  #remove panel headers
-  #add annotation of x=<> (coordinate) on sagittal slices
-  #add annotation of y=<> (coordinate) on coronal slices
-  #add annotation of z=<> (coordinate) on axial slices
-  #use oro.nifti::translateCoordinate() to lookup spatial locations within matrix to get annotations
-  
-  #add overlays based on structure of overlay image -- generate one ggplot per element in 4th dimension 
-  #provide options for rendering to file (ggsave to pdf and so on)
-  
-}
-  
+g <- ggbrain(underlay="template_brain.nii", overlay = "zstat6_ptfce_fwep_0.05_1mm.nii.gz",
+        slices = data.frame(coord = c("z = 58", "y = -7", "y = 50%"), coord_labels = TRUE),
+        remove_null_space = TRUE, pos_thresh = 5.11, neg_thresh = -5.11, 
+        background_color = "black", text_color = "white",
+        panel_borders = FALSE, symmetric_legend = TRUE, base_size = 18,
+        positive_colorscale = scale_fill_viridis_c(), underlay_contrast = "medium"
+)
+
+#slices = data.frame(coord = c("z = 58", "x = -7.45", "y = 10")),         
+#positive_colorscale = scale_fill_viridis_c(), negative_colorscale = scale_fill_distiller(palette="Blues"))
+
+dev.off()
+
+
+# entropy
+# axial z = 58 IPS, FEF, Motor
+# sagittal x = 5, IPS, neg vmPFC

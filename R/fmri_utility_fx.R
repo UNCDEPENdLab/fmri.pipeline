@@ -168,7 +168,7 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
           )
         }
       })
-
+      
       # drop null events before combining into data.frame
       run_convolve <- run_convolve[sapply(run_convolve, function(x) !is.null(x))]
       df <- as.data.frame(run_convolve, check.names = FALSE) #pull into a data.frame with n_vols rows and nregressors cols (convolved)
@@ -348,6 +348,7 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
   #   to multiplying against the event value/height.
   # In the case of durmax_1 normalization, normalize the HRF to a height of 1 for long events (~15s).
   if (isTRUE(normalize_hrf)) {
+    
     #for each event, convolve it with hrf, normalize, then sum convolved events to get full timecourse
     normed_events <- sapply(seq_along(times), function(i) {
       #obtain unit-convolved duration-modulated regressor to define HRF prior to modulation by parametric regressor
@@ -474,7 +475,7 @@ fmri.stimulus <- function(n_vols=1, onsets=c(1), durations=c(1), values=c(1), ti
                           a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35, conv_method="r", microtime_resolution=20) {
 
   #double gamma function
-  double_gamma_hrf <- function(x, a1, a2, b1, b2, cc) {
+  double_gamma_hrf <- function(x, a1=6, a2=12, b1=0.9, b2=0.9, cc=0.35) {
     d1 <- a1 * b1
     d2 <- a2 * b2
     c1 <- ( x/d1 )^a1
@@ -483,6 +484,34 @@ fmri.stimulus <- function(n_vols=1, onsets=c(1), durations=c(1), values=c(1), ti
     res
   }
 
+  double_gamma_glover <- function(t, n1 = 6, t1=0.9, a2=0.35, n2=12, t2=0.9) {
+    gamma1 <- t^n1 * exp(-t/t1)
+    gamma2 <- t^n2 * exp(-t/t2)
+    c1 <- max(gamma1)
+    c2 <- max(gamma2)
+    res <- gamma1/c1 - a2*gamma2/c2
+    return(res)
+  }
+
+  # xx <- double_gamma_hrf(1:30)
+  # yy <- double_gamma_glover(1:30)
+  # plot(xx, type="b")
+  # lines(yy, type="b", col="blue")
+  # summary(xx-yy)
+  
+  # def original_glover(t, n1=6., t1=0.9, a2=0.35, n2=12., t2=0.9):
+  #   """ As seen in Glover 1999, page 420. Using values for the auditory cortex (canonical Glover).
+  #   Variables are named after those in the paper. 
+  #   """
+  # gamma1 = t ** n1 * np.exp(-t / t1)
+  # gamma2 = t ** n2 * np.exp(-t / t2)
+  # 
+  # c1 = gamma1.max()
+  # c2 = gamma2.max()
+  # 
+  # return gamma1 / c1 - a2 * gamma2 / c2
+  # 
+  
   #verify that ts_multiplier is n_vols in length
   if (!is.null(ts_multiplier)) { stopifnot(is.vector(ts_multiplier) && length(ts_multiplier) == n_vols) }
 
@@ -580,6 +609,7 @@ fmri.stimulus <- function(n_vols=1, onsets=c(1), durations=c(1), values=c(1), ti
     #compute the double-gamma HRF for one event, scale to be as long as time series
     #this goes from last-to-first volume since this is reversed in convolution
     hrf_values <- double_gamma_hrf(((40*microtime_resolution)+n_vols):1, a1, a2, b1/tr, b2/tr, cc)
+    #hrf_values <- double_gamma_glover(((40*microtime_resolution)+n_vols):1, n1=a1, t1=b1/tr, a2=cc, n2=a1, t2=b2/tr)
     regressor <- convolve(stimulus, hrf_values)/microtime_resolution
   }
 
