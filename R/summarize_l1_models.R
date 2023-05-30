@@ -44,3 +44,49 @@ summarize_l1_models <- function(gpa) {
         cat("No events in l1 models\n")
         }
     }
+
+  summarize_pipeline <- function(gpa) {
+        cat("\nSummary of GLM Pipeline Analysis: \n\n")
+        if (!is.null(gpa)) {
+            cat("Analysis Name: ", gpa$analysis_name[1])
+          # GLM and Confound Settings
+            cat("\n--------\n Settings: \n")
+            cat(" -  Scheduler Name: ", gpa$scheduler, "\n")
+            cat(" -  TR: ", gpa$tr, "\n")
+            cat(" -  Multi-Level Run: ", gpa$multi_run[1], "\n")
+            cat(" -  GLM Settings: ", gpa$glm_settings, "\n")
+            cat(" -  NA Strings:", paste(gpa$confound_settings$na_strings, collapse = ", "), "\n")
+            if (!is.null(gpa$confound_settings$exclude_run)) {
+              cat(" -  Exclude Run: ", gpa$confound_settings$exclude_run, "\n")
+            } else {
+              cat(" -  Exclude Run: NA\n")
+            }
+            if (!is.null(gpa$confound_settings$exclude_subject)) {
+              cat(" -  Exclude Subject: ", gpa$confound_settings$exclude_subject, "\n")
+            } else {
+              cat(" -  Exclude Subject: NA\n")
+            }
+            if (!is.null(gpa$confound_settings$truncate_run)) {
+              cat(" -  Truncate Run: ", gpa$confound_settings$truncate_run, "\n")
+            } else {
+              cat(" -  Truncate Run: NA\n")
+            }
+            if (!is.null(gpa$confound_settings$spike_volumes)) {
+              cat(" -  Spike Volumes: ", gpa$confound_settings$spike_volumes, "\n")
+            } else {
+              cat(" -  Spike Volumes: NA\n")
+            }
+            # VM
+            cat("--------\n VM: \n")
+            cat("  ", paste(gpa$vm, collapse = ", "), "\n")
+            # Output Directory and System Info
+            cat("--------\n System Info: \n")
+            cat(" -  Output Directory: ", gpa$output_directory[1], "\n")
+            cat(" -  System Info: ", gpa$sys_info, "\n")
+        } else {
+        cat("No info in gpa object\n")
+        }
+    }
+
+    # summarize_pipeline(gpa)
+    # summarize_l1_models(gpa)
