@@ -49,6 +49,8 @@ summarize_l1_models <- function(gpa) {
         cat("\nSummary of GLM Pipeline Analysis: \n\n")
         if (!is.null(gpa)) {
             cat("Analysis Name: ", gpa$analysis_name[1])
+            cat("\n  Node Name: ", gpa$nodename[1])
+            cat("\n  Finalize Complete: ", gpa$finalize_complete[1])
           # GLM and Confound Settings
             cat("\n--------\n Settings: \n")
             cat(" -  Scheduler Name: ", gpa$scheduler, "\n")
