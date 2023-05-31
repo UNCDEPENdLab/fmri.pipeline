@@ -1,13 +1,14 @@
 proj_dir <- "/proj/mnhallqlab/projects/fmri.pipeline_test_data"
+test_data_dir <- "testdata"
 
-get_trial_df <- function(test_dir="testdata/sample_trial_data.csv") {
-  trial_df <- data.table::fread(file.path(test_dir, "mmy3_trial_df_selective_groupfixed.csv"))
+get_trial_df <- function() {
+  trial_df <- data.table::fread(file.path(test_data_dir, "sample_trial_data.csv"))
   return(trial_df)
 }
 
-get_subj_df <- function(test_dir = "testdata/sample_subject_data.csv") {
+get_subj_df <- function() {
   #subj_df <- data.table::fread(file.path(test_dir, "mmy3_demographics.tsv"), data.table = FALSE)
-  subj_df <- read.table(file.path(test_dir, "mmy3_demographics.tsv"), header=TRUE)
+  subj_df <- data.table::fread(file.path(test_data_dir, "sample_subject_data.tsv"))
   return(subj_df)
 }
 
@@ -20,6 +21,21 @@ get_gpa_minimal <- function() {
     output_directory = tempdir(),
     subject_data = data.frame(id=c(1, 2, 3)),
     trial_data = data.frame(id=c(1, 2, 3)),
+    tr = 1.0,
+    l1_models=NULL
+  )
+}
+
+#' Provide a gpa list with subject/trial data,
+#' but no built models.
+#' 
+#' @return a minimal gpa list
+get_gpa_no_models <- function() {
+  setup_glm_pipeline(
+    analysis_name = "gpa_tests",
+    output_directory = tempdir(),
+    subject_data = get_subj_df(),
+    trial_data = get_trial_df(),
     tr = 1.0,
     l1_models=NULL
   )
