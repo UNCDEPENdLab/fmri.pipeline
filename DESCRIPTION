@@ -45,6 +45,7 @@ Imports:
     lubridate,
     lme4,
     lmerTest,
+    psych,
     patchwork,
     purrr,
     rlang,
