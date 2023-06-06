@@ -69,7 +69,7 @@ if (length(argpos) > 0L) {
   args <- c()
 }
 
-#contains runAFNICommand
+#contains run_afni_command
 source(file.path(scriptpath, "R_helper_functions.R"))
 
 if (is.null(args) || length(args) == 0L) {
@@ -488,7 +488,7 @@ if (!identical(dim(rsproc)[1:3], dim(roimask)[1:3])) {
   message("Resampling rs proc file from: ", paste(dim(rsproc)[1:3], collapse="x"), " to: ", paste(dim(roimask)[1:3], collapse="x"), " using nearest neighbor")
   message("This assumes that the files are in the same space and have the same grid size. Make sure this is what you want!!")
   
-  runAFNICommand(paste0("3dresample -overwrite -inset ", fname_rsproc, " -rmode NN -master ", fname_roimask, " -prefix tmpResamp.nii.gz"))
+  run_afni_command(paste0("3dresample -overwrite -inset ", fname_rsproc, " -rmode NN -master ", fname_roimask, " -prefix tmpResamp.nii.gz"))
   stopifnot(file.exists("tmpResamp.nii.gz"))
   
   rsproc <- readNIfTI("tmpResamp.nii.gz", reorient=FALSE)
