@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 #script to pull together FSL FEAT level 1 runs into an AFNI BRIK+HEAD format for review
-printHelp <- function() {
+print_help <- function() {
   cat(paste("This script converts a first-level feat directory to an AFNI-compatible stats file with",
     "the afni graphical viewer. This avoids the challenge of unlabeled and unintuitive individual",
     "outputs from feat. Here are the basic options:",
@@ -15,11 +15,6 @@ printHelp <- function() {
     sep="\n"))
 }
 
-##Sys.setenv(AFNIDIR="/opt/aci/sw/afni/16.0.00/bin")
-if (Sys.getenv("AFNIDIR") == "") {
-  Sys.setenv(AFNIDIR="/gpfs/group/mnh5174/default/sw/afni")
-}
-
 #read in command line arguments
 args <- commandArgs(trailingOnly = FALSE)
 
@@ -31,12 +26,12 @@ if (length(argpos) > 0L) {
   args <- c()
 }
 
-#contains runAFNICommand
-source(file.path(scriptpath, "R_helper_functions.R"))
+# contains run_afni_command
+if (!requireNamespace("fmri.pipeline", quietly = TRUE)) stop("Must install fmri.pipeline R package for this script to work")
 
 if (length(args) == 0L) {
-  message("feat_lvl1_to_afni expects a single .feat directory from a level 1 analysis --feat_dir <directory>.\n")
-  printHelp()
+  message("feat_lvl1_to_afni.R expects a single .feat directory from a level 1 analysis --feat_dir <directory>.\n")
+  print_help()
   quit(save="no", 1, FALSE)
 }
 
@@ -52,7 +47,7 @@ while (argpos <= length(args)) {
     stopifnot(file.exists(featdir))
     argpos <- argpos + 2
   } else if (args[argpos] == "--help") {
-    printHelp()
+    print_help()
     quit(save="no", 0, FALSE)
   } else if (args[argpos] == "--no_varcope") {
     output_varcope <- FALSE
@@ -96,7 +91,7 @@ for (s in 1:nstats) {
 }
 
 #concatenate stat images
-runAFNICommand(tcatcall)
+fmri.pipeline::run_afni_command(tcatcall)
 
 #design.con contains names of contrasts
 dcon <- readLines("design.con")
@@ -111,9 +106,9 @@ if (output_varcope) {
 }
 
 #add this to zstat images
-refitcall <- paste0("3drefit -fbuc ", paste("-substatpar", zbriks, "fizt", collapse=" "), " -relabel_all_str '", briknames, "' ", outfilename, "+tlrc") 
+refitcall <- paste0("3drefit -fbuc ", paste("-substatpar", zbriks, "fizt", collapse=" "), " -relabel_all_str '", briknames, "' ", outfilename, "+tlrc")
 
-runAFNICommand(refitcall)
+fmri.pipeline::run_afni_command(refitcall)
 
 if (output_auxstats) {
 
@@ -157,11 +152,11 @@ if (output_auxstats) {
     findex <- findex + 1
   }
 
-  runAFNICommand(tcatcall)
+  fmri.pipeline::run_afni_command(tcatcall)
 
-  briknames <- paste(c(paste0("pe", sort(penums)), paste0("thresh_zstat", sort(threshznums)), paste0("zfstat", 1:length(zfstatfiles)), "sigmasquareds"), collapse=" ")
+  briknames <- paste(c(paste0("pe", sort(penums)), paste0("thresh_zstat", sort(threshznums)), paste0("zfstat", seq_along(zfstatfiles)), "sigmasquareds"), collapse=" ")
 
   #add this to zstat images
   refitcall <- paste0("3drefit -fbuc ", paste("-substatpar", zbriks, "fizt", collapse=" "), " -relabel_all_str '", briknames, "' ", auxfilename, "+tlrc")
-  runAFNICommand(refitcall)
+  fmri.pipeline::run_afni_command(refitcall)
 }

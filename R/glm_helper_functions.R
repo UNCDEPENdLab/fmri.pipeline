@@ -1777,7 +1777,7 @@ setdiff_list_combn <- function(l) {
   return(invisible(NULL))
 }
 
-#' initial function to generate a run_data object from a BIDS-compliant folder
+#' Function to generate a run_data object from a BIDS-compliant folder
 #' @param bids_dir a directory containing BIDS-compliant processed data for analysis
 #' @param modality the subfolder within \code{bids_dir} that contains data of a certain modality.
 #'   Almost always 'func', which is the default.
@@ -1792,14 +1792,58 @@ setdiff_list_combn <- function(l) {
 #'   '_postprocessed' is the \code{suffix}.
 #' @importFrom dplyr bind_rows
 #' @export
-generate_run_data_from_bids <- function(bids_dir, modality="func", type="task", task_name="ridl", suffix="_postprocessed") {
+generate_run_data_from_bids <- function(bids_dir, modality="func", type="task", task_name="ridl", suffix="_postprocessed", anat_root=NULL, fmap_root=NULL) {
   checkmate::assert_directory_exists(bids_dir)
   checkmate::assert_string(modality)
   checkmate::assert_string(type)
   checkmate::assert_string(task_name)
   checkmate::assert_string(suffix, null.ok=TRUE)
-  sub_dirs <- list.dirs(bids_dir, recursive = FALSE)
+  sub_dirs <- grep("^.*/?sub-", list.dirs(bids_dir, recursive = FALSE), value = TRUE)
+
   slist <- lapply(sub_dirs, function(ss) {
+    id <- sub("^sub-", "", basename(ss))
+    mr_dir <- ss
+
+    if (is.null(anat_root)) anat_dir <- file.path(ss, "anat")
+    else anat_dir <- file.path(anat_root, basename(ss), "anat")
+
+    if (dir.exists(anat_dir)) {
+      t1w <- Sys.glob(glue("{anat_dir}/sub-{id}*_T1w.nii.gz"))
+      if (length(t1w) > 1L) {
+        warning(glue("Using first of multiple T1w files: {paste(t1w, collapse=', ')}"))
+        t1w <- t1w[1L]
+      } else if (length(t1w) == 0L) {
+        t1w <- NA_character_
+      }
+    } else {
+      t1w <- NA_character_
+    }
+
+    # this is weakly developed -- works for A>>P and P>>A spin echos only
+    if (is.null(fmap_root)) fmap_dir <- file.path(ss, "fmap")
+    else fmap_dir <- file.path(fmap_root, basename(ss), "fmap")
+
+    if (dir.exists(fmap_dir)) {
+      se_pos <- Sys.glob(glue("{fmap_dir}/sub-{id}*-{task_name}_dir-PA*.nii.gz"))
+       if (length(se_pos) > 1L) {
+        warning(glue("Using first of multiple SE P>>A files: {paste(se_pos, collapse=', ')}"))
+        se_pos <- se_pos[1L]
+      } else if (length(se_pos) == 0L) {
+        se_pos <- NA_character_
+      }
+
+      se_neg <- Sys.glob(glue("{fmap_dir}/sub-{id}*-{task_name}_dir-AP*.nii.gz"))
+      if (length(se_neg) > 1L) {
+        warning(glue("Using first of multiple SE A>>P files: {paste(se_neg, collapse=', ')}"))
+        se_neg <- se_neg[1L]
+      } else if (length(se_neg) == 0L) {
+        se_neg <- NA_character_
+      }
+    } else {
+      se_pos <- NA_character_
+      se_neg <- NA_character_
+    }
+
     expect_dir <- file.path(ss, modality)
     if (!checkmate::test_directory_exists(expect_dir)) {
       warning(glue("Cannot find expected modality directory: {expect_dir}"))
@@ -1812,18 +1856,205 @@ generate_run_data_from_bids <- function(bids_dir, modality="func", type="task", 
       warning(glue("No NIfTI file matches in: {expect_dir}"))
       return(NULL)
     }
+
+    sbref_files <- Sys.glob(glue("{expect_dir}/sub*_{type}-{task_name}*sbref.nii.gz"))
+
+    if (length(sbref_files) > 0L && length(nii_files) != length(sbref_files)) {
+      warning(glue("Cannot align nifti and sbref files for {expect_dir}"))
+      return(NULL)
+    } else if (length(sbref_files) == 0L) {
+      sbref_files <- NA_character_
+    }
+
     confound_files <- Sys.glob(glue("{expect_dir}/sub*_{type}-{task_name}*-confounds*.tsv"))
 
-    if (length(nii_files) != length(confound_files)) {
+    if (length(confound_files) > 0L && length(nii_files) != length(confound_files)) {
       warning(glue("Cannot align nifti and confound files for {expect_dir}"))
       return(NULL)
+    } else if (length(confound_files) == 0L) {
+      confound_files <- NA_character_
     }
-    id <- sub("^sub-", "", basename(ss))
 
-    # NB. this is not a BIDS-compliant approach. Needs to be _run-01. Will to adjust
-    run_number <- as.integer(sub(glue(".*sub-.*_{type}-{task_name}(\\d+).*"), "\\1", nii_files, perl = TRUE))
-    data.frame(id = id, run_number = run_number, run_nifti = nii_files, confound_input_file = confound_files)
+    # if only one matching NIfTI is found, we likely have a single-run scenario and may not expect a run-<x> syntax
+    if (all(grepl(glue(".*sub-.*_{type}-{task_name}_run-\\d+.*"), nii_files, perl=TRUE))) {
+      run_number <- as.integer(sub(glue(".*sub-.*_{type}-{task_name}_run-(\\d+).*"), "\\1", nii_files, perl = TRUE))
+    } else if (length(nii_files) == 1L) {
+      run_number <- 1
+    } else {
+      warning(glue("Cannot parse run_number from these files: {paste(nii_files, collapse=' ')}"))
+    }
+
+    data.frame(id, task_name, mr_dir, run_number, run_nifti = nii_files, sbref_nifti = sbref_files, confound_input_file = confound_files, t1w, se_pos, se_neg)
   })
 
   dplyr::bind_rows(slist)
+}
+
+preprocess_all_functional <- function(run_df, output_directory = NULL, cleanup_failed = TRUE) {
+  if (is.null(output_directory)) stop("Must specify the root directory for outputs")
+  run_df <- run_df %>%
+    dplyr::mutate(
+      expect_func_dir = glue::glue_data(., "{output_directory}/sub-{id}/func/{task_name}_run-{sprintf('%02d', run_number)}"),
+      expect_func_file = glue::glue_data(., "{expect_func_dir}/{basename(run_nifti)}"),
+      expect_func_json = sub("\\.nii\\.gz$", ".json", run_nifti),
+      expect_complete = glue::glue_data(., "{expect_func_dir}/.preprocessfunctional_complete"),
+      expect_mprage_bet = glue::glue_data(., "{output_directory}/sub-{id}/anat/sub-{id}_T1w_bet.nii.gz"),
+      expect_mprage_warpcoef = glue::glue_data(., "{output_directory}/sub-{id}/anat/sub-{id}_T1w_warpcoef_withgdc.nii.gz"),
+      output_dir_exists = dir.exists(expect_func_dir),
+      func_file_exists = file.exists(expect_func_file),
+      is_complete = file.exists(expect_complete),
+      mprage_bet_exists = file.exists(expect_mprage_bet),
+      mprage_warpcoef_exists = file.exists(expect_mprage_warpcoef)
+    )
+
+    if (any(!run_df$mprage_bet_exists)) {
+      warning("Cannot process some functional data because mprage_bet.nii.gz is not present (run preprocessMprage first?)")
+      cat(run_df$expect_mprage_bet[!run_df$mprage_bet_exists], sep = "\n")
+      run_df <- run_df %>% dplyr::filter(mprage_bet_exists == TRUE)
+    }
+
+    if (any(!run_df$mprage_warpcoef_exists)) {
+      warning("Cannot process some functional data because mprage_warpcoef_withgdc.nii.gz is not present (run preprocessMprage first?)")
+      cat(run_df$expect_mprage_warpcoef[!run_df$mprage_warpcoef_exists], sep = "\n")
+      run_df <- run_df %>% dplyr::filter(mprage_warpcoef_exists == TRUE)
+    }
+
+    # cleanup failed runs
+    if (isTRUE(cleanup_failed)) {
+      to_dump <- with(run_df, output_dir_exists == TRUE & is_complete == FALSE)
+      if (any(to_dump)) {
+        message(glue("Deleting failed directories: {paste(run_df$expect_func_dir[to_dump], collapse=', ')}"))
+        unlink(run_df$expect_func_dir[to_dump], recursive = TRUE)
+        run_df$output_dir_exists[to_dump] <- FALSE
+        run_df$func_file_exists[to_dump] <- FALSE
+      }
+    }
+
+    # need to setup output directories before symlinks and calls
+    miss_dirs <- with(run_df, output_dir_exists == FALSE)
+    if (any(miss_dirs)) {
+      sapply(run_df$expect_func_dir[miss_dirs], dir.create, recursive = TRUE)
+      run_df$output_dir_exists[miss_dirs] <- TRUE
+    }
+
+    # make symlinks
+    to_link <- with(run_df, func_file_exists == FALSE)
+    if (any(to_link)) {
+      file.symlink(run_df$run_nifti[to_link], run_df$expect_func_file[to_link]) # accepts vector inputs
+      run_df$func_file_exists[to_link] <- TRUE
+    }
+
+    # read and copy through slice times from json
+    for (ii in seq_len(nrow(run_df))) {
+      jfile <- run_df$expect_func_json[ii]
+      if (file.exists(jfile)) {
+        ff <- jsonlite::read_json(jfile)
+        stimes <- as.numeric(ff$SliceTiming)
+        writeLines(paste(as.character(stimes), collapse = ","), con = file.path(run_df$expect_func_dir[ii], ".stimes"))
+      }
+    }
+
+    to_run <- run_df %>% filter(is_complete == FALSE)
+
+    calls <- paste(
+      "cd", to_run$expect_func_dir, "&&",
+      "preprocessFunctional",
+      "-4d", basename(to_run$expect_func_file), "-func_refimg", to_run$sbref_nifti, "-se_phasepos", to_run$se_pos, "-se_phaseneg", to_run$se_neg,
+      "-mprage_bet", to_run$expect_mprage_bet, "-warpcoef", to_run$expect_mprage_warpcoef,
+      "-epi_pedir y- -epi_echospacing .00053 -epi_te 30 -tr .635",
+      "-hp_filter 120s -rescaling_method 100_voxelmean -template_brain MNI_2.3mm",
+      "-func_struc_dof bbr -warp_interpolation spline -constrain_to_template y",
+      "-4d_slice_motion -custom_slice_times .stimes",
+      "-ica_aroma -motion_censor fd=0.9",
+      "-nuisance_file nuisance_regressors.txt -nuisance_compute csf,dcsf,wm,dwm -smoothing_kernel 6 -cleanup",
+      ">preprocessFunctional_stdout 2>preprocessFunctional_stderr"
+    )
+
+    pre <- c(
+      "module use /proj/mnhallqlab/sw/modules",
+      "module load afni/23.0.07",
+      "module load fsl/6.0.6",
+      "module load r/4.2.1",
+      "module load c3d/1.1.0",
+      "module load freesurfer/6.0.0",
+      "module load ants/2.3.1",
+      "module load imagemagick/7.1.1-11",
+      "source /proj/mnhallqlab/lab_resources/lab_python3/bin/activate"
+    )
+
+    scripts_out <- tempdir()
+    message("Writing job scripts to: ", scripts_out)
+
+    cluster_submit_shell_jobs(calls,
+      commands_per_cpu = 1L, cpus_per_job = 8L, memgb_per_command = 32, time_per_job = "40:00:00",
+      pre = pre, debug = FALSE, job_out_dir = scripts_out
+    )
+}
+
+preprocess_all_mprage <- function(run_df, output_directory = NULL, cleanup_failed = TRUE) {
+  if (is.null(output_directory)) stop("Must specify the root directory for outputs")
+  run_df <- run_df %>%
+    dplyr::distinct(t1w, .keep_all = TRUE) %>% # drop repeated t1 images
+    dplyr::mutate(
+      expect_mprage_dir = glue::glue_data(., "{output_directory}/sub-{id}/anat"),
+      expect_mprage_file = glue::glue_data(., "{output_directory}/sub-{id}/anat/sub-{id}_T1w.nii.gz"),
+      expect_complete = glue::glue_data(., "{expect_mprage_dir}/.preprocessmprage_complete"),
+      output_dir_exists = dir.exists(expect_mprage_dir),
+      mprage_file_exists = file.exists(expect_mprage_file),
+      is_complete = file.exists(expect_complete)
+    )
+
+  # cleanup failed runs
+  if (isTRUE(cleanup_failed)) {
+    to_dump <- with(run_df, output_dir_exists == TRUE & is_complete == FALSE)
+    if (any(to_dump)) {
+      message(glue("Deleting failed directories: {paste(run_df$expect_mprage_dir[to_dump], collapse=', ')}"))
+      unlink(run_df$expect_mprage_dir[to_dump], recursive = TRUE)
+      run_df$output_dir_exists[to_dump] <- FALSE
+      run_df$mprage_file_exists[to_dump] <- FALSE
+    }
+  }
+
+  # need to setup output directories before symlinks and calls
+  miss_dirs <- with(run_df, output_dir_exists == FALSE)
+  if (any(miss_dirs)) {
+    sapply(run_df$expect_mprage_dir[miss_dirs], dir.create, recursive = TRUE)
+    run_df$output_dir_exists[miss_dirs] <- TRUE
+  }
+
+  # make symlinks
+  to_link <- with(run_df, mprage_file_exists == FALSE)
+  if (any(to_link)) {
+    file.symlink(run_df$t1w[to_link], run_df$expect_mprage_file[to_link]) # accepts vector inputs
+    run_df$mprage_file_exists[to_link] <- TRUE
+  }
+
+  to_run <- run_df %>% filter(is_complete == FALSE)
+
+  calls <- paste(
+    "cd", to_run$expect_mprage_dir, "&&",
+    "preprocessMprage -template_brain MNI_2mm -grad_unwarp prisma.coeff.grad -weak_bias -cleanup",
+    "-n", to_run$expect_mprage_file,
+    ">preprocessMprage_stdout 2>preprocessMprage_stderr"
+  )
+
+  pre <- c(
+    "module use /proj/mnhallqlab/sw/modules",
+    "module load afni/23.0.07",
+    "module load fsl/6.0.6",
+    "module load r/4.2.1",
+    "module load c3d/1.1.0",
+    "module load freesurfer/6.0.0",
+    "module load ants/2.3.1",
+    "module load imagemagick/7.1.1-11",
+    "source /proj/mnhallqlab/lab_resources/lab_python3/bin/activate"
+  )
+
+  scripts_out <- tempdir()
+  message("Writing job scripts to: ", scripts_out)
+
+  cluster_submit_shell_jobs(calls, time_per_job = "2:00:00",
+    commands_per_cpu = 1L, cpus_per_job = 8L, memgb_per_command = 12,
+    pre = pre, debug = FALSE, job_out_dir = scripts_out
+  )
 }

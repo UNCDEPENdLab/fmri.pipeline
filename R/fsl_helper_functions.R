@@ -627,7 +627,7 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
     run_afni_command(tcatcall)
 
     z_briks <- which(ss$image_type %in% c("z", "zthresh")) - 1 # subtract 1 because AFNI uses 0-based indexing
-    
+
     # tack on statistic type as suffix to sub-brik name (avoid ambiguity)
     ss$afni_briks <- paste(ss$afni_briks, ss$image_type, sep="_")
 
