@@ -36,7 +36,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
   lg$set_threshold(gpa$lgr_threshold)
 
   # allow deferred model specification upstream
-  if (!is.null(model_set) && model_set == "prompt") model_set <- NULL
+  if (!is.null(model_set) && model_set[1L] == "prompt") model_set <- NULL
 
   checkmate::assert_class(model_set, "hi_model_set", null.ok = TRUE)
   checkmate::assert_subset(regressor_cols, names(data)) # make sure all parametric regressor columns are in the data frame
@@ -249,14 +249,15 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
       print(summary(data[, mobj$model_variables]))
 
       # handle mean centering and reference levels
-      cont_vars <- sapply(data[, mobj$model_variables], class) %in% c("integer", "numeric")
+      cont_vars <- sapply(data[, mobj$model_variables, drop=FALSE], class) %in% c("integer", "numeric")
       if (any(cont_vars)) {
         cat(
           "We will now ask you to indicate whether to transform any of the continuous covariates in the model.",
           "The most common transformation, which is often a good default, is to mean-center the covariate.",
           "Other options are to subtract the minimum (so that zero now represents the lowest covariate value),",
           "subtract the maximum (so that zero represents the highest covariate value),",
-          "or to z-score/standardized the covariate to a mean of zero and standard deviation of one.", sep="\n  "
+          "or to z-score/standardized the covariate to a mean of zero and standard deviation of one.",
+          sep = "\n  "
         )
         cont_vars <- mobj$model_variables[cont_vars == TRUE]
         mobj$covariate_transform <- c() # reset any previous centering settings
