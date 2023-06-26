@@ -338,7 +338,7 @@ R_batch_job <- R6::R6Class("batch_job",
         hostname <- Sys.info()["nodename"]
         user <- Sys.info()["user"]
         if (isTRUE(grepl("longleaf", hostname))) {
-          self$batch_directory <- glue("/pine/scr/{substr(user, 1, 1)}/{substr(user, 2, 2)}/{user}")
+          self$batch_directory <- glue("/work/users/{substr(user, 1, 1)}/{substr(user, 2, 2)}/{user}")
           message(glue("On Longleaf, defaulting to batch_directory on the scratch system: {self$batch_directory}"))
         } else {
           self$batch_directory <- normalizePath(("~/"))

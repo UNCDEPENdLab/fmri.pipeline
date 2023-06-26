@@ -1955,11 +1955,13 @@ preprocess_all_functional <- function(run_df, output_directory = NULL, cleanup_f
     }
 
     to_run <- run_df %>% filter(is_complete == FALSE)
+    # don't pass through sbref if it does not exist
+    sbref_string <- sapply(to_run$sbref_nifti, function(x) if (file.exists(x)) paste("-func_refimg", x) else "")
 
     calls <- paste(
       "cd", to_run$expect_func_dir, "&&",
       "preprocessFunctional",
-      "-4d", basename(to_run$expect_func_file), "-func_refimg", to_run$sbref_nifti, "-se_phasepos", to_run$se_pos, "-se_phaseneg", to_run$se_neg,
+      "-4d", basename(to_run$expect_func_file), sbref_string, "-se_phasepos", to_run$se_pos, "-se_phaseneg", to_run$se_neg,
       "-mprage_bet", to_run$expect_mprage_bet, "-warpcoef", to_run$expect_mprage_warpcoef,
       "-epi_pedir y- -epi_echospacing .00053 -epi_te 30 -tr .635",
       "-hp_filter 120s -rescaling_method 100_voxelmean -template_brain MNI_2.3mm",
@@ -1986,7 +1988,7 @@ preprocess_all_functional <- function(run_df, output_directory = NULL, cleanup_f
     message("Writing job scripts to: ", scripts_out)
 
     cluster_submit_shell_jobs(calls,
-      commands_per_cpu = 1L, cpus_per_job = 8L, memgb_per_command = 32, time_per_job = "40:00:00",
+      commands_per_cpu = 1L, cpus_per_job = 8L, memgb_per_command = 24, time_per_job = "50:00:00",
       pre = pre, debug = FALSE, job_out_dir = scripts_out
     )
 }

@@ -13,7 +13,7 @@
 #' @param generate_automask a logical indicating whether to use AFNI 3dAutomask to generate brain masks if they are
 #'   not provided in the $brain_mask field. If NULL (default), the user will be prompted for whether they wish to
 #'   generate missing brain masks. If \code{FALSE}, masks will not be generate, and if \code{TRUE}, they will be
-#'   generated.   
+#'   generated.
 #'
 #' @importFrom RNifti readNifti niftiHeader
 #' @importFrom glue glue
