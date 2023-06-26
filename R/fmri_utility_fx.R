@@ -369,11 +369,11 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
           #   event in the middle of the interval, convolve it with the HRF, then use *that* height as the normalization factor.
           # Apply this alternative correction to any event that begins or is 'on' in the last 20 seconds.
           msg <- glue(
-            "Event occurs at the tail of the run. Onset: {times[i]}, Offset: {times[i] + durations[i]}, Run duration: {n_vols*tr}.",
-            "Using HRF peak from center of run for evtmax_1 regressor to avoid strange scaling.",
+            "Event occurs at the tail of the run. Onset: {round(times[i], 2)}, Offset: {round(times[i] + durations[i], 2)}, Run duration: {n_vols*tr}. ",
+            "Using HRF peak from center of run for evtmax_1 regressor to avoid strange scaling. ",
             "Please check that the end of your convolved regressors matches your expectation."
           )
-          lg$info(msg)
+          lg$debug(msg)
 
           mid_vol <- n_vols*tr/2
           stim_at_center <- fmri.stimulus(n_vols=n_vols, values=1.0, times=mid_vol, durations=durations[i], tr=tr, demean=FALSE, 
