@@ -173,13 +173,27 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       }
 
       bdm_out_file <- file.path(l1_output_dir, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData"))
+      run_bdm <- TRUE
       if (file.exists(bdm_out_file)) {
         lg$info("Loading BDM info from extant file: %s", bdm_out_file)
-        load(bdm_out_file)
+        # Attempt to load BDM. If it fails, re-run build_design matrix
+        run_bdm <- tryCatch(
+          {
+            load(bdm_out_file)
+            FALSE
+          },
+          error = function(e) {
+            lg$error("Failed to load BDM file: %s with error: %s.", bdm_out_file, e)
+            return(TRUE)
+          }
+        )
+        
         if ("run_4d_files" %in% names(d_obj)) { # older nomenclature ca. mid 2021
           d_obj$run_nifti <- d_obj$run_4d_files
         }
-      } else {
+      }
+
+      if (run_bdm) {
         t_out <- gpa$glm_software
         if (isTRUE(gpa$use_preconvolve)) t_out <- c("convolved", t_out) # compute preconvolved regressors
         bdm_args <- gpa$additional$bdm_args
