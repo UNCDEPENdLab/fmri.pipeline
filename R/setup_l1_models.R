@@ -65,7 +65,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   #   subj_df <- gpa$subject_data[ii, ]
 
   all_subj_l1_list <- foreach(
-    subj_df = iter(gpa$subject_data, by = "row"), .inorder = FALSE, .packages = c("dplyr", "fmri.pipeline"),
+    subj_df = iter(gpa$subject_data, by = "row"), .inorder = FALSE, .packages = c("dplyr", "fmri.pipeline"), .errorhandling = "remove",
     .export = c(
       "truncate_runs", "fsl_l1_model", "get_mr_abspath",
       "get_output_directory", "run_fsl_command", "get_feat_status", "add_custom_feat_syntax"
@@ -135,7 +135,6 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       this_model <- l1_model_names[ii]
 
       # setup design matrix for any given software package
-
       m_signals <- lapply(gpa$l1_models$signals[gpa$l1_models$models[[this_model]]$signals], function(this_signal) {
         # filter down to this id if the signal is a data.frame
         if (inherits(this_signal$value, "data.frame")) {
@@ -183,11 +182,11 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
             FALSE
           },
           error = function(e) {
-            lg$error("Failed to load BDM file: %s with error: %s.", bdm_out_file, e)
+            lg$error("Failed to load BDM file: %s with error: %s. I will regenerate the design matrix.", bdm_out_file, e)
             return(TRUE)
           }
         )
-        
+
         if ("run_4d_files" %in% names(d_obj)) { # older nomenclature ca. mid 2021
           d_obj$run_nifti <- d_obj$run_4d_files
         }
@@ -206,6 +205,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         bdm_args$runs_to_output <- mr_run_nums
         bdm_args$output_directory <- file.path(l1_output_dir, "timing_files")
         bdm_args$lg <- lg
+
         d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error = function(e) {
           lg$error("Failed build_design_matrix for id: %s, session: %s, model: %s", subj_id, subj_session, this_model)
           lg$error("Error message: %s", as.character(e))
