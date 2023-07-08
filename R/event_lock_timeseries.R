@@ -602,7 +602,7 @@ evt_align_decon_files <- function(d_files, trial_df, alignment = list(), aggrega
     registerDoSEQ()
   }
 
-  elist <- foreach(fname = iter(d_files), .packages = c("dplyr", "readr", "data.table", "fmri.pipeline")) %dopar% {
+  elist <- foreach(fname = iter(d_files), .packages = c("dplyr", "readr", "data.table", "fmri.pipeline"), .errorhandling="remove") %dopar% {
 
     # add sub and run for now since I screwed this up in the outputs...
     id <- as.numeric(sub("^.*/sub(\\d+)_.*", "\\1", fname))
@@ -657,7 +657,7 @@ evt_align_decon_files <- function(d_files, trial_df, alignment = list(), aggrega
         group_by = c(aggregate_by, "trial")
       ), # one time series per region and trial
       error = function(err) {
-        cat("Problems with event aligning ", fname, " for event: ", e, "\n  ",
+        cat("Problems with event aligning ", fname, " for event: ", alignment$evt_col, "\n  ",
           as.character(err), "\n\n",
           file = "evt_align_errors.txt", append = TRUE
         )
