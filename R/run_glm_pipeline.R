@@ -66,12 +66,11 @@ l3_model_names = "prompt", glm_software = NULL) {
     # batch job for setting up l1 models -- calls setup_l1_models to create relevant FSFs
       l1_setup_batch <- f_batch$copy(
         job_name = "setup_l1", n_cpus = gpa$parallel$l1_setup_cores,
-        wall_time = gpa$parallel$l1_setup_time,
+        wall_time = gpa$parallel$l1_setup_time, mem_total = gpa$parallel$l1_setup_memgb,
         r_code = sprintf(
           "gpa <- setup_l1_models(gpa, l1_model_names=%s)", paste(deparse(model_list$l1_model_name), collapse = "")
         )
       )
-      l1_setup_batch$mem_total <- "24G"
 
       l1_setup_batch$depends_on_parents <- "finalize_configuration"
 

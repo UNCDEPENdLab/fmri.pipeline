@@ -236,7 +236,7 @@ R_batch_job <- R6::R6Class("batch_job",
     n_cpus = "4",
 
     #' @field mem_total The total amount of memory (RAM) requested by the job
-    mem_total = "4g",
+    mem_total = "4G",
 
     #' @field mem_per_cpu The amount of memory (RAM) requested per cpu (total = mem_per_cpu * n_cpus)
     mem_per_cpu = NULL,
@@ -516,8 +516,9 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param n_nodes The number of compute nodes to be requested on the scheduler
     #' @param n_cpus The number of cpus to be requested on the scheduler
     #' @param wall_time The compute time requested on the cluster dd-HH:MM:SS
+    #' @param mem_total The total amount of memory (RAM) requested by the job
     #' @param r_code A character vector or expression containing R code to be executed
-    copy = function(job_name=NULL, n_nodes=NULL, n_cpus=NULL, wall_time=NULL, r_code=NULL) {
+    copy = function(job_name=NULL, n_nodes=NULL, n_cpus=NULL, wall_time=NULL, mem_total=NULL, r_code=NULL) {
       cloned <- self$clone(deep = TRUE)
       cloned$reset_file_names()
 
@@ -525,6 +526,7 @@ R_batch_job <- R6::R6Class("batch_job",
       if (!is.null(n_nodes)) cloned$n_nodes <- as.character(n_nodes)
       if (!is.null(n_cpus)) cloned$n_cpus <- as.character(n_cpus)
       if (!is.null(wall_time)) cloned$wall_time <- as.character(wall_time)
+      if (!is.null(mem_total)) cloned$mem_total <- as.character(mem_total)
       if (!is.null(r_code)) {
         checkmate::assert_multi_class(r_code, c("expression", "character"))
         if (is.expression(r_code)) { # expand r_code expression as character vector

@@ -205,7 +205,9 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   # l1_setup_cores defines how many cores to use when looping over models in setup_l1_models
   # default to 4 cores in setup_lvl1_models
   gpa <- specify_cores(gpa, "l1_setup_cores", 4)
-  if (is.null(gpa$parallel$l1_setup_memgb)) gpa$parallel$fsl$l1_setup_memgb <- "16G"
+
+  # default to 4GB per core for l1 setup
+  if (is.null(gpa$parallel$l1_setup_memgb)) gpa$parallel$l1_setup_memgb <- paste0(4 * gpa$parallel$l1_setup_cores, "G")
 
   # l2_setup_cores defines how many cores to use when looping over models in setup_l2_models
   gpa <- specify_cores(gpa, "l2_setup_cores", 4)
