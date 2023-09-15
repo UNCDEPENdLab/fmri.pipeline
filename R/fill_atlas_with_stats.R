@@ -94,7 +94,17 @@ fill_atlas_with_stats <- function(atlas_nifti, stat_dt, stat_cols = c("t", "p"),
   }
 
   use_afni <- TRUE # locked to TRUE based on prior testing -- some vestigial code for FALSE preserved
-  if (isFALSE(use_afni)) vol <- RNifti::readNifti(atlas_nifti)
+  if (isTRUE(use_afni)) {
+    # force atlas to short data type to ensure that 3dUndump is okay with it
+    orig <- atlas_nifti # user specified atlas
+    atlas_nifti <- tempfile(pattern="atlas", fileext=".nii.gz") # where the dtype = short file goes
+    system2(
+      command = glue("{afni_dir}/nifti_tool"), stdout = FALSE, stderr = FALSE,
+      args = glue("-copy_image -infiles {orig} -prefix {atlas_nifti} -convert2dtype DT_SIGNED_SHORT -convert_fail_choice fail -convert_verify")
+    )
+  } else {
+    vol <- RNifti::readNifti(atlas_nifti)
+  }
 
   # helper subfunction for populating nifti  
   fill_nifti <- function(data, out_file) {
@@ -152,6 +162,7 @@ fill_atlas_with_stats <- function(atlas_nifti, stat_dt, stat_cols = c("t", "p"),
     unlink(c(tmpout, to_combine))
   }
 
+  
   # loop over splits (e.g., contrasts)
   for (dd in seq_along(stat_dt)) {
     this_out_nifti <- glue("{out_dir}/{img_names[dd]}")
