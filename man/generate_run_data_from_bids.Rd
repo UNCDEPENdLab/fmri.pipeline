@@ -2,14 +2,16 @@
 % Please edit documentation in R/glm_helper_functions.R
 \name{generate_run_data_from_bids}
 \alias{generate_run_data_from_bids}
-\title{initial function to generate a run_data object from a BIDS-compliant folder}
+\title{Function to generate a run_data object from a BIDS-compliant folder}
 \usage{
 generate_run_data_from_bids(
   bids_dir,
   modality = "func",
   type = "task",
   task_name = "ridl",
-  suffix = "_postprocessed"
+  suffix = "_postprocessed",
+  anat_root = NULL,
+  fmap_root = NULL
 )
 }
 \arguments{
@@ -28,7 +30,7 @@ Almost always 'func', which is the default.}
 a data.frame containing all run_nifti and confound_input_file results for subjects in the folder
 }
 \description{
-initial function to generate a run_data object from a BIDS-compliant folder
+Function to generate a run_data object from a BIDS-compliant folder
 }
 \details{
 The files should generally have a name like

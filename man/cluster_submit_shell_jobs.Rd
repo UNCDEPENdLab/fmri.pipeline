@@ -35,6 +35,10 @@ cluster_submit_shell_jobs(
 
 \item{time_per_job}{amount of time requested for each job}
 
+\item{fork_jobs}{if TRUE, all jobs within a single batch will run simultaneously using the fork (&) approach.}
+
+\item{pre}{user-specified code to include in the job script prior to job_list (e.g., module load commands)}
+
 \item{job_out_dir}{the directory where job scripts should be written}
 
 \item{job_script_prefix}{the filename prefix for each job script}

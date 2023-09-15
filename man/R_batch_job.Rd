@@ -222,6 +222,7 @@ Function to create a deep copy of a batch job
   n_nodes = NULL,
   n_cpus = NULL,
   wall_time = NULL,
+  mem_total = NULL,
   r_code = NULL
 )}\if{html}{\out{</div>}}
 }
@@ -236,6 +237,8 @@ Function to create a deep copy of a batch job
 \item{\code{n_cpus}}{The number of cpus to be requested on the scheduler}
 
 \item{\code{wall_time}}{The compute time requested on the cluster dd-HH:MM:SS}
+
+\item{\code{mem_total}}{The total amount of memory (RAM) requested by the job}
 
 \item{\code{r_code}}{A character vector or expression containing R code to be executed}
 }
