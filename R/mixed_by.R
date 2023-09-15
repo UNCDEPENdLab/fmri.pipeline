@@ -363,22 +363,24 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     data <- data[, .(dt = list(.SD)), by = split_on]
 
     # for each split and each outcome + rhs, examine whether there are 0 non-NA cases
-    for (rr in seq_len(nrow(data))) {
-      for (mm in seq_len(nrow(model_set))) {
-        ff <- model_set$form[[mm]]
-        vv <- all.vars(ff)
-        miss_data <- data[rr, dt[[1]]] %>%
-          dplyr::select(!!vv) %>% # just keep model-relevant variables
-          mutate(any_miss = rowSums(is.na(dplyr::select(., any_of(!!vv)))) > 0)
-        n_present <- miss_data %>%
-          dplyr::filter(any_miss == FALSE) %>%
-          nrow()
-
-        if (n_present == 0) {
-          browser()
-        }
-      }
-    }
+    # for (rr in seq_len(nrow(data))) {
+    #   for (mm in seq_len(nrow(model_set))) {
+    #     ff <- model_set$form[[mm]]
+    #     vv <- all.vars(ff)
+    #     miss_data <- data[rr, dt[[1]]] %>%
+    #       dplyr::select(!!vv) %>% # just keep model-relevant variables
+    #       mutate(any_miss = rowSums(is.na(dplyr::select(., any_of(!!vv)))) > 0)
+    #     n_present <- miss_data %>%
+    #       dplyr::filter(any_miss == FALSE) %>%
+    #       nrow()
+    # 
+    #     if (n_present == 0) {
+    #       ss <- paste(names(data[rr, ..split_on]), data[rr, ..split_on], sep="=", collapse=", ")
+    #       ss <- paste(ss, "model=", model_set$model_name[mm], "outcome=", model_set$outcome[mm])
+    #       message("No non-missing observations for split combination: ", ss)
+    #     }
+    #   }
+    # }
 
     # loop over outcomes and rhs formulae within each chunk to maximize compute time by chunk (reduce worker overhead)
     message("Starting processing of data splits")
@@ -397,6 +399,30 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
         ret[, outcome := model_set$outcome[[mm]]]
         ret[, model_name := names(model_set$rhs)[mm]]
         ret[, rhs := as.character(model_set$rhs[mm])]
+        
+        # defaults
+        ret[, coef_df_reml := list()]
+        ret[, coef_df_ml := list()]
+        ret[, residuals := list()]
+        ret[, fitted := list()]
+        ret[, emm := list()] 
+        
+        # check missingness
+        vv <- all.vars(ff)
+        
+        miss_data <- ret$dt[[1]] %>%
+          dplyr::select(!!vv) %>% # just keep model-relevant variables
+          mutate(any_miss = rowSums(is.na(dplyr::select(., any_of(!!vv)))) > 0)
+        n_present <- miss_data %>%
+          dplyr::filter(any_miss == FALSE) %>%
+          nrow()
+        
+        if (n_present == 0) {
+          ret[, dt := NULL]
+          return(ret)
+        }
+        
+        ##
 
         if ("parameter_estimates_reml" %in% calculate) {
           thism <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, scale_predictors, REML=TRUE)
