@@ -1,3 +1,5 @@
+#' Populates parcel-wise statistics from an atlas or set of clusters back into NIfTIs in the original space
+#' 
 #' @param atlas_nifti The filename of the NIfTI image containing atlas values to match against \code{stat_dt}
 #' @param stat_dt a \code{data.table} object containing the statistics to write to parcels in the atlas
 #' @param stat_cols The column names in \code{stat_dt} that should be written to parcels in the NIfTI. By default,
@@ -21,7 +23,7 @@
 #' @importFrom RNifti readNifti
 #' @importFrom tidyr pivot_longer pivot_wider
 #' @importFrom checkmate assert_file_exists assert_directory_exists assert_subset assert_flag
-#' @importFrom data.table setDT split
+#' @importFrom data.table setDT
 #' @importFrom glue glue
 #' @export
 fill_atlas_with_stats <- function(atlas_nifti, stat_dt, stat_cols = c("t", "p"), stat_labels = NULL,
