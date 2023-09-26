@@ -88,39 +88,6 @@ summarize_pipeline <- function(gpa) {
       }
   }
 
-## Model Summaries
-## model_summary inputs a gpa object and runs an existing
-
-#model_summary <- function(gpa_object) {
-#  complete <- FALSE
-#      while (isFALSE(complete)) {
-#        model_object <- menu(c(
-#          "Events",
-#          "Signals",
-#          "Models",
-#          "All of the Above",
-#          "Exit Summary Build"), title= "Choose L1 Model Object")
-#          if (model_object == 1) {
-#            cat("\n \n")
-#            summarize_events(gpa_object$l1_models)
-#          } else if (model_object == 2) {
-#            cat("\n \n")
-#            summarize_l1_signals(gpa_object$l1_models$signals)
-#          } else if (model_object == 3) {
-#            cat("\n \n")
-#            summarize_l1_models(gpa_object$l1_models$models)
-#          } else if (model_object == 4) {
-#            cat("\n \n")
-#            summarize_events(gpa_object$l1_models)
-#            summarize_l1_signals(gpa_object$l1_models$signals)
-#            summarize_l1_models(gpa_object$l1_models$models)
-#          } else {
-#            cat("\n \n", "Goodbye.")
-#          }
-#          complete <- TRUE
-#        }
-#      }
-
 
 model_summary <- function(gpa_object) {
   complete <- FALSE
