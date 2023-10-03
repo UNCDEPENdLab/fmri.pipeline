@@ -1,12 +1,12 @@
 #' Load in trial dataframe from test data.
-get_trial_df <- function(test_data_base_dir,
+get_trial_df <- function(test_data_base_dir = "local/test_data",
                          trial_df_file_name = "mmy3_trial_df_selective_groupfixed.csv") {
   trial_df <- data.table::fread(file.path(base_dir, trial_df_file_name))
   return(trial_df)
 }
 
 #' Load in run dataframe from test data.
-get_run_df <- function(test_data_base_dir) {
+get_run_df <- function(test_data_base_dir = "local/test_data") {
     # Initialize empty lists to store data
     id_list <- vector("character")
     task_name_list <- vector("character")
@@ -60,8 +60,12 @@ get_run_df <- function(test_data_base_dir) {
 }
 
 #' Load in subject dataframe from test data.
-get_subj_df <- function(test_data_base_dir, demographics_df_file_name = "mmy3_demographics.tsv") {
+get_subj_df <- function(test_data_base_dir = "local/test_data", demographics_df_file_name = "mmy3_demographics.tsv") {
   subj_df <- data.table::fread(file.path(test_data_base_dir, demographics_df_file_name))
+
+  # Rename lunaid column to id
+  subj_df <- dplyr::rename(subj_df, id = lunaid)
+
   return(subj_df)
 }
 
