@@ -1,3 +1,6 @@
+library(data.table)
+library(fmri.pipeline)
+
 #' Build the trial dataframe from test data. This file is already saved in the repo, so should only be used to
 #' adjust the run data file.
 #' Currently this is just copying the trial data from the MRI test folder - do not have script used to build it here yet.
@@ -59,13 +62,12 @@ build_run_data_file <- function(test_data_base_dir = "tests/testthat/testdata", 
     write.csv(run_df, file.path(test_data_base_dir, run_data_file), row.names = FALSE)
 }
 
-
 #' Build the subject dataframe from test data. This file is already saved in the repo, so should only be used to
 #' adjust the run data file.
 #' Currently this is just copying the subject data from the MRI test folder - do not have script used to build it here yet.
-build_trial_data_file <- function(test_data_base_dir = "tests/testthat/testdata", mri_data_folder = "mri", cache_file = "mmy3_demographics.tsv", trial_data_file = "sample_subject_data.csv") {
+build_subject_data_file <- function(test_data_base_dir = "tests/testthat/testdata", mri_data_folder = "mri", cache_file = "mmy3_demographics.tsv", trial_data_file = "sample_subject_data.csv") {
   # Copy the cached trial data file in the MRI folder to the test data folder
-  subj_df <- data.table::fread(file.path(test_data_base_dir, mri_data_folder, cache_file))
+  subj_df <- read.csv(file.path(test_data_base_dir, mri_data_folder, cache_file))
 
   # Rename lunaid column to id
   subj_df <- dplyr::rename(subj_df, id = lunaid)
@@ -107,19 +109,27 @@ get_gpa_no_models <- function() {
 #' 
 #' @param test_data_base_dir the base directory of the test data.
 get_gpa <- function(
-    test_data_base_dir = "local/test_data",
+    test_data_base_dir = "test_data",
+    trial_data_file = "sample_trial_data.csv.gz",
+    run_data_file = "sample_run_data.csv",
+    subject_data_file = "sample_subject_data.csv",
     scheduler = "slurm", drop_volumes = 2,
     exclude_run = "max(FD) > 5 | sum(FD > .9)/length(FD) > .10",
     exclude_subject = "n_good_runs < 4",
     truncate_run = "(FD > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
     spike_volumes = NULL) {
 
+  # Read in trial, run, and subject dataframes
+  trial_df <- read.csv(file.path(test_data_base_dir, trial_data_file))
+  run_df <- read.csv(file.path(test_data_base_dir, run_data_file))
+  subj_df <- read.csv(file.path(test_data_base_dir, subject_data_file))
+
   setup_glm_pipeline(
     analysis_name = "gpa_tests",
     scheduler = scheduler,
-    trial_data = get_trial_df(test_data_base_dir),
-    run_data = get_run_df(test_data_base_dir),
-    subject_data = get_subj_df(test_data_base_dir),
+    trial_data = trial_df,
+    run_data = run_df,
+    subject_data = subj_df,
     output_directory = tempdir(),
     n_expected_runs = 8,
     tr = 1.0,
