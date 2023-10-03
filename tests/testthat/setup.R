@@ -170,29 +170,25 @@ get_gpa_base <- function(
 
 #' Populate base GPA with models. Save models & final GPA to cache files.
 #' Currently interactively-only until we can build all models from spec YAML,
-#'  so must be called manually, before get_gpa to rebuild models.
+#' so must be called manually, before get_gpa to rebuild models.
+#' This COULD be split up so that each model gets their own cache file, but that feels
+#' excessive for now. Just assume all models need to be rebuilt if gpa needs rebuilding.
 build_gpa <- function(
   test_data_base_dir = "tests/testthat/testdata",
   gpa_cache_file = "gpa.rds"
   l1_spec_file = "sample_L1_spec.yaml"
-  l1_model_cache_file = "l1_models.rds",
-  l2_model_cache_file = "l2_models.rds",
-  l3_model_cache_file = "l3_models.rds",
   ...
 ) {
   gpa <- get_gpa_base(test_data_base_dir = test_data_base_dir, ...)
 
   # Build L1 models
   gpa <- build_l1_models(gpa, from_spec_file = file.path(test_data_base_dir, l1_spec_file))
-  saveRDS(gpa$l1_models, file = file.path(test_data_base_dir, l1_model_cache_file))
 
   # Build L2 models
   gpa <- build_l2_models(gpa)
-  saveRDS(gpa$l2_models, file = file.path(test_data_base_dir, l2_model_cache_file))
 
   # Build L3 models
   gpa <- build_l3_models(gpa)
-  saveRDS(gpa$l3_models, file = file.path(test_data_base_dir, l3_model_cache_file))
 
   # Save final RDS object
   saveRDS(gpa, file = file.path(test_data_base_dir, gpa_cache_file))
@@ -210,6 +206,6 @@ get_gpa <- function(
   } else {
     gpa <- build_gpa(test_data_base_dir = test_data_base_dir, gpa_cache_file = gpa_cache_file, ...)
   }
-
+  
   return(gpa)
 }
