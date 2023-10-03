@@ -1,14 +1,63 @@
-proj_dir <- "/proj/mnhallqlab/projects/fmri.pipeline_test_data"
-test_data_dir <- "testdata"
-
-get_trial_df <- function() {
-  trial_df <- data.table::fread(file.path(test_data_dir, "sample_trial_data.csv"))
+get_trial_df <- function(test_data_base_dir) {
+  trial_df <- data.table::fread(file.path(base_dir, "sample_trial_data.csv"))
   return(trial_df)
 }
 
-get_subj_df <- function() {
-  #subj_df <- data.table::fread(file.path(test_dir, "mmy3_demographics.tsv"), data.table = FALSE)
-  subj_df <- data.table::fread(file.path(test_data_dir, "sample_subject_data.tsv"))
+get_run_df <- function(test_data_base_dir) {
+    # Initialize empty lists to store data
+    id_list <- vector("character")
+    task_name_list <- vector("character")
+    mr_dir_list <- vector("character")
+    run_number_list <- vector("integer")
+    run_nifti_list <- vector("character")
+    confound_input_file_list <- vector("character")
+
+    # Iterate over folders in base directory
+    subject_folders <- list.dirs(test_data_base_dir, recursive = FALSE)
+    for (subject_folder in subject_folders) {
+        subject_dir_name <- basename(subject_folder)
+
+        # Get subject id from folder name
+        parts <- strsplit(subject_dir_name, "_")[[1]]
+        id <- parts[1]  # Subject ID
+        print(id)
+        print(subject_folder)
+
+        # Change level to mni_5mm_aroma
+        subject_folder <- file.path(subject_folder, "mni_5mm_aroma")
+        
+        task_name <- "clock"
+
+        run_folders <- list.dirs(subject_folder, recursive = FALSE)
+        for (run_folder in run_folders) {
+            run_dir_name <- basename(run_folder)
+
+            run_number <- as.integer(gsub("clock", "", run_dir_name))  
+            mr_dir <- file.path(subject_dir_name, paste0("clock", run_number), "ica_aroma")
+            run_nifti <- file.path(mr_dir, "melodic_IC_thr_MNI2mm.nii")
+            confound_input_file <- file.path(mr_dir, "nuisance_regressors.txt")
+
+            # Appending all once per run
+            id_list <- append(id_list, id)
+            task_name_list <- append(task_name_list, task_name)
+            mr_dir_list <- append(mr_dir_list, mr_dir)
+            run_number_list <- append(run_number_list, run_number)
+            run_nifti_list <- append(run_nifti_list, run_nifti)
+            confound_input_file_list <- append(confound_input_file_list, confound_input_file)
+        }
+    }
+
+    # Create a DataFrame
+    df <- data.frame(id = id_list, task_name = task_name_list, 
+                    mr_dir = mr_dir_list, run_number = run_number_list, 
+                    run_nifti = run_nifti_list, confound_input_file = confound_input_file_list)
+
+    # Print the DataFrame
+    return(df)
+}
+
+get_subj_df <- function(test_data_base_dir) {
+  subj_df <- data.table::fread(file.path(test_data_base_dir, "sample_subject_data.tsv"))
   return(subj_df)
 }
 
