@@ -153,12 +153,9 @@ build_gpa_base <- function(
 
 #' Get a populated GPA object. Pull the base gpa from cache if present; if not, run build_gpa_base.
 #' Model objects only loaded in from file for now until they can be programatically created from YAML.
-get_gpa <- function(
+get_gpa_base <- function(
   test_data_base_dir = "tests/testthat/testdata",
-  cache_file = "gpa_base.rds",
-  l1_model_file = "l1_models.rds",
-  l2_model_file = "l2_models.rds",
-  l3_model_file = "l3_models.rds",
+  cache_file = "gpa_base.rds"
   ...
 ) {
   # Check if gpa object is already cached, if not, build it
@@ -169,4 +166,34 @@ get_gpa <- function(
   }
 
   return(gpa)
+}
+
+#' Populate base GPA with models. Save models & final GPA to cache files.
+#' Currently interactively-only until we can build all models from spec YAML,
+#'  so must be called manually, before get_gpa to rebuild models.
+build_gpa <- function(
+  test_data_base_dir = "tests/testthat/testdata",
+  gpa_cache_file = "gpa.rds"
+  l1_spec_file = "sample_L1_spec.yaml"
+  l1_model_cache_file = "l1_models.rds",
+  l2_model_cache_file = "l2_models.rds",
+  l3_model_cache_file = "l3_models.rds",
+  ...
+) {
+  gpa <- get_gpa_base(test_data_base_dir = test_data_base_dir, ...)
+
+  # Build L1 models
+  gpa <- build_l1_models(gpa, from_spec_file = file.path(test_data_base_dir, l1_spec_file))
+  saveRDS(gpa$l1_models, file = file.path(test_data_base_dir, l1_model_cache_file))
+
+  # Build L2 models
+  gpa <- build_l2_models(gpa)
+  saveRDS(gpa$l2_models, file = file.path(test_data_base_dir, l2_model_cache_file))
+
+  # Build L3 models
+  gpa <- build_l3_models(gpa)
+  saveRDS(gpa$l3_models, file = file.path(test_data_base_dir, l3_model_cache_file))
+
+  # Save final RDS object
+  saveRDS(gpa, file = file.path(test_data_base_dir, gpa_cache_file))
 }
