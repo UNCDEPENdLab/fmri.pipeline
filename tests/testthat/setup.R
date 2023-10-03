@@ -1,12 +1,15 @@
-#' Load in trial dataframe from test data.
-get_trial_df <- function(test_data_base_dir = "local/test_data",
-                         trial_df_file_name = "mmy3_trial_df_selective_groupfixed.csv") {
-  trial_df <- data.table::fread(file.path(base_dir, trial_df_file_name))
-  return(trial_df)
+#' Build the trial dataframe from test data. This file is already saved in the repo, so should only be used to
+#' adjust the run data file.
+#' Currently this is just copying the trial data from the MRI test folder - do not have script used to build it here yet.
+build_trial_data_file <- function(test_data_base_dir = "tests/testthat/testdata", mri_data_folder = "mri", cache_file = "mmy3_trial_df_selective_groupfixed.csv.gz", trial_data_file = "sample_trial_data.csv.gz") {
+  # Copy the cached trial data file in the MRI folder to the test data folder
+  file.copy(file.path(test_data_base_dir, mri_data_folder, cache_file), file.path(test_data_base_dir, trial_data_file))
 }
 
-#' Load in run dataframe from test data.
-get_run_df <- function(test_data_base_dir = "local/test_data") {
+
+#' Build the run dataframe from test data. This file is already saved in the repo, so should only be used to
+#' adjust the run data file.
+build_run_data_file <- function(test_data_base_dir = "tests/testthat/testdata", mri_data_folder = "mri", run_data_file = "sample_run_data.csv") {
     # Initialize empty lists to store data
     id_list <- vector("character")
     task_name_list <- vector("character")
@@ -16,15 +19,13 @@ get_run_df <- function(test_data_base_dir = "local/test_data") {
     confound_input_file_list <- vector("character")
 
     # Iterate over folders in base directory
-    subject_folders <- list.dirs(test_data_base_dir, recursive = FALSE)
+    subject_folders <- list.dirs(file.path(test_data_base_dir, mri_data_folder), recursive = FALSE)
     for (subject_folder in subject_folders) {
         subject_dir_name <- basename(subject_folder)
 
         # Get subject id from folder name
         parts <- strsplit(subject_dir_name, "_")[[1]]
         id <- parts[1]  # Subject ID
-        print(id)
-        print(subject_folder)
 
         # Change level to mni_5mm_aroma
         subject_folder <- file.path(subject_folder, "mni_5mm_aroma")
@@ -55,9 +56,25 @@ get_run_df <- function(test_data_base_dir = "local/test_data") {
                     mr_dir = mr_dir_list, run_number = run_number_list, 
                     run_nifti = run_nifti_list, confound_input_file = confound_input_file_list)
 
-    # Print the DataFrame
-    return(df)
+    write.csv(run_df, file.path(test_data_base_dir, run_data_file), row.names = FALSE)
 }
+
+
+#' Build the subject dataframe from test data. This file is already saved in the repo, so should only be used to
+#' adjust the run data file.
+#' Currently this is just copying the subject data from the MRI test folder - do not have script used to build it here yet.
+build_trial_data_file <- function(test_data_base_dir = "tests/testthat/testdata", mri_data_folder = "mri", cache_file = "mmy3_demographics.tsv", trial_data_file = "sample_subject_data.csv") {
+  # Copy the cached trial data file in the MRI folder to the test data folder
+  subj_df <- data.table::fread(file.path(test_data_base_dir, mri_data_folder, cache_file))
+
+  # Rename lunaid column to id
+  subj_df <- dplyr::rename(subj_df, id = lunaid)
+
+  write.csv(subj_df, file.path(test_data_base_dir, trial_data_file), row.names = FALSE)
+}
+
+build_trial_data_file()
+
 
 #' Load in subject dataframe from test data.
 get_subj_df <- function(test_data_base_dir = "local/test_data", demographics_df_file_name = "mmy3_demographics.tsv") {
@@ -134,3 +151,10 @@ get_gpa <- function(
 }
 
 gpa <- get_gpa()
+
+saveRDS(gpa, file = "tests/testthat/testdata/gpa_no_models.rds")
+
+run_df.to_csv("tests/testthat/testdata/sample_trial_data.csv")
+
+# Save run_df to csv at location "tests/testthat/testdata/sample_trial_data.csv"
+
