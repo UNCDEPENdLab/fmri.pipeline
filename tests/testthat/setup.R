@@ -73,18 +73,6 @@ build_trial_data_file <- function(test_data_base_dir = "tests/testthat/testdata"
   write.csv(subj_df, file.path(test_data_base_dir, trial_data_file), row.names = FALSE)
 }
 
-build_trial_data_file()
-
-
-#' Load in subject dataframe from test data.
-get_subj_df <- function(test_data_base_dir = "local/test_data", demographics_df_file_name = "mmy3_demographics.tsv") {
-  subj_df <- data.table::fread(file.path(test_data_base_dir, demographics_df_file_name))
-
-  # Rename lunaid column to id
-  subj_df <- dplyr::rename(subj_df, id = lunaid)
-
-  return(subj_df)
-}
 
 #' Provide a minimal instantiation of the gpa list
 #' 
@@ -149,12 +137,3 @@ get_gpa <- function(
     )
   )
 }
-
-gpa <- get_gpa()
-
-saveRDS(gpa, file = "tests/testthat/testdata/gpa_no_models.rds")
-
-run_df.to_csv("tests/testthat/testdata/sample_trial_data.csv")
-
-# Save run_df to csv at location "tests/testthat/testdata/sample_trial_data.csv"
-
