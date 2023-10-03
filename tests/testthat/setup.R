@@ -94,6 +94,9 @@ get_gpa_no_models <- function() {
   )
 }
 
+#' Provide a gpa list populated from test data.
+#' 
+#' @param test_data_base_dir the base directory of the test data.
 get_gpa <- function(
     test_data_base_dir = "local/test_data",
     scheduler = "slurm", drop_volumes = 2,
