@@ -1,3 +1,5 @@
+library(testthat)
+
 test_that("Basic GPA setup works", {
   gpa <- get_gpa_minimal()
   expect_equal(1, 1)
@@ -10,7 +12,9 @@ test_that("Summarize GPA setup", {
 })
 
 test_that("Summarize GPA", {
-  gpa <- get_gpa_minimal()
+  gpa <- get_gpa()
   summarize_pipeline(gpa)
   expect_equal(1, 1)
 })
+
+# show cwd

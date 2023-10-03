@@ -109,7 +109,7 @@ get_gpa_no_models <- function() {
 #' 
 #' @param test_data_base_dir the base directory of the test data.
 build_gpa_base <- function(
-    test_data_base_dir = "test_data",
+    test_data_base_dir = "tests/testthat/testdata",
     trial_data_file = "sample_trial_data.csv.gz",
     run_data_file = "sample_run_data.csv",
     subject_data_file = "sample_subject_data.csv",
@@ -149,4 +149,24 @@ build_gpa_base <- function(
   )
 
   saveRDS(gpa, file = file.path(test_data_base_dir, cache_file))
+}
+
+#' Get a populated GPA object. Pull the base gpa from cache if present; if not, run build_gpa_base.
+#' Model objects only loaded in from file for now until they can be programatically created from YAML.
+get_gpa <- function(
+  test_data_base_dir = "tests/testthat/testdata",
+  cache_file = "gpa_base.rds",
+  l1_model_file = "l1_models.rds",
+  l2_model_file = "l2_models.rds",
+  l3_model_file = "l3_models.rds",
+  ...
+) {
+  # Check if gpa object is already cached, if not, build it
+  if (file.exists(file.path(test_data_base_dir, cache_file))) {
+    gpa <- readRDS(file.path(test_data_base_dir, cache_file))
+  } else {
+    gpa <- build_gpa_base(test_data_base_dir = test_data_base_dir, cache_file = cache_file, ...)
+  }
+
+  return(gpa)
 }
