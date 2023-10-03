@@ -105,14 +105,15 @@ get_gpa_no_models <- function() {
   )
 }
 
-#' Provide a gpa list populated from test data.
+#' Build a gpa object with all information that doesn't require the CLI, and export to RDS.
 #' 
 #' @param test_data_base_dir the base directory of the test data.
-get_gpa <- function(
+build_gpa_base <- function(
     test_data_base_dir = "test_data",
     trial_data_file = "sample_trial_data.csv.gz",
     run_data_file = "sample_run_data.csv",
     subject_data_file = "sample_subject_data.csv",
+    cache_file = "gpa_base.rds",
     scheduler = "slurm", drop_volumes = 2,
     exclude_run = "max(FD) > 5 | sum(FD > .9)/length(FD) > .10",
     exclude_subject = "n_good_runs < 4",
@@ -124,7 +125,7 @@ get_gpa <- function(
   run_df <- read.csv(file.path(test_data_base_dir, run_data_file))
   subj_df <- read.csv(file.path(test_data_base_dir, subject_data_file))
 
-  setup_glm_pipeline(
+  gpa <- setup_glm_pipeline(
     analysis_name = "gpa_tests",
     scheduler = scheduler,
     trial_data = trial_df,
@@ -146,4 +147,6 @@ get_gpa <- function(
       spike_volumes = NULL
     )
   )
+
+  saveRDS(gpa, file = file.path(test_data_base_dir, cache_file))
 }
