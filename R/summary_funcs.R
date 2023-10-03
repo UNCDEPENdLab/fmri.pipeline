@@ -156,7 +156,6 @@ summ_l1_sig <- function(sl) {
   )
 }
 
-install.packages("yaml")
 library(yaml)
 l1_yaml <- function(gpa){
   gpa2 <- gpa$l1_models
