@@ -1,8 +1,11 @@
-get_trial_df <- function(test_data_base_dir) {
-  trial_df <- data.table::fread(file.path(base_dir, "sample_trial_data.csv"))
+#' Load in trial dataframe from test data.
+get_trial_df <- function(test_data_base_dir,
+                         trial_df_file_name = "mmy3_trial_df_selective_groupfixed.csv") {
+  trial_df <- data.table::fread(file.path(base_dir, trial_df_file_name))
   return(trial_df)
 }
 
+#' Load in run dataframe from test data.
 get_run_df <- function(test_data_base_dir) {
     # Initialize empty lists to store data
     id_list <- vector("character")
@@ -56,8 +59,9 @@ get_run_df <- function(test_data_base_dir) {
     return(df)
 }
 
-get_subj_df <- function(test_data_base_dir) {
-  subj_df <- data.table::fread(file.path(test_data_base_dir, "sample_subject_data.tsv"))
+#' Load in subject dataframe from test data.
+get_subj_df <- function(test_data_base_dir, demographics_df_file_name = "mmy3_demographics.tsv") {
+  subj_df <- data.table::fread(file.path(test_data_base_dir, demographics_df_file_name))
   return(subj_df)
 }
 
@@ -91,6 +95,7 @@ get_gpa_no_models <- function() {
 }
 
 get_gpa <- function(
+    test_data_base_dir = "local/test_data",
     scheduler = "slurm", drop_volumes = 2,
     exclude_run = "max(FD) > 5 | sum(FD > .9)/length(FD) > .10",
     exclude_subject = "n_good_runs < 4",
@@ -100,8 +105,9 @@ get_gpa <- function(
   setup_glm_pipeline(
     analysis_name = "gpa_tests",
     scheduler = scheduler,
-    subject_data = get_subj_df(proj_dir),
-    trial_data = get_trial_df(proj_dir),
+    trial_data = get_trial_df(test_data_base_dir),
+    run_data = get_run_df(test_data_base_dir),
+    subject_data = get_subj_df(test_data_base_dir),
     output_directory = tempdir(),
     n_expected_runs = 8,
     tr = 1.0,
@@ -119,3 +125,5 @@ get_gpa <- function(
     )
   )
 }
+
+gpa <- get_gpa()
