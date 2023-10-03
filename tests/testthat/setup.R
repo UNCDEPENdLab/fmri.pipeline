@@ -197,3 +197,19 @@ build_gpa <- function(
   # Save final RDS object
   saveRDS(gpa, file = file.path(test_data_base_dir, gpa_cache_file))
 }
+
+#' Get a populated GPA object. Pull the base gpa and models from cache if present; if not, run build_gpa_base.
+get_gpa <- function(
+  test_data_base_dir = "tests/testthat/testdata",
+  gpa_cache_file = "gpa.rds"
+  ...
+) {
+  # Check if gpa object is already cached, if not, build it
+  if (file.exists(file.path(test_data_base_dir, gpa_cache_file))) {
+    gpa <- readRDS(file.path(test_data_base_dir, gpa_cache_file))
+  } else {
+    gpa <- build_gpa(test_data_base_dir = test_data_base_dir, gpa_cache_file = gpa_cache_file, ...)
+  }
+
+  return(gpa)
+}
