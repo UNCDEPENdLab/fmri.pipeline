@@ -155,7 +155,7 @@ build_gpa_base <- function(
 #' Model objects only loaded in from file for now until they can be programatically created from YAML.
 get_gpa_base <- function(
   test_data_base_dir = "tests/testthat/testdata",
-  cache_file = "gpa_base.rds"
+  cache_file = "gpa_base.rds",
   ...
 ) {
   # Check if gpa object is already cached, if not, build it
@@ -175,8 +175,8 @@ get_gpa_base <- function(
 #' excessive for now. Just assume all models need to be rebuilt if gpa needs rebuilding.
 build_gpa <- function(
   test_data_base_dir = "tests/testthat/testdata",
-  gpa_cache_file = "gpa.rds"
-  l1_spec_file = "sample_L1_spec.yaml"
+  gpa_cache_file = "gpa.rds",
+  l1_spec_file = "sample_L1_spec.yaml",
   ...
 ) {
   gpa <- get_gpa_base(test_data_base_dir = test_data_base_dir, ...)
@@ -197,7 +197,7 @@ build_gpa <- function(
 #' Get a populated GPA object. Pull the base gpa and models from cache if present; if not, run build_gpa_base.
 get_gpa <- function(
   test_data_base_dir = "tests/testthat/testdata",
-  gpa_cache_file = "gpa.rds"
+  gpa_cache_file = "gpa.rds",
   ...
 ) {
   # Check if gpa object is already cached, if not, build it
