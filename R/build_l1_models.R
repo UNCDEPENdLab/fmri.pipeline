@@ -700,7 +700,7 @@ bl1_build_signals <- function(l1_model_set, trial_data, lg=NULL) {
         }
       }
 
-      while (is.null(ss$value) || ss$value[1L] == 0) {
+      while (any(is.null(ss$value)) || ss$value[1L] == 0) {
         regtype <- menu(c(
           "Unit height (1.0)", "Other fixed value (will prompt for details)",
           "Parametric modulator (will prompt for details)"
