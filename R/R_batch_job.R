@@ -418,6 +418,8 @@ R_batch_job <- R6::R6Class("batch_job",
       if (!is.null(input_rdata_file)) self$input_rdata_file <- input_rdata_file
       if (!is.null(output_rdata_file)) self$output_rdata_file <- output_rdata_file
 
+      # Populate the batch_id field here with random UUID
+
       if (!is.null(scheduler_options)) {
         checkmate::assert_character(scheduler_options)
         self$scheduler_options <- scheduler_options
@@ -499,6 +501,36 @@ R_batch_job <- R6::R6Class("batch_job",
       )
 
       message("Job received job id: ", private$job_id)
+
+      # Get the current time
+      current_time <- Sys.time()
+
+      # Create a dataframe with the batch_id and values
+      batch_data = data.frame(
+          self$batch_id, current_time, private$job_id, self$job_name, self$wall_time, 
+          self$n_nodes, self$n_cpus, self$mem_total, self$mem_per_cpu, self$batch_directory, 
+          self$batch_code, self$repolling_interval, self$depends_on_parents, self$parent_jobs, 
+          self$wait_for_children, self$post_children_r_code, self$input_rdata_file, self$input_objects, 
+          self$output_rdata_file, self$batch_generated, self$batch_file_name, self$compute_file_name, 
+          self$child_job_ids)
+
+      # Give the above dataframe column names
+      colnames(batch_data) <- c("batch_id", "submission_time", "job_id", "job_name", "wall_time", 
+          "n_nodes", "n_cpus", "mem_total", "mem_per_cpu", "batch_directory", 
+          "batch_code", "repolling_interval", "depends_on_parents", "parent_jobs", 
+          "wait_for_children", "post_children_r_code", "input_rdata_file", "input_objects", 
+          "output_rdata_file", "batch_generated", "batch_file_name", "compute_file_name", 
+          "child_job_ids")
+
+      # Create a gpa list filler object that just has output_locations$sqlite_db
+      # populated in order to use insert_df_sqlite
+      gpa <- list(output_locations = list(sqlite_db = self$sqlite_db))
+
+      # Insert batch_id and values into batch table here
+      insert_df_sqlite(
+        gpa = gpa,
+        data = batch_data
+      )
 
       if (!is.null(cd) && dir.exists(cd)) setwd(cd) # reset working directory (don't attempt if that directory is absent)
 
