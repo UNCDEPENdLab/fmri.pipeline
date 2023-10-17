@@ -1,13 +1,14 @@
 #' Function which queries for the status of jobs associated with the given gpa object
 #' 
 #' @param gpa you glm_pipeline_arguments list
+#' @param batch_id filter by batch_id from run_glm_pipeline
 #' @param days_back how far back in time to search for jobs (in days)
 #' @param desc whether to sort the status by descending order (newest first)
 #' @param latest_only whether to only show the latest status of each job or all records
 #' @param update whether or not to update the status of unresolved jobs
 #' 
 #' @return a data.frame containing the status of jobs
-show_job_status <- function(gpa=NULL, days_back=1, desc=TRUE, latest_only=TRUE, update=TRUE) {
+show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, latest_only=TRUE, update=TRUE) {
     
     # Use read database function to get the status of the jobs
     status_df <- read_df_sqlite(gpa = gpa, table = "job_status")
@@ -50,24 +51,33 @@ show_job_status <- function(gpa=NULL, days_back=1, desc=TRUE, latest_only=TRUE, 
             status_df <- read_df_sqlite(gpa = gpa, table = "job_status")
     }
     
-    # Get the current time
-    current_time <- Sys.time()
+    # Narrow down status id by batch_id if it's present, otherwise use a time range
+    if(!is.null(batch_id)) {
+        # Only select records from status_df with batch ids matching the batch_id argument
+        status_df <- status_df %>%
+            filter(batch_id == batch_id)
+    } else {
+        # Select records by time range
 
-    # Get the time range to search for jobs
-    range_seconds <- days_back*24*60*60
-    since_time <- current_time - range_seconds
+        # Get the current time
+        current_time <- Sys.time()
 
-    # Query the status df for the latest value of every job id, within the time period of 'range' days
-    # from the current time
-    status_df <- status_df %>%
-        filter(submission_time > since_time) %>%
-    
-    if(latest_only) {
-        # Group by job and pick the latest submission time
-        status_df <- state_df %>%
-            group_by(job_id) %>%
-            filter(submission_time == max(submission_time)) %>%
-            ungroup()
+        # Get the time range to search for jobs
+        range_seconds <- days_back*24*60*60
+        since_time <- current_time - range_seconds
+
+        # Query the status df for the latest value of every job id, within the time period of 'range' days
+        # from the current time
+        status_df <- status_df %>%
+            filter(submission_time > since_time) %>%
+        
+        if(latest_only) {
+            # Group by job and pick the latest submission time
+            status_df <- state_df %>%
+                group_by(job_id) %>%
+                filter(submission_time == max(submission_time)) %>%
+                ungroup()
+        }
     }
     
     # Sort the status_df

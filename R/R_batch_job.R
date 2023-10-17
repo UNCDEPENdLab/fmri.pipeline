@@ -309,7 +309,7 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param wall_time The compute time requested on the cluster dd-HH:MM:SS
     #' @param mem_per_cpu The amount of memory to be requested per cpu
     #' @param mem_total The total amount of memory to requested by the job
-    #' @param batch_id The batch id (not currently used)
+    #' @param batch_id The batch id
     #' @param r_code A character vector or expression containing R code to be executed
     #' @param r_script The path to an R script to be executed by the batch (mutually exclusive with \code{r_code}).
     #' @param post_children_r_code A character vector of R code to be executed after waiting for child jobs finishes
@@ -365,7 +365,7 @@ R_batch_job <- R6::R6Class("batch_job",
         self$mem_total <- mem_total
       }
 
-      if (!is.null(batch_id)) self$batch_id <- as.character(batch_id)
+      if (!is.null(batch_id)) self$batch_id <- batch_id
 
       if (!is.null(r_script)) {
         if (!is.null(r_code)) {
@@ -417,8 +417,6 @@ R_batch_job <- R6::R6Class("batch_job",
 
       if (!is.null(input_rdata_file)) self$input_rdata_file <- input_rdata_file
       if (!is.null(output_rdata_file)) self$output_rdata_file <- output_rdata_file
-
-      # Populate the batch_id field here with random UUID
 
       if (!is.null(scheduler_options)) {
         checkmate::assert_character(scheduler_options)
