@@ -507,20 +507,11 @@ R_batch_job <- R6::R6Class("batch_job",
 
       # Create a dataframe with the batch_id and values
       batch_data = data.frame(
-          self$batch_id, current_time, private$job_id, self$job_name, self$wall_time, 
-          self$n_nodes, self$n_cpus, self$mem_total, self$mem_per_cpu, self$batch_directory, 
-          self$batch_code, self$repolling_interval, self$depends_on_parents, self$parent_jobs, 
-          self$wait_for_children, self$post_children_r_code, self$input_rdata_file, self$input_objects, 
-          self$output_rdata_file, self$batch_generated, self$batch_file_name, self$compute_file_name, 
-          self$child_job_ids)
+        self$batch_id, current_time, private$job_id, self$job_name
+      )
 
       # Give the above dataframe column names
-      colnames(batch_data) <- c("batch_id", "submission_time", "job_id", "job_name", "wall_time", 
-          "n_nodes", "n_cpus", "mem_total", "mem_per_cpu", "batch_directory", 
-          "batch_code", "repolling_interval", "depends_on_parents", "parent_jobs", 
-          "wait_for_children", "post_children_r_code", "input_rdata_file", "input_objects", 
-          "output_rdata_file", "batch_generated", "batch_file_name", "compute_file_name", 
-          "child_job_ids")
+      colnames(batch_data) <- c("batch_id", "job_id", "job_name", "state", "timestamp")
 
       # Create a gpa list filler object that just has output_locations$sqlite_db
       # populated in order to use insert_df_sqlite
