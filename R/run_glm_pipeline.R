@@ -39,7 +39,7 @@ l3_model_names = "prompt", glm_software = NULL) {
     job_name = "finalize_configuration", batch_directory = batch_directory, scheduler = gpa$scheduler,
     input_rdata_file = gpa_cache, output_rdata_file = gpa_cache,
     n_nodes = 1, n_cpus = 1, wall_time = gpa$parallel$finalize_time,
-    mem_total = "16G", batch_id = batch_id,
+    mem_total = "16G", batch_id = batch_id, sqlite_db = gpa$output_locations$job_status_db,
     r_code = "gpa <- finalize_pipeline_configuration(gpa)", r_packages = "fmri.pipeline",
     batch_code = get_compute_environment(gpa),
     scheduler_options = gpa$parallel$sched_args

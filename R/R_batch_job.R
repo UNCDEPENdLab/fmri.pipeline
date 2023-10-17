@@ -310,6 +310,7 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param mem_per_cpu The amount of memory to be requested per cpu
     #' @param mem_total The total amount of memory to requested by the job
     #' @param batch_id The batch id
+    #' @param sqlite_db The path to the sqlite database to be used for job tracking
     #' @param r_code A character vector or expression containing R code to be executed
     #' @param r_script The path to an R script to be executed by the batch (mutually exclusive with \code{r_code}).
     #' @param post_children_r_code A character vector of R code to be executed after waiting for child jobs finishes
@@ -327,7 +328,7 @@ R_batch_job <- R6::R6Class("batch_job",
     #'   compute environment `Sys.info()` when the job starts.
     #' @param print_environment If TRUE, print the session environment via `Sys.getenv()` when the job starts. Default: FALSE.
     initialize = function(batch_directory = NULL, parent_jobs = NULL, job_name = NULL, n_nodes = NULL, n_cpus = NULL,
-                          wall_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL, r_script = NULL,
+                          wall_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, sqlite_db = NULL, r_code = NULL, r_script = NULL,
                           post_children_r_code = NULL, batch_code = NULL, r_packages = NULL, scheduler = NULL, wait_for_children = NULL,
                           input_rdata_file = NULL, input_objects = NULL, output_rdata_file = NULL,
                           scheduler_options = NULL, repolling_interval = NULL, print_session_info = TRUE, print_environment = FALSE) {
@@ -366,6 +367,7 @@ R_batch_job <- R6::R6Class("batch_job",
       }
 
       if (!is.null(batch_id)) self$batch_id <- batch_id
+      if (!is.null(sqlite_db)) self$batch_id <- sqlite_db
 
       if (!is.null(r_script)) {
         if (!is.null(r_code)) {
