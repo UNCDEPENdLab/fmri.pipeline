@@ -42,7 +42,72 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
   job_complete <- FALSE
   wait_start <- Sys.time()
 
-  get_job_status <- function() { # use variables in parent environment
+  ret_code <- NULL # should be set to TRUE if all jobs complete and FALSE if any job fails 
+
+  while (job_complete == FALSE) {
+    status <- get_job_status(job_ids=job_ids, scheduler=scheduler)
+
+    # update wait time
+    wait_total <- difftime(Sys.time(), wait_start, units = "sec")
+
+    # Debugging
+    # cat("Wait so far: ", wait_total, "\n")
+
+    if (any(status == "running")) {
+      if (isFALSE(quiet)) {
+        cat("Job(s) still running:", paste(job_ids[status == "running"], collapse = ", "), "\n")
+      }
+    }
+
+    if (any(status == "queued")) {
+      if (isFALSE(quiet)) {
+        cat("Job(s) still queued:", paste(job_ids[status == "queued"], collapse = ", "), "\n")
+      }
+    }
+
+    if (any(status == "suspended")) {
+      if (isFALSE(quiet)) {
+        cat("Job(s) suspended:", paste(job_ids[status == "suspended"], collapse = ", "), "\n")
+      }
+    }
+
+    if (any(status == "missing")) {
+      if (isFALSE(quiet)) {
+        cat("Job(s) missing from scheduler response:", paste(job_ids[status == "missing"], collapse = ", "), "\n")
+      }
+    }
+
+    if (wait_total > max_wait) {
+      if (isTRUE(stop_on_timeout)) {
+        stop("Maximum wait time: ", max_wait, " exceeded. Stopping execution of parent script because something is wrong.")
+      } else {
+        return(FALSE)
+      }
+    } else if (all(status %in% c("failed", "complete"))) {
+      job_complete <- TRUE # drop out of this loop
+      if (isFALSE(quiet)) {
+        cat("All jobs have finished.\n")
+      }
+      if (any(status == "failed")) {
+        cat("The following jobs(s) failed:", paste(job_ids[status == "failed"], collapse = ", "), "\n")
+        ret_code <- FALSE
+      } else {
+        ret_code <- TRUE
+      }
+    } else {
+      Sys.sleep(repolling_interval) # wait and repoll jobs
+    }
+  }
+
+  return(invisible(ret_code))
+}
+
+#' Get the status of a list of jobs based on scheduler type
+#' 
+#' @author Michael Hallquist
+#' @importFrom dplyr full_join if_else bind_rows
+#' @export
+get_job_status <- function(job_ids = NULL, scheduler = "local") { # use variables in parent environment
     if (scheduler %in% c("slurm", "sbatch")) {
       status <- slurm_job_status(job_ids)
       state <- sapply(status$State, function(x) {
@@ -99,66 +164,6 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
     }
     return(state)
   }
-
-  ret_code <- NULL # should be set to TRUE if all jobs complete and FALSE if any job fails 
-
-  while (job_complete == FALSE) {
-    status <- get_job_status()
-
-    # update wait time
-    wait_total <- difftime(Sys.time(), wait_start, units = "sec")
-
-    # Debugging
-    # cat("Wait so far: ", wait_total, "\n")
-
-    if (any(status == "running")) {
-      if (isFALSE(quiet)) {
-        cat("Job(s) still running:", paste(job_ids[status == "running"], collapse = ", "), "\n")
-      }
-    }
-
-    if (any(status == "queued")) {
-      if (isFALSE(quiet)) {
-        cat("Job(s) still queued:", paste(job_ids[status == "queued"], collapse = ", "), "\n")
-      }
-    }
-
-    if (any(status == "suspended")) {
-      if (isFALSE(quiet)) {
-        cat("Job(s) suspended:", paste(job_ids[status == "suspended"], collapse = ", "), "\n")
-      }
-    }
-
-    if (any(status == "missing")) {
-      if (isFALSE(quiet)) {
-        cat("Job(s) missing from scheduler response:", paste(job_ids[status == "missing"], collapse = ", "), "\n")
-      }
-    }
-
-    if (wait_total > max_wait) {
-      if (isTRUE(stop_on_timeout)) {
-        stop("Maximum wait time: ", max_wait, " exceeded. Stopping execution of parent script because something is wrong.")
-      } else {
-        return(FALSE)
-      }
-    } else if (all(status %in% c("failed", "complete"))) {
-      job_complete <- TRUE # drop out of this loop
-      if (isFALSE(quiet)) {
-        cat("All jobs have finished.\n")
-      }
-      if (any(status == "failed")) {
-        cat("The following jobs(s) failed:", paste(job_ids[status == "failed"], collapse = ", "), "\n")
-        ret_code <- FALSE
-      } else {
-        ret_code <- TRUE
-      }
-    } else {
-      Sys.sleep(repolling_interval) # wait and repoll jobs
-    }
-  }
-
-  return(invisible(ret_code))
-}
 
 # calls sacct with a job list
 slurm_job_status <- function(job_ids = NULL, user = NULL, sacct_format = "jobid,submit,timelimit,start,end,state") {
