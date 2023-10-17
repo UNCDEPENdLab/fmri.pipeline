@@ -65,13 +65,13 @@ summarize_pipeline <- function(gpa) {
           # Compute Environment Info
           cat("--------\n Computing Environment: \n")
           cat(" Global:\n")
-          cat("  -  ", gpa$parallel$compute_environment[2], "\n")
+          cat("  -  ", gpa$parallel$compute_environment$global, "\n")
           cat(" R:\n")
-          cat("  -  ", gpa$parallel$compute_environment[1], "\n")
+          cat("  -  ", gpa$parallel$compute_environment$r[2], "\n")
           cat(" FSL:\n")
-          cat("  -  ", gpa$parallel$fsl$compute_environment, "\n")
+          cat("  -  ", gpa$parallel$compute_environment$fsl[2], "\n")
           cat(" AFNI:\n")
-          cat("  -  ", gpa$parallel$afni$compute_environment, "\n")
+          cat("  -  ", gpa$parallel$compute_environment$afni[2], "\n")
           # Output Directory and System Info
           cat("--------\n System Info: \n")
           cat(" -  Output Directory: ", gpa$output_directory[1], "\n")
@@ -230,3 +230,4 @@ l1_yaml <- function(gpa){
             return(cat("\nGoodbye.\n"))
           )
 }
+
