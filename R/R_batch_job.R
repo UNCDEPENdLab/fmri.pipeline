@@ -506,8 +506,10 @@ R_batch_job <- R6::R6Class("batch_job",
       current_time <- Sys.time()
 
       # Create a dataframe with the batch_id and values
+      # SUBMITTED is a special state used before state is fetched from batch scheduler to indicate
+      # that the job was submitted but has a non-confirmed status
       batch_data = data.frame(
-        self$batch_id, current_time, private$job_id, self$job_name
+        self$batch_id, private$job_id, self$job_name, "SUBMITTED", current_time
       )
 
       # Give the above dataframe column names
@@ -520,7 +522,9 @@ R_batch_job <- R6::R6Class("batch_job",
       # Insert batch_id and values into batch table here
       insert_df_sqlite(
         gpa = gpa,
-        data = batch_data
+        table = "job_status",
+        data = batch_data,
+        append = TRUE
       )
 
       if (!is.null(cd) && dir.exists(cd)) setwd(cd) # reset working directory (don't attempt if that directory is absent)
