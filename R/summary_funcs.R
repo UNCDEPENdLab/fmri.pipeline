@@ -175,15 +175,15 @@ l1_yaml <- function(gpa){
       checkmate::assert_number(ee$duration, lower=0)
     }
     checkmate::assert_string(ee$isi, null.ok = TRUE)
-    eobj$name <- ee$name
+    name_e <- ee$name
     eobj$onset <- ee$onset
     eobj$duration <- ee$duration
     eobj$isi <- ee$isi
-    end_yaml$events[[eobj$name]] <- eobj # this will overwrite existing specification
+    end_yaml$events[[name_e]] <- eobj # this will overwrite existing specification
   }
   sobj <- list()
   for (ss in gpa2$signals) {
-    sobj$name <- ss$name
+    name_s <- ss$name
     sobj$event <- ss$event
     sobj$trial_subset_expression <- ss$trial_subset_expression
     if (!is.null(ss$normalization)) {
@@ -204,13 +204,24 @@ l1_yaml <- function(gpa){
         sobj$value_type <- "number"
       }
     }
-    end_yaml$signals[[sobj$name]] <- sobj
+    end_yaml$signals[[name_s]] <- sobj
   }
   mobj <- list()
   for (mm in gpa2$models) {
-    mobj$name <- mm$name
+    name_m <- mm$name
+    mobj$diagonal <- mm$contrast_spec$diagonal
+    mobj$cell_means <- mm$contrast_spec$cell_means
+    mobj$overall_response <- mm$contrast_spec$overall_response
+    mobj$weights <- mm$contrast_spec$weights
     mobj$signals <- mm$signals
-    end_yaml$models[[mobj$name]] <- mobj
+    cobj <- list()
+    for (i in seq_along(colnames(mm$contrasts))) {
+      name_c <- colnames(mm$contrasts)[i]
+      cobj$row <- rownames(mm$contrasts)[which(mm$contrasts[i,]!=0)]
+      cobj$contrast <- mm$contrasts[i,which(gpa22$contrasts[i,]!=0)]
+      mobj$contrasts[[name_c]] <- cobj
+    }
+    end_yaml$models[[name_m]] <- mobj
   }
   endyaml3 <- as.yaml(end_yaml)
   yaml_choice <- menu(c(
@@ -222,7 +233,7 @@ l1_yaml <- function(gpa){
             return(cat(endyaml3, "\nGoodbye.\n"))
           } else if (yaml_choice == 2) {
             writeLines(endyaml3, "output.yaml")
-            return(cat("\nFile should be seen as \"output.yaml\"."))
+            return(cat("\nFile should be seen as \"output.yaml\".\nGoodbye.\n"))
           } else if (yaml_choice == 3) {
             writeLines(endyaml3, "output.yaml")
             return(endyaml3, "\nFile should be seen as \"output.yaml\".")
@@ -231,3 +242,112 @@ l1_yaml <- function(gpa){
           )
 }
 
+l2_yaml <- function(gpa){
+  gpa2 <- gpa$l2_models
+  end_yaml2 <- list()
+  ## Model Specifications
+  mobj2 <- list()
+  for (m2 in gpa2$models) {
+    name_m2 <- m2$name
+    mobj2$model_variables <- m2$model_variables
+    mobj2$covariate_transform <- m2$covariate_transform
+    csobj <- list(
+      diagonal = m2$contrast_spec$diagonal,
+      cell_means = m2$contrast_spec$cell_means,
+      overall_response = m2$contrast_spec$overall_response,
+      simple_slopes = m2$contrast_spec$simple_slopes,
+      weights = m2$contrast_spec$weights
+    )
+    mobj2$contrast_spec <- csobj
+    #for (cs in m2$contrast_spec){
+    #  csobj$diagonal <- cs$diagonal
+    #  csobj$cell_means <- cs$cell_means
+    #  csobj$overall_response <- cs$overall_response
+    #  csobj$simple_slopes <- cs$simple_slopes
+    #  csobj$weights <- cs$weights
+    #  mobj2$constrast_spec[[]]
+    #}
+    #end_yaml2$models1[[name_m2]] <- mobj2
+  }
+  mobj <- list()
+  for (mm in gpa2$models) {
+    name_m <- mm$name
+    mobj$model_variables <- mm$model_variables
+    mobj$covariate_transform <- mm$covariate_transform
+    mobj$diagonal <- mm$contrast_spec$diagonal
+    mobj$cell_means <- mm$contrast_spec$cell_means
+    mobj$overall_response <- mm$contrast_spec$overall_response
+    mobj$weights <- mm$contrast_spec$weights
+    mobj$signals <- mm$signals
+    cobj <- list()
+    for (i in seq_along(colnames(mm$contrasts))) {
+      name_c <- colnames(mm$contrasts)[i]
+      cobj$row <- rownames(mm$contrasts)[which(mm$contrasts[i,]!=0)]
+      cobj$contrast <- mm$contrasts[i,which(mm$contrasts[i,]!=0)]
+      mobj$contrasts[[name_c]] <- cobj
+    }
+    mobj$coefficient <- mm$lmfit$coefficients
+    end_yaml2[[name_m]] <- mobj
+  }
+  endyaml23 <- as.yaml(end_yaml2)
+  yaml_choice <- menu(c(
+          "Console Output",
+          "File Output",
+          "Both",
+          "Exit"), title= "How would you like to receive the YAML file?")
+          if (yaml_choice == 1) {
+            return(cat(endyaml23, "\nGoodbye.\n"))
+          } else if (yaml_choice == 2) {
+            writeLines(endyaml23, "output.yaml")
+            return(cat("\nFile should be seen as \"output.yaml\".\nGoodbye.\n"))
+          } else if (yaml_choice == 3) {
+            writeLines(endyaml23, "output.yaml")
+            return(endyaml23, "\nFile should be seen as \"output.yaml\".")
+          } else (
+            return(cat("\nGoodbye.\n"))
+          )
+}
+
+l3_yaml <- function(gpa){
+  gpa2 <- gpa$l3_models
+  end_yaml <- list()
+  ## Model Specifications
+  mobj <- list()
+  for (mm in gpa2$models) {
+    name_m <- mm$name
+    mobj$model_variables <- mm$model_variables
+    mobj$covariate_transform <- mm$covariate_transform
+    mobj$diagonal <- mm$contrast_spec$diagonal
+    mobj$cell_means <- mm$contrast_spec$cell_means
+    mobj$overall_response <- mm$contrast_spec$overall_response
+    mobj$weights <- mm$contrast_spec$weights
+    mobj$signals <- mm$signals
+    cobj <- list()
+    for (i in seq_along(colnames(mm$contrasts))) {
+      name_c <- colnames(mm$contrasts)[i]
+      cobj$row <- rownames(mm$contrasts)[which(mm$contrasts[i,]!=0)]
+      cobj$contrast <- mm$contrasts[i,which(mm$contrasts[i,]!=0)]
+      mobj$contrasts[[name_c]] <- cobj
+    }
+    mobj$coefficient <- mm$lmfit$coefficients
+    end_yaml[[name_m]] <- mobj
+  }
+  endyaml23 <- as.yaml(end_yaml)
+  yaml_choice <- menu(c(
+          "Console Output",
+          "File Output",
+          "Both",
+          "Exit"), title= "How would you like to receive the YAML file?")
+          if (yaml_choice == 1) {
+            return(cat(endyaml23, "\nGoodbye.\n"))
+          } else if (yaml_choice == 2) {
+            writeLines(endyaml23, "output.yaml")
+            return(cat("\nFile should be seen as \"output.yaml\".\nGoodbye.\n"))
+          } else if (yaml_choice == 3) {
+            writeLines(endyaml23, "output.yaml")
+            return(endyaml23, "\nFile should be seen as \"output.yaml\".")
+          } else (
+            return(cat("\nGoodbye.\n"))
+          )
+}
+l3_yaml(gpa2)
