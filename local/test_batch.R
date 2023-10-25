@@ -5,7 +5,7 @@ w <- R_batch_job$new(
   job_name="step1",
   n_nodes=1,
   n_cpus=1,
-  cpu_time="10:00",
+  wall_time="10:00",
   r_code=c(
     "Sys.sleep(100)",
     "print('hi')",
