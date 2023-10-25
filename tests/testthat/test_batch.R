@@ -1,5 +1,3 @@
-library(fmri.pipeline)
-
 test_that("Basic job setup works", {
 	# note that HPC settings like nodes and batch_code are ignored for local scheduler
 	w <- R_batch_job$new(

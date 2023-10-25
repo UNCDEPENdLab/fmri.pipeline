@@ -1,5 +1,3 @@
-library(testthat)
-
 #' Test summarization of GPA
 test_that("Summarize GPA", {
   gpa <- get_gpa("testdata")
