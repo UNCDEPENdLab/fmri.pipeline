@@ -5,76 +5,39 @@ library(data.table)
 library(lgr)
 library(foreach)
 library(doParallel)
-# library(dependlab)
 library(emmeans)
 library(glue)
-library(oro.nifti)
-library(RNifti)
 # library(fmri.pipeline)
 
-setwd("/proj/mnhallqlab/users/michael/fmri.pipeline/R")
-source("setup_glm_pipeline.R")
-source("finalize_pipeline_configuration.R")
-source("glm_helper_functions.R")
-source("fsl_helper_functions.R")
-source("fsl_l1_model.R")
-source("fsl_l2_model.R")
-source("fsl_l3_model.R")
-source("setup_l1_models.R")
-source("setup_l2_models.R")
-source("setup_l3_models.R")
-source("specify_contrasts.R")
-source("build_l2_models.R")
-source("build_l1_models.R")
-source("glm_helper_functions.R")
-source("lookup_nifti_inputs.R")
-source("get_l1_confounds.R")
-source("truncate_runs.R")
-source("run_feat_sepjobs.R")
-source("cluster_job_submit.R")
-source("insert_df_sqlite.R")
-source("read_df_sqlite.R")
-source("get_output_directory.R")
-source("populate_l1_from_yaml.R")
-source("l1_helper_functions.R")
-source("build_design_matrix.R")
-source("fmri_utility_fx.R")
-source("build_fwe_correction.R")
-source("ptfce_spec.R")
-source("R_batch_job.R")
-source("voxelwise_deconvolution.R")
-source("event_lock_timeseries.R")
-source("fmri_ts.R")
-
-d <- data.table::fread("/proj/mnhallqlab/projects/medusa_simulation/simulated_data/batch026/rw_ntrial30_samp5_smid5_tr1_snr1_nC5_nT765_cnv0/rep01/medusa_preanalyzed/outputFile_basicTrial_samp100_tr0dot5_snr1_nC5_nT150_rep1_subject_001_COMP_MASK/deconvolved/sub002_deconvolved.csv.gz")
-
-decon_dat <- d %>%
-  select(vnum, time, decon, atlas_value) %>%
-  mutate(atlas_value = round(atlas_value) - 1) %>%
-  data.table() # remove weird rounding error issues from matlab
-
-event_data_tot <- get(load("/proj/mnhallqlab/projects/medusa_simulation/simulated_data/batch026/rw_ntrial30_samp5_smid5_tr1_snr1_nC5_nT765_cnv0/task_designs/rep01/td_rw_ntrial30_samp5_smid5_tr1_snr1_nC5_nT765_cnv0_subject_002.RData"))
-event_data <- event_data_tot$ev_times %>%
-  mutate(id = "002") %>%
-  select(id, event, run, trial, start_vol) %>%
-  spread(event, start_vol) %>%
-  tibble()
-ev_vol <- event_data_tot$events$feedback$act_func$time
-time_be <- ev_vol[1]
-time_af <- ev_vol[length(ev_vol)]
-
-fmri_event_data <- fmri_ts$new(
-  ts_data = decon_dat, event_data = event_data, tr = 1.0,
-  vm = list(value = c("decon"), key = c("vnum", "atlas_value"))
+# setwd("/proj/mnhallqlab/users/michael/fmri.pipeline/R")
+# setwd("~/Data_Analysis/r_packages/fmri.pipeline/R")
+file.sources <- list.files("~/Data_Analysis/r_packages/fmri.pipeline/R",
+  pattern = "*.R$", full.names = TRUE,
+  ignore.case = TRUE
 )
+sapply(file.sources, source, .GlobalEnv)
 
-interp_dt <- get_medusa_interpolated_ts(fmri_event_data,
-  event = "feedback", time_before = time_be, time_after = time_af,
-  collide_before = "feedback", collide_after = NULL,
-  pad_before = -1.5, pad_after = 1.5, output_resolution = metadata$TR,
-  group_by = c("atlas_value", "trial")
-)
-
+# source("setup_glm_pipeline.R")
+# source("finalize_pipeline_configuration.R")
+# source("glm_helper_functions.R")
+# source("fsl_helper_functions.R")
+# source("fsl_l1_model.R")
+# source("fsl_l2_model.R")
+# source("fsl_l3_model.R")
+# source("setup_l1_models.R")
+# source("setup_l2_models.R")
+# source("setup_l3_models.R")
+# source("specify_contrasts.R")
+# source("build_l2_models.R")
+# source("build_l1_models.R")
+# source("glm_helper_functions.R")
+# source("lookup_nifti_inputs.R")
+# source("get_l1_confounds.R")
+# source("run_feat_sepjobs.R")
+# source("cluster_job_submit.R")
+# source("insert_df_sqlite.R")
+# source("read_df_sqlite.R")
+# source("build_design_matrix.R")
 
 trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
   mutate(rt_sec = rt_csv / 1000) %>%
