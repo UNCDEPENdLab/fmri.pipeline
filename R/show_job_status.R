@@ -92,3 +92,4 @@ show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, lat
     # Show the status_df
     status_df
 }
+}
