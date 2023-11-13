@@ -34,6 +34,8 @@ test_that("Basic job setup works", {
 test_that("Basic job submission works", {
 	# note that HPC settings like nodes and batch_code are ignored for local scheduler
 	w <- get_simple_batch_job()
+	w$batch_id <- "test_batch_id_123"
+	w$sqlite_db <- file.path(tempdir(), "testdb")
 
 	w$submit()
 	print(list.files(w$batch_directory))
