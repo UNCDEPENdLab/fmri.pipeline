@@ -157,11 +157,11 @@ summ_l1_sig <- function(sl) {
 }
 
 library(yaml)
-l1_yaml <- function(gpa){
+l1_yaml <- function(gpa) {
   gpa2 <- gpa$l1_models
   ## Model Specifications
   end_yaml <- list(
-  onset = gpa2$onset,
+  onsets = gpa2$onset,
   durations = gpa2$durations,
   isis = gpa2$isis,
   wi_factors = gpa2$wi_factors,
@@ -207,21 +207,25 @@ l1_yaml <- function(gpa){
     end_yaml$signals[[name_s]] <- sobj
   }
   mobj <- list()
-  for (mm in gpa2$models) {
+    for (mm in gpa2$models) {
     name_m <- mm$name
     mobj$diagonal <- mm$contrast_spec$diagonal
+    diag(mm$contrasts) <- ifelse(mobj$diagonal==TRUE, 0, diag(mm$contrasts))
     mobj$cell_means <- mm$contrast_spec$cell_means
     mobj$overall_response <- mm$contrast_spec$overall_response
     mobj$weights <- mm$contrast_spec$weights
     mobj$signals <- mm$signals
     cobj <- list()
-    for (i in seq_along(colnames(mm$contrasts))) {
-      name_c <- colnames(mm$contrasts)[i]
-      cobj$row <- rownames(mm$contrasts)[which(mm$contrasts[i,]!=0)]
-      cobj$contrast <- mm$contrasts[i,which(gpa22$contrasts[i,]!=0)]
+    for (cc in seq_along(colnames(mm$contrasts))) {
+      name_c <- NULL
+      name_c <- colnames(mm$contrasts)[cc]
+      cobj$row <- rownames(mm$contrasts)[which(mm$contrasts[cc,]!=0)]
+      cobj$contrast <- mm$contrasts[cc,which(mm$contrasts[cc,]!=0)]
+      cobj$mm <- mm$name
       mobj$contrasts[[name_c]] <- cobj
     }
-    end_yaml$models[[name_m]] <- mobj
+    end_yaml$l1_models[[name_m]] <- mobj
+    mobj$contrasts <- NULL
   }
   endyaml3 <- as.yaml(end_yaml)
   yaml_choice <- menu(c(
@@ -350,4 +354,3 @@ l3_yaml <- function(gpa){
             return(cat("\nGoodbye.\n"))
           )
 }
-l3_yaml(gpa2)
