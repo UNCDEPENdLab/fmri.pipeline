@@ -1,7 +1,24 @@
-get_simple_batch_job <- function() {
+get_temp_dir <- function(set_working=FALSE, set_env=FALSE) {
+	tmpdir <- tempfile()
+	dir.create(tmpdir, showWarnings=FALSE)
+
+	sprintf("Using temp dir: %s", tmpdir)
+
+	if(set_working) {
+		setwd(tmpdir)
+	}
+
+	if(set_env) {
+		Sys.setenv(TMPDIR=tmpdir)
+	}
+
+	return(tmpdir)
+}
+
+get_simple_batch_job <- function(tmp_dir=get_temp_dir()) {
 	return(
 		R_batch_job$new(
-			batch_directory=tempdir(),
+			batch_directory=tmp_dir,
 			job_name="step1",
 			n_nodes=1,
 			n_cpus=1,
@@ -33,11 +50,26 @@ test_that("Basic job setup works", {
 
 test_that("Basic job submission works", {
 	# note that HPC settings like nodes and batch_code are ignored for local scheduler
-	w <- get_simple_batch_job()
+	tmp_dir <- get_temp_dir()
+	
+	w <- get_simple_batch_job(tmp_dir=tmp_dir)
 	w$batch_id <- "test_batch_id_123"
-	w$sqlite_db <- file.path(tempdir(), "testdb")
+	w$sqlite_db <- file.path(tmp_dir, "testdb")
 
 	w$submit()
 	print(list.files(w$batch_directory))
+
+	con <- dbConnect(RSQLite::SQLite(), dbname = w$sqlite_db)
+	
+	# List all tables in the database
+	tables <- dbListTables(con)
+
+	# Print the tables
+	job_status_data <- dbReadTable(con, "job_status")
+	print(job_status_data)
+
+	# Disconnect from the database
+	dbDisconnect(con)
+
 	expect_equal(1, 1)
 })
