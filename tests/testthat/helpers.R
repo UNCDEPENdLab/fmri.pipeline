@@ -1,4 +1,5 @@
 library(data.table)
+library(DBI)
 
 #' Build the trial dataframe from test data. This file is already saved in the repo, so should only be used to
 #' adjust the run data file.
