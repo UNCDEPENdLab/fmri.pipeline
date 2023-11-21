@@ -8,5 +8,6 @@
 
 library(testthat)
 library(fmri.pipeline)
+library(DBI)
 
 test_check("fmri.pipeline")

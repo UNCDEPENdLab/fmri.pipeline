@@ -15,6 +15,20 @@ get_temp_dir <- function(set_working=FALSE, set_env=FALSE) {
 	return(tmpdir)
 }
 
+preview_db <- function(db_path, table="job_status") {
+	con <- dbConnect(RSQLite::SQLite(), dbname = db_path)
+	
+	# List all tables in the database
+	tables <- dbListTables(con)
+
+	# Print the tables
+	table_data <- dbReadTable(con, table)
+	print(table_data)
+
+	# Disconnect from the database
+	dbDisconnect(con)
+}
+
 get_simple_batch_job <- function(tmp_dir=get_temp_dir()) {
 	return(
 		R_batch_job$new(
@@ -59,17 +73,7 @@ test_that("Basic job submission works", {
 	w$submit()
 	print(list.files(w$batch_directory))
 
-	con <- dbConnect(RSQLite::SQLite(), dbname = w$sqlite_db)
-	
-	# List all tables in the database
-	tables <- dbListTables(con)
-
-	# Print the tables
-	job_status_data <- dbReadTable(con, "job_status")
-	print(job_status_data)
-
-	# Disconnect from the database
-	dbDisconnect(con)
+	preview_db(w$sqlite_db)
 
 	expect_equal(1, 1)
 })
