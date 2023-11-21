@@ -1,34 +1,3 @@
-get_temp_dir <- function(set_working=FALSE, set_env=FALSE) {
-	tmpdir <- tempfile()
-	dir.create(tmpdir, showWarnings=FALSE)
-
-	sprintf("Using temp dir: %s", tmpdir)
-
-	if(set_working) {
-		setwd(tmpdir)
-	}
-
-	if(set_env) {
-		Sys.setenv(TMPDIR=tmpdir)
-	}
-
-	return(tmpdir)
-}
-
-preview_db <- function(db_path, table="job_status") {
-	con <- dbConnect(RSQLite::SQLite(), dbname = db_path)
-	
-	# List all tables in the database
-	tables <- dbListTables(con)
-
-	# Print the tables
-	table_data <- dbReadTable(con, table)
-	print(table_data)
-
-	# Disconnect from the database
-	dbDisconnect(con)
-}
-
 get_simple_batch_job <- function(tmp_dir=get_temp_dir()) {
 	return(
 		R_batch_job$new(
