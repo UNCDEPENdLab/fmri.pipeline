@@ -523,11 +523,7 @@ R_batch_job <- R6::R6Class("batch_job",
       gpa <- list(output_locations = list(sqlite_db = self$sqlite_db), id="123")
       class(gpa) <- c("list", "glm_pipeline_arguments")
 
-      # Temporarily copied over from finalize_pipeline_configuration
-      if (is.null(gpa$sqlite_con) || !DBI::dbIsValid(gpa$sqlite_con)) {
-        print(paste0("Opening SQLite connection to: ", gpa$output_locations$sqlite_db))
-        gpa$sqlite_con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
-      }
+      gpa$sqlite_con <- get_sqlite_conn(gpa$output_locations$sqlite_db, gpa$sqlite_con)
 
       # Insert batch_id and values into batch table here
       insert_df_sqlite(

@@ -22,10 +22,8 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
     return(gpa)
   }
 
-  if (is.null(gpa$sqlite_con) || !DBI::dbIsValid(gpa$sqlite_con)) {
-    lg$info("Opening SQLite connection to: %s", gpa$output_locations$sqlite_db)
-    gpa$sqlite_con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
-  }
+  lg$info("Opening SQLite connection to: %s", gpa$output_locations$sqlite_db)
+  gpa$sqlite_con <- get_sqlite_conn(gpa$output_locations$sqlite_db, gpa$sqlite_con)
 
   # final checks on compute environment now that we're running inside the compute environment
   test_compute_environment(gpa, stop_on_fail=TRUE)
