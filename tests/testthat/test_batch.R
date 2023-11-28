@@ -53,12 +53,17 @@ test_that("Nested job submission works", {
 	parent_job$batch_id <- "test_batch_id_123"
 	parent_job$sqlite_db <- db_path
 
-	child_job <- get_simple_batch_job(job_name="child", tmp_dir=tmp_dir)
+	child_job <- get_simple_batch_job(job_name="child1", tmp_dir=tmp_dir)
 	child_job$parent_jobs <- parent_job
 	child_job$batch_id <- "test_batch_id_124"
 	child_job$sqlite_db <- db_path
 
-	jobs <- R_batch_sequence$new(parent_job, child_job)
+	child_job2 <- get_simple_batch_job(job_name="child2", tmp_dir=tmp_dir)
+	child_job2$parent_jobs <- parent_job
+	child_job2$batch_id <- "test_batch_id_125"
+	child_job2$sqlite_db <- db_path
+
+	jobs <- R_batch_sequence$new(parent_job, child_job, child_job2)
 	jobs$submit()
 
 	preview_db(child_job$sqlite_db)
