@@ -504,6 +504,8 @@ R_batch_job <- R6::R6Class("batch_job",
 
       # Get the current time
       current_time <- Sys.time()
+      # Convert current time to ISO
+      current_time <- format(current_time, "%Y-%m-%dT%H:%M:%S")
 
       # Create a dataframe with the batch_id and values
       # SUBMITTED is a special state used before state is fetched from batch scheduler to indicate
