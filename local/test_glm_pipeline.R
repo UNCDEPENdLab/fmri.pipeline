@@ -39,7 +39,9 @@ sapply(file.sources, source, .GlobalEnv)
 # source("read_df_sqlite.R")
 # source("build_design_matrix.R")
 
-trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
+ff <- system.file("example_files/mmy3_trial_df_selective_groupfixed.rds", package = "fmri.pipeline")
+#trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
+trial_df <- readRDS(ff) %>%
   mutate(rt_sec = rt_csv / 1000) %>%
   select(-isi_onset, -iti_onset)
   #mutate(session=1) %>%
@@ -72,10 +74,16 @@ trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/
 # l1_models$models$pe_only$regressors <- c("clock", "feedback", "pe", "d_pe" )
 # rownames(l1_models$models$pe_only$contrasts) <- colnames(l1_models$models$pe_only$contrasts) <- c("clock", "feedback", "pe", "d_pe")
 
-subject_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example_files/mmclock_subject_data.rds") %>%
+ff <- system.file("example_files/mmclock_subject_data.rds", package = "fmri.pipeline")
+subject_df <- readRDS(ff) %>%
   mutate(mr_dir=paste0(mr_dir, "/mni_5mm_aroma")) #make sure we're looking in the right folder
 
+<<<<<<< HEAD
 # run_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example_files/mmclock_run_data.rds")
+=======
+ff <- system.file("example_files/mmclock_run_data.rds", package = "fmri.pipeline")
+run_df <- readRDS(ff)
+>>>>>>> c6a7504 (Support run-level TR variation; make summary of gpa an S3 method; add some ui functions for formatting unique values and statistics)
 #gpa$run_data$..id.. <- NULL
 #saveRDS(gpa$run_data, file = "/proj/mnhallqlab/users/michael/fmri.pipeline/example_files/mmclock_run_data.rds")
 
@@ -87,11 +95,19 @@ subject_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example
 subject_df <- subject_df %>% dplyr::slice(1:8)
 trial_df <- trial_df %>% filter(id %in% subject_df$id)
 
+run_df$tr <- sample(c(1, 2), nrow(run_df), replace=TRUE)
+
 gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm",
   output_directory = "/proj/mnhallqlab/users/michael/fmri_test",
+<<<<<<< HEAD
   subject_data=subject_df, trial_data=trial_df, #run_data=run_df,
   tr=1.0,
   vm=c(run_number="run"),
+=======
+  subject_data=subject_df, run_data=run_df, trial_data=trial_df,
+  tr=NULL,
+  vm=c(id="subid"),
+>>>>>>> c6a7504 (Support run-level TR variation; make summary of gpa an S3 method; add some ui functions for formatting unique values and statistics)
   fmri_file_regex="nfaswuktm_clock[1-8]_5\\.nii\\.gz",
   fmri_path_regex="clock[0-9]",
   run_number_regex=".*clock([0-9]+)_5.*",

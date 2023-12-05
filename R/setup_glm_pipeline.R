@@ -25,7 +25,8 @@
 #'   subject's data. Default is "mr_dir".
 #' @param fmri_file_regex A character string containing a Perl-compatible regular expression for the subfolder and filename
 #'   within the \code{mr_dir} field in \code{subject_data}.
-#' @param tr The repetition time of the scanning sequence in seconds. Used for setting up design matrices
+#' @param tr The repetition time of the scanning sequence in seconds. Used for setting up design matrices. If this is NULL, the
+#'   function will look for a \code{tr} field in the \code{run_data} object, which specifies TR at run level (e.g., if varies).
 #' @param output_directory The output directory for all configuration and job submission files for this analysis.
 #'   Default is a subfolder called "glm_out" in the current working directory.
 #' @param drop_volumes The number of volumes to drop from the fMRI data and convolved regressors prior to analysis.
@@ -111,7 +112,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   checkmate::assert_character(vm, unique = TRUE) # all values of vm must refer to distinct columns
 
   # would be insane to have super-long TR (suggests milliseconds, not seconds passed in)
-  checkmate::assert_number(tr, lower = 0.01, upper = 20)
+  checkmate::assert_number(tr, lower = 0.01, upper = 20, null.ok = TRUE)
   checkmate::assert_string(fmri_file_regex, null.ok = TRUE)
   checkmate::assert_string(run_number_regex, null.ok = TRUE)
   checkmate::assert_integerish(drop_volumes)
@@ -182,6 +183,24 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   # check completeness of run data and correct any data expectation problems
   run_data <- validate_input_data(run_data, vm, lg, level="run")
+
+  # handle setup of TR as global versus run-level
+  if (is.null(tr) && is.null(run_data$tr)) {
+    stop("A TR was not provided in the setup_glm_pipeline call or in run_data. Please provide one or the other.")
+  } else if (!is.null(tr) && is.null(run_data$tr)) {
+    # single TR applies to all runs. Copy it to run_data as a variable
+    run_data$tr <- tr
+  } else if (!is.null(tr) && !is.null(run_data$tr)) {
+    warning(
+      "TR provided in both the setup_glm_pipeline call and in run_data. ",
+      "We will use the values in run_data and ignore the tr argument to setup_glm_pipeline."
+    )
+  }
+
+  # final test on TR
+  if (!checkmate::test_numeric(run_data$tr, lower=0.01, upper=20)) {
+    stop("Please provide a TR in seconds.")
+  }
 
   # create subject data
   if (is.null(subject_data)) {
