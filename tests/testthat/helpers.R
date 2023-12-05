@@ -240,3 +240,27 @@ preview_db <- function(db_path, table="job_status") {
 	# Disconnect from the database
 	dbDisconnect(con)
 }
+
+get_simple_batch_job <- function(job_name="step1", tmp_dir=get_temp_dir()) {
+	return(
+		R_batch_job$new(
+			batch_directory=tmp_dir,
+			job_name=job_name,
+			n_nodes=1,
+			n_cpus=1,
+			wall_time="10:00",
+			r_code=c(
+					"Sys.sleep(100)",
+					"print('hi')",
+					"x <- 2+2"
+			),
+			r_packages=c("lme4"),
+			batch_code = c(
+					"module use /proj/mnhallqlab/sw/modules",
+					"module load r/4.0.3_depend"
+			),
+			scheduler="slurm",
+			repolling_interval=1 #repoll every second for this test (should be slower for real jobs)
+		)
+	)
+}
