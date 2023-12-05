@@ -5,39 +5,45 @@ library(data.table)
 library(lgr)
 library(foreach)
 library(doParallel)
-# library(dependlab)
 library(emmeans)
 library(glue)
 library(oro.nifti)
 library(RNifti)
 # library(fmri.pipeline)
 
-setwd("/proj/mnhallqlab/users/michael/fmri.pipeline/R")
-source("setup_glm_pipeline.R")
-source("finalize_pipeline_configuration.R")
-source("glm_helper_functions.R")
-source("fsl_helper_functions.R")
-source("fsl_l1_model.R")
-source("fsl_l2_model.R")
-source("fsl_l3_model.R")
-source("setup_l1_models.R")
-source("setup_l2_models.R")
-source("setup_l3_models.R")
-source("specify_contrasts.R")
-source("build_l2_models.R")
-source("build_l1_models.R")
-source("glm_helper_functions.R")
-source("lookup_nifti_inputs.R")
-source("get_l1_confounds.R")
-source("truncate_runs.R")
+# setwd("/proj/mnhallqlab/users/michael/fmri.pipeline/R")
+# setwd("~/Data_Analysis/r_packages/fmri.pipeline/R")
+file.sources <- list.files("~/Data_Analysis/r_packages/fmri.pipeline/R",
+  pattern = "*.R$", full.names = TRUE,
+  ignore.case = TRUE
+)
+sapply(file.sources, source, .GlobalEnv)
+
+# source("setup_glm_pipeline.R")
+# source("finalize_pipeline_configuration.R")
+# source("glm_helper_functions.R")
+# source("fsl_helper_functions.R")
+# source("fsl_l1_model.R")
+# source("fsl_l2_model.R")
+# source("fsl_l3_model.R")
+# source("setup_l1_models.R")
+# source("setup_l2_models.R")
+# source("setup_l3_models.R")
+# source("specify_contrasts.R")
+# source("build_l2_models.R")
+# source("build_l1_models.R")
+# source("glm_helper_functions.R")
+# source("lookup_nifti_inputs.R")
+# source("get_l1_confounds.R")
+# source("truncate_runs.R")
 source("run_feat_sepjobs.R")
-source("cluster_job_submit.R")
-source("insert_df_sqlite.R")
-source("read_df_sqlite.R")
+# source("cluster_job_submit.R")
+# source("insert_df_sqlite.R")
+# source("read_df_sqlite.R")
 source("get_output_directory.R")
 source("populate_l1_from_yaml.R")
 source("l1_helper_functions.R")
-source("build_design_matrix.R")
+ source("build_design_matrix.R")
 source("fmri_utility_fx.R")
 source("build_fwe_correction.R")
 source("ptfce_spec.R")
@@ -76,7 +82,9 @@ interp_dt <- get_medusa_interpolated_ts(fmri_event_data,
 )
 
 
-trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
+ff <- system.file("example_files/mmy3_trial_df_selective_groupfixed.rds", package = "fmri.pipeline")
+#trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
+trial_df <- readRDS(ff) %>%
   mutate(rt_sec = rt_csv / 1000) %>%
   select(-isi_onset, -iti_onset)
   #mutate(session=1) %>%
@@ -109,10 +117,12 @@ trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/
 # l1_models$models$pe_only$regressors <- c("clock", "feedback", "pe", "d_pe" )
 # rownames(l1_models$models$pe_only$contrasts) <- colnames(l1_models$models$pe_only$contrasts) <- c("clock", "feedback", "pe", "d_pe")
 
-subject_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example_files/mmclock_subject_data.rds") %>%
+ff <- system.file("example_files/mmclock_subject_data.rds", package = "fmri.pipeline")
+subject_df <- readRDS(ff) %>%
   mutate(mr_dir=paste0(mr_dir, "/mni_5mm_aroma")) #make sure we're looking in the right folder
 
-# run_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example_files/mmclock_run_data.rds")
+ff <- system.file("example_files/mmclock_run_data.rds", package = "fmri.pipeline")
+run_df <- readRDS(ff)
 #gpa$run_data$..id.. <- NULL
 #saveRDS(gpa$run_data, file = "/proj/mnhallqlab/users/michael/fmri.pipeline/example_files/mmclock_run_data.rds")
 
@@ -121,14 +131,16 @@ subject_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example
 # run_df <- run_df %>% rename(subid = id) %>% mutate(id=subid)
 # subject_df <- subject_df %>% rename(subid = id) %>% mutate(id=subid)
 
+run_df$tr <- sample(c(1, 2), nrow(run_df), replace=TRUE)
+
 subject_df <- subject_df %>% dplyr::slice(1:8)
 trial_df <- trial_df %>% filter(id %in% subject_df$id)
 
 gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm",
   output_directory = "/proj/mnhallqlab/users/michael/fmri_test",
-  subject_data=subject_df, trial_data=trial_df, #run_data=run_df,
-  tr=1.0,
-  vm=c(run_number="run"),
+  subject_data=subject_df, run_data=run_df, trial_data=trial_df,
+  tr=NULL,
+  vm=c(id="subid"),
   fmri_file_regex="nfaswuktm_clock[1-8]_5\\.nii\\.gz",
   fmri_path_regex="clock[0-9]",
   run_number_regex=".*clock([0-9]+)_5.*",

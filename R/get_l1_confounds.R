@@ -43,7 +43,7 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   # populate drop_volumes in run_df if not present
   if (!"drop_volumes" %in% names(run_df)) run_df$drop_volumes <- gpa$drop_volumes
 
-  if (checkmate::test_null(id)) { stop("get_l1_confounds requires a specific id for lookup") }
+  if (checkmate::test_null(id)) stop("get_l1_confounds requires a specific id for lookup")
   checkmate::assert_integerish(session, null.ok=TRUE)
   if (is.null(session)) session <- 1
   checkmate::assert_integerish(run_number, lower=1, null.ok = FALSE)
@@ -261,7 +261,7 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
 
   # add volume and time columns to confounds in case these are helpful in exclusion or truncation expressions
   all_confounds <- all_confounds %>%
-    mutate(volume = 1:n(), time = (volume - 1) * gpa$tr)
+    mutate(volume = 1:n(), time = (volume - 1) * run_df$tr[1L])
 
   # handle NA values in confounds -> convert to 0
   has_na <- sapply(all_confounds, anyNA)
