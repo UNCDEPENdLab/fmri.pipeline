@@ -12,7 +12,9 @@
 show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, latest_only=TRUE, update=TRUE) {
 
     # Use read database function to get the status of the jobs
-    status_df <- read_df_sqlite(gpa = gpa, table = "job_status", id = batch_id)
+    #status_df <- read_df_sqlite(gpa = gpa, table = "job_status", id = batch_id)
+    conn <- get_sqlite_conn(gpa$output_locations$sqlite_db)
+    status_df <- dbReadTable(con, "job_status")
 
     if(update) {
         # Query for the jobs that still have the status "RUNNING" or "SUBMITTED" 
@@ -54,43 +56,44 @@ show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, lat
     }
     
     # Narrow down status id by batch_id if it's present, otherwise use a time range
-    if(!is.null(batch_id)) {
-        # Only select records from status_df with batch ids matching the batch_id argument
-        status_df <- status_df %>%
-            filter(batch_id == batch_id)
-    } else {
-        # Select records by time range
+    # if(!is.null(batch_id)) {
+    #     # Only select records from status_df with batch ids matching the batch_id argument
+    #     status_df <- status_df %>%
+    #         filter(batch_id == batch_id)
+    # } else {
+    #     # Select records by time range
 
-        # Get the current time
-        current_time <- Sys.time()
+    #     # Get the current time
+    #     current_time <- Sys.time()
 
-        # Get the time range to search for jobs
-        range_seconds <- days_back*24*60*60
-        since_time <- current_time - range_seconds
+    #     # Get the time range to search for jobs
+    #     range_seconds <- days_back*24*60*60
+    #     since_time <- current_time - range_seconds
 
-        # Query the status df for the latest value of every job id, within the time period of 'range' days
-        # from the current time
-        status_df <- status_df %>%
-            filter(timestamp > since_time) %>%
+    #     # Query the status df for the latest value of every job id, within the time period of 'range' days
+    #     # from the current time
+    #     status_df <- status_df %>%
+    #         filter(timestamp > since_time) %>%
         
-        if(latest_only) {
-            # Group by job and pick the latest submission time
-            status_df <- state_df %>%
-                group_by(job_id) %>%
-                filter(timestamp == max(timestamp)) %>%
-                ungroup()
-        }
-    }
+    #     if(latest_only) {
+    #         # Group by job and pick the latest submission time
+    #         status_df <- state_df %>%
+    #             group_by(job_id) %>%
+    #             filter(timestamp == max(timestamp)) %>%
+    #             ungroup()
+    #     }
+    # }
     
     # Sort the status_df
-    if(desc) {
-        status_df <- status_df %>%
-            arrange(desc(timestamp))
-    } else {
-        status_df <- status_df %>%
-            arrange(timestamp)
-    }
+    # if(desc) {
+    #     status_df <- status_df %>%
+    #         arrange(desc(timestamp))
+    # } else {
+    #     status_df <- status_df %>%
+    #         arrange(timestamp)
+    # }
     
     # Show the status_df
+    cat("Job status:\n")
     print(status_df)
 }
