@@ -8,10 +8,11 @@
 #' @param update whether or not to update the status of unresolved jobs
 #' 
 #' @return a data.frame containing the status of jobs
+#' @export
 show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, latest_only=TRUE, update=TRUE) {
-    
+
     # Use read database function to get the status of the jobs
-    status_df <- read_df_sqlite(gpa = gpa, table = "job_status")
+    status_df <- read_df_sqlite(gpa = gpa, table = "job_status", id = batch_id)
 
     if(update) {
         # Query for the jobs that still have the status "RUNNING" or "SUBMITTED" 
@@ -49,6 +50,7 @@ show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, lat
             # Re-pull the status_df with the new records
             # Could also avoid a re-pull by just updating the status_df with the new records
             status_df <- read_df_sqlite(gpa = gpa, table = "job_status")
+        }
     }
     
     # Narrow down status id by batch_id if it's present, otherwise use a time range
@@ -69,13 +71,13 @@ show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, lat
         # Query the status df for the latest value of every job id, within the time period of 'range' days
         # from the current time
         status_df <- status_df %>%
-            filter(submission_time > since_time) %>%
+            filter(timestamp > since_time) %>%
         
         if(latest_only) {
             # Group by job and pick the latest submission time
             status_df <- state_df %>%
                 group_by(job_id) %>%
-                filter(submission_time == max(submission_time)) %>%
+                filter(timestamp == max(timestamp)) %>%
                 ungroup()
         }
     }
@@ -83,13 +85,12 @@ show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, lat
     # Sort the status_df
     if(desc) {
         status_df <- status_df %>%
-            arrange(desc(submission_time))
+            arrange(desc(timestamp))
     } else {
         status_df <- status_df %>%
-            arrange(submission_time)
+            arrange(timestamp)
     }
     
     # Show the status_df
-    status_df
-}
+    print(status_df)
 }
