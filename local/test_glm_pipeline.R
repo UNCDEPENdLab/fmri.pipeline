@@ -39,7 +39,9 @@ sapply(file.sources, source, .GlobalEnv)
 # source("read_df_sqlite.R")
 # source("build_design_matrix.R")
 
-trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
+ff <- system.file("example_files/mmy3_trial_df_selective_groupfixed.rds", package = "fmri.pipeline")
+#trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
+trial_df <- readRDS(ff) %>%
   mutate(rt_sec = rt_csv / 1000) %>%
   select(-isi_onset, -iti_onset) %>%
   mutate(session=1) %>%
@@ -72,10 +74,12 @@ l1_models$signals <- lapply(l1_models$signals, function(ss) {
 l1_models$models$pe_only$regressors <- c("clock", "feedback", "pe", "d_pe" )
 rownames(l1_models$models$pe_only$contrasts) <- colnames(l1_models$models$pe_only$contrasts) <- c("clock", "feedback", "pe", "d_pe")
 
-subject_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example_files/mmclock_subject_data.rds") %>%
+ff <- system.file("example_files/mmclock_subject_data.rds", package = "fmri.pipeline")
+subject_df <- readRDS(ff) %>%
   mutate(mr_dir=paste0(mr_dir, "/mni_5mm_aroma")) #make sure we're looking in the right folder
 
-run_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example_files/mmclock_run_data.rds")
+ff <- system.file("example_files/mmclock_run_data.rds", package = "fmri.pipeline")
+run_df <- readRDS(ff)
 #gpa$run_data$..id.. <- NULL
 #saveRDS(gpa$run_data, file = "/proj/mnhallqlab/users/michael/fmri.pipeline/example_files/mmclock_run_data.rds")
 
@@ -84,10 +88,12 @@ trial_df <- trial_df %>% rename(subid = id) %>% mutate(id=subid)
 run_df <- run_df %>% rename(subid = id) %>% mutate(id=subid)
 subject_df <- subject_df %>% rename(subid = id) %>% mutate(id=subid)
 
+run_df$tr <- sample(c(1, 2), nrow(run_df), replace=TRUE)
+
 gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm",
   output_directory = "/proj/mnhallqlab/users/michael/fmri_test",
   subject_data=subject_df, run_data=run_df, trial_data=trial_df,
-  tr=1.0,
+  tr=NULL,
   vm=c(id="subid"),
   fmri_file_regex="nfaswuktm_clock[1-8]_5\\.nii\\.gz",
   fmri_path_regex="clock[0-9]",

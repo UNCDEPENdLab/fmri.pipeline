@@ -2,7 +2,7 @@
 #' @param gpa the \code{gpa} object
 #' @return a readable summary of the given gpa object
 #' @export
-summarize_pipeline <- function(gpa) {
+summary.glm_pipeline_arguments <- function(gpa) {
       cat("\nSummary of GLM Pipeline Analysis: \n\n")
       if (!is.null(gpa)) {
           cat("Analysis Name: ", gpa$analysis_name[1])
@@ -11,7 +11,7 @@ summarize_pipeline <- function(gpa) {
         # GLM and Confound Settings
           cat("\n--------\n Settings: \n")
           cat(" -  Scheduler Name: ", gpa$scheduler, "\n")
-          cat(" -  TR: ", gpa$tr, "\n")
+          cat(" -  TR: ", ifelse(is.null(gpa$run_data$tr), gpa$tr, ol_unique(gpa$run_data$tr)), "\n")
           cat(" -  Multi-Level Run: ", gpa$multi_run[1], "\n")
           cat(" -  GLM Settings: ", gpa$glm_settings, "\n")
           if (!is.null(gpa$confound_settings$na_strings)) {
@@ -32,7 +32,7 @@ summarize_pipeline <- function(gpa) {
           # VM/Key Columns
           cat("--------\n Key Columns: \n")
           cat("  ", paste(gpa$vm, collapse = ", "), "\n")
-          cat("n Expected Runs: ", gpa$n_expected_runs, "\n")
+          cat("  n Expected Runs: ", gpa$n_expected_runs, "\n")
           # Models: L1/2/3
           cat("--------\n Models: \n")
           if (!is.null(gpa$l1_models)) {
