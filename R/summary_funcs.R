@@ -210,7 +210,7 @@ l1_yaml <- function(gpa) {
     for (mm in gpa2$models) {
     name_m <- mm$name
     mobj$diagonal <- mm$contrast_spec$diagonal
-    diag(mm$contrasts) <- ifelse(mobj$diagonal==TRUE, 0, diag(mm$contrasts))
+    #diag(mm$contrasts) <- ifelse(mobj$diagonal==TRUE, 0, diag(mm$contrasts))
     mobj$cell_means <- mm$contrast_spec$cell_means
     mobj$overall_response <- mm$contrast_spec$overall_response
     mobj$weights <- mm$contrast_spec$weights
@@ -221,7 +221,6 @@ l1_yaml <- function(gpa) {
       name_c <- colnames(mm$contrasts)[cc]
       cobj$row <- rownames(mm$contrasts)[which(mm$contrasts[cc,]!=0)]
       cobj$contrast <- mm$contrasts[cc,which(mm$contrasts[cc,]!=0)]
-      cobj$mm <- mm$name
       mobj$contrasts[[name_c]] <- cobj
     }
     end_yaml$l1_models[[name_m]] <- mobj
@@ -236,11 +235,17 @@ l1_yaml <- function(gpa) {
           if (yaml_choice == 1) {
             return(cat(endyaml3, "\nGoodbye.\n"))
           } else if (yaml_choice == 2) {
-            writeLines(endyaml3, "output.yaml")
-            return(cat("\nFile should be seen as \"output.yaml\".\nGoodbye.\n"))
+            var <- readline(prompt = "Enter Output File Name: ")
+            var = as.character(var)
+            var2 <- paste(c(var, "yaml"), collapse=".")
+            writeLines(endyaml3, var2)
+            return(cat("\nFile should be seen as", var2, "\nGoodbye.\n"))
           } else if (yaml_choice == 3) {
-            writeLines(endyaml3, "output.yaml")
-            return(endyaml3, "\nFile should be seen as \"output.yaml\".")
+            var <- readline(prompt = "Enter Output File Name: ")
+            var = as.character(var)
+            var2 <- paste(c(var, "yaml"), collapse=".")
+            writeLines(endyaml3, var2)
+            return(cat(endyaml3, "\nFile should be seen as", var2, "\nGoodbye.\n"))
           } else (
             return(cat("\nGoodbye.\n"))
           )
