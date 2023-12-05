@@ -106,6 +106,7 @@ Create a new R_batch_job object for execution on an HPC cluster
   mem_per_cpu = NULL,
   mem_total = NULL,
   batch_id = NULL,
+  sqlite_db = NULL,
   r_code = NULL,
   r_script = NULL,
   post_children_r_code = NULL,
@@ -144,7 +145,9 @@ job begins.}
 
 \item{\code{mem_total}}{The total amount of memory to requested by the job}
 
-\item{\code{batch_id}}{The batch id (not currently used)}
+\item{\code{batch_id}}{The batch id}
+
+\item{\code{sqlite_db}}{The path to the sqlite database to be used for job tracking}
 
 \item{\code{r_code}}{A character vector or expression containing R code to be executed}
 
