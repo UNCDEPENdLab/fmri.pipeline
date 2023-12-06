@@ -511,7 +511,6 @@ R_batch_job <- R6::R6Class("batch_job",
       # SUBMITTED is a special state used before state is fetched from batch scheduler to indicate
       # that the job was submitted but has a non-confirmed status
       batch_data = data.frame(
-        job_id = private$job_id[[1]],
         batch_id = self$batch_id,
         job_name = self$job_name,
         state = "SUBMITTED",
@@ -519,7 +518,7 @@ R_batch_job <- R6::R6Class("batch_job",
       )
 
       # Give the above dataframe column names
-      colnames(batch_data) <- c("job_id", "batch_id", "job_name", "state", "timestamp")
+      colnames(batch_data) <- c("batch_id", "job_name", "state", "timestamp")
 
       # Create a gpa list filler object that just has output_locations$sqlite_db
       # populated in order to use insert_df_sqlite
