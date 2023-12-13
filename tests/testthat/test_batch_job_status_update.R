@@ -27,9 +27,14 @@ test_that("Request for job status works, with a query to update status", {
 	cat("Sleeping for 10 seconds to allow Slurm to process the jobs\n")
 	Sys.sleep(10)
 
-	show_job_status(gpa=gpa, batch_id="test_batch_id_123", days_back=1, desc=TRUE, update=TRUE)
+	show_job_status(gpa=gpa, batch_id=123, days_back=1, desc=TRUE, update=TRUE, debug=TRUE)
 
-	cat("Sleeping for another 20 seconds to allow the jobs to complete.\n")
+	cat("Sleeping for another 20 seconds.\n")
+	Sys.sleep(20)
+
+	show_job_status(gpa=gpa, batch_id=123, days_back=1, desc=TRUE, update=TRUE, debug=TRUE)
+
+	cat("Sleeping for another 20 seconds.\n")
 	Sys.sleep(20)
 
 	show_job_status(gpa=gpa, batch_id=123, days_back=1, desc=TRUE, update=TRUE)
@@ -38,7 +43,7 @@ test_that("Request for job status works, with a query to update status", {
 })
 
 # Next steps:
-# Change timestamp to time submitted
+## ~~Change timestamp to time submitted~~
 # Add last updated timestamp
 # Add parent job column
 # Generate batch id in run_glm_pipeline
