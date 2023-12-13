@@ -52,3 +52,7 @@ slurm-*.out
 *.Rout
 
 .DS_Store
+
+# Large MRI test files
+tests/testthat/testdata/mri
+tests/testthat/testdata/gpa_base.rds

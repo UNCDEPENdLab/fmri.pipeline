@@ -1,0 +1,94 @@
+onsets:
+  - clock_onset
+  - feedback_onset
+  
+durations:
+  - rt_csv
+
+isis:
+  - iti_ideal
+
+wi_factors:
+  - emotion
+  - rewFunc
+  - rewFunc
+
+values:
+  - v_entropy
+  - pe_max
+  - rewFunc
+  
+# events must consist of name, onset, and duration. isi is optional
+events:
+  clock:
+    onset: clock_onset
+    duration: rt_csv    # RT convolution
+
+  feedback:
+    onset: feedback_onset
+    duration: 0.9
+    isi: iti_ideal
+
+# if not otherwise speecified, signals will default to unit height regressors with no HRF normalization
+signals:
+  clock:
+    event: clock
+    normalization: none
+    value_fixed: 1
+
+  feedback:
+    event: feedback
+    normalization: none
+    value_fixed: 1
+
+  ## ENTROPY
+  # clock-aligned entropy without run centering and normalization
+  entropy_clock:
+    event: clock
+    trial_subset_expression: rt_csv < 4
+    normalization: evtmax_1
+    parametric_modulator: v_entropy
+
+  ## PE
+  # signed prediction error
+  pe_feedback:
+    event: feedback
+    trial_subset_expression: rt_csv < 4
+    normalization: evtmax_1
+    parametric_modulator: pe_max
+
+  # reward (0 - 1)
+  rewFunc_feedback:
+    event: feedback
+    trial_subset_expression: rt_csv < 4
+    normalization: evtmax_1
+    parametric_modulator: rewFunc
+
+l1_models:
+  ## ENTROPY
+  # overall entropy (no z-scoring)
+  entropy:
+    signals:
+      - clock
+      - feedback
+      - entropy_clock
+    contrasts:
+      include_diagonal: yes
+
+  # PE
+  pe:
+    signals:
+      - clock
+      - feedback
+      - pe_feedback
+    contrasts:
+      include_diagonal: yes
+
+  # reward/omission only
+  rewFunc:
+    signals:
+      - clock
+      - feedback
+      - rewFunc_feedback
+    contrasts:
+      include_diagonal: yes
