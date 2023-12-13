@@ -4,12 +4,11 @@
 #' @param batch_id filter by batch_id from run_glm_pipeline
 #' @param days_back how far back in time to search for jobs (in days)
 #' @param desc whether to sort the status by descending order (newest first)
-#' @param latest_only whether to only show the latest status of each job or all records
 #' @param update whether or not to update the status of unresolved jobs
 #' 
 #' @return a data.frame containing the status of jobs
 #' @export
-show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, update=TRUE) {
+show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, update=TRUE, debug=FALSE) {
 
     # Use read database function to get the status of the jobs
     #status_df <- read_df_sqlite(gpa = gpa, table = "job_status", id = batch_id)
@@ -23,24 +22,30 @@ show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, upd
         open_jobs <- status_df %>%
             filter(state == "RUNNING" | state == "SUBMITTED") %>%
             pull(id)
-        cat("Open jobs:\n")
-        print(open_jobs)
+
+        if(debug) {
+            cat("Open jobs:\n")
+            print(open_jobs)
+        }
 
         # if open_jobs isn't empty, get the lastest state of those jobs and update the DB
         if(length(open_jobs) > 0) {
             # Get the latest state of any still-running jobs
             current_status_df <- get_job_status(job_ids = open_jobs, scheduler = gpa$scheduler)
 
-            cat("Current status:\n")
-            print(current_status_df)
+            if(debug) {
+                cat("Current status:\n")
+                print(current_status_df)
+            }
 
             # Select only the JobID and State columns from the current_status_df
             current_status_df <- current_status_df %>%
                 dplyr::select(JobID, State) %>%
                 dplyr::rename(id = JobID, state = State)
-
-            cat("Current status transform:\n")
-            print(current_status_df)
+            if(debug) {
+                cat("Current status transform:\n")
+                print(current_status_df)
+            }
 
             # Select only open_jobs from the status_df
             status_df_open <- status_df %>%
@@ -53,20 +58,21 @@ show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, upd
                 #mutate(status = ifelse(is.na(status.y), status.x, status.y)) %>%
                 #dplyr::rename(state = state.y)
 
-            cat("Status df open:\n")
-            print(status_df_open)
+            if(debug) {
+                cat("Status df open:\n")
+                print(status_df_open)
+            }
 
             # Iterate over each row in status_df_open and update the status table
             for(i in 1:nrow(status_df_open)) {
                 # Get the row
                 row <- status_df_open[i,]
-                # Get the id
-                id <- row$id
 
                 # Update the status table
                 insert_df_sqlite(
                     gpa = gpa,
-                    id = id,
+                    id = row$id,
+                    session = row$session,
                     table = "job_status",
                     data = row,
                     append = TRUE,
@@ -82,7 +88,7 @@ show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, upd
     }
     
     # Sort the status_df
-    if(desc) {
+    if(desc) { 
         status_df <- status_df %>%
             arrange(desc(timestamp))
     } else {
@@ -92,6 +98,7 @@ show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, upd
     
     # Show the status_df
     cat("Job status:\n")
+    status_df <- status_df %>% dplyr::rename(slurm_id=id, batch_id=session)
     print(status_df)
 
     dbDisconnect(conn)
