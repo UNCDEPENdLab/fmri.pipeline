@@ -246,7 +246,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
     # need to build a model LM-style
     if (length(mobj$model_variables) > 0L) {
       cat("Summary of variables included in model:\n\n")
-      print(summary(data[, mobj$model_variables]))
+      print(summary(data[, mobj$model_variables, drop=FALSE]))
 
       # handle mean centering and reference levels
       cont_vars <- sapply(data[, mobj$model_variables, drop=FALSE], class) %in% c("integer", "numeric")
@@ -284,7 +284,7 @@ build_l2_models <- function(gpa, regressor_cols = NULL) {
       }
 
       # handle reference levels for factors
-      cat_vars <- sapply(data[, mobj$model_variables], class) %in% c("factor")
+      cat_vars <- sapply(data[, mobj$model_variables, drop=FALSE], class) %in% c("factor")
       if (any(cat_vars)) {
         cat_vars <- mobj$model_variables[cat_vars == TRUE]
         cat(

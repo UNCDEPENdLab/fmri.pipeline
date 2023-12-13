@@ -70,7 +70,8 @@ If you wish, you can pass a single trial-level data frame that also contains all
 
 \item{bad_ids}{An optional vector of ids in \code{subject_data} and \code{trial_data} that should be excluded from analysis.}
 
-\item{tr}{The repetition time of the scanning sequence in seconds. Used for setting up design matrices}
+\item{tr}{The repetition time of the scanning sequence in seconds. Used for setting up design matrices. If this is NULL, the
+function will look for a \code{tr} field in the \code{run_data} object, which specifies TR at run level (e.g., if varies).}
 
 \item{fmri_file_regex}{A character string containing a Perl-compatible regular expression for the subfolder and filename
 within the \code{mr_dir} field in \code{subject_data}.}
