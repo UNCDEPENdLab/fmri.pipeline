@@ -250,14 +250,14 @@ get_simple_batch_job <- function(job_name="step1", tmp_dir=get_temp_dir()) {
 			n_cpus=1,
 			wall_time="10:00",
 			r_code=c(
-					"Sys.sleep(100)",
+					"Sys.sleep(10)",
 					"print('hi')",
 					"x <- 2+2"
 			),
 			r_packages=c("lme4"),
 			batch_code = c(
 					"module use /proj/mnhallqlab/sw/modules",
-					"module load r/4.0.3_depend"
+					"module load r/4.2.1"
 			),
 			scheduler="slurm",
 			repolling_interval=1 #repoll every second for this test (should be slower for real jobs)
