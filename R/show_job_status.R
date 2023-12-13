@@ -58,6 +58,15 @@ show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, upd
                 #mutate(status = ifelse(is.na(status.y), status.x, status.y)) %>%
                 #dplyr::rename(state = state.y)
 
+            # Get the current time
+            current_time <- Sys.time()
+            # Convert current time to ISO
+            current_time <- format(current_time, "%Y-%m-%dT%H:%M:%S")
+
+            # Update the timestamp column to the current time
+            status_df_open <- status_df_open %>%
+                mutate(last_updated = current_time)
+
             if(debug) {
                 cat("Status df open:\n")
                 print(status_df_open)
@@ -75,8 +84,8 @@ show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, upd
                     session = row$session,
                     table = "job_status",
                     data = row,
-                    append = TRUE,
-                    overwrite = FALSE
+                    append = FALSE,
+                    overwrite = TRUE
                 )
             }
 
@@ -90,10 +99,10 @@ show_job_status <- function(gpa=NULL, batch_id=NULL, days_back=1, desc=TRUE, upd
     # Sort the status_df
     if(desc) { 
         status_df <- status_df %>%
-            arrange(desc(timestamp))
+            arrange(desc(submitted))
     } else {
         status_df <- status_df %>%
-            arrange(timestamp)
+            arrange(submitted)
     }
     
     # Show the status_df
