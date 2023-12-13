@@ -513,11 +513,12 @@ R_batch_job <- R6::R6Class("batch_job",
       job_data = data.frame(
         job_name = self$job_name,
         state = "SUBMITTED",
-        timestamp = current_time
+        submitted = current_time,
+        last_updated = current_time
       )
 
       # Give the above dataframe column names
-      colnames(job_data) <- c("job_name", "state", "timestamp")
+      colnames(job_data) <- c("job_name", "state", "submitted", "last_updated")
 
       # Create a gpa list filler object that just has output_locations$sqlite_db
       # populated in order to use insert_df_sqlite
