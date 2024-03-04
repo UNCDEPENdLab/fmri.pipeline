@@ -580,7 +580,7 @@ validate_block_data <- function(df) {
     single_block <- counts %>%
       filter(n_blocks == 1L)
 
-    msg <- sprintf("%d runs contained only a single block. Please verify that this matches your expectations!", nrow(single_block)
+    msg <- sprintf("%d runs contained only a single block. Please verify that this matches your expectations!", nrow(single_block))
     lg$warn(msg)
     lg$warn("%s", capture.output(print(single_block)))
     warning(msg)

@@ -13,9 +13,9 @@ setup_glm_pipeline(
   trial_data = NULL,
   group_output_directory = "default",
   output_locations = "default",
-  vm = c(id = "id", session = "session", run_number = "run_number", trial = "trial",
-    run_trial = "run_trial", mr_dir = "mr_dir", run_nifti = "run_nifti", exclude_subject
-    = "exclude_subject"),
+  vm = c(id = "id", session = "session", run_number = "run_number", block_number =
+    "block_number", trial = "trial", run_trial = "run_trial", subtrial = "subtrial",
+    mr_dir = "mr_dir", run_nifti = "run_nifti", exclude_subject = "exclude_subject"),
   bad_ids = NULL,
   tr = NULL,
   fmri_file_regex = ".*\\\\.nii(\\\\.gz)?",
@@ -114,7 +114,8 @@ the screen and to log files. Default is "info", which produces all messages, war
 or trace statements. To output only concerning errors, change to "error". See: 
 \url{https://s-fleck.github.io/lgr/articles/lgr.html} for details.}
 
-\item{id_column}{A character string indicating the name of the subject identifier in \code{subject_data} and \code{trial_data}.}
+\item{block_data}{An optional data.frame containing information about design features in the task that vary at
+block level (typically, longer periods of time such as 10-30s). Blocks are superordinate to trials and subordinate to runs.}
 
 \item{mr_dir_column}{A character string indicating the column name in \code{subject_data} containing the folder for each
 subject's data. Default is "mr_dir".}
