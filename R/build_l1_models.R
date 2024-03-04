@@ -151,11 +151,11 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
     cat(
       "Welcome to the l1 model builder. This process will walk you through setting up all level 1 fMRI models for you analyses.",
       "This process consists of eight steps: ",
-      "  1. Selection of event onset columns in trial_data. Event onsets must be in seconds relative to the scan start.",
-      "  2. Selection of event duration columns in trial_data. Event durations must be in seconds relative to the scan start.",
-      "  3. Optional selection of interstimulus/intertrial intervals in trial_data. These must be ISI/ISI durations in seconds.",
-      "  4. Selection of all parametric modulator (continuous) event values in trial_data.",
-      "  5. Optional selection of within-subject factor columns in trial_data that can be used in specifying signals.",
+      "  1. Selection of event onset columns. Event onsets must be in seconds relative to the scan start.",
+      "  2. Selection of event duration columns. Event durations must be in seconds relative to the scan start.",
+      "  3. Optional selection of interstimulus/intertrial intervals. These must be ISI/ISI durations in seconds.",
+      "  4. Selection of all parametric modulator (continuous) event values.",
+      "  5. Optional selection of within-subject factor columns that can be used in specifying signals.",
       "  6. Build 'events' which consist of onset times, durations, and optional ITI/ISI.",
       "  7. Build 'signals', which consist of an event, an event value (amplitude), and convolution and regressor settings.",
       "  8. Build 'models', which consist of a set of signals and GLM contrasts for signal-related regressors.",
@@ -547,7 +547,7 @@ summarize_l1_models <- function(ml) {
 #'
 #' @return a modified version of \code{l1_model_set} with updated \code{$signals}
 #' @keywords internal
-bl1_build_signals <- function(l1_model_set, trial_data, lg=NULL) {
+bl1_build_signals <- function(l1_model_set, trial_data, block_data = NULL, subtrial_data = NULL, lg=NULL) {
   cat("\nNow, we will build up a set of signals that can be included as regressors in the level 1 model.\n")
 
   checkmate::assert_class(lg, "Logger")

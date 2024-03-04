@@ -7,6 +7,8 @@ library(foreach)
 library(doParallel)
 library(emmeans)
 library(glue)
+library(oro.nifti)
+library(RNifti)
 # library(fmri.pipeline)
 
 # setwd("/proj/mnhallqlab/users/michael/fmri.pipeline/R")
@@ -33,11 +35,52 @@ sapply(file.sources, source, .GlobalEnv)
 # source("glm_helper_functions.R")
 # source("lookup_nifti_inputs.R")
 # source("get_l1_confounds.R")
-# source("run_feat_sepjobs.R")
+# source("truncate_runs.R")
+source("run_feat_sepjobs.R")
 # source("cluster_job_submit.R")
 # source("insert_df_sqlite.R")
 # source("read_df_sqlite.R")
-# source("build_design_matrix.R")
+source("get_output_directory.R")
+source("populate_l1_from_yaml.R")
+source("l1_helper_functions.R")
+ source("build_design_matrix.R")
+source("fmri_utility_fx.R")
+source("build_fwe_correction.R")
+source("ptfce_spec.R")
+source("R_batch_job.R")
+source("voxelwise_deconvolution.R")
+source("event_lock_timeseries.R")
+source("fmri_ts.R")
+
+d <- data.table::fread("/proj/mnhallqlab/projects/medusa_simulation/simulated_data/batch026/rw_ntrial30_samp5_smid5_tr1_snr1_nC5_nT765_cnv0/rep01/medusa_preanalyzed/outputFile_basicTrial_samp100_tr0dot5_snr1_nC5_nT150_rep1_subject_001_COMP_MASK/deconvolved/sub002_deconvolved.csv.gz")
+
+decon_dat <- d %>%
+  select(vnum, time, decon, atlas_value) %>%
+  mutate(atlas_value = round(atlas_value) - 1) %>%
+  data.table() # remove weird rounding error issues from matlab
+
+event_data_tot <- get(load("/proj/mnhallqlab/projects/medusa_simulation/simulated_data/batch026/rw_ntrial30_samp5_smid5_tr1_snr1_nC5_nT765_cnv0/task_designs/rep01/td_rw_ntrial30_samp5_smid5_tr1_snr1_nC5_nT765_cnv0_subject_002.RData"))
+event_data <- event_data_tot$ev_times %>%
+  mutate(id = "002") %>%
+  select(id, event, run, trial, start_vol) %>%
+  spread(event, start_vol) %>%
+  tibble()
+ev_vol <- event_data_tot$events$feedback$act_func$time
+time_be <- ev_vol[1]
+time_af <- ev_vol[length(ev_vol)]
+
+fmri_event_data <- fmri_ts$new(
+  ts_data = decon_dat, event_data = event_data, tr = 1.0,
+  vm = list(value = c("decon"), key = c("vnum", "atlas_value"))
+)
+
+interp_dt <- get_medusa_interpolated_ts(fmri_event_data,
+  event = "feedback", time_before = time_be, time_after = time_af,
+  collide_before = "feedback", collide_after = NULL,
+  pad_before = -1.5, pad_after = 1.5, output_resolution = metadata$TR,
+  group_by = c("atlas_value", "trial")
+)
+
 
 ff <- system.file("example_files/mmy3_trial_df_selective_groupfixed.rds", package = "fmri.pipeline")
 #trial_df <- readRDS("/proj/mnhallqlab/projects/clock_analysis/fmri/fsl_pipeline/mmy3_trial_df_selective_groupfixed.rds") %>%
@@ -78,12 +121,9 @@ ff <- system.file("example_files/mmclock_subject_data.rds", package = "fmri.pipe
 subject_df <- readRDS(ff) %>%
   mutate(mr_dir=paste0(mr_dir, "/mni_5mm_aroma")) #make sure we're looking in the right folder
 
-<<<<<<< HEAD
 # run_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example_files/mmclock_run_data.rds")
-=======
 ff <- system.file("example_files/mmclock_run_data.rds", package = "fmri.pipeline")
 run_df <- readRDS(ff)
->>>>>>> c6a7504 (Support run-level TR variation; make summary of gpa an S3 method; add some ui functions for formatting unique values and statistics)
 #gpa$run_data$..id.. <- NULL
 #saveRDS(gpa$run_data, file = "/proj/mnhallqlab/users/michael/fmri.pipeline/example_files/mmclock_run_data.rds")
 
@@ -92,22 +132,16 @@ run_df <- readRDS(ff)
 # run_df <- run_df %>% rename(subid = id) %>% mutate(id=subid)
 # subject_df <- subject_df %>% rename(subid = id) %>% mutate(id=subid)
 
+run_df$tr <- sample(c(1, 2), nrow(run_df), replace=TRUE)
+
 subject_df <- subject_df %>% dplyr::slice(1:8)
 trial_df <- trial_df %>% filter(id %in% subject_df$id)
 
-run_df$tr <- sample(c(1, 2), nrow(run_df), replace=TRUE)
-
 gpa <- setup_glm_pipeline(analysis_name="testing", scheduler="slurm",
   output_directory = "/proj/mnhallqlab/users/michael/fmri_test",
-<<<<<<< HEAD
-  subject_data=subject_df, trial_data=trial_df, #run_data=run_df,
-  tr=1.0,
-  vm=c(run_number="run"),
-=======
   subject_data=subject_df, run_data=run_df, trial_data=trial_df,
   tr=NULL,
   vm=c(id="subid"),
->>>>>>> c6a7504 (Support run-level TR variation; make summary of gpa an S3 method; add some ui functions for formatting unique values and statistics)
   fmri_file_regex="nfaswuktm_clock[1-8]_5\\.nii\\.gz",
   fmri_path_regex="clock[0-9]",
   run_number_regex=".*clock([0-9]+)_5.*",

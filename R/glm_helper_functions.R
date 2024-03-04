@@ -285,7 +285,7 @@ file_sans_ext <- function(file, withdot = TRUE) {
 #' @param rot_units The units of the rotation parameters. Default is "rad" for radians
 #' @param tra_units The units of the translation parameter. Only support "mm" right now millimeters
 #'
-#' @importFrom data.table fread
+#' @importFrom data.table fread setnames
 #' @importFrom checkmate assert_file_exists assert_subset assert_integerish
 #' @keywords internal
 generate_motion_regressors <- function(motion_params_file = "motion.par",
@@ -584,7 +584,6 @@ summarize_contrasts <- function(cmat) {
 #'   such as id, session, and run.
 #'
 #' @return a modified version of \code{df} with column names modified to use internal names
-#' @importFrom data.table setnames
 #' @keywords internal
 names_to_internal <- function(df, vm) {
   # look for naming collisions

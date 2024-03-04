@@ -11,6 +11,8 @@
 #' @param run_data A data.frame containing all run-level data such as run condition or run number. Columns from
 #'   \code{run_data} can be used as covariates in subject (aka 'level 2') analyses. If \code{NULL}, this will be
 #'   distilled from \code{trial_data} by looking for variables that vary at the same level as \code{vm["run_number"]}.
+#' @param block_data An optional data.frame containing information about design features in the task that vary at
+#'   block level (typically, longer periods of time such as 10-30s). Blocks are superordinate to trials and subordinate to runs.
 #' @param trial_data A data.frame containing trial-level statistics for all subjects. Data should be stacked in long
 #'   form such that each row represents a single trial for a given subject and the number of total rows is subjects x trials.
 #'   If you wish, you can pass a single trial-level data frame that also contains all run-level and subject-level covariates
@@ -19,7 +21,6 @@
 #'   \code{subject_data} and \code{run_data}.
 #' @param vm A named character vector containing key identifying columns in \code{subject_data} and
 #'   \code{trial_data}. Minimally, this vector should contain the elements 'id'
-#' @param id_column A character string indicating the name of the subject identifier in \code{subject_data} and \code{trial_data}.
 #' @param bad_ids An optional vector of ids in \code{subject_data} and \code{trial_data} that should be excluded from analysis.
 #' @param mr_dir_column A character string indicating the column name in \code{subject_data} containing the folder for each
 #'   subject's data. Default is "mr_dir".
@@ -70,8 +71,8 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                group_output_directory = "default",
                                output_locations = "default",
                                vm = c(
-                                 id = "id", session = "session", run_number = "run_number", trial = "trial",
-                                 run_trial = "run_trial", mr_dir = "mr_dir", run_nifti = "run_nifti",
+                                 id = "id", session = "session", run_number = "run_number", block_number = "block_number", trial = "trial",
+                                 run_trial = "run_trial", subtrial = "subtrial", mr_dir = "mr_dir", run_nifti = "run_nifti",
                                  exclude_subject = "exclude_subject"
                                ),
                                bad_ids = NULL, tr = NULL,
@@ -150,8 +151,8 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   # validate and fill in variable mapping vector (if user only passes some fields)
   default_vm <- c(
-    id = "id", session = "session", trial = "trial", run_trial = "run_trial",
-    mr_dir = "mr_dir", run_nifti = "run_nifti", run_number = "run_number"
+    id = "id", session = "session",  run_number = "run_number", block_number = "block_number", trial = "trial", 
+    run_trial = "run_trial", subtrial = "subtrial",  mr_dir = "mr_dir", run_nifti = "run_nifti"
   )
 
   default_vm[names(vm)] <- vm # override defaults with user inputs
@@ -502,7 +503,11 @@ setup_compute_environment <- function(gpa) {
   return(gpa)
 }
 
-# helper function to verify contents of subject, trial, and run data
+
+
+#' helper function to verify contents of subject, run, block, trial, and subtrial data
+#' @importFrom dplyr is_grouped_df ungroup
+#' @keywords internal
 validate_input_data <- function(df, vm, lg, level = "trial") {
   checkmate::assert_data_frame(df)
 
@@ -527,5 +532,88 @@ validate_input_data <- function(df, vm, lg, level = "trial") {
     df[[vm["run_number"]]] <- 1L
   }
 
+  # verify that block data contain block-level variation
+  if (level == "block") {
+    if (!vm["block_number"] %in% names(df)) {
+      msg <- sprintf("Cannot find expected block column %s in %s data. Is your variable mapping (vm) correct?", vm["block_number", level])
+      lg$error(msg)
+      stop(msg)
+    }
+  }
+
+  # add relevant class information so that data summary functions work as expected
+  # this is a bit poorly designed because we haven't renamed the columns to the internal standard yet, so for a second, the columns
+  # could be wrong. But we need to defer the renaming until after the validation to line up the data.frames with each other above
+  if (level == "subject" & !inherits(df, "bg_subject_data")) {
+    class(df) <- c(class(df), "bg_subject_data")
+  } else if (level == "run" & !inherits(df, "bg_run_data")) {
+    class(df) <- c(class(df), "bg_run_data")
+  } else if (level == "block" & !inherits(df, "bg_block_data")) {
+    class(df) <- c(class(df), "bg_block_data")
+  } else if (level == "trial" & !inherits(df, "bg_trial_data")) {
+    class(df) <- c(class(df), "bg_trial_data") 
+  } else if (level == "subtrial" & !inherits(df, "bg_subtrial_data")) {
+    class(df) <- c(class(df), "bg_subtrial_data")
+  }
+
   return(df)
+}
+
+#' internal function to validate the contents of a block data.frame
+#' @importFrom dplyr group_by summarise n n_distinct filter
+#' @keywords internal
+validate_block_data <- function(df) {
+  checkmate::assert_class(df, "bg_block_data")
+
+  # check that a) there are no duplicate block_numbers in each run counts of 
+  counts <- df %>%
+    group_by(id, session, run_number) %>%
+    summarise(n_blocks = n_distinct(block_number), n_rows=n(), duplicates=any(duplicated(block_number)), .groups="drop")
+
+  if (all(counts$n_rows) == 1L) {
+    msg <- "All runs in block_data contain only a single block. It is unclear why block_data are provided."
+    lg$error(msg)
+    stop(msg)
+  }
+  
+  if (any(counts$n_blocks) == 1L) {
+    single_block <- counts %>%
+      filter(n_blocks == 1L)
+
+    msg <- sprintf("%d runs contained only a single block. Please verify that this matches your expectations!", nrow(single_block)
+    lg$warn(msg)
+    lg$warn("%s", capture.output(print(single_block)))
+    warning(msg)
+  }
+
+  if (any(counts$duplicates)) {
+    dupes <- counts %>%
+      filter(duplicates == TRUE)
+    
+    msg <- "Duplicate blocks identified for some runs. Unable to proceed until this is resolved."
+    lg$error(msg)
+    lg$error("%s", capture.output(print(dupes)))
+    stop(msg)
+  }
+
+}
+
+#' Summarize the contents of the subject data
+#' @param df A \code{bg_subject_data} object containing subject-level data.
+#' @details This is typically run using \code{summary(gpa$trial_data)}
+#' @export
+summary.bg_subject_data <- function(df) {
+
+
+}
+
+#' Summarize the contents of the subject data
+#' @param df A \code{bg_block_data} object containing block-level data.
+#' @details This is typically run using \code{summary(gpa$block_data)}
+#' @export
+summary.bg_block_data <- function(df) {
+  cat(
+    "Summary of block data:",
+    "Number of ids: ", length(unique(df$id)), "\n"
+  )
 }
