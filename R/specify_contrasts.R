@@ -58,8 +58,8 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     }
 
     # still prompt for contrasts on yaml input since it doesn't ask about within-subjects factors etc.
-    prompt_contrasts <- TRUE
-    # mobj <- populate_mobj_contrasts(mobj)
+    # prompt_contrasts <- TRUE
+    mobj <- populate_mobj_contrasts(mobj)
   } else if (is.null(mobj$contrast_spec)) {
     mobj$contrast_spec <- list()
     prompt_contrasts <- TRUE

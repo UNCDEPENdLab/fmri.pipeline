@@ -121,6 +121,7 @@ ff <- system.file("example_files/mmclock_subject_data.rds", package = "fmri.pipe
 subject_df <- readRDS(ff) %>%
   mutate(mr_dir=paste0(mr_dir, "/mni_5mm_aroma")) #make sure we're looking in the right folder
 
+# run_df <- readRDS("/proj/mnhallqlab/users/michael/fmri.pipeline/inst/example_files/mmclock_run_data.rds")
 ff <- system.file("example_files/mmclock_run_data.rds", package = "fmri.pipeline")
 run_df <- readRDS(ff)
 #gpa$run_data$..id.. <- NULL

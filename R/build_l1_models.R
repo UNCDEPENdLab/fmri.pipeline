@@ -453,6 +453,8 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL, spec_list = NULL
 
       # populate data frame for event
       eobj <- populate_event_data(eobj, trial_data)
+      # create 'l1_model_set_events' class
+      class(eobj) <- c("list", "l1_model_set_events")
       l1_model_set$events[[nm]] <- eobj
     } else if (action == 2L) { # delete
       event_names <- names(l1_model_set$events)
@@ -842,6 +844,9 @@ bl1_build_signals <- function(l1_model_set, trial_data, block_data = NULL, subtr
     }
   }
 
+  # create 'l1_model_set_signals' class
+  class(signal_list) <- c("list", "l1_model_set_signals")
+
   # populate back into model set
   l1_model_set$signals <- signal_list
 
@@ -913,6 +918,8 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
           return(invisible(NULL)) #return nothing from function
         }
       } else {
+        # create 'l1_model_set_signals' class
+        class(signals) <- c("list", "l1_model_set_signals")
         mobj$signals <- signals
       }
     }
@@ -980,8 +987,11 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
     }
   }
 
+  # add class 'l1_model_set_models'
+  class(model_list) <- c("list", "l1_model_set_models")
   l1_model_set$models <- model_list
   l1_model_set$n_contrasts <- sapply(model_list, function(mm) { nrow(mm$contrasts) })
+
   return(l1_model_set)
 }
 

@@ -503,6 +503,8 @@ setup_compute_environment <- function(gpa) {
   return(gpa)
 }
 
+
+
 #' helper function to verify contents of subject, run, block, trial, and subtrial data
 #' @importFrom dplyr is_grouped_df ungroup
 #' @keywords internal
