@@ -16,6 +16,7 @@
 #'   boundary that can help to have sufficient data to interpolate early and late times within the epoch.
 #' @param pad_after Number of seconds to include in the epoch time window after the event of interest.
 #' @param logfile Name of log file containing event-locking problems
+#' @param time_audit If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing
 #'
 #' @importFrom dplyr filter pull
 #' @importFrom data.table rbindlist
@@ -23,7 +24,7 @@
 #'
 #' @export
 event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
-                          collide_before=NULL, collide_after=NULL, pad_before=-1, pad_after=1) {
+                          collide_before=NULL, collide_after=NULL, pad_before=-1, pad_after=1, time_audit=FALSE) {
 
   ts_data <- fmri_obj$get_ts(orig_names=TRUE) #so that vm pass-through to returned object works
   run_df <- fmri_obj$event_data
@@ -63,13 +64,13 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
     evt_before <- -Inf
     if (!is.null(collide_before)) {
       evts <- run_df %>% select(all_of(collide_before)) %>% unlist() %>% unname()
-      if (any(evts < evt_onset)) { evt_before <- max(evts[evts < evt_onset]) } #most recent past event
+      if (any(evts < evt_onset)) evt_before <- max(evts[evts < evt_onset]) #most recent past event
     }
 
     evt_after <- Inf
     if (!is.null(collide_after)) {
       evts <- run_df %>% select(all_of(collide_after)) %>% unlist() %>% unname()
-      if (any(evts > evt_onset)) { evt_after <- min(evts[evts > evt_onset]) } #nearest future event
+      if (any(evts > evt_onset)) evt_after <- min(evts[evts > evt_onset]) #nearest future event
     }
 
     if (is.na(evt_onset)) next #times are missing for some events on early trials (like rt_vmax_cum)
@@ -85,8 +86,15 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
     #enforce colliding subsequent event
     if (evt_after < Inf) trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) < evt_after)
 
-    #populate trial field
+    # populate trial field
     trial_ts[[ vm[["trial"]] ]] <- if (nrow(trial_ts) > 0L) { trials[t] } else { numeric(0) } #allow for a zero-row df
+
+    # handle time audit
+    if (isTRUE(time_audit)) {
+      trial_ts$evt_onset <- evt_onset
+      trial_ts$collide_after <- evt_after
+      trial_ts$collide_before <- evt_before
+    }
 
     #add these data to trial list
     tlist[[t]] <- trial_ts
@@ -130,13 +138,14 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
 #'   the same as \code{tr}.
 #' @param group_by return interpolated time series for each combination of group_by variables. Default is
 #'   to provide one interpolated time series per trial.
+#' @param time_audit If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing
 #'
 #' @author Michael Hallquist
 #' @export
 get_medusa_interpolated_ts <- function(fmri_obj, event=NULL, time_before=-3.0, time_after=3.0,
                                        collide_before=NULL, collide_after=NULL,
                                        pad_before=-1.5, pad_after=1.5, output_resolution=NULL,
-                                       group_by="trial") {
+                                       group_by="trial", time_audit=FALSE) {
 
   stopifnot(inherits(fmri_obj, "fmri_ts"))
 
@@ -146,12 +155,13 @@ get_medusa_interpolated_ts <- function(fmri_obj, event=NULL, time_before=-3.0, t
   # talign is an fmri_ts object keyed by trial (and other keying variables)
   talign <- event_lock_ts(fmri_obj,
     event = event, time_before = time_before, time_after = time_after,
-    pad_before = pad_before, pad_after = pad_after, collide_before = collide_before, collide_after = collide_after
+    pad_before = pad_before, pad_after = pad_after, collide_before = collide_before, collide_after = collide_after,
+    time_audit = time_audit
   )
 
   #need to interpolate by key variables
   interpolated_epochs <- interpolate_fmri_epochs(talign, time_before=time_before, time_after=time_after,
-    output_resolution=output_resolution, group_by=group_by)  
+    output_resolution=output_resolution, group_by=group_by, time_audit = time_audit)  
 
   return(interpolated_epochs)
 }
@@ -242,13 +252,14 @@ get_medusa_compression_score <- function(fmri_obj, event=NULL, time_before=-3, t
 #' @param time_after The latest time point (in seconds) relative to the event to be output in interpolation
 #' @param output_resolution The timestep (in seconds) used for interpolation
 #' @param group_by a character vector of keying variables used for aggregation of data prior to interpolation
+#' @param time_audit If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing
 #'
 #' @importFrom data.table dcast melt setnames
 #' @importFrom dplyr summarize group_by across
 #' @author Michael Hallquist
 #' @keywords internal
 interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, time_after=3,
-                                    output_resolution=1.0, group_by=NULL) {
+                                    output_resolution=1.0, group_by=NULL, time_audit=FALSE) {
 
   #basically need to split align_obj on keying units, then interpolate within keys
 
@@ -272,7 +283,11 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
     }
 
     vcols <- grep("value_.*", names(interp_agg), value=TRUE)
-    tout <- seq(time_before, time_after, by=output_resolution)
+
+    #always window around 0 so that evt_time = 0 is in the output    
+    tout <- c((ceiling(time_before/output_resolution):-1)*output_resolution, 0, (1:floor(time_after/output_resolution))*output_resolution)
+    # tout <- seq(time_before, time_after, by=output_resolution) # old method that may not include 0
+
     df <- data.frame(evt_time=tout, sapply(vcols, function(cname) {
       if (all(is.na(interp_agg[[cname]]))) {
         rep(NA_real_, length(tout)) #if all inputs are NA, do not try to interpolate
@@ -290,9 +305,12 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
   interp_dt <- a_obj$get_ts(orig_names=TRUE) %>%
     data.table::melt(measure.vars=a_obj$vm$value, variable.name=".vkey", values.name="value")
 
-  # debugging problem with 'by' not being recognized because interp_dt is somehow a data.frame, not data.table
-  cat(glue("Class of interp_dt is {class(interp_dt)}"), "\n")
-  #setDT(interp_dt)
+  # debugging problem with 'by' not being recognized because interp_dt is somehow a data.frame, not data.table -- seems to be a namespace issue with data.table (fixed by ::
+  checkmate::assert_data_table(interp_dt)
+  #setDT(interp_dt) # should not be necessary
+
+  # get timing audit information for each trial
+  if (isTRUE(time_audit)) audit_dt <- interp_dt[, .SD[1], by=c(a_obj$vm$trial), .SDcols = c("evt_onset", "collide_before", "collide_after")]
 
   interp_dt <- interp_dt[, interpolate_worker(.SD), by=c(".vkey", group_by)]
 
@@ -301,6 +319,11 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
 
   #make names more readable: like decon_mean, not value_mean_decon
   setnames(output_dt, names(output_dt), sub("value_([^|]+)\\|(.+)", "\\2_\\1", names(output_dt), perl=TRUE))
+
+  if (isTRUE(time_audit)) {
+    output_dt <- merge(output_dt, audit_dt, by=a_obj$vm$trial)
+    output_dt[, time := evt_time + evt_onset] # put evt_time back in original time units
+  }
 
   return(output_dt)
 }
@@ -398,6 +421,8 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
 #' @param ncpus The number of cores to use for each parallel job
 #' @param mem_per_cpu The amount of memory (RAM) allocated for each CPU job. Default is "4g" (4 gigabytes)
 #' @param walltime The time requested for each event alignment job. Default: 1:00:00 (1 hour).
+#' @param scheduler The job scheduler to be used in alignment. Options are "slurm" (default), "torque", or "local"
+#' @param time_audit If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing
 #'
 #' @details
 #'   This function will create a separate R batch job on the scheduler for each combination of atlas files and alignments. Each of these
@@ -451,7 +476,7 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
 #' }
 #' @export
 run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = list(), nbins = 12, aggregate_by = "atlas_value", 
-    atlas_subset=NULL, overwrite = FALSE, tr = NULL, ncpus = 8, mem_per_cpu = "4g", walltime = "1:00:00", scheduler = "slurm") {
+    atlas_subset=NULL, overwrite = FALSE, tr = NULL, ncpus = 8, mem_per_cpu = "4g", walltime = "1:00:00", scheduler = "slurm", time_audit=FALSE) {
   checkmate::assert_file_exists(atlas_files)
   checkmate::assert_directory_exists(decon_dir)
   checkmate::assert_data_frame(trial_df)
@@ -466,36 +491,7 @@ run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = l
   checkmate::assert_string(scheduler)
   checkmate::assert_subset(scheduler, c("local", "slurm", "torque"))
 
-  # validate padding and alignment settings, input defaults
-  for (aa in seq_along(alignments)) {
-    if (!"pad_before" %in% names(alignments[[aa]])) {
-      message(glue("For alignment {names(alignments)[aa]}, defaulting pad_before to -1.5"))
-      alignments[[aa]]$pad_before <- -1.5
-    } else {
-      checkmate::assert_number(alignments[[aa]]$pad_before, upper = 0)
-    }
-
-    if (!"pad_after" %in% names(alignments[[aa]])) {
-      message(glue("For alignment {names(alignments)[aa]}, defaulting pad_after to 1.5"))
-      alignments[[aa]]$pad_after <- 1.5
-    } else {
-      checkmate::assert_number(alignments[[aa]]$pad_after, lower = 0)
-    }
-
-    if (!"output_resolution" %in% names(alignments[[aa]])) {
-      message(glue("For alignment {names(alignments)[aa]}, defaulting output_resolution (sampling rate) of {tr}"))
-      alignments[[aa]]$output_resolution <- tr
-    } else {
-      checkmate::assert_number(alignments[[aa]]$output_resolution, lower = 0.01, upper = 1e2)
-    }
-
-    has_ingredients <- c("pad_before", "pad_after", "evt_col", "time_before", "time_after", "output_resolution") %in% names(alignments[[aa]])
-    if (!all(has_ingredients)) {
-      stop(glue("For alignment {names(alignments)[aa]}, missing required fields: {paste(names(alignments[[aa]]), collapse=', ')}"))
-    }
-
-    stopifnot(alignments[[aa]]$evt_col %in% names(trial_df))
-  }
+  alignments <- validate_alignments(alignments, tr, trial_df)
 
   # loop over atlases and alignments
   for (af in atlas_files) {
@@ -552,7 +548,7 @@ run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = l
         input_objects = named_list(d_files, trial_df, this_alignment, aggregate_by, tr, atlas_cuts, atlas_subset, out_file, ncpus),
         r_packages = "fmri.pipeline",
         r_code = c(
-          "evt_align_decon_files(d_files, trial_df, this_alignment, aggregate_by, tr, atlas_cuts, atlas_subset, out_file, ncpus)"
+          "evt_align_decon_files(d_files, trial_df, this_alignment, aggregate_by, tr, atlas_cuts, atlas_subset, out_file, ncpus, time_audit)"
         )
       )
 
@@ -574,8 +570,9 @@ run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = l
 #' @param atlas_cuts For a continuous-valued atlas (e.g., containing a gradient of interest), a vector of cut points for binning values.
 #'   These cuts are applied to the \code{aggregate_by} column, commonly "atlas_value"
 #' @param atlas_subset An optional numeric vector containing values of \code{aggregate_by} 
-#' @param mask A list of mask-related information, including ...
-#' @param output_dir The output directory for the event-aligned csv file. If NULL, nothing it output
+#' @param out_file The output file name (can include path) for the event-aligned csv file. If NULL, nothing is output 
+#'   (but the event-aligned data are always returned as a data.frame)
+#' @param time_audit If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing
 #' @importFrom doParallel registerDoParallel
 #' @importFrom parallel makeCluster stopCluster
 #' @importFrom foreach registerDoSEQ
@@ -584,7 +581,7 @@ run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = l
 #' @importFrom rlang sym
 #' @export
 evt_align_decon_files <- function(d_files, trial_df, alignment = list(), aggregate_by="atlas_value", 
-    tr = NULL, atlas_cuts = NULL, atlas_subset = NULL, out_file = NULL, ncpus = 8) {
+    tr = NULL, atlas_cuts = NULL, atlas_subset = NULL, out_file = NULL, ncpus = 8, time_audit=FALSE) {
   checkmate::assert_character(d_files)
   checkmate::assert_file_exists(d_files)
   checkmate::assert_data_frame(trial_df)
@@ -593,6 +590,9 @@ evt_align_decon_files <- function(d_files, trial_df, alignment = list(), aggrega
   checkmate::assert_numeric(atlas_cuts, null.ok = TRUE)
   checkmate::assert_numeric(atlas_subset, null.ok = TRUE)
   checkmate::assert_string(out_file, null.ok = TRUE)
+  checkmate::assert_integerish(ncpus, lower=1L, len=1L)
+
+  alignment <- validate_alignments(alignment, tr, trial_df)
 
   if (ncpus > 1) {
     clusterobj <- parallel::makeCluster(ncpus)
@@ -613,13 +613,14 @@ evt_align_decon_files <- function(d_files, trial_df, alignment = list(), aggrega
       return(NULL)
     }
 
+
     drop_cols <- intersect(c("atlas_name", "x", "y", "z"), names(d))
     if (length(drop_cols) > 0L) {
       d <- d %>% dplyr::select(-all_of(drop_cols))
     }
 
     if (all(is.na(d$decon))) {
-      cat(glue("For file {fname}, all decon values are NA, suggesting a failue in deconvolution. Returning NULL."))
+      cat(glue("For file {fname}, all decon values are NA, suggesting a failure in deconvolution. Returning NULL."))
       return(NULL)
     }
 
@@ -654,7 +655,7 @@ evt_align_decon_files <- function(d_files, trial_df, alignment = list(), aggrega
         time_before = alignment$time_before, time_after = alignment$time_after,
         collide_before = alignment$collide_before, collide_after = alignment$collide_after,
         pad_before = alignment$pad_before, pad_after = alignment$pad_after, output_resolution = alignment$output_resolution,
-        group_by = c(aggregate_by, "trial")
+        group_by = c(aggregate_by, "trial"), time_audit = time_audit
       ), # one time series per region and trial
       error = function(err) {
         cat("Problems with event aligning ", fname, " for event: ", alignment$evt_col, "\n  ",
@@ -682,4 +683,53 @@ evt_align_decon_files <- function(d_files, trial_df, alignment = list(), aggrega
   }
 
   return(all_e)
+}
+
+
+validate_alignments <- function(alignments, tr, trial_df) {
+  checkmate::assert_list(alignments)
+  checkmate::assert_data_frame(trial_df)
+
+  # if a single alignment is passed in, wrap it as a single-element list
+  single_align <- FALSE
+  if (!is.list(alignments[[1]])) {
+    alignments <- list(a=alignments)
+    single_align <- TRUE
+  }
+  
+
+  # validate padding and alignment settings, input defaults
+  for (aa in seq_along(alignments)) {
+    if (!"pad_before" %in% names(alignments[[aa]])) {
+      message(glue("For alignment {names(alignments)[aa]}, defaulting pad_before to -1.5"))
+      alignments[[aa]]$pad_before <- -1.5
+    } else {
+      checkmate::assert_number(alignments[[aa]]$pad_before, upper = 0)
+    }
+
+    if (!"pad_after" %in% names(alignments[[aa]])) {
+      message(glue("For alignment {names(alignments)[aa]}, defaulting pad_after to 1.5"))
+      alignments[[aa]]$pad_after <- 1.5
+    } else {
+      checkmate::assert_number(alignments[[aa]]$pad_after, lower = 0)
+    }
+
+    if (!"output_resolution" %in% names(alignments[[aa]])) {
+      message(glue("For alignment {names(alignments)[aa]}, defaulting output_resolution (sampling rate) of {tr}"))
+      alignments[[aa]]$output_resolution <- tr
+    } else {
+      checkmate::assert_number(alignments[[aa]]$output_resolution, lower = 0.01, upper = 1e2)
+    }
+
+    has_ingredients <- c("pad_before", "pad_after", "evt_col", "time_before", "time_after", "output_resolution") %in% names(alignments[[aa]])
+    if (!all(has_ingredients)) {
+      stop(glue("For alignment {names(alignments)[aa]}, missing required fields: {paste(names(alignments[[aa]]), collapse=', ')}"))
+    }
+
+    stopifnot(alignments[[aa]]$evt_col %in% names(trial_df))
+  }
+
+  if (single_align) alignments <- alignments[[1L]]
+  return(alignments)
+
 }

@@ -3,8 +3,6 @@
 #' @importFrom yaml as.yaml
 #' @return a yaml document of l1_models for an object
 #' @export
-
-library(yaml)
 l1_yaml <- function(gpa) {
   gpa2 <- gpa$l1_models
   ## Model Specifications

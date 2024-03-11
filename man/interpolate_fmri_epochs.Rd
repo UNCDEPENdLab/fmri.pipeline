@@ -10,7 +10,8 @@ interpolate_fmri_epochs(
   time_before = -3,
   time_after = 3,
   output_resolution = 1,
-  group_by = NULL
+  group_by = NULL,
+  time_audit = FALSE
 )
 }
 \arguments{
@@ -25,6 +26,8 @@ interpolate_fmri_epochs(
 \item{output_resolution}{The timestep (in seconds) used for interpolation}
 
 \item{group_by}{a character vector of keying variables used for aggregation of data prior to interpolation}
+
+\item{time_audit}{If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing}
 }
 \description{
 Interpolate an aligned fmri_ts object onto a consistent time grid with respect to a target event

@@ -15,7 +15,8 @@ get_medusa_interpolated_ts(
   pad_before = -1.5,
   pad_after = 1.5,
   output_resolution = NULL,
-  group_by = "trial"
+  group_by = "trial",
+  time_audit = FALSE
 )
 }
 \arguments{
@@ -46,6 +47,8 @@ the same as \code{tr}.}
 
 \item{group_by}{return interpolated time series for each combination of group_by variables. Default is
 to provide one interpolated time series per trial.}
+
+\item{time_audit}{If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing}
 }
 \description{
 front-end function for taking a list of windowed time series by mask value, interpolating them onto a time grid,

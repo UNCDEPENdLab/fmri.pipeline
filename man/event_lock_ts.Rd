@@ -12,7 +12,8 @@ event_lock_ts(
   collide_before = NULL,
   collide_after = NULL,
   pad_before = -1,
-  pad_after = 1
+  pad_after = 1,
+  time_audit = FALSE
 )
 }
 \arguments{
@@ -39,6 +40,8 @@ spans the window from \code{time_before} to \code{time_after}, but padding inclu
 boundary that can help to have sufficient data to interpolate early and late times within the epoch.}
 
 \item{pad_after}{Number of seconds to include in the epoch time window after the event of interest.}
+
+\item{time_audit}{If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing}
 
 \item{logfile}{Name of log file containing event-locking problems}
 }

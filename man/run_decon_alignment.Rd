@@ -17,7 +17,8 @@ run_decon_alignment(
   ncpus = 8,
   mem_per_cpu = "4g",
   walltime = "1:00:00",
-  scheduler = "slurm"
+  scheduler = "slurm",
+  time_audit = FALSE
 )
 }
 \arguments{
@@ -44,6 +45,10 @@ event-aligned time series. Most commonly, this is "atlas_value", which will lead
 \item{mem_per_cpu}{The amount of memory (RAM) allocated for each CPU job. Default is "4g" (4 gigabytes)}
 
 \item{walltime}{The time requested for each event alignment job. Default: 1:00:00 (1 hour).}
+
+\item{scheduler}{The job scheduler to be used in alignment. Options are "slurm" (default), "torque", or "local"}
+
+\item{time_audit}{If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing}
 }
 \description{
 Align a set of deconvolved time series files from \code{voxelwise_deconvolution} to a set of events in a task-related design

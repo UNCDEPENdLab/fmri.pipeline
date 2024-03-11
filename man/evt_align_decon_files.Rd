@@ -13,7 +13,8 @@ evt_align_decon_files(
   atlas_cuts = NULL,
   atlas_subset = NULL,
   out_file = NULL,
-  ncpus = 8
+  ncpus = 8,
+  time_audit = FALSE
 )
 }
 \arguments{
@@ -33,9 +34,10 @@ These cuts are applied to the \code{aggregate_by} column, commonly "atlas_value"
 
 \item{atlas_subset}{An optional numeric vector containing values of \code{aggregate_by}}
 
-\item{mask}{A list of mask-related information, including ...}
+\item{out_file}{The output file name (can include path) for the event-aligned csv file. If NULL, nothing is output 
+(but the event-aligned data are always returned as a data.frame)}
 
-\item{output_dir}{The output directory for the event-aligned csv file. If NULL, nothing it output}
+\item{time_audit}{If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing}
 }
 \description{
 Align a set of deconvolved time series files to an event of interest function.
