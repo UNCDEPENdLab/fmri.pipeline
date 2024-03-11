@@ -6,7 +6,7 @@
 #' @param prespace An integer indicating the number of spaces to include at the beginning of the string. Default: 0
 #' @param showNA whether to print information about NAs. As with \code{table}, the
 #'   options are "no", "ifany", and "always".
-#' @param newline if TRUE, include a newline character \code{\n} at the end of the string
+#' @param newline if TRUE, include a newline character \code{\\n} at the end of the string
 #' @return a formatted character string with mean, min, and max
 #' @keywords internal
 ol_mean_min_max <- function(x, digits=2, prespace=0, showNA="ifany", newline=TRUE) {
@@ -40,7 +40,7 @@ ol_mean_min_max <- function(x, digits=2, prespace=0, showNA="ifany", newline=TRU
 #' @param prespace An integer indicating the number of spaces to include at the beginning of the string. Default: 0
 #' @param showNA whether to print information about NAs. As with \code{table}, the
 #'   options are "no", "ifany", and "always".
-#' @param newline if TRUE, include a newline character \code{\n} at the end of the string
+#' @param newline if TRUE, include a newline character \code{\\n} at the end of the string
 #' @return a formatted character string with frequencies for the top \code{max_show} categories
 #' @importFrom dplyr slice_max
 #' @keywords internal

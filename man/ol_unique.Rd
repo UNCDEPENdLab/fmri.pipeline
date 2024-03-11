@@ -25,7 +25,7 @@ ol_unique(
 \item{showNA}{whether to print information about NAs. As with \code{table}, the
 options are "no", "ifany", and "always".}
 
-\item{newline}{if TRUE, include a newline character \code{\n} at the end of the string}
+\item{newline}{if TRUE, include a newline character \code{\\n} at the end of the string}
 }
 \value{
 a formatted character string with frequencies for the top \code{max_show} categories

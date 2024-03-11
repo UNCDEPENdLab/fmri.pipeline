@@ -16,7 +16,7 @@ ol_mean_min_max(x, digits = 2, prespace = 0, showNA = "ifany", newline = TRUE)
 \item{showNA}{whether to print information about NAs. As with \code{table}, the
 options are "no", "ifany", and "always".}
 
-\item{newline}{if TRUE, include a newline character \code{\n} at the end of the string}
+\item{newline}{if TRUE, include a newline character \code{\\n} at the end of the string}
 }
 \value{
 a formatted character string with mean, min, and max
