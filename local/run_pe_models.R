@@ -31,11 +31,22 @@ gpa <- setup_glm_pipeline(analysis_name="mmclock_nov2021", scheduler="slurm",
     truncate_run = "(FD > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
     spike_volumes = NULL
   ),
-  parallel=list(
-    fsl=list(
-      l1_feat_alljobs_time="144:00:00"
-
+  parallel = list(
+    fsl = list(
+      l1_feat_alljobs_time = "144:00:00",
+      compute_environment = c(
+        "module unload fsl", # remove any current fsl module
+        "module load fsl/6.0.4" # load latest version (2021)
+      )
     ),
+    afni = list(
+      compute_environment = c(
+        "module unload afni", # remove any current afni module
+        "module load afni/21.3.04" # load latest version (2021)
+      )
+    )
+  )
+,
     
 
   )

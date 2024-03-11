@@ -36,7 +36,7 @@ y$depends_on_parents <- "step2" # step2 and step3 both depend on step 1, but do 
 waiter <- w$copy()
 waiter$job_name <- "local_wait"
 waiter$r_code <- c(
-  "Sys.sleep(15)"
+  "Sys.sleep(30)"
 )
 waiter$generate()
 
@@ -46,10 +46,10 @@ z$depends_on_parents <- c("step1") # step4 depends on step1 completion only
 z$wait_for_children <- TRUE
 z$r_code <- c(
   z$r_code,
-  "cat('Sys.sleep(15)', file='sleep15.R')",
   "j1 <- fmri.pipeline::cluster_job_submit('/nas/longleaf/home/mnhallq/batch_test/submit_batch_local_wait.sh', scheduler='slurm')",
   "j2 <- fmri.pipeline::cluster_job_submit('/nas/longleaf/home/mnhallq/batch_test/submit_batch_local_wait.sh', scheduler='slurm')",
-  "child_job_ids <- c(j1, j2)"
+  "child_job_ids <- c(j1, j2)",
+  "cat('child job ids', j1, j2)"
 )
 
 batch_seq <- R_batch_sequence$new(w, z) # x, y,

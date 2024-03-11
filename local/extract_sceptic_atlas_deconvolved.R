@@ -11,8 +11,8 @@ if (is.na(run_model_index)) { stop("Couldn't identify usable run_model_index var
 
 load(to_run)
 
-source("voxelwise_deconvolution.R")
-source(file.path(fsl_model_arguments$pipeline_home, "functions", "glm_helper_functions.R"))
+#source("voxelwise_deconvolution.R")
+#source(file.path(fsl_model_arguments$pipeline_home, "functions", "glm_helper_functions.R"))
 #source(file.path(fsl_model_arguments$pipeline_home, "functions", "deconvolve_funcs.R"))
 #source(file.path(fsl_model_arguments$pipeline_home, "functions", "spm_funcs.R"))
 
@@ -175,6 +175,11 @@ if (!all(fexists <- file.exists(l1_niftis))) {
 #call voxelwise_deconvolution here
 metadata <- feat_l2_inputs_df %>% dplyr::select(subid, run_num, contingency, emotion)
 
-voxelwise_deconvolution(l1_niftis, metadata, out_dir="/proj/mnhallqlab/users/michael/sceptic_decon_beta60",
-  TR=1, time_offset=2.0, atlas_files=atlas_files, mask=NULL, nprocs=18, save_original_ts=FALSE,
-  out_file_expression=expression(paste0("sub", this_subj$subid, "_run", this_subj$run_num, "_", atlas_img_name)))
+library(fmri.pipeline)
+l1_niftis <- "/proj/mnhallqlab/studies/MMClock/MR_Proc/10637_20140304/mni_5mm_aroma/clock1/nfaswuktm_clock1_5_drop2_trunc298.nii.gz"
+#atlas <- "/proj/mnhallqlab/projects/clock_analysis/fmri/pfc_entropy/original_masks/Schaefer2018_200Parcels_7Networks_order_fonov_2.3mm_ants.nii.gz"
+atlas <- "/proj/mnhallqlab/projects/clock_analysis/fmri/pfc_entropy/masks/Schaefer_Limbic_2.3mm.nii.gz"
+metadata <- data.frame(id=10637, run_number=1)
+voxelwise_deconvolution(l1_niftis, metadata, out_dir="/proj/mnhallqlab/users/michael/test",
+  TR=1, time_offset=2.0, atlas_files=atlas, mask=NULL, nprocs=1, save_original_ts=FALSE,
+  out_file_expression=expression(paste0("sub", this_subj$id, "_run", this_subj$run_number, "_", atlas_img_name)))

@@ -190,7 +190,7 @@ res <- foreach(
   # high power - low power at omission
   hilo_omission_by_sensor <- hypothesis(br_model, "Pow_facHi = 0", group="Sensor", scope="coef")$hypothesis
 
-  # high power - low power at omission
+  # high power - low power at reward
   hilo_reward_by_sensor <- hypothesis(br_model, "Pow_facHi + Pow_facHi:rew_omReward = 0", group="Sensor", scope="coef")$hypothesis
 
   # high - low, reward - omission

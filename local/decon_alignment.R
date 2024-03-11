@@ -1,3 +1,98 @@
+library(dplyr)
+library(fmri.pipeline)
+# setwd(file.path(getMainDir(), "projects", "clock_analysis", "fmri", "hippo_voxelwise"))
+setwd(file.path(getMainDir(), "users", "michael", "sceptic_decon"))
+
+trial_df <- get_mmy3_trial_df(model="selective", groupfixed=TRUE) %>%
+  mutate(rt_time=clock_onset + rt_csv/1000, #should be pretty redundant with isi_onset, but still
+    rt_vmax=rt_vmax/10, #to put into seconds
+    rt_vmax_cum=clock_onset + rt_vmax)
+
+## trial_df <- read_csv(file.path(getMainDir(), "clock_analysis/fmri/data/mmclock_fmri_decay_factorize_selective_psequate_mfx_trial_statistics.csv.gz"))
+    
+## base_dir <- "/proj/mnhallqlab/projects/clock_analysis/fmri/hippo_voxelwise"
+
+## atlas_dirs <- list.dirs(file.path(base_dir, "deconvolved_timeseries","smooth_in_mask_b2015"), recursive=FALSE)
+## #atlas_dirs <- c(file.path(base_dir, "deconvolved_timeseries", "long_axis_l_2.3mm"),
+## #                file.path(base_dir, "deconvolved_timeseries", "long_axis_r_2.3mm"))
+
+base_dir <- file.path(getMainDir(), "users/michael/sceptic_decon")
+
+#all atlases in use
+#atlas_dirs <- list.dirs(base_dir, recursive=FALSE)
+
+# schaefer 200 -> 400 MEDuSA remapping process
+atlas_dirs <- "/proj/mnhallqlab/users/michael/sceptic_decon/Schaefer_400_remap"
+atlases <- file.path("/proj/mnhallqlab/projects/clock_analysis/fmri/pfc_entropy/masks", paste0(basename(atlas_dirs), ".nii.gz"))
+
+atlas_dirs <- grep("Schaefer", atlas_dirs, value=TRUE)
+atlases <- grep("Schaefer", atlases, value=TRUE)
+
+#nbins <- 12 # splits along axis
+
+# atlas_dirs <- list.dirs(base_dir, recursive = FALSE)[c(1,3,4)]
+# atlases <- file.path("/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks", paste0(basename(atlas_dirs), ".nii.gz"))
+
+# these are all ROIs in the Schaefer 400 that are in the DorsAttn (7) or DorsAttnA + DorsAttnB (17)
+# node numbers are based on the 7-network order, consistent with the 200-400 remapping in concatenate_decon_remap.R
+# NB. Jul 2022: This is missing 3 nodes that were retained in the N=47
+# dan_400_7net_rois <- c(
+#   1L, 8L, 28L, 31L, 46L, 58L, 69L, 70L, 71L, 72L, 73L, 74L, 75L,
+#   76L, 77L, 78L, 79L, 80L, 81L, 82L, 83L, 84L, 85L, 86L, 87L, 88L,
+#   89L, 90L, 91L, 94L, 201L, 209L, 216L, 227L, 230L, 247L, 267L,
+#   271L, 272L, 273L, 274L, 275L, 276L, 277L, 278L, 279L, 280L, 281L,
+#   282L, 283L, 284L, 285L, 286L, 287L, 288L, 289L, 290L, 291L, 292L,
+#   293L
+# )
+
+dan_labels <- readxl::read_excel("/proj/mnhallqlab/projects/clock_analysis/fmri/keuka_brain_behavior_analyses/dan/MNH DAN Labels 400 Good Only 47 parcels.xlsx")
+
+dan_400_7net_rois <- dan_labels$roi7_400
+
+alignments <- list(
+  clock_long = list(
+    evt_col = "clock_onset",
+    time_before = -5,
+    time_after = 10,
+    collide_before = "iti_onset", # censor data if we bump into the end of the prior trial
+    collide_after = "clock_onset" # censor data it we hit the next trial
+  ),
+  rt_long = list(
+    evt_col = "rt_time",
+    time_before = -4,
+    time_after=7,
+    collide_before = "iti_onset",
+    collide_after = "clock_onset"
+  )
+)
+
+run_decon_alignment(atlases, base_dir, trial_df,
+  alignments = alignments, aggregate_by = "roi_400", atlas_subset = dan_400_7net_rois,
+  overwrite = TRUE, tr = 1.0, ncpus = 16, mem_per_cpu="12g", walltime = "20:00:00", scheduler = "slurm"
+)
+
+# long axis hippo
+
+atlas_dirs <- c(
+  "/proj/mnhallqlab/projects/clock_analysis/fmri/hippo_voxelwise/deconvolved_timeseries/smooth_in_mask/long_axis_l_2.3mm",
+  "/proj/mnhallqlab/projects/clock_analysis/fmri/hippo_voxelwise/deconvolved_timeseries/smooth_in_mask/long_axis_r_2.3mm"
+)
+
+atlases <- c(
+  "/proj/mnhallqlab/projects/clock_analysis/fmri/hippo_voxelwise/masks/long_axis_l_2.3mm.nii.gz",
+  "/proj/mnhallqlab/projects/clock_analysis/fmri/hippo_voxelwise/masks/long_axis_r_2.3mm.nii.gz"
+)
+
+base_dir <- "/proj/mnhallqlab/projects/clock_analysis/fmri/hippo_voxelwise/deconvolved_timeseries/smooth_in_mask"
+
+run_decon_alignment(atlases, base_dir, trial_df,
+  alignments = alignments, nbins=12,
+  overwrite = TRUE, tr = 1.0, ncpus = 16, mem_per_cpu = "12g", walltime = "20:00:00", scheduler = "slurm"
+)
+
+
+##### OLD
+
 library(tidyverse)
 library(foreach)
 library(iterators)
@@ -19,34 +114,14 @@ source("get_mmy3_trial_df.R")
 source("event_lock_timeseries.R")
 source("fmri_ts.R")
 
-#setwd(file.path(getMainDir(), "projects", "clock_analysis", "fmri", "hippo_voxelwise"))
-setwd(file.path(getMainDir(), "users", "michael", "sceptic_decon"))
 
-trial_df <- get_mmy3_trial_df(model="selective", groupfixed=TRUE) %>%
-  mutate(rt_time=clock_onset + rt_csv/1000, #should be pretty redundant with isi_onset, but still
-    rt_vmax=rt_vmax/10, #to put into seconds
-    rt_vmax_cum=clock_onset + rt_vmax)
-
-## trial_df <- read_csv(file.path(getMainDir(), "clock_analysis/fmri/data/mmclock_fmri_decay_factorize_selective_psequate_mfx_trial_statistics.csv.gz"))
-    
-## base_dir <- "/gpfs/group/mnh5174/default/clock_analysis/fmri/hippo_voxelwise"
-
-## atlas_dirs <- list.dirs(file.path(base_dir, "deconvolved_timeseries","smooth_in_mask_b2015"), recursive=FALSE)
-## #atlas_dirs <- c(file.path(base_dir, "deconvolved_timeseries", "long_axis_l_2.3mm"),
-## #                file.path(base_dir, "deconvolved_timeseries", "long_axis_r_2.3mm"))
-
-base_dir <- file.path(getMainDir(), "users/michael/sceptic_decon")
-
-#all atlases in use
-atlas_dirs <- list.dirs(base_dir, recursive=FALSE)
-atlases <- file.path("/proj/mnhallqlab/projects/clock_analysis/fmri/pfc_entropy/masks", paste0(basename(atlas_dirs), ".nii.gz"))
-
-atlas_dirs <- grep("Schaefer", atlas_dirs, value=TRUE)
-atlases <- grep("Schaefer", atlases, value=TRUE)
-
-#hard code DAN for a bit
+# hard code DAN for a bit
 atlas_dirs <- atlas_dirs[3]
 atlases <- atlases[3]
+
+#events <- c("clock_onset", "feedback_onset", "clock_long", "feedback_long", "rt_long", "rt_vmax_cum")
+events <- c("whole_trial", "rt_to_rt", "rt8")
+
 
 ncores <- Sys.getenv("ncores")
 ncores <- ifelse(ncores == "", 20, as.numeric(ncores))
@@ -55,11 +130,8 @@ cl <- makeCluster(ncores)
 registerDoParallel(cl)
 on.exit(stopCluster(cl))
 
-#registerDoSEQ()
+# registerDoSEQ()
 
-#events <- c("clock_onset", "feedback_onset", "clock_long", "feedback_long", "rt_long", "rt_vmax_cum")
-events <- c("whole_trial", "rt_to_rt", "rt8")
-nbins <- 12 #splits along axis
 
 for (a in 1:length(atlas_dirs)) {
   aname <- basename(atlas_dirs[a])
@@ -78,7 +150,7 @@ for (a in 1:length(atlas_dirs)) {
     bin_cuts <- seq(min(mask[mi]) - 1e-5, max(mask[mi]) + 1e-5, length.out=nbins+1)
   }
   
-  afiles <- list.files(file.path(atlas_dirs[a], "deconvolved"), full.names = TRUE)
+  d_files <- list.files(file.path(atlas_dirs[a], "deconvolved"), full.names = TRUE)
 
   pad_before <- -1.5 #seconds before earliest event, to aid in interpolation
   pad_after <- 1.5
@@ -87,8 +159,8 @@ for (a in 1:length(atlas_dirs)) {
   for (e in events) {
     if (e == "clock_long") {
       evt_col <- "clock_onset"
-      time_before=-5
-      time_after=10
+      time_before <- -5
+      time_after <- 10
       collide_before <- "clock_onset" #censor data at trial boundaries (prior clock onset, next clock onset)
       collide_after <- "clock_onset"
     } else if (e == "feedback_long") {
@@ -127,7 +199,7 @@ for (a in 1:length(atlas_dirs)) {
       next
     }
     
-    elist <- foreach(fname=iter(afiles), .packages = c("dplyr", "readr", "data.table")) %dopar% {
+    elist <- foreach(fname=iter(d_files), .packages = c("dplyr", "readr", "data.table")) %dopar% {
 
       #add sub and run for now since I screwed this up in the outputs...
       id <- as.numeric(sub("^.*/sub(\\d+)_.*", "\\1", fname))

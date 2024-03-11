@@ -16,7 +16,7 @@ w <- R_batch_job$new(
     "module use /proj/mnhallqlab/sw/modules",
     "module load r/4.0.3_depend"
   ),
-  scheduler="local",
+  scheduler="slurm",
   repolling_interval=1 #repoll every second for this test (should be slower for real jobs)
 )
 
