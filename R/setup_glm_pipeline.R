@@ -545,15 +545,15 @@ validate_input_data <- function(df, vm, lg, level = "trial") {
   # this is a bit poorly designed because we haven't renamed the columns to the internal standard yet, so for a second, the columns
   # could be wrong. But we need to defer the renaming until after the validation to line up the data.frames with each other above
   if (level == "subject" & !inherits(df, "bg_subject_data")) {
-    class(df) <- c(class(df), "bg_subject_data")
+    class(df) <- c("bg_subject_data", class(df))
   } else if (level == "run" & !inherits(df, "bg_run_data")) {
-    class(df) <- c(class(df), "bg_run_data")
+    class(df) <- c("bg_run_data", class(df))
   } else if (level == "block" & !inherits(df, "bg_block_data")) {
-    class(df) <- c(class(df), "bg_block_data")
+    class(df) <- c("bg_block_data", class(df))
   } else if (level == "trial" & !inherits(df, "bg_trial_data")) {
-    class(df) <- c(class(df), "bg_trial_data") 
+    class(df) <- c("bg_trial_data", class(df)) 
   } else if (level == "subtrial" & !inherits(df, "bg_subtrial_data")) {
-    class(df) <- c(class(df), "bg_subtrial_data")
+    class(df) <- c("bg_subtrial_data", class(df))
   }
 
   return(df)
