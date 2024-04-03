@@ -1,3 +1,10 @@
+# register bg_ custom classes so that DBI writeTable works with this as a formal (S4?) class
+setOldClass(c("bg_subject_data", "data.frame"))
+setOldClass(c("bg_run_data", "data.frame"))
+setOldClass(c("bg_block_data", "data.frame"))
+setOldClass(c("bg_trial_data", "data.frame"))
+setOldClass(c("bg_subtrial_data", "data.frame"))
+
 #' Main worker function for setting up an analysis pipeline
 #'
 #' @param analysis_name A character string providing a useful name for identifying this analysis. Practically, this
