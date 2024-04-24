@@ -198,7 +198,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         bdm_args <- gpa$additional$bdm_args
         bdm_args$events <- m_events
         bdm_args$signals <- m_signals
-        bdm_args$tr <- gpa$tr
+        bdm_args$tr <- rdata$tr
         bdm_args$write_timing_files <- t_out
         bdm_args$drop_volumes <- gpa$drop_volumes
         bdm_args$run_data <- mr_df

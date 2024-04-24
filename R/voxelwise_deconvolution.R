@@ -120,14 +120,14 @@ voxelwise_deconvolution <- function(
     a_indices <- which(aimg > zero_thresh, arr.ind=TRUE)
     
     ## allow a 2d matrix to be passed, add additional slice column that creates 3d mat with a single slice. 
-    if(ncol(a_indices) == 2){
+    if (ncol(a_indices) == 2L) {
       cat("Converting 2d atlas to a single 3d slice\n")
       a_indices <- cbind(a_indices, rep(1, nrow(a_indices))); colnames(a_indices)[3] <- "slice"  
       #look up spatial coordinates of voxels in atlas (xyz)
       a_coordinates <- cbind(a_indices, t(apply(a_indices, 1, function(r) { translateCoordinate(i=r, nim=aimg, verbose=FALSE) })))
       ## drop k for later indexing
       a_indices <- a_indices[,-3]
-    } else{
+    } else {
       #look up spatial coordinates of voxels in atlas (xyz)
       a_coordinates <- cbind(a_indices, t(apply(a_indices, 1, function(r) { translateCoordinate(i=r, nim=aimg, verbose=FALSE) })))
     }
@@ -173,7 +173,7 @@ voxelwise_deconvolution <- function(
       cat("  Deconvolving subject: ", niftis[si], "\n")
       dump_out <- tempfile()
       
-      if(!is.null(afni_dir)){
+      if (!is.null(afni_dir)) {
         afnistat <- run_afni_command(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]), afnidir = afni_dir)
       } else{
         afnistat <- run_afni_command(paste0("3dmaskdump -mask ", atlas_files[ai], " -o ", dump_out, " ", niftis[si]))
@@ -213,10 +213,10 @@ voxelwise_deconvolution <- function(
 
       #test1 <- deconvolve_nlreg(to_deconvolve[117,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
       #test2 <- deconvolve_nlreg(to_deconvolve[118,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
-      # browser()
+      
       if (algorithm == "bush2015") {
         #use R implementation of Bush 2015 algorithm
-        deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("dependlab")) %do% {
+        deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("fmri.pipeline")) %do% {
           reg <- tryCatch(deconvolve_nlreg_resample(as.vector(vox_ts), kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon, n_resample=decon_settings$n_resample),
             error=function(e) { cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE); return(rep(NA, length(vox_ts))) })
 
@@ -252,7 +252,7 @@ voxelwise_deconvolution <- function(
         
         if (is.null(decon_bin)) {
           alg_input <- as.matrix(data.table::fread(temp_i))
-          deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("dependlab")) %do% {
+          deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("fmri.pipeline")) %do% {
             reg <- tryCatch(deconvolve_nlreg(as.vector(vox_ts), kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon),
                             error=function(e) { cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE); return(rep(NA, length(vox_ts))) })
             return(reg)
@@ -279,9 +279,9 @@ voxelwise_deconvolution <- function(
       #trim hrf end-padding for both C++ and R variants
       deconv_mat <- deconv_mat[, c(seq(-ncol(deconv_mat), -ncol(deconv_mat)+hrf_pad-1))] #trim trailing padding added above
 
-      #melt this for combination
-      deconv_melt <- reshape2::melt(deconv_mat, value.name="decon", varnames=c("vnum", "time"))
-      deconv_melt$time <- (deconv_melt$time - 1)*TR + time_offset #convert back to seconds; first volume is time 0
+      # melt this for combination
+      deconv_melt <- reshape2::melt(deconv_mat, value.name="decon", varnames=c("vnum", "volume"))
+      deconv_melt$time <- (deconv_melt$volume - 1)*TR + time_offset #convert back to seconds; first volume is time 0
 
       deconv_df <- deconv_melt %>% 
         dplyr::mutate(vnum=as.numeric(vnum)) %>%
@@ -316,7 +316,11 @@ voxelwise_deconvolution <- function(
     #write metadata as single data.frame that can be merged selectively, cutting down on storage demands in individual files
     if (!is.null(add_metadata)) {
       out_name <- file.path(out_dir, atlas_img_name, paste0(atlas_img_name, "_metadata.csv"))
-      readr::write_csv(add_metadata, file = out_name)
+      if (file.exists(out_name)) {
+        readr::write_csv(add_metadata, file = out_name, append = TRUE, col_names = FALSE)
+      } else {
+        readr::write_csv(add_metadata, file = out_name, append = FALSE, col_names = TRUE)
+      }
     }
 
   }
