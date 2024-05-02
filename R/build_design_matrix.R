@@ -481,6 +481,9 @@ build_design_matrix <- function(
     if ("session" %in% names(df_events)) {
       join_cols <- c(join_cols, "session")
     }
+    if ("block_number" %in% names(df_events)) { # also add block number as join basis if we have multiple blocks in one run
+      join_cols <- c(join_cols, "block_number")
+    }
 
     if (length(df_signal) == 1L && is.numeric(df_signal)) { #task indicator-type regressor
       s_aligned <- df_events
