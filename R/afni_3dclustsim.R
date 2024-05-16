@@ -122,21 +122,28 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
     #' @field insdat_file An sdat file containing permutations to be passed to 3dClustSim through -insdat
     insdat_file = NULL,
 
-    #' @field insdat_file A mask file corresponding to the insdat_file data that indicates where each value is in space
+    #' @field insdat_mask_file A mask file corresponding to the insdat_file data that indicates where each value is in space
     insdat_mask_file = NULL,
 
     #' @field null_3dttest_obj only used if residuals_file is passed in, this contains the object for running the permutations
     null_3dttest_obj = NULL,
 
     #' @description Create a new afni_3dclustsim object
+    #' @param out_dir the intended output directory for 3dClustSim files
+    #' @param prefix the prefix to be included in the names of 3dClustSim output files
     #' @param fwhmx_input_files A character vector of input files to be passed through 3dFWHMx (-ACF method)
     #' @param fwhmx_mask_files A character vector of masks containing the volume over which to estimate the ACF in 3dFWHMx. 
     #'   Must match 1:1 with \code{fwhmx_input_files}.
     #' @param residuals_file The filename of the group residuals file to be used in null dataset generation (permutation approach).
-    #' @param residuals_mask_file The volume over which null datasets should be generated from teh residuals
+    #' @param residuals_mask_file The volume over which null datasets should be generated from the residuals
+    #' @param dxyz the size of voxels in x y z (vector of 3 numbers)
+    #' @param nxyz the number of voxels along x y z (vector of 3 positive integers)
     #' @param clustsim_mask This controls the volume over which to correct for FWE using 3dClustSim. If you give a whole-brain mask,
     #'   then your cluster thresholds reflect whole-brain FWE correction. If you give a smaller mask (e.g., a single region or network),
     #'   you are correcting only over that volume (i.e., a small-volume correction).
+    #' @param acf_params a vector of 3 autocorrelation parameters (a, b, c) to be used to simulate smoothness. Usually produced by 3dFWHMx. 
+    #'   The 'a' parameter must be between 0 and 1. The 'b' and 'c' parameters (scale radii) must be positive. The spatial autocorrelation function 
+    #'   is given by: `ACF(r) = a * exp(-r*r/(2*b*b)) + (1-a)*exp(-r/c)`
     #' @param pthr A vector of voxelwise p-values to be tested in 3dClustSim (-pthr). Can be a space-separated string or
     #'   a numeric vector. Default: ".01 .005 .002 .001 .0005 .0002 .0001".
     #' @param athr A vector of cluster p-values to be tested in 3dClustSim (-athr). Can be a space-separated string or
@@ -534,7 +541,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
 
       clust_nvox <- sim_calc %>%
         pull(nvoxels) %>%
-        ceiling()
+        ceiling(.)
 
       arg_list <- list(
           threshold_file = statistic_nifti, bisided = bisided, onesided = onesided, twosided = twosided,

@@ -1,5 +1,3 @@
-library(R6)
-
 #essential structure
 # - time data: time, signal, unit (voxel/region) ([voxels + time] x signals)
 # - metadata: id, trial, events (trials x signals)

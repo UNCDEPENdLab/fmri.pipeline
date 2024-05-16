@@ -80,15 +80,15 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
                      calculate=c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"),
                      return_models = FALSE, emmeans_spec = NULL, emtrends_spec=NULL) {
   
-  require(data.table) # remove for package
-  require(dplyr)
-  require(lme4)
-  require(lmerTest)
-  require(foreach)
-  require(doParallel)
-  require(iterators)
-  require(broom.mixed)
-  require(formula.tools)
+  requireNamespace("data.table") # remove for package
+  requireNamespace("dplyr")
+  requireNamespace("lme4")
+  requireNamespace("lmerTest")
+  requireNamespace("foreach")
+  requireNamespace("doParallel")
+  requireNamespace("iterators")
+  requireNamespace("broom.mixed")
+  requireNamespace("formula.tools")
 
   ## VALIDATE INPUTS
   # support data.frame input for single dataset execution or a vector of files that are imported and fit sequentially

@@ -26,6 +26,7 @@ helper class to generate 3dttest++ null datasets using -randomsign
 \if{html}{\out{<a id="method-simulate_null_3dttest-new"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-new}{}}}
 \subsection{Method \code{new()}}{
+initialize a simulate_null_3dttest object to support 3dttest++ -randomsign
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$new(
   residuals_file = NULL,
@@ -50,8 +51,7 @@ helper class to generate 3dttest++ null datasets using -randomsign
 
 \item{\code{n_permutations}}{The total number of null datasets to be computed by sign-flipping}
 
-\item{\code{use_sdat}}{a logical indicating whether to output null datasets in sdat format (single-precision, serialized, I think)
-method to return R_batch_job to run 3dttest permutations}
+\item{\code{use_sdat}}{a logical indicating whether to output null datasets in sdat format (single-precision, serialized, I think)}
 }
 \if{html}{\out{</div>}}
 }
@@ -60,19 +60,32 @@ method to return R_batch_job to run 3dttest permutations}
 \if{html}{\out{<a id="method-simulate_null_3dttest-is_complete"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-is_complete}{}}}
 \subsection{Method \code{is_complete()}}{
+test whether the expected outputs of the permutation are complete
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$is_complete()}\if{html}{\out{</div>}}
 }
 
+\subsection{Returns}{
+a boolean indicating whether the expected output file exists
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-submit"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-submit}{}}}
 \subsection{Method \code{submit()}}{
+submit the permutation job to the cluster
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$submit(force = FALSE)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{force}}{whether to run the permutation job even if the outputs are already complete
+method to return R_batch_job to run 3dttest permutations}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-get_3dttest_calls"></a>}}

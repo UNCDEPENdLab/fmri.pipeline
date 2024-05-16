@@ -64,12 +64,14 @@ simulate_null_3dttest <- R6::R6Class("simulate_null_3dttest",
       return(private$perm_batch)
     }
   ),
-  #' @param residuals_file the 4D file containing voxelwise residuals for all subjects (e.g., res4d.nii.gz in FEAT)
-  #' @param mask_file A mask file used to specify which voxels should be analyzed/permuted
-  #' @param njobs The number of independent jobs across which permutations are distributed
-  #' @param n_permutations The total number of null datasets to be computed by sign-flipping
-  #' @param use_sdat a logical indicating whether to output null datasets in sdat format (single-precision, serialized, I think)
+  
   public = list(
+    #' @description initialize a simulate_null_3dttest object to support 3dttest++ -randomsign
+    #' @param residuals_file the 4D file containing voxelwise residuals for all subjects (e.g., res4d.nii.gz in FEAT)
+    #' @param mask_file A mask file used to specify which voxels should be analyzed/permuted
+    #' @param njobs The number of independent jobs across which permutations are distributed
+    #' @param n_permutations The total number of null datasets to be computed by sign-flipping
+    #' @param use_sdat a logical indicating whether to output null datasets in sdat format (single-precision, serialized, I think)
     initialize = function(residuals_file = NULL, mask_file = NULL, njobs = NULL, n_permutations = NULL, use_sdat = NULL,
                           wall_time = NULL, memgb_per_3dttest = NULL, memgb_combine = NULL) {
 
@@ -141,9 +143,14 @@ simulate_null_3dttest <- R6::R6Class("simulate_null_3dttest",
       })
     },
 
+    #' @description test whether the expected outputs of the permutation are complete
+    #' @return a boolean indicating whether the expected output file exists
     is_complete = function() {
       checkmate::test_file_exists(private$combined_output_file)
     },
+    
+    #' @description submit the permutation job to the cluster
+    #' @param force whether to run the permutation job even if the outputs are already complete
     submit = function(force = FALSE) {
       if (isTRUE(self$is_complete()) && isFALSE(force)) {
         message(glue("The permutations output file already exists: {private$combined_output_file}."))

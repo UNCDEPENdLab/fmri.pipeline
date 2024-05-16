@@ -1,7 +1,6 @@
 spm_sceptic_model <- function(subj_data, sceptic_signals, mrfiles, runlengths, mrrunnums, execute=FALSE, force=FALSE,
                               drop_volumes=0, outdir=NULL, usepreconvolve=FALSE, spikeregressors=FALSE, model_suffix="", ...) {
-  require(dplyr)
-  require(tidyr)
+
     
   if (is.null(outdir)) {
     outdir=paste0("sceptic-", paste(sceptic_signals, collapse="-")) #define output directory based on combination of signals requested

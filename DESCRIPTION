@@ -1,8 +1,8 @@
 Package: fmri.pipeline
 Type: Package
 Title: Analysis of fMRI Data on HPC clusters
-Version: 0.2-1
-Date: 2024-03-11
+Version: 0.2-2
+Date: 2024-05-16
 Authors@R: c(person("Michael", "Hallquist", role = c("aut", "cre"),
     email = "michael.hallquist@gmail.com"))
 Maintainer: Michael Hallquist <michael.hallquist@gmail.com>
@@ -20,10 +20,11 @@ Imports:
     Rcpp,
     R.utils,
     RNifti,
+    R6,
     abind,
     anytime,
     broom.mixed,
-    cowplot,
+    car,
     checkmate,
     dplyr,
     data.table,
@@ -36,18 +37,21 @@ Imports:
     future.batchtools,
     ggbrain,
     ggplot2,
-    ggnewscale,
     glue,
     gsubfn,
+    iterators,
+    jsonlite,
     oro.nifti,
     orthopolynom,
     lgr,
     lubridate,
     lme4,
     lmerTest,
+    magrittr,
     psych,
     patchwork,
     purrr,
+    readr,
     rlang,
     signal,
     stringr,
