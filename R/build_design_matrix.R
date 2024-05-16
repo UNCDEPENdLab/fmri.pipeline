@@ -475,15 +475,10 @@ build_design_matrix <- function(
     event_runs <- factor(sort(unique(df_events$run_number)))
     df_signal <- s$value # the signal data.frame for this signal
 
-    if ("id" %in% names(df_events)) {
-      join_cols <- c(join_cols, "id")
-    }
-    if ("session" %in% names(df_events)) {
-      join_cols <- c(join_cols, "session")
-    }
-    if ("block_number" %in% names(df_events)) { # also add block number as join basis if we have multiple blocks in one run
-      join_cols <- c(join_cols, "block_number")
-    }
+    # further match-merge on id, session, and block_number, if present
+    if ("id" %in% names(df_events)) join_cols <- c(join_cols, "id")
+    if ("session" %in% names(df_events)) join_cols <- c(join_cols, "session")
+    if ("block_number" %in% names(df_events)) join_cols <- c(join_cols, "block_number")
 
     if (length(df_signal) == 1L && is.numeric(df_signal)) { #task indicator-type regressor
       s_aligned <- df_events
