@@ -969,16 +969,43 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     c_custom
   )
 
+  # handle contrasts from the full matrix that should be deleted
+  # these are processed dynamically here so that the same set can be dropped if a contrast is respecified for a data subset or subject
   if (!is.null(spec$delete)) {
     which_del <- match(spec$delete, rownames(cmat_full))
-    if (!is.na(which_del[1L])) {
+    if (!any(is.na(which_del))) {
       cmat <- cmat_full[-1*which_del, , drop=FALSE]
+    } else {
+      warning("Some contrasts to be dropped were not found in the matrix: ", paste(spec$delete[is.na(which_del)], collapse = ", "))
+      which_del <- na.omit(which_del)
+      cmat <- if (length(which_del) > 0L) cmat_full[-1 * na.omit(which_del), , drop = FALSE] else cmat_full
     }
   } else {
     cmat <- cmat_full
   }
 
-  dupes <- duplicated(cmat, MARGIN = 1)
+  # check for contrasts that are duplicated and ask user what to do about it. This should only happen once because we then update the $delete field
+  dupe_list <- get_dupe_rows(cmat)
+  drop_rows <- c()
+  if (length(dupe_list) > 0L) {    
+    message("Duplicate contrasts found in your matrix. This can occur for many benign reasons, but we need you do say what you want
+      to call these contrasts in the output so that it is clear to you.\n")
+    
+    for (dd in dupe_list) {
+      message("These contrasts are the same: ", paste(rownames(cmat)[dd], collapse=", "))
+      whichkeep <- menu(rownames(cmat)[dd], title = "Which name should we use?")
+      drop_rows <- c(drop_rows, dd[-whichkeep])
+    }
+
+    # add these back into model specification so that the same decisions are made if the spec is used to repopulate a new matrix
+    mobj$contrast_spec$delete <- unique(c(mobj$contrast_spec$delete, rownames(cmat)[drop_rows]))
+  } 
+
+  # duplicated does not give user any control over which one to retain (in terms of contrast name)
+  # dupes <- duplicated(cmat, MARGIN = 1)
+  dupes <- rep(FALSE, nrow(cmat))
+  dupes[drop_rows] <- TRUE
+  
   cmat <- cmat[!dupes, , drop=FALSE] # drop duplicated contrasts
 
   # parentheses in contrast names generate problems in running through FEAT (chokes on submission)
@@ -999,6 +1026,35 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   mobj$contrasts <- cmat
   return(mobj)
 }
+
+# helper function to identify duplicate contrasts
+get_dupe_rows <- function(mat, enforce_rownames=FALSE) {
+  stopifnot(inherits(mat, "matrix"))
+  
+  # rows to check -- start with all, then winnow
+  rtc <- seq_len(nrow(mat))
+  
+  # if enforce_rownames is FALSE, drop rownames from local copy so that identical does not fail
+  if (isFALSE(enforce_rownames)) rownames(mat) <- NULL
+  
+  dupe_list<- list()
+  while(length(rtc) > 1L) {
+    last_rtc <- length(rtc)
+    to_compare <- mat[rtc[last_rtc],,drop=FALSE] # always compare preceding rows to last remaining row
+    rdupes <- sapply(1:(length(rtc) - 1), function(i) identical(mat[rtc[i],,drop=FALSE], to_compare))
+    to_drop <- last_rtc # always drop last eligible row after checking for dupes of it
+    if (any(rdupes)) {
+      # rdupes will always be 1 less than length of rtc. Add FALSE as last element so that rtc subset never gets scalar rtc[TRUE], which would grab all elements
+      dupe_list <- c(dupe_list, list(c(rtc[c(rdupes, FALSE)], rtc[last_rtc])))
+      to_drop <- c(to_drop, which(rdupes))
+    }
+    rtc <- rtc[-to_drop] # drop rows that have been processed
+  }
+  
+  return(dupe_list)
+}
+
+
 
 get_wi_contrast_matrix <- function(mobj, c_colnames) {
   # this function is only intended to crawl over within-subject contrasts of an l1 model
