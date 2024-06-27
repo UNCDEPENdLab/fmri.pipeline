@@ -83,6 +83,17 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
     nvoxels <- rdata$nvoxels
     exclude_run <- rdata$exclude_run
 
+    # ensure that we have a TR column and that TR does not vary by run
+    if (!"tr" %in% names(rdata)) {
+      lg$error("No tr column in run data for subject: %s, session: %d", subj_id, subj_session)
+      return(NULL)
+    }
+
+    if (length(unique(rdata$tr)) > 1L) {
+      lg$error("More than one TR value for runs within a subject. This is not currently supported! subject: %s, session: %d", subj_id, subj_session)
+      return(NULL)
+    }
+
     if ("l1_confound_file" %in% names(rdata)) {
       l1_confound_files <- rdata$l1_confound_file
     } else {
@@ -156,7 +167,9 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
             this_signal <- fit_wi_model(this_signal)
           }
         } else {
-          stop("Unable to sort out how to refit wi_model with signal that doesn't have a data.frame in the $value slot")
+          msg <- "Unable to sort out how to refit wi_model with signal that doesn't have a data.frame in the $value slot"
+          lg$error(msg)
+          stop(msg)
         }
         return(this_signal)
       })
@@ -179,7 +192,12 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         run_bdm <- tryCatch(
           {
             load(bdm_out_file)
-            FALSE
+            if (!exists("d_obj") || is.null(d_obj)) {
+              lg$warning("Regenerating design because d_obj is missing/NULL in extant BDM file: %s.", bdm_out_file)
+              TRUE # regenerate
+            } else {
+              FALSE # use cache
+            }
           },
           error = function(e) {
             lg$error("Failed to load BDM file: %s with error: %s. I will regenerate the design matrix.", bdm_out_file, e)
@@ -198,7 +216,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         bdm_args <- gpa$additional$bdm_args
         bdm_args$events <- m_events
         bdm_args$signals <- m_signals
-        bdm_args$tr <- rdata$tr
+        bdm_args$tr <- rdata$tr[1L]
         bdm_args$write_timing_files <- t_out
         bdm_args$drop_volumes <- gpa$drop_volumes
         bdm_args$run_data <- mr_df

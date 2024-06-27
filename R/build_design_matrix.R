@@ -366,9 +366,7 @@ build_design_matrix <- function(
   checkmate::assert_integerish(run_data$run_number, lower = 1)
   checkmate::assert_integerish(drop_volumes, lower = 0)
 
-  if (is.null(lg)) {
-    lg <- lgr::get_logger()
-  }
+  if (is.null(lg)) lg <- lgr::get_logger()
 
   # If drop_volumes is just 1 in length, assume it applies to all runs
   # This will only have an effect if run_data does not already have a drop_volumes column
@@ -390,6 +388,8 @@ build_design_matrix <- function(
   if (is.null(events)) stop("You must pass in an events data.frame. See ?build_design_matrix for details.")
   if (is.null(signals)) stop("You must pass in a signals list. See ?build_design_matrix for details.")
   if (is.null(tr)) stop("You must pass in the tr (repetition time) in seconds. See ?build_design_matrix for details.")
+
+  checkmate::assert_number(tr, lower=0.01, upper=100) # enforce scalar number
 
   stopifnot(inherits(events, "data.frame"))
   if (!"event" %in% names(events)) { stop("events data.frame must contain event column with the name of the event") }
