@@ -1,12 +1,12 @@
 Package: fmri.pipeline
 Type: Package
 Title: Analysis of fMRI Data on HPC clusters
-Version: 0.2-2
-Date: 2024-05-16
+Version: 0.2-3
+Date: 2024-10-02
 Authors@R: c(person("Michael", "Hallquist", role = c("aut", "cre"),
     email = "michael.hallquist@gmail.com"))
 Maintainer: Michael Hallquist <michael.hallquist@gmail.com>
-Description: Setup of GLM and deconvolution analyses for large-scale analyses
+Description: Setup of GLM and deconvolution analyses for large-scale fMRI analyses
   of fMRI data.
 License: GPL-3
 Encoding: UTF-8
@@ -32,7 +32,6 @@ Imports:
     doFuture,
     emmeans,
     foreach,
-    fs,
     future,
     future.batchtools,
     ggbrain,

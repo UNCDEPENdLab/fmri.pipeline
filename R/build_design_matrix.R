@@ -246,7 +246,6 @@
 #' @importFrom RNifti niftiHeader
 #' @importFrom checkmate assert_file_exists
 #' @importFrom rlang flatten
-#' @importFrom fs path_sanitize
 #'
 #' @author Michael Hallquist
 #' @author Alison Schreiber
@@ -676,8 +675,8 @@ build_design_matrix <- function(
           reg_name <- names(dmat_convolved[[r]])[v]
           fname <- paste0(names(dmat_convolved)[r], "_", reg_name, ".1D")
           to_write <- round(dmat_convolved[[r]][[v]], 6)
-          conv_concat[[reg_name]] <<- c(conv_concat[[reg_name]], to_write) #add for concatenated 1D file
-          ofile <- file.path(output_directory, fs::path_sanitize(fname, replacement = "."))
+          conv_concat[[reg_name]] <<- c(conv_concat[[reg_name]], to_write) # add for concatenated 1D file
+          ofile <- file.path(output_directory, path_sanitize(fname, replacement = ""))
           tf_convolved[r, v] <<- ofile
           write.table(to_write,
             file = ofile,
@@ -691,7 +690,7 @@ build_design_matrix <- function(
       #write run-concatenated convolved regressors (for use in AFNI)
       tf_convolved_concat <- sapply(seq_along(conv_concat), function(v) {
         fname <- paste0(names(conv_concat)[v], "_concat.1D")
-        ofile <- file.path(output_directory, fs::path_sanitize(fname, replacement = "."))
+        ofile <- file.path(output_directory, path_sanitize(fname, replacement = ""))
         #tf_convolved_concat[v] <<- ofile
         write.table(conv_concat[[v]],
           file = ofile,
@@ -725,7 +724,7 @@ build_design_matrix <- function(
           }
 
           fname <- paste0("run", runs_to_output[i], "_", dimnames(dmat)[[2L]][reg], "_FSL3col.txt")
-          ofile <- file.path(output_directory, fs::path_sanitize(fname, replacement = "."))
+          ofile <- file.path(output_directory, path_sanitize(fname, replacement = ""))
           tf_fsl[i, reg] <- ofile
           write.table(regout, file=ofile, sep="\t", eol="\n", col.names=FALSE, row.names=FALSE)
         }

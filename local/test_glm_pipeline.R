@@ -9,11 +9,13 @@ library(emmeans)
 library(glue)
 library(oro.nifti)
 library(RNifti)
+library(ggplot2)
 # library(fmri.pipeline)
 
-# setwd("/proj/mnhallqlab/users/michael/fmri.pipeline/R")
+# setwd()
 # setwd("~/Data_Analysis/r_packages/fmri.pipeline/R")
-file.sources <- list.files("~/Data_Analysis/r_packages/fmri.pipeline/R",
+#file.sources <- list.files("~/Data_Analysis/r_packages/fmri.pipeline/R",
+file.sources <- list.files("/proj/mnhallqlab/users/michael/fmri.pipeline/R",
   pattern = "*.R$", full.names = TRUE,
   ignore.case = TRUE
 )

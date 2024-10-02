@@ -144,14 +144,6 @@ expand_signal <- function(sig) {
     s_list <- c(s_list, s_list_deriv)
   }
 
-  # parentheses in signal names will cause errors when these timing files are written to disk if they are evaluated unquoted (in FSL shell scripts)
-  # thus, trim out any parentheses in names, and while we're at it, whitespace (if shell scripts use unquoted)
-  s_list <- lapply(s_list, function(ss) {
-    ss$name <- gsub("(\\(|\\)|\\s)", "", ss$name, perl=TRUE)
-    return(ss)
-  })
-
-
   return(s_list)
 }
 
