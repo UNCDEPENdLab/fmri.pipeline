@@ -285,11 +285,15 @@ fwe_spec <- R6::R6Class("fwe_spec",
     fwe_obj_list = list()
     #fwe_type = NULL
   ), public = list(
+    #' @description create a new FWE correction instance
+    #' @param ... not used yet
+    #' @param fwe_data not used yet
     initialize = function(..., fwe_data = NULL) {
       objs <- list(...)
       #checkmate::assert_subset(fwe_type, c("ptfce, 3dclustsim", "palm", "randomise"), empty.ok = FALSE)
 
     },
+    #' @description submit FWE estimation to the cluster
     submit = function() {
       # run submit method for every fwe object
       lapply(fwe_obj_list$submit())

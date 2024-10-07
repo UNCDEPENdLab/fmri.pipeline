@@ -52,6 +52,12 @@ initialize a simulate_null_3dttest object to support 3dttest++ -randomsign
 \item{\code{n_permutations}}{The total number of null datasets to be computed by sign-flipping}
 
 \item{\code{use_sdat}}{a logical indicating whether to output null datasets in sdat format (single-precision, serialized, I think)}
+
+\item{\code{wall_time}}{The amount of compute time needed for this job as a dd-hh:mm:ss string}
+
+\item{\code{memgb_per_3dttest}}{The number of gigabytes of memory requested for each 3dttest++ permutation process. If not specified, 8 will be requested}
+
+\item{\code{memgb_combine}}{The number of gigabytes of memory requested for the parent 3dttest++ job that combines permutation outputs. If not specified, 32 will be requested}
 }
 \if{html}{\out{</div>}}
 }

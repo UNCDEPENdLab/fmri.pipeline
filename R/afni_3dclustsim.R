@@ -136,6 +136,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
     #'   Must match 1:1 with \code{fwhmx_input_files}.
     #' @param residuals_file The filename of the group residuals file to be used in null dataset generation (permutation approach).
     #' @param residuals_mask_file The volume over which null datasets should be generated from the residuals
+    #' @param residuals_njobs The number of independent jobs for splitting up the residuals permutations. If NULL, 32 jobs will be used.
     #' @param dxyz the size of voxels in x y z (vector of 3 numbers)
     #' @param nxyz the number of voxels along x y z (vector of 3 positive integers)
     #' @param clustsim_mask This controls the volume over which to correct for FWE using 3dClustSim. If you give a whole-brain mask,
@@ -144,11 +145,13 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
     #' @param acf_params a vector of 3 autocorrelation parameters (a, b, c) to be used to simulate smoothness. Usually produced by 3dFWHMx. 
     #'   The 'a' parameter must be between 0 and 1. The 'b' and 'c' parameters (scale radii) must be positive. The spatial autocorrelation function 
     #'   is given by: `ACF(r) = a * exp(-r*r/(2*b*b)) + (1-a)*exp(-r/c)`
+    #' @param nopad If TRUE, disable 3dClustSim's default 'padding' slices along each face to allow for edge effects of the smoothing process. Default: FALSE
     #' @param pthr A vector of voxelwise p-values to be tested in 3dClustSim (-pthr). Can be a space-separated string or
     #'   a numeric vector. Default: ".01 .005 .002 .001 .0005 .0002 .0001".
     #' @param athr A vector of cluster p-values to be tested in 3dClustSim (-athr). Can be a space-separated string or
     #'   a numeric vector. Default: ".05 .02 .01 .005 .002 .001 .0005 .0002 .0001".
     #' @param iter The number of iterations to use in simulating null datasets in 3dClustSim. Default: 30000.
+    #' @param nodec If TRUE, clusters will be printed without decimal places, rounding up (e.g., 27.2 becomes 28). Default: FALSE.
     #' @param seed The seed to use when starting 3dClustSim random number generation. Default: 0 (sets a random seed)
     #' @param scheduler The HPC scheduler to use. Can be 'local', 'slurm', or 'torque'.
     #' @param ncpus The number of cores to use in the 3dClustSim job. This sets OMP_NUM_THREADS in the 3dClustSim job to 

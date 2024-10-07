@@ -21,15 +21,26 @@ R6 class for an FWE correction method that can apply to one or more models
 \if{html}{\out{<a id="method-fwe_spec-new"></a>}}
 \if{latex}{\out{\hypertarget{method-fwe_spec-new}{}}}
 \subsection{Method \code{new()}}{
+create a new FWE correction instance
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{fwe_spec$new(..., fwe_data = NULL)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{...}}{not used yet}
+
+\item{\code{fwe_data}}{not used yet}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fwe_spec-submit"></a>}}
 \if{latex}{\out{\hypertarget{method-fwe_spec-submit}{}}}
 \subsection{Method \code{submit()}}{
+submit FWE estimation to the cluster
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{fwe_spec$submit()}\if{html}{\out{</div>}}
 }

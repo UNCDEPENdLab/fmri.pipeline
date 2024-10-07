@@ -72,8 +72,11 @@ This is mostly relevant to the 'local' scheduler.}
 \item{\code{print_session_info}}{If TRUE, print the `sessionInfo()` and `Sys.info()` when the job starts. Useful for debugging
 problems with the compute environment or R installation.}
 
-\item{\code{print_environment}}{If TRUE, print the `Sys.getenv()` when the job starts. This can produce a lot of output,
+\item{\code{print_environment}}{If `TRUE``, print the `Sys.getenv()` when the job starts. This can produce a lot of output,
 but can be useful if certain environment variables are not being found when your job runs, leading it to fail.}
+
+\item{\code{sqlite_cache_obj}}{If `TRUE`, copy this object into the SQLite database at submission time. This is mostly useful for
+detailed debugging and is not generally recommended because it can increase the size of the database considerably}
 }
 \if{html}{\out{</div>}}
 }
@@ -116,6 +119,7 @@ Create a new R_batch_job object for execution on an HPC cluster
   input_rdata_file = NULL,
   input_objects = NULL,
   output_rdata_file = NULL,
+  sqlite_db = NULL,
   scheduler_options = NULL,
   repolling_interval = NULL,
   print_session_info = TRUE,
@@ -166,6 +170,8 @@ job begins.}
 This is mutually exclusive with input_rdata_file at present.}
 
 \item{\code{output_rdata_file}}{The name of the environment to be saved at the end of the R batch execution}
+
+\item{\code{sqlite_db}}{The location of the SQLite database to be used for job tracking. If `NULL`, job tracking will be disabled.}
 
 \item{\code{scheduler_options}}{A character vector of scheduler options to be added to the header of the batch script}
 

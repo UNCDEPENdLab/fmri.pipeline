@@ -88,6 +88,8 @@ Must match 1:1 with \code{fwhmx_input_files}.}
 
 \item{\code{residuals_mask_file}}{The volume over which null datasets should be generated from the residuals}
 
+\item{\code{residuals_njobs}}{The number of independent jobs for splitting up the residuals permutations. If NULL, 32 jobs will be used.}
+
 \item{\code{dxyz}}{the size of voxels in x y z (vector of 3 numbers)}
 
 \item{\code{nxyz}}{the number of voxels along x y z (vector of 3 positive integers)}
@@ -100,6 +102,8 @@ you are correcting only over that volume (i.e., a small-volume correction).}
 The 'a' parameter must be between 0 and 1. The 'b' and 'c' parameters (scale radii) must be positive. The spatial autocorrelation function 
 is given by: `ACF(r) = a * exp(-r*r/(2*b*b)) + (1-a)*exp(-r/c)`}
 
+\item{\code{nopad}}{If TRUE, disable 3dClustSim's default 'padding' slices along each face to allow for edge effects of the smoothing process. Default: FALSE}
+
 \item{\code{pthr}}{A vector of voxelwise p-values to be tested in 3dClustSim (-pthr). Can be a space-separated string or
 a numeric vector. Default: ".01 .005 .002 .001 .0005 .0002 .0001".}
 
@@ -107,6 +111,8 @@ a numeric vector. Default: ".01 .005 .002 .001 .0005 .0002 .0001".}
 a numeric vector. Default: ".05 .02 .01 .005 .002 .001 .0005 .0002 .0001".}
 
 \item{\code{iter}}{The number of iterations to use in simulating null datasets in 3dClustSim. Default: 30000.}
+
+\item{\code{nodec}}{If TRUE, clusters will be printed without decimal places, rounding up (e.g., 27.2 becomes 28). Default: FALSE.}
 
 \item{\code{seed}}{The seed to use when starting 3dClustSim random number generation. Default: 0 (sets a random seed)}
 

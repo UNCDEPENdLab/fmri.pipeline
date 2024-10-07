@@ -72,6 +72,9 @@ simulate_null_3dttest <- R6::R6Class("simulate_null_3dttest",
     #' @param njobs The number of independent jobs across which permutations are distributed
     #' @param n_permutations The total number of null datasets to be computed by sign-flipping
     #' @param use_sdat a logical indicating whether to output null datasets in sdat format (single-precision, serialized, I think)
+    #' @param wall_time The amount of compute time needed for this job as a dd-hh:mm:ss string
+    #' @param memgb_per_3dttest The number of gigabytes of memory requested for each 3dttest++ permutation process. If not specified, 8 will be requested
+    #' @param memgb_combine The number of gigabytes of memory requested for the parent 3dttest++ job that combines permutation outputs. If not specified, 32 will be requested
     initialize = function(residuals_file = NULL, mask_file = NULL, njobs = NULL, n_permutations = NULL, use_sdat = NULL,
                           wall_time = NULL, memgb_per_3dttest = NULL, memgb_combine = NULL) {
 
