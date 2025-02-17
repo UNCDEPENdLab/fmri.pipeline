@@ -95,8 +95,11 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
   int_vars <- sapply(trial_data, checkmate::test_integerish)
   char_vars <- sapply(trial_data, checkmate::test_character)
   fac_vars <- sapply(trial_data, checkmate::test_factor)
-  possible_factors <- names(which(int_vars | char_vars | fac_vars))
+  num_vars <- sapply(trial_data, checkmate::test_numeric)
+  possible_factors <- names(which(int_vars | char_vars | fac_vars)) # possible factors must be int, char, or factor
   possible_factors <- setdiff(possible_factors, c("id", "session", "run_number", "trial"))
+  possible_pms <- names(which(int_vars | num_vars)) # possible parametric modulators must be numeric
+  possible_pms <- setdiff(possible_pms, c("id", "session", "run_number", "trial"))
 
   # relies on scope of parent function for onset_cols etc.
   take_l1_actions <- function(l1_model_set, actions) {
@@ -118,26 +121,27 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
         # iti/isi
         l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
           field_name = "isis", field_desc = "ISI/ITI",
-          select_cols = isi_cols, select_regex = isi_regex
+          select_cols = isi_cols, select_regex = isi_regex, force_selection=FALSE
         )
       } else if (aa == 4) {
         # parametric values
         l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
           field_name = "values", field_desc = "parametric value",
-          select_cols = value_cols, select_regex = value_regex
+          select_cols = value_cols, select_regex = value_regex, force_selection=FALSE,
+          limit_cols = possible_pms
         )
       } else if (aa == 5) {
         # within-subject factors
         l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
-          field_name = "wi_factors", field_desc = "within-subject factor",
+          field_name = "wi_factors", field_desc = "within-subject factor", force_selection=FALSE,
           limit_cols = possible_factors
         )
       } else if (aa == 6) {
         # events
-        l1_model_set <- bl1_build_events(l1_model_set, trial_data, lg)
+        l1_model_set <- bl1_build_events(l1_model_set, trial_data, lg=lg)
       } else if (aa == 7) {
         # signals
-        l1_model_set <- bl1_build_signals(l1_model_set, trial_data, lg)
+        l1_model_set <- bl1_build_signals(l1_model_set, trial_data, lg=lg)
       } else if (aa == 8) {
         # models
         l1_model_set <- bl1_build_models(l1_model_set, lg=lg)
@@ -276,10 +280,12 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
     }
 
     if (action == 1L) { # Add/modify
-      chosen_cols <- select.list(possible_cols,
+      # if user selects 0 to cancel, select.list still returns character(0) instead of the current values
+      new_cols <- select.list(possible_cols,
         multiple = TRUE, preselect = chosen_cols,
         title = glue("Choose all columns denoting event {field_desc}s\n(Command/Control-click to select multiple)")
       )
+      if (!identical(new_cols, character(0))) chosen_cols <- new_cols
     } else if (action == 2L) { # Delete
       if (length(chosen_cols) == 0L && isTRUE(force_selection)) {
         cat(glue("No {field_desc} yet. Please add at least one.\n"))

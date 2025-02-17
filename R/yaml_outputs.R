@@ -12,7 +12,7 @@ export_l1_config <- function(gpa, file = "l1_config.yaml") {
     warning("Cannot export l1 config because $l1_models is NULL. Run build_l1_models first?")
   }
 
-  if (checkmate::test_class(l1m, "l1_model_set")) {
+  if (!checkmate::test_class(l1m, "l1_model_set")) {
     stop("$l1_models is not of class l1_model_set")
   }
 

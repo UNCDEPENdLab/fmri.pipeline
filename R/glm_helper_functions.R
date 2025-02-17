@@ -988,7 +988,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   dupe_list <- get_dupe_rows(cmat)
   drop_rows <- c()
   if (length(dupe_list) > 0L) {    
-    message("Duplicate contrasts found in your matrix. This can occur for many benign reasons, but we need you do say what you want
+    message("Duplicate contrasts found in your matrix. This can occur for many benign reasons, but we need you to say what you want
       to call these contrasts in the output so that it is clear to you.\n")
     
     for (dd in dupe_list) {
