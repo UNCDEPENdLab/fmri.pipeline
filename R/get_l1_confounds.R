@@ -92,7 +92,7 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   # COPIED FROM HERE generate_l1_confounds
   generate_l1_confounds_output <- test_generate_l1_confounds(gpa,analysis_outdir, run_number, lg)
   expected_l1_confound_file <- generate_l1_confounds_output$expected_l1_confound_file
-  
+
   l1_cached_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_run_calculations")
 
   # COPIED fROM HERE generate_run_exclusion
@@ -101,6 +101,7 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
 
   # COPIED FROM HERE generate_run_truncation
   generate_run_truncation_output <- test_generate_run_truncation(gpa, id, session, run_number, lg)
+  generate_run_truncation <- generate_run_truncation_output$generate_run_truncation
   truncation_data <- generate_run_truncation_output$truncation_data
 
   # If run exclusion, l1 confounds, and truncation data exist, just use the precalculated information
@@ -138,7 +139,9 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   }
   
   # COPIED FROM HERE read_confounds_motion_parameters
-  all_confounds <- read_confounds_motion_parameters(gpa, id, session, run_number, run_df, lg, expected_l1_confound_file)
+  read_confounds_motion_parameters_output <- read_confounds_motion_parameters(gpa, id, session, run_number, run_df, expected_l1_confound_file, lg)
+  all_confounds <- read_confounds_motion_parameters_output$all_confounds
+  motion_df <- read_confounds_motion_parameters_output$motion_df
 
   # retain columns used in calculating run truncation
   if (isTRUE(generate_run_truncation) && !is.null(gpa$confound_settings$truncate_run)) {
@@ -162,9 +165,7 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   run_df$exclude_run <- exclude_run_output$exclude_run
 
   # COPIED FROM HERE confound_manip
-  confound_manip_output <- confound_manipulations(gpa, all_confounds, expected_l1_confound_file, run_df, lg, demean)
-  all_confounds <- confound_manip_output$all_confounds
-  lg <- confound_manip_output$lg
+  all_confounds <- confound_manipulations(gpa, all_confounds, expected_l1_confound_file, run_df, demean, lg)
 
   # incorporate spike regressors if requested (not used in conventional AROMA)
   spikes <- compute_spike_regressors(motion_df, gpa$confound_settings$spike_volumes, lg = lg)
@@ -173,7 +174,7 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   lg$debug("Writing l1 confounds to file: %s", expected_l1_confound_file)
   write.table(all_confounds, file = expected_l1_confound_file, row.names = FALSE, col.names = FALSE)
   run_df$l1_confound_file <- expected_l1_confound_file
-
+ 
   # cache final confounds to db
   insert_df_sqlite(gpa,
     id = id, session = session, run_number = run_number,
@@ -199,7 +200,8 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
 
 #' helper function to generate confounds file
 test_generate_l1_confounds <- function(gpa, analysis_outdir, run_number, lg){
-# Determine whether we should be returning information about l1 confound regressors
+
+  # Determine whether we should be returning information about l1 confound regressors
   # and whether this information has already been calculated
   generate_l1_confounds <- FALSE
   if (is.null(gpa$confound_settings$l1_confound_regressors) && is.null(gpa$confound_settings$spike_volumes)) {
@@ -212,6 +214,7 @@ test_generate_l1_confounds <- function(gpa, analysis_outdir, run_number, lg){
       generate_l1_confounds <- TRUE
     }
   }
+
   return(list(expected_l1_confound_file = expected_l1_confound_file, generate_l1_confounds = generate_l1_confounds))
 }
 
@@ -237,11 +240,14 @@ test_generate_run_exclusion <- function(gpa, id, session, run_number, l1_cached_
       generate_run_exclusion <- TRUE
     }
   }
+
   return(list(generate_run_exclusion = generate_run_exclusion, exclude_data = exclude_data))
 }
 
 #' helper function to generate run truncation
 test_generate_run_truncation <- function(gpa, id, session, run_number, lg){
+
+  lg <- lgr::get_logger("glm_pipeline/l1_setup")
 
   # default empty data.frames for exclusion and truncation (in case of NULL exclude or truncate criteria)
   truncation_data <- data.frame()
@@ -260,7 +266,7 @@ test_generate_run_truncation <- function(gpa, id, session, run_number, lg){
 }
 
 #' helper function to read confounds and motion parameters and combine them
-read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_df, lg, expected_l1_confound_file) {
+read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_df, expected_l1_confound_file, lg) {
 
   # read external confounds file (contains all volumes)
   confound_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_confound_inputs")
@@ -365,11 +371,12 @@ read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_d
       return(x)
     }))
   }
-  return(all_confounds)
+  return(list(all_confounds = all_confounds, motion_df = motion_df))
 }
 
 #' calculate whether to retain or exclude this run
 test_exclude_run <- function(gpa, id, session, run_number, generate_run_exclusion, all_confounds, lg) {
+  
     # calculate whether to retain or exclude this run
   if (isTRUE(generate_run_exclusion) && !is.null(gpa$confound_settings$exclude_run)) {
     if (!all(gpa$confound_settings$run_exclusion_columns %in% names(all_confounds))) {
@@ -401,17 +408,18 @@ test_exclude_run <- function(gpa, id, session, run_number, generate_run_exclusio
 
     # write the exclusion basis to the database
     exclude_data <- all_confounds[, intersect(gpa$confound_settings$run_exclusion_columns, names(all_confounds)), drop = FALSE]
+
     insert_df_sqlite(gpa,
       id = id, session = session, run_number = run_number, data = exclude_data,
       table = "l1_exclusion_data", immediate=TRUE
     )
   }
-  retur(list(exclude_data = exclude_data, exclude_run = exclude_run))
+  return(list(exclude_data = exclude_data, exclude_run = exclude_run))
 }
 
 #' helper function to manipulate confounds
-confound_manipulations <- function(gpa, all_confounds, expected_l1_confound_file, run_df, lg, demean) {
-
+confound_manipulations <- function(gpa, all_confounds, expected_l1_confound_file, run_df, demean, lg) {
+  
   # check for missing confound columns
   if (!all(gpa$confound_settings$l1_confound_regressors %in% names(all_confounds))) {
     lg$warn("Missing confound columns for subject: %s, session: %s", run_df$id[1L], run_df$session[1L])
