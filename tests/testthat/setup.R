@@ -192,11 +192,11 @@ get_gpa_base <- function(
   ...
 ) {
   # Check if gpa object is already cached, if not, build it
-  if (file.exists(file.path(test_data_base_dir, cache_file))) {
-    gpa <- readRDS(file.path(test_data_base_dir, cache_file))
-  } else {
+  # if (file.exists(file.path(test_data_base_dir, cache_file))) {
+  #   gpa <- readRDS(file.path(test_data_base_dir, cache_file))
+  # } else {
     gpa <- build_gpa_base(analysis_name = analysis_name, test_data_base_dir = test_data_base_dir, cache_file = cache_file, ...)
-  }
+  # }
 
   return(gpa)
 }
@@ -241,11 +241,11 @@ get_gpa <- function(
   ...
 ) {
   # Check if gpa object is already cached, if not, build it
-  if (file.exists(file.path(test_data_base_dir, gpa_cache_file))) {
-    gpa <- readRDS(file.path(test_data_base_dir, gpa_cache_file))
-  } else {
+  # if (file.exists(file.path(test_data_base_dir, gpa_cache_file))) {
+  #   gpa <- readRDS(file.path(test_data_base_dir, gpa_cache_file))
+  # } else {
     gpa <- build_gpa(analysis_name = analysis_name, test_data_base_dir = test_data_base_dir, gpa_cache_file = gpa_cache_file, ...)
-  }
+  # }
   
   return(gpa)
 }
