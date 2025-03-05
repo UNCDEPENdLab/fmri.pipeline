@@ -154,7 +154,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     )
     if (is.null(weights)) weights <- "cells"
 
-    # handle model-predicted means for each level of each factor
+    # handle model-predicted means for each level of each factor (marginalizing over any other factors)
     for (vv in seq_along(cat_vars)) {
       title_str <- paste0(
         "Do you want to include model-predicted means for ",
@@ -166,19 +166,35 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
       if (isTRUE(ii)) {
         cond_means <- c(cond_means, cat_vars[vv])
       }
+    }
 
+    # for categorical variables and their interactions, ask about pairwise differences, computed by emmeans
+    emm_vars <- cat_vars
+    if (any(int_terms > 1)) {
+      cat_int <- sapply(term_labels[which(int_terms > 1)], function(tt) {
+        term_split <- strsplit(tt, ":")[[1]] # split terms on colon
+        all(term_split %in% cat_vars)
+      })
+
+      if (any(cat_int)) {
+        emm_vars <- c(emm_vars, names(cat_int)[cat_int])
+      }
+    }
+    
+    # handle pairwise differencs for all factors (and interactions, if specified)
+    for (vv in seq_along(emm_vars)) {
       title_str <- paste0(
         "Do you want to include pairwise differences for ",
-        ifelse(inherits(mobj, "l1_wi_spec"), paste(cat_vars[vv], "modulation of", mobj$signal_name), cat_vars[vv]), "?"
+        ifelse(inherits(mobj, "l1_wi_spec"), paste(emm_vars[vv], "modulation of", mobj$signal_name), emm_vars[vv]), "?"
       )
       ii <- menu(c("Yes", "No"), title = title_str)
       ii <- ifelse(ii == 1L, TRUE, FALSE)
       if (isTRUE(ii)) {
-        pairwise_diffs <- c(pairwise_diffs, cat_vars[vv])
+        pairwise_diffs <- c(pairwise_diffs, emm_vars[vv])
       }
     }
 
-    # handle model-predicted means for each cell of a factorial design
+    # handle model-predicted means for each *cell* of a factorial design
     if (length(cat_vars) > 1L) {
       title_str <- glue(
         ifelse(inherits(mobj, "l1_wi_spec"), "For {mobj$signal_name}, do ", "Do "),

@@ -162,7 +162,12 @@ fit_wi_model <- function(sobj) {
 
 }
   
-
+# copied from formula.tools to avoid NAMESPACE import
+as.character.formula <- function(x, ...) { 
+  form <- paste( deparse(x), collapse=" " )
+  form <- gsub( "\\s+", " ", form, perl=FALSE ) # remove multiple spaces
+  return(form)
+}
 
 #obsolete
 # # helper function to expand beta series

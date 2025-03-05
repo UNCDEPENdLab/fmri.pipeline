@@ -847,7 +847,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
       ee <- emmeans(lmfit, as.formula(paste("~", vv)), weights = spec$weights)
       edata <- summary(ee)
       econ <- ee@linfct
-      enames <- as.character(edata[[vv]]) # names of contrasts
+      enames <- unname(apply(edata[strsplit(vv, ":")[[1]]], 1, paste, collapse=".")) # combine multi-factor contrasts, if relevant
 
       # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
       which_na <- is.na(edata$emmean)
