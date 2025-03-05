@@ -1,105 +1,4 @@
-#' test get_l1_confounds function
-test_that("test get_l1_confounds", {
-
-  # gpa <- create_gpa() # 2: Cell and 1 for others
-  gpa <- create_gpa(
-      analysis_name = "gpa_tests_build_l1_models",
-      test_data_base_dir = "/proj/mnhallqlab/projects/fmri.pipeline_test_data",
-      l1_spec_file = "sample_2_L1_spec.yaml",
-      trial_data_file = "sample_trial_data.csv.gz",
-      run_data_file = "sample_run_data.csv",
-      subject_data_file = "sample_subject_data.csv",
-      gpa_cache_file = "gpa_tests_build_l1_models.rds",
-      cache_file = "gpa_tests_base_build_l1_models.rds") 
-  # gpa <- readRDS("/proj/mnhallqlab/projects/fmri.pipeline_test_data/gpa_l2l3.rds")
-  
-  output <- finalize_pipeline_partial(gpa)
-
-  gpa <- finalize_confound_settings_partial(output$gpa, output$lg)
-
-  # for each run, calculate confounds, exclusions, and truncation
-  get_l1_confounds_output <- lapply(seq_len(nrow(gpa$run_data)), function(ii) {
-    get_l1_confounds(run_df = gpa$run_data[ii, , drop = FALSE], gpa = gpa)
-  }) # get_l1_confounds_output should contain a list of list 'confounds' of locations of confound text files
-
-  # save.image("test-get_l1_confound_runned_l2l3_local.RData")
-  
-  # test if confound text files were created in file.path(analysis_outdir, paste0("run", run_number, "_l1_confounds.txt"))
-  # for each subject for each run and that they are not empty. 
-  # I dont know how the nrows in this confound file is calculated, 4 columns should exists.
-  id_list <- unique(gpa$run_data$id)
-  run_list <- c(1:8)
-  lapply(id_list, function(id) {
-    analysis_outdir <- paste0("/proj/mnhallqlab/users/nidhi/fmri.pipeline_testing/gpa_tests_l2l3_local/feat_l1/sub-", toString(id))
-    lapply(run_list, function(run) {
-      confound_filepath <- file.path(analysis_outdir, paste0("run", run, "_l1_confounds.txt"))
-      # check if file exists
-      expect_true(file.exists(confound_filepath))
-      # check if file has 4 columns
-      expect_equal(ncol(read.table(confound_filepath)), 4)
-      # check if file has more than 0 rows
-      expect_gt(nrow(read.table(confound_filepath)), 0)
-      # check for missing elements
-      expect_false(any(is.na(read.table(confound_filepath))))
-      # check if the elements are numeric
-      expect_true(all(sapply(read.table(confound_filepath), is.numeric)))
-    })
-  })
-  
-  # testing if get_l1_confounds added dataframes to the sqlite database
-
-  # testing if sqlite database has the motion parameters dataframe
-  lapply(id_list, function(id) {
-    lapply(run_list, function(run) {
-      saved_df <- read_df_sqlite(gpa, id = id, session = 1, run_number = run, table = "l1_motion_parameters")
-      # check if the dataframe is not empty
-      expect_gt(nrow(saved_df), 0)
-      # check for missing elements
-      expect_false(any(is.na(saved_df)))
-      # check if the elements are numeric
-      expect_true(all(sapply(saved_df, is.numeric)))
-    })
-  })
-
-  # testing if sqlite database has the truncation data dataframe
-  lapply(id_list, function(id) {
-    lapply(run_list, function(run) {
-      saved_df <- read_df_sqlite(gpa, id = id, session = 1, run_number = run, table = "l1_truncation_data")
-      # check if the dataframe is not empty
-      expect_gt(nrow(saved_df), 0)
-      # check for missing elements
-      expect_false(any(is.na(saved_df)))
-      # check if the elements are numeric
-      expect_true(all(sapply(saved_df, is.numeric)))
-    })
-  })
-
-  # testing if sqlite database has the exclusion data dataframe
-  lapply(id_list, function(id) {
-    lapply(run_list, function(run) {
-      saved_df <- read_df_sqlite(gpa, id = id, session = 1, run_number = run, table = "l1_exclusion_data")
-      # check if the dataframe is not empty
-      expect_gt(nrow(saved_df), 0)
-      # check for missing elements
-      expect_false(any(is.na(saved_df)))
-      # check if the elements are numeric
-      expect_true(all(sapply(saved_df, is.numeric)))
-    })
-  })
-
-  # saved_df <- read_df_sqlite(gpa, id = 10638, session = 1, run_number = 1, table = "l1_confound_inputs")
-  # saved_df <- read_df_sqlite(gpa, id = 10638, session = 1, run_number = 1, table = "l1_confounds") # this is what is saved in the confounds text file
-  # saved_df <- read_df_sqlite(gpa, id = 10638, session = 1, run_number = 1, table = "l1_run_calculations") # nifti location
-
-  # NEXT TODO screw up the data (how?) and test again
-
-
-
-
-})
-
-# sub-functions to test get_l1_confounds
-
+#' sub-functions to test get_l1_confounds
 finalize_pipeline_partial <- function(gpa, refinalize = FALSE) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_logical(refinalize, len = 1L)
@@ -361,3 +260,104 @@ finalize_confound_settings_partial <- function(gpa, lg) {
 
   return(gpa)
 }
+
+
+#' test get_l1_confounds function
+test_that("test get_l1_confounds", {
+
+  # gpa <- create_gpa() # 2: Cell and 1 for others
+  gpa <- create_gpa(
+      analysis_name = "gpa_tests_build_l1_models",
+      test_data_base_dir = "/proj/mnhallqlab/projects/fmri.pipeline_test_data",
+      l1_spec_file = "sample_2_L1_spec.yaml",
+      trial_data_file = "sample_trial_data.csv.gz",
+      run_data_file = "sample_run_data.csv",
+      subject_data_file = "sample_subject_data.csv",
+      gpa_cache_file = "gpa_tests_build_l1_models.rds",
+      cache_file = "gpa_tests_base_build_l1_models.rds") 
+  # gpa <- readRDS("/proj/mnhallqlab/projects/fmri.pipeline_test_data/gpa_l2l3.rds")
+  
+  output <- finalize_pipeline_partial(gpa)
+
+  gpa <- finalize_confound_settings_partial(output$gpa, output$lg)
+
+  # for each run, calculate confounds, exclusions, and truncation
+  get_l1_confounds_output <- lapply(seq_len(nrow(gpa$run_data)), function(ii) {
+    get_l1_confounds(run_df = gpa$run_data[ii, , drop = FALSE], gpa = gpa)
+  }) # get_l1_confounds_output should contain a list of list 'confounds' of locations of confound text files
+
+  # save.image("test-get_l1_confound_runned_l2l3_local.RData")
+  
+  # test if confound text files were created in file.path(analysis_outdir, paste0("run", run_number, "_l1_confounds.txt"))
+  # for each subject for each run and that they are not empty. 
+  # I dont know how the nrows in this confound file is calculated, 4 columns should exists.
+  id_list <- unique(gpa$run_data$id)
+  run_list <- c(1:8)
+  lapply(id_list, function(id) {
+    analysis_outdir <- paste0("/proj/mnhallqlab/users/nidhi/fmri.pipeline_testing/gpa_tests_l2l3_local/feat_l1/sub-", toString(id))
+    lapply(run_list, function(run) {
+      confound_filepath <- file.path(analysis_outdir, paste0("run", run, "_l1_confounds.txt"))
+      # check if file exists
+      expect_true(file.exists(confound_filepath))
+      # check if file has 4 columns
+      expect_equal(ncol(read.table(confound_filepath)), 4)
+      # check if file has more than 0 rows
+      expect_gt(nrow(read.table(confound_filepath)), 0)
+      # check for missing elements
+      expect_false(any(is.na(read.table(confound_filepath))))
+      # check if the elements are numeric
+      expect_true(all(sapply(read.table(confound_filepath), is.numeric)))
+    })
+  })
+  
+  # testing if get_l1_confounds added dataframes to the sqlite database
+
+  # testing if sqlite database has the motion parameters dataframe
+  lapply(id_list, function(id) {
+    lapply(run_list, function(run) {
+      saved_df <- read_df_sqlite(gpa, id = id, session = 1, run_number = run, table = "l1_motion_parameters")
+      # check if the dataframe is not empty
+      expect_gt(nrow(saved_df), 0)
+      # check for missing elements
+      expect_false(any(is.na(saved_df)))
+      # check if the elements are numeric
+      expect_true(all(sapply(saved_df, is.numeric)))
+    })
+  })
+
+  # testing if sqlite database has the truncation data dataframe
+  lapply(id_list, function(id) {
+    lapply(run_list, function(run) {
+      saved_df <- read_df_sqlite(gpa, id = id, session = 1, run_number = run, table = "l1_truncation_data")
+      # check if the dataframe is not empty
+      expect_gt(nrow(saved_df), 0)
+      # check for missing elements
+      expect_false(any(is.na(saved_df)))
+      # check if the elements are numeric
+      expect_true(all(sapply(saved_df, is.numeric)))
+    })
+  })
+
+  # testing if sqlite database has the exclusion data dataframe
+  lapply(id_list, function(id) {
+    lapply(run_list, function(run) {
+      saved_df <- read_df_sqlite(gpa, id = id, session = 1, run_number = run, table = "l1_exclusion_data")
+      # check if the dataframe is not empty
+      expect_gt(nrow(saved_df), 0)
+      # check for missing elements
+      expect_false(any(is.na(saved_df)))
+      # check if the elements are numeric
+      expect_true(all(sapply(saved_df, is.numeric)))
+    })
+  })
+
+  # saved_df <- read_df_sqlite(gpa, id = 10638, session = 1, run_number = 1, table = "l1_confound_inputs")
+  # saved_df <- read_df_sqlite(gpa, id = 10638, session = 1, run_number = 1, table = "l1_confounds") # this is what is saved in the confounds text file
+  # saved_df <- read_df_sqlite(gpa, id = 10638, session = 1, run_number = 1, table = "l1_run_calculations") # nifti location
+
+  # NEXT TODO screw up the data (how?) and test again
+
+
+
+
+})
