@@ -81,25 +81,21 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     return(mobj)
   }
 
-  # handle diagonal contrasts
+  # handle diagonal contrasts and L1 within-factor modulation of signals
   if (inherits(mobj, "l1_wi_spec")) {
     include_diagonal <- FALSE # for within-subject factor, no need to re-ask about diagonal contrasts for a given factor
     cat("\n\n---------\n")
     cat(glue("The signal {mobj$signal_name} is modulated by the following within-subject factors: {c_string(mobj$wi_factors)}.\n", .trim=FALSE))
     cat(glue("  Please specify contrasts for this signal based on this model: {deparse(mobj$wi_formula, width.cutoff=500)}.\n\n", .trim=FALSE))
-  } else {
-    include_diagonal <- menu(c("Yes", "No"), title = "Do you want to include diagonal contrasts for each regressor?")
-    include_diagonal <- ifelse(include_diagonal == 1L, TRUE, FALSE)
-  }
-
-  # in case of level 1 object, look for any within-subject factors and prompt for relevant contrasts of each
-  if (mobj$level == 1L && inherits(mobj, "l1_model_spec")) {
+  } else if (mobj$level == 1L && inherits(mobj, "l1_model_spec")) {
+    has_wi_contrasts <- FALSE # default overridden below if relevant
+    # in case of level 1 object, look for any within-subject factors and prompt for relevant contrasts of each
     if (is.null(signals)) {
       lg$warn("An L1 model has been passed to specify_contrasts without a signals list. Cannot check for within-subject factors.")
     } else {
       wi_factors <- sapply(mobj$signals, function(x) !is.null(signals[[x]]$wi_factors))
       if (any(wi_factors)) {
-        #setup models for each wi factor
+        # setup models for each wi factor
         for (ss in names(wi_factors)[wi_factors]) {
           wi_obj <- list(
             level = 1L, lmfit = signals[[ss]]$wi_model, signal_name = ss,
@@ -108,8 +104,25 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
           class(wi_obj) <- c("list", "l1_wi_spec")
           mobj$wi_models[[ss]] <- specify_contrasts(wi_obj)
         }
+        has_wi_contrasts <- sapply(mobj$wi_models, function(m) {
+          if (is.null(m$contrasts) || nrow(m$contrasts) == 0L) FALSE else TRUE
+        })
       }
     }
+
+    # add L1 diagonal contrasts automatically if there are no wi_factors or the user didn't ask for wi_contrasts
+    if (!any(has_wi_contrasts)) {
+      lg$info("Automatically adding diagonal contrasts")
+      include_diagonal <- TRUE
+    } else {
+      # if we have wi contrasts, then prompt whether we also want overall diagonal contrasts
+      include_diagonal <- menu(c("Yes", "No"), title = "Do you want to include diagonal contrasts for each regressor?")
+      include_diagonal <- ifelse(include_diagonal == 1L, TRUE, FALSE)
+    }
+  } else {
+    # at l2 and l3, ask about diagonal contrasts    
+    include_diagonal <- menu(c("Yes", "No"), title = "Do you want to include diagonal contrasts for each regressor?")
+    include_diagonal <- ifelse(include_diagonal == 1L, TRUE, FALSE)
   }
 
   format_prompt <- function(vars, signal_name=NULL) {

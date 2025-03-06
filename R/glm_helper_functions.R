@@ -969,6 +969,11 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     c_custom
   )
 
+  if (is.null(cmat_full)) {
+    # no contrasts specified! Not good, but for now, just create an empty matrix and let upstream handle bothering the user
+    cmat_full <- matrix(numeric(0), nrow=0, ncol=length(c_colnames), dimnames=list(NULL, c_colnames))
+  }
+
   # handle contrasts from the full matrix that should be deleted
   # these are processed dynamically here so that the same set can be dropped if a contrast is respecified for a data subset or subject
   if (!is.null(spec$delete)) {
@@ -1001,7 +1006,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     mobj$contrast_spec$delete <- unique(c(mobj$contrast_spec$delete, rownames(cmat)[drop_rows]))
   } 
 
-  # duplicated does not give user any control over which one to retain (in terms of contrast name)
+  # duplicated does not give user any control over which one to retain (in terms of contrast name) -- now superseded by duplicate resolution above
   # dupes <- duplicated(cmat, MARGIN = 1)
   dupes <- rep(FALSE, nrow(cmat))
   dupes[drop_rows] <- TRUE
@@ -1029,7 +1034,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
 
 # helper function to identify duplicate contrasts
 get_dupe_rows <- function(mat, enforce_rownames=FALSE) {
-  stopifnot(inherits(mat, "matrix"))
+  if (!inherits(mat, "matrix")) return(list()) # return empty list if we are not passed a contrast matrix
   
   # rows to check -- start with all, then winnow
   rtc <- seq_len(nrow(mat))

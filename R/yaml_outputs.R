@@ -65,6 +65,16 @@ export_l1_config <- function(gpa, file = "l1_config.yaml") {
       }
     }
 
+    # within-subject formula
+    if (!is.null(ss$wi_formula)) {
+      sobj$wi_formula <- as.character.formula(ss$wi_formula)
+    }
+
+    # within-subject factors
+    if (!is.null(ss$wi_factors)) {
+      sobj$wi_factors <- ss$wi_factors
+    }
+
     # other signal flags
     if (!is.null(ss$demean_convolved)) {
       checkmate::assert_flag(ss$demean_convolved)
@@ -97,20 +107,46 @@ export_l1_config <- function(gpa, file = "l1_config.yaml") {
   # L1 models
   for (mm in l1m$models) {
     mobj <- list()
+    mobj$signals <- mm$signals
+
     mobj$diagonal <- mm$contrast_spec$diagonal
     # diag(mm$contrasts) <- ifelse(mobj$diagonal==TRUE, 0, diag(mm$contrasts))
     mobj$cell_means <- mm$contrast_spec$cell_means
     mobj$overall_response <- mm$contrast_spec$overall_response
-    mobj$weights <- mm$contrast_spec$weights
-    mobj$signals <- mm$signals
-    cobj <- list()
-    for (cc in seq_along(colnames(mm$contrasts))) {
-      name_c <- NULL
-      name_c <- colnames(mm$contrasts)[cc]
-      cobj$row <- rownames(mm$contrasts)[which(mm$contrasts[cc, ] != 0)]
-      cobj$contrast <- mm$contrasts[cc, which(mm$contrasts[cc, ] != 0)]
-      mobj$contrasts[[name_c]] <- cobj
+    if (!is.null(mm$contrast_spec$simple_slopes) && length(mm$contrast_spec$simple_slopes) > 0L) {
+      mobj$simple_slopes <- mm$contrast_spec$simple_slopes
     }
+    mobj$weights <- mm$contrast_spec$weights
+    mobj$delete <- mm$contrast_spec$delete
+    
+    if (!is.null(mm$wi_models)) {
+      mobj$wi_contrasts <- list()
+      for (cc in names(mm$wi_models)) {
+        mcopy <- mm$wi_models[[cc]]$contrast_spec
+        mcopy$cat_vars <- NULL
+        if (!is.null(mcopy$simple_slopes) && length(mm$contrast_spec$simple_slopes) == 0L) mcopy$simple_slopes <- NULL # remove empty
+        #mcopy$contrasts <- NULL # do not export constructed matrix
+        #mcopy$contrast_list <- NULL
+        #mcopy$lmfit <- NULL # should be refit upon import
+        #mcopy$wi_formula <- as.character.formula(mcopy$wi_formula)
+
+        # mobj$wi_models[[cc]] <- list(
+        #   wi_factors = mm$wi_models[[cc]]$wi_factors
+        #   wi_formula = mm$wi_models[[cc]]$wi_factors
+        # )
+        mobj$wi_contrasts[[cc]] <- mcopy
+      }
+    }
+
+
+    # cobj <- list()
+    # for (cc in seq_along(colnames(mm$contrasts))) {
+    #   name_c <- NULL
+    #   name_c <- colnames(mm$contrasts)[cc]
+    #   cobj$row <- rownames(mm$contrasts)[which(mm$contrasts[cc, ] != 0)]
+    #   cobj$contrast <- mm$contrasts[cc, which(mm$contrasts[cc, ] != 0)]
+    #   mobj$contrasts[[name_c]] <- cobj
+    # }
     end_yaml$l1_models[[mm$name]] <- mobj
   }
 
