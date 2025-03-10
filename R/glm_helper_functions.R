@@ -1109,7 +1109,7 @@ respecify_l2_models_by_subject <- function(mobj, data) {
 
   # create a nested data.table object for fitting each id + session separately
   data <- data.table(data, key = c("id", "session"))
-  data$dummy <- rnorm(nrow(data))
+  data$dummy <- seq_len(nrow(data))
   dsplit <- data[, .(dt = list(.SD)), by = c("id", "session")]
 
   # use model formula from parent object
@@ -1200,7 +1200,7 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
 
   # verify that there is a dummy DV for lm fitting
   if (!"dummy" %in% names(data)) {
-    data$dummy <- rnorm(nrow(data))
+    data$dummy <- seq_len(nrow(data))
   }
 
   model_formula <- update.formula(model_formula, "dummy ~ .") # add LHS
