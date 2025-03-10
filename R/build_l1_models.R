@@ -86,10 +86,13 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
     spec_list <- propagate_spec_names(spec_list)
 
     l1_model_set <- fields_from_spec(l1_model_set, spec_list, trial_data, c("onsets", "durations", "isis", "values", "wi_factors"))
-    l1_model_set <- bl1_build_events(l1_model_set, trial_data, lg, spec_list)
+    l1_model_set <- bl1_build_events(l1_model_set, spec_list, trial_data, lg)
     l1_model_set <- signals_from_spec(l1_model_set, spec_list, trial_data, lg)
     l1_model_set <- bl1_build_models(l1_model_set, spec_list, lg)
     new_l1 <- FALSE # always assume that the spec file has enough info not to walk through each stage
+    blm1_complete <- TRUE # drop out of model builder when working from a spec file
+  } else {
+    blm1_complete <- FALSE
   }
 
   int_vars <- sapply(trial_data, checkmate::test_integerish)
@@ -138,7 +141,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
         )
       } else if (aa == 6) {
         # events
-        l1_model_set <- bl1_build_events(l1_model_set, trial_data, lg=lg)
+        l1_model_set <- bl1_build_events(l1_model_set, trial_data=trial_data, lg=lg)
       } else if (aa == 7) {
         # signals
         l1_model_set <- bl1_build_signals(l1_model_set, trial_data, lg=lg)
@@ -171,8 +174,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
     cat("Modifying existing l1 model structure\n")
   }
 
-  # always drop into l1 model menu, whether new or modification
-  blm1_complete <- FALSE
+  # drop into l1 model menu, whether new or modification, unless working from a spec file
   while (isFALSE(blm1_complete)) {
     blm1_action <- menu(c(
       "Update event onset columns",                                             # 1
@@ -327,7 +329,7 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
 #' @importFrom dplyr select mutate
 #' @importFrom checkmate test_number
 #' @importFrom glue glue
-bl1_build_events <- function(l1_model_set, trial_data, lg=NULL, spec_list = NULL) {
+bl1_build_events <- function(l1_model_set, spec_list = NULL, trial_data, lg=NULL) {
   cat("Specify all events that can be added to a GLM model. Events consist of an onset time and duration\n")
 
   summarize_events <- function(l1_model_set) {
@@ -459,8 +461,7 @@ bl1_build_events <- function(l1_model_set, trial_data, lg=NULL, spec_list = NULL
 
       # populate data frame for event
       eobj <- populate_event_data(eobj, trial_data)
-      # create 'l1_model_set_events' class
-      class(eobj) <- c("list", "l1_model_set_events")
+      class(eobj) <- c("list", "l1_model_set_events") # set 'l1_model_set_events' class
       l1_model_set$events[[nm]] <- eobj
     } else if (action == 2L) { # delete
       event_names <- names(l1_model_set$events)
@@ -523,7 +524,7 @@ summarize_l1_signals <- function(sl) {
     cat("  Generate beta series:", as.character(this$beta_series), "\n")
     cat(
       "  Multiply convolved regressor against time series:",
-      ifelse(this$ts_multiplier == FALSE || is.null(this$ts_multiplier),
+      ifelse(is.null(this$ts_multiplier || isFALSE(this$ts_multiplier)),
         "FALSE", this$ts_multiplier
       ), "\n"
     )
@@ -803,6 +804,7 @@ bl1_build_signals <- function(l1_model_set, trial_data, block_data = NULL, subtr
         ss$add_deriv <- FALSE
         ss$demean_convolved <- TRUE
         ss$beta_series <- FALSE
+        ss$ts_multiplier <- FALSE
       } else {
         # derivative
         while (is.null(ss$add_deriv)) {
@@ -850,8 +852,8 @@ bl1_build_signals <- function(l1_model_set, trial_data, block_data = NULL, subtr
     }
   }
 
-  # create 'l1_model_set_signals' class
-  class(signal_list) <- c("list", "l1_model_set_signals")
+  
+  class(signal_list) <- c("list", "l1_model_set_signals") # set 'l1_model_set_signals' class
 
   # populate back into model set
   l1_model_set$signals <- signal_list
@@ -924,8 +926,6 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
           return(invisible(NULL)) #return nothing from function
         }
       } else {
-        # create 'l1_model_set_signals' class
-        class(signals) <- c("list", "l1_model_set_signals")
         mobj$signals <- signals
       }
     }
@@ -954,6 +954,8 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
       mobj <- create_new_model(signal_list, from_spec=mm)
       model_list[[mobj$name]] <- mobj # add to set
     }
+
+    add_more <- 4 # quit out of model builder when working from spec file
   }
 
   while (add_more != 4) {
@@ -1061,7 +1063,7 @@ bl1_specify_wi_factors <- function(ss, l1_model_set, trial_data, modify) {
   }
 
   # drop intercept from within-subject model to make contrasts more paradigmatic for L1 (i.e., avoid use of grand intercept)
-  ss$wi_formula <- update.formula(wi_formula, ~ . - 1)
+  ss$wi_formula <- as.character(update.formula(wi_formula, ~ . - 1)) # always store formula as character to avoid storing environment
   ss$wi_factors <- wi_vars
 
   if (!checkmate::test_data_frame(ss$value)) {

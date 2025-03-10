@@ -26,6 +26,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
   weights <- "cells"
   cat_vars <- c()
   cont_vars <- c()
+  delete <- c() # contrasts to be deleted based on user specification or redundancy
 
   # subfunction to populate contrast_spec and create $contrast_list from spec
   # uses lexical scope of specify_contrasts
@@ -39,6 +40,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     mobj$contrast_spec$weights <- weights
     mobj$contrast_spec$cat_vars <- cat_vars
     mobj$contrast_spec$regressors <- mobj$regressors
+    mobj$contrast_spec$delete <- delete
     mobj <- get_contrasts_from_spec(mobj)
   }
 
@@ -49,17 +51,80 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
 
   prompt_contrasts <- FALSE
   if (!is.null(from_spec)) {
-    if (!is.null(from_spec$contrasts$include_diagonal)) {
-      checkmate::assert_logical(from_spec$contrasts$include_diagonal, len = 1L)
-      include_diagonal <- from_spec$contrasts$include_diagonal
+    if (!is.null(from_spec$diagonal)) {
+      checkmate::assert_logical(from_spec$diagonal, len = 1L)
+      include_diagonal <- from_spec$diagonal
     } else {
       lg$debug("In contrast specification from spec file, including diagonal contrasts by default")
       include_diagonal <- TRUE
     }
 
-    # still prompt for contrasts on yaml input since it doesn't ask about within-subjects factors etc.
-    # prompt_contrasts <- TRUE
+    if (!is.null(from_spec$cond_means)) {
+      checkmate::assert_character(from_spec$cond_means)
+      cond_means <- from_spec$cond_means
+    }
+
+    if (!is.null(from_spec$pairwise_diffs)) {
+      checkmate::assert_character(from_spec$pairwise_diffs)
+      pairwise_diffs <- from_spec$pairwise_diffs
+    }
+
+    if (!is.null(from_spec$cell_means)) {
+      checkmate::assert_logical(from_spec$cell_means, len = 1L)
+      cell_means <- from_spec$cell_means
+    }
+
+    if (!is.null(from_spec$overall_response)) {
+      checkmate::assert_logical(from_spec$overall_response, len = 1L)
+      overall_response <- from_spec$overall_response
+    }
+
+    if (!is.null(from_spec$simple_slopes)) {
+      # checkmate::assert_character(from_spec$simple_slopes)
+      simple_slopes <- from_spec$simple_slopes
+    }
+
+    if (!is.null(from_spec$weights)) {
+      checkmate::assert_string(from_spec$weights)
+      checkmate::assert_subset(from_spec$weights, c("equal", "cells", "proportional", "flat"))
+      weights <- from_spec$weights
+    } else {
+      lg$debug("In contrast specficiation from spec file, setting emmeans weights to 'cells' by default")
+      weights <- "cells"
+    }
+
+    if (!is.null(from_spec$delete)) {
+      checkmate::assert_character(from_spec$delete)
+      delete <- from_spec$delete
+    }
+
+    # populate categorical vars for within-subject contrast
+    if (inherits(mobj, "l1_wi_spec")) {
+      term_labels <- attr(terms(mobj$lmfit), "term.labels") # names of regressors
+      dclass <- attr(mobj$lmfit$terms, "dataClasses")[term_labels] # omit response variable
+      cat_vars <- names(dclass[which(dclass %in% c("factor", "character"))])
+    }
+
+    # now handle population of within-subject contrasts (wi_models)
+
+    if (!is.null(from_spec$wi_contrasts)) {
+      checkmate::assert_list(from_spec$wi_contrasts)
+
+      for (ff in seq_along(from_spec$wi_contrasts)) {
+        sig <- names(from_spec$wi_contrasts)[ff]
+
+        wi_obj <- list(
+          level = 1L, lmfit = signals[[sig]]$wi_model, signal_name = sig,
+          wi_factors = signals[[sig]]$wi_factors, wi_formula = signals[[sig]]$wi_formula
+        )
+        class(wi_obj) <- c("list", "l1_wi_spec")
+
+        mobj$wi_models[[sig]] <- specify_contrasts(wi_obj, from_spec = from_spec$wi_contrasts[[ff]])
+      }
+    }
+
     mobj <- populate_mobj_contrasts(mobj)
+
   } else if (is.null(mobj$contrast_spec)) {
     mobj$contrast_spec <- list()
     prompt_contrasts <- TRUE
@@ -194,7 +259,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
       }
     }
     
-    # handle pairwise differencs for all factors (and interactions, if specified)
+    # handle pairwise differences for all factors (and interactions, if specified)
     for (vv in seq_along(emm_vars)) {
       title_str <- paste0(
         "Do you want to include pairwise differences for ",
@@ -247,14 +312,11 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     }
   }
 
-
   # populate contrast specification object
   mobj <- populate_mobj_contrasts(mobj)
 
   cmat_base <- matrix(numeric(0), nrow = 0, ncol = length(mobj$regressors), dimnames = list(NULL, mobj$regressors))
   cmat <- mobj$contrasts
-
-
 
   # N.B. For now, hand off full model matrix and contrasts to fMRI fitting function (e.g., feat) and
   # let it handle the rank degeneracy. We may need to come back here and drop bad contrasts and use

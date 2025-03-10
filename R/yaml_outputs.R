@@ -67,7 +67,7 @@ export_l1_config <- function(gpa, file = "l1_config.yaml") {
 
     # within-subject formula
     if (!is.null(ss$wi_formula)) {
-      sobj$wi_formula <- as.character.formula(ss$wi_formula)
+      sobj$wi_formula <- ss$wi_formula
     }
 
     # within-subject factors
@@ -96,7 +96,7 @@ export_l1_config <- function(gpa, file = "l1_config.yaml") {
       sobj$convmax_1 <- ss$convmax_1
     }
 
-    if (!is.null(ss$ts_multiplier)) {
+    if (!is.null(ss$ts_multiplier) && !checkmate::test_logical(ss$ts_multiplier)) {
       checkmate::assert_string(ss$ts_multiplier)
       sobj$ts_multiplier <- ss$ts_multiplier
     }

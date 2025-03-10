@@ -50,6 +50,7 @@ events_from_spec <- function(l1_model_set, slist, trial_data) {
     eobj$duration <- ee$duration
     eobj$isi <- ee$isi
     eobj <- populate_event_data(eobj, trial_data)
+    class(eobj) <- c("list", "l1_model_set_events") # set 'l1_model_set_events' class
     l1_model_set$events[[eobj$name]] <- eobj # this will overwrite existing specification
   }
 
@@ -63,10 +64,11 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
 
   if (is.null(slist$signals)) return(l1_model_set)
 
+  signal_list <- list() # holding tank for populated signals
   for (ss in slist$signals) {
     # initialize defaults
     sobj <- list(
-      normalization = "none", trial_subset = FALSE, add_deriv = FALSE, ts_multiplier = NULL,
+      normalization = "none", trial_subset = FALSE, add_deriv = FALSE, ts_multiplier = FALSE,
       demean_convolved = TRUE, beta_series = FALSE, value_type = "unit", value_fixed = 1
     )
     checkmate::assert_string(ss$name)
@@ -145,9 +147,9 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
         ff <- as.formula(paste("~", paste(ss$wi_factors, collapse = " + ")))
       }
 
-      sobj$wi_formula <- ff
+      sobj$wi_formula <- as.character(ff)
 
-      model_vars <- all.vars(sobj$wi_formula)
+      model_vars <- all.vars(ff)
       if (!all(model_vars %in% sobj$wi_factors)) {
         lg$warn("At least one variable in the spec wi_formula expression was not in wi_factors. Adding it!\n")
         sobj$wi_factors <- union(sobj$wi_factors, model_vars)
@@ -161,8 +163,11 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
       sobj$value <- get_value_df(sobj, trial_data)
     }
 
-    l1_model_set$signals[[sobj$name]] <- sobj # this will overwrite existing specification
+    signal_list[[sobj$name]] <- sobj # this will overwrite existing specification
   }
+
+  class(signal_list) <- c("list", "l1_model_set_signals") # set 'l1_model_set_signals' class
+  l1_model_set$signals <- signal_list
 
   return(l1_model_set)
 }

@@ -153,13 +153,12 @@ fit_wi_model <- function(sobj) {
   }
 
   wi_df <- sobj$value %>%
-    mutate(dummy = rnorm(n())) %>%
+    mutate(dummy = 1:n()) %>%
     mutate(across(!!sobj$wi_factors, factor)) # always force wi_factors to be stored as factor to make contrasts straightforward
-  ffit <- update.formula(sobj$wi_formula, "dummy ~ .")
-
+  
+  ffit <- update.formula(as.formula(sobj$wi_formula), "dummy ~ .")
   sobj$wi_model <- lm(ffit, wi_df)
   return(sobj)
-
 }
   
 # copied from formula.tools to avoid NAMESPACE import
