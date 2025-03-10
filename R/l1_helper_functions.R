@@ -161,7 +161,11 @@ fit_wi_model <- function(sobj) {
   return(sobj)
 }
   
-# copied from formula.tools to avoid NAMESPACE import
+#' S3 method to convert formula to character
+#' @param x a formula to convert to character
+#' @param ... not used
+#' @details copied from formula.tools to avoid NAMESPACE import
+#' @export
 as.character.formula <- function(x, ...) { 
   form <- paste( deparse(x), collapse=" " )
   form <- gsub( "\\s+", " ", form, perl=FALSE ) # remove multiple spaces
