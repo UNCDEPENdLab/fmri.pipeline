@@ -21,6 +21,17 @@ fields_from_spec <- function(l1_model_set, slist, trial_data, field_names=NULL) 
       checkmate::assert_subset(field_vals, names(trial_data))
     }
 
+    # require that parametric modulators are all numeric
+    if (fn == "values") {
+      is_numeric <- sapply(field_vals, function(v) checkmate::test_numeric(trial_data[[v]]))
+      if (!all(is_numeric)) {
+        stop(
+          "The following parametric modulators in the config file are not numeric in the trial data: ",
+          paste(field_vals[!is_numeric], collapse=", ")
+        )
+      }
+    }
+
     l1_model_set <- bl1_get_cols(l1_model_set, trial_data,
       field_name = fn, field_desc = field_mapping[fn],
       select_cols = field_vals, prompt_input = FALSE
