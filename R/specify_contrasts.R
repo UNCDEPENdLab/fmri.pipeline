@@ -2,14 +2,14 @@
 #'
 #' @param mobj \code{l1_model_spec} or \code{hi_model_spec} object
 #' @param signals a list of signals that provide information about regressor specification
-#' @param from_spec a list of settings for this model based on an external YAML/JSON specification file
+#' @param spec_list a list of settings for this model based on an external YAML/JSON specification file
 #' @keywords internal
 #' @author Michael Hallquist
 #' @importFrom magrittr %>%
 #' @importFrom emmeans emmeans emtrends
 #' @importFrom lgr get_logger
 #' @importFrom checkmate assert_multi_class assert_integerish
-specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
+specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
   checkmate::assert_multi_class(mobj, c("l1_model_spec", "l1_wi_spec", "hi_model_spec")) # verify that we have an object of known structure
   checkmate::assert_list(signals, null.ok = TRUE)
 
@@ -50,56 +50,56 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
   }
 
   prompt_contrasts <- FALSE
-  if (!is.null(from_spec)) {
-    if (!is.null(from_spec$diagonal)) {
-      checkmate::assert_logical(from_spec$diagonal, len = 1L)
-      include_diagonal <- from_spec$diagonal
+  if (!is.null(spec_list)) {
+    if (!is.null(spec_list$diagonal)) {
+      checkmate::assert_logical(spec_list$diagonal, len = 1L)
+      include_diagonal <- spec_list$diagonal
     } else {
       lg$debug("In contrast specification from spec file, including diagonal contrasts by default")
       include_diagonal <- TRUE
     }
 
-    if (!is.null(from_spec$cond_means)) {
-      checkmate::assert_character(from_spec$cond_means)
-      cond_means <- from_spec$cond_means
+    if (!is.null(spec_list$cond_means)) {
+      checkmate::assert_character(spec_list$cond_means)
+      cond_means <- spec_list$cond_means
     }
 
-    if (!is.null(from_spec$pairwise_diffs)) {
-      checkmate::assert_character(from_spec$pairwise_diffs)
-      pairwise_diffs <- from_spec$pairwise_diffs
+    if (!is.null(spec_list$pairwise_diffs)) {
+      checkmate::assert_character(spec_list$pairwise_diffs)
+      pairwise_diffs <- spec_list$pairwise_diffs
     }
 
-    if (!is.null(from_spec$cell_means)) {
-      checkmate::assert_logical(from_spec$cell_means, len = 1L)
-      cell_means <- from_spec$cell_means
+    if (!is.null(spec_list$cell_means)) {
+      checkmate::assert_logical(spec_list$cell_means, len = 1L)
+      cell_means <- spec_list$cell_means
     }
 
-    if (!is.null(from_spec$overall_response)) {
-      checkmate::assert_logical(from_spec$overall_response, len = 1L)
-      overall_response <- from_spec$overall_response
+    if (!is.null(spec_list$overall_response)) {
+      checkmate::assert_logical(spec_list$overall_response, len = 1L)
+      overall_response <- spec_list$overall_response
     }
 
-    if (!is.null(from_spec$simple_slopes)) {
-      # checkmate::assert_character(from_spec$simple_slopes)
-      simple_slopes <- from_spec$simple_slopes
+    if (!is.null(spec_list$simple_slopes)) {
+      # checkmate::assert_character(spec_list$simple_slopes)
+      simple_slopes <- spec_list$simple_slopes
     }
 
-    if (!is.null(from_spec$weights)) {
-      checkmate::assert_string(from_spec$weights)
-      checkmate::assert_subset(from_spec$weights, c("equal", "cells", "proportional", "flat"))
-      weights <- from_spec$weights
+    if (!is.null(spec_list$weights)) {
+      checkmate::assert_string(spec_list$weights)
+      checkmate::assert_subset(spec_list$weights, c("equal", "cells", "proportional", "flat"))
+      weights <- spec_list$weights
     } else {
       lg$debug("In contrast specficiation from spec file, setting emmeans weights to 'cells' by default")
       weights <- "cells"
     }
 
-    if (!is.null(from_spec$delete)) {
-      checkmate::assert_character(from_spec$delete)
-      delete <- from_spec$delete
+    if (!is.null(spec_list$delete)) {
+      checkmate::assert_character(spec_list$delete)
+      delete <- spec_list$delete
     }
 
-    # populate categorical vars for within-subject contrast
-    if (inherits(mobj, "l1_wi_spec")) {
+    # populate categorical vars for within-subject contrast and higher-level models
+    if (inherits(mobj, c("l1_wi_spec", "hi_model_spec"))) {
       term_labels <- attr(terms(mobj$lmfit), "term.labels") # names of regressors
       dclass <- attr(mobj$lmfit$terms, "dataClasses")[term_labels] # omit response variable
       cat_vars <- names(dclass[which(dclass %in% c("factor", "character"))])
@@ -107,11 +107,11 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
 
     # now handle population of within-subject contrasts (wi_models)
 
-    if (!is.null(from_spec$wi_contrasts)) {
-      checkmate::assert_list(from_spec$wi_contrasts)
+    if (!is.null(spec_list$wi_contrasts)) {
+      checkmate::assert_list(spec_list$wi_contrasts)
 
-      for (ff in seq_along(from_spec$wi_contrasts)) {
-        sig <- names(from_spec$wi_contrasts)[ff]
+      for (ff in seq_along(spec_list$wi_contrasts)) {
+        sig <- names(spec_list$wi_contrasts)[ff]
 
         wi_obj <- list(
           level = 1L, lmfit = signals[[sig]]$wi_model, signal_name = sig,
@@ -119,7 +119,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
         )
         class(wi_obj) <- c("list", "l1_wi_spec")
 
-        mobj$wi_models[[sig]] <- specify_contrasts(wi_obj, from_spec = from_spec$wi_contrasts[[ff]])
+        mobj$wi_models[[sig]] <- specify_contrasts(wi_obj, spec_list = spec_list$wi_contrasts[[ff]])
       }
     }
 
@@ -330,7 +330,8 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
       "You will probably need to fix the contrasts by hand!",
       sep = "\n"
     )
-    has_alias <- which(apply(cmat[, mobj$aliased_terms], 1, function(x) {
+
+    has_alias <- which(apply(cmat[, mobj$aliased_terms, drop=F], 1, function(x) {
       any(abs(x - 0) > 1e-5)
     }))
 
@@ -340,7 +341,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     }
 
     # Not used at present
-    cmat_reduce <- cmat[, !colnames(cmat) %in% mobj$aliased_terms]
+    cmat_reduce <- cmat[, !colnames(cmat) %in% mobj$aliased_terms, drop=F]
     # write.csv(cmat_reduce, file = "cmat_test_reduce.csv")
   }
 

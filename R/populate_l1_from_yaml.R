@@ -213,7 +213,7 @@ populate_event_data <- function(eobj, trial_data) {
 #     clock:
 #       name: clock # this is redundant!
 propagate_spec_names <- function(spec_list) {
-  fields <- c("signals", "events", "l1_models")
+  fields <- c("signals", "events", "l1_models", "l2_models", "l3_models")
   for (ff in fields) {
     this_l <- spec_list[[ff]]
     for (ii in seq_along(this_l)) {

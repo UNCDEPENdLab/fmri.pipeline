@@ -4,7 +4,7 @@
 \alias{build_l3_models}
 \title{Interactive function to build an l3 model specification for setup_glm_pipeline}
 \usage{
-build_l3_models(gpa, regressor_cols = NULL)
+build_l3_models(gpa, from_spec_file = NULL, regressor_cols = NULL)
 }
 \description{
 Interactive function to build an l3 model specification for setup_glm_pipeline

@@ -1,7 +1,7 @@
 #' Interactive function to build an l1 model specification for setup_glm_pipeline
 #'
 #' @param gpa a \code{glm_pipeline_arguments} object containing an analysis pipeline to which $l1_models
-#'   shoudl be added. If $l1_models is already present, these will be amended.
+#'   should be added. If $l1_models is already present, these will be amended.
 #' @param trial_data a data.frame containing trial-level data for one or more subjects
 #' @param l1_model_set optional existing l1_model_set to be modified
 #' @param from_spec_file optional YAML or JSON file containing settings to populated into l1 models
@@ -76,7 +76,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
     if (ext == "yaml") {
       spec_list <- yaml::read_yaml(from_spec_file)
     } else if (ext == "json") {
-      spec_list <- jsonlite::read_json(from_spec_file)
+      spec_list <- jsonlite::read_json(from_spec_file, simplifyVector = TRUE)
     } else {
       msg <- sprintf("Cannot understand how to input spec file: %s", from_spec_file)
       lg$error(msg)
@@ -862,10 +862,15 @@ bl1_build_signals <- function(l1_model_set, trial_data, block_data = NULL, subtr
 }
 
 ############### BUILD MODELS FROM SIGNALS AND EVENTS
+#' helper function to create a set of level 1 models
+#' @param l1_model_set a set of level 1 models
+#' @param spec_list if creating models from a spec (YAML) file, this is the parsed list
+#' @param lg the current logger
+#' @keywords internal
 bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
   checkmate::assert_class(lg, "Logger")
 
-  create_new_model <- function(signal_list, to_modify=NULL, from_spec=NULL) {
+  create_new_model <- function(signal_list, to_modify=NULL, spec_list=NULL) {
     checkmate::assert_class(to_modify, "l1_model_spec", null.ok=TRUE)
     if (is.null(to_modify)) {
       mobj <- list(level = 1L) #first-level model
@@ -883,8 +888,8 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
       if (res == 2) { mobj$name <- NULL } #clear out so that it is respecified
     }
 
-    if (!is.null(from_spec$name)) { # populate from specification, if requested
-      mobj$name <- from_spec$name
+    if (!is.null(spec_list$name)) { # populate from specification, if requested
+      mobj$name <- spec_list$name
     }
 
     while (is.null(mobj$name) || mobj$name == "") {
@@ -909,9 +914,9 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
     }
 
     ### ------ model signals ------
-    if (!is.null(from_spec$signals)) {
-      checkmate::assert_subset(from_spec$signals, names(signal_list))
-      mobj$signals <- from_spec$signals
+    if (!is.null(spec_list$signals)) {
+      checkmate::assert_subset(spec_list$signals, names(signal_list))
+      mobj$signals <- spec_list$signals
     } else {
       summarize_l1_signals(signal_list) # print summary of signals if user input is needed
     }
@@ -940,7 +945,7 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
     # contrasts for each wi-factor-modulated signal.
 
     #contrast editor
-    mobj <- specify_contrasts(mobj, signal_list, from_spec)
+    mobj <- specify_contrasts(mobj, signal_list, spec_list)
 
     return(mobj)
   }
@@ -951,7 +956,7 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
 
   if (!is.null(spec_list)) {
     for (mm in spec_list$l1_models) {
-      mobj <- create_new_model(signal_list, from_spec=mm)
+      mobj <- create_new_model(signal_list, spec_list=mm)
       model_list[[mobj$name]] <- mobj # add to set
     }
 

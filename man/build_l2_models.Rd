@@ -4,17 +4,16 @@
 \alias{build_l2_models}
 \title{Interactive function to build an l2 model specification for setup_glm_pipeline}
 \usage{
-build_l2_models(gpa, regressor_cols = NULL)
+build_l2_models(gpa, from_spec_file = NULL, regressor_cols = NULL)
 }
 \arguments{
+\item{gpa}{a \code{glm_pipeline_arguments} object containing an analysis pipeline to which $l2_models
+should be added. If $l2_models is already present, these will be amended.}
+
+\item{from_spec_file}{optional YAML or JSON file containing settings to populated into l2 models}
+
 \item{regressor_cols}{an optional character vector of columns in \code{data} that should be considered
 as possible regressors}
-
-\item{data}{a data.frame containing trial-level data for one or more subjects}
-
-\item{model_set}{optional existing model_set to be modified}
-
-\item{variable_mapping}{a vector of mappings between columns in \code{data} and internal constructs}
 }
 \value{
 a \code{hi_model_set} object containing a list of higher-level regression models

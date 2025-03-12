@@ -4,14 +4,14 @@
 \alias{specify_contrasts}
 \title{Internal function to add, edit, rename, delete contrasts}
 \usage{
-specify_contrasts(mobj = NULL, signals = NULL, from_spec = NULL)
+specify_contrasts(mobj = NULL, signals = NULL, spec_list = NULL)
 }
 \arguments{
 \item{mobj}{\code{l1_model_spec} or \code{hi_model_spec} object}
 
 \item{signals}{a list of signals that provide information about regressor specification}
 
-\item{from_spec}{a list of settings for this model based on an external YAML/JSON specification file}
+\item{spec_list}{a list of settings for this model based on an external YAML/JSON specification file}
 }
 \description{
 Internal function to add, edit, rename, delete contrasts

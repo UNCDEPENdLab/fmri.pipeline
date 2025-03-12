@@ -9,7 +9,7 @@ mobj_fit_lm(mobj = NULL, model_formula = NULL, data, id_cols = NULL, lg = NULL)
 \arguments{
 \item{mobj}{a model object to be populated or modified}
 
-\item{model_formula}{a formula of the model to be fit}
+\item{model_formula}{a character string specifying the formula of the model to be fit}
 
 \item{data}{a data.frame containing all columns used in model fitting}
 

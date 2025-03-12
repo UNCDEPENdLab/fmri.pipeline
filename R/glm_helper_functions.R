@@ -847,6 +847,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
       ee <- emmeans(lmfit, as.formula(paste("~", vv)), weights = spec$weights)
       edata <- summary(ee)
       econ <- ee@linfct
+      econ[abs(econ) < 1e-8] <- 0 # round tiny contrasts due to floating point
       enames <- unname(apply(edata[strsplit(vv, ":")[[1]]], 1, paste, collapse=".")) # combine multi-factor contrasts, if relevant
 
       # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
@@ -874,6 +875,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     edata <- summary(ee)
 
     econ <- ee@linfct
+    econ[abs(econ) < 1e-8] <- 0 # round tiny contrasts due to floating point
     enames <- apply(edata[, spec$cat_vars, drop = FALSE], 1, function(x) { paste(names(x), x, sep=".", collapse = "_") })
 
     # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
@@ -893,6 +895,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   if (isTRUE(spec$overall_response) && is.null(c_overall)) {
     ee <- emmeans(lmfit, ~1, weights = spec$weights)
     econ <- ee@linfct
+    econ[abs(econ) < 1e-8] <- 0 # round tiny contrasts due to floating point
     rownames(econ) <- paste0(prefix, "overall")
     colnames(econ) <- c_colnames
     c_overall <- econ
@@ -906,6 +909,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
       pp <- pairs(ee)
       edata <- summary(pp)
       econ <- pp@linfct
+      econ[abs(econ) < 1e-8] <- 0 # round tiny contrasts due to floating point
       enames <- paste(vv, make.names(sub("\\s+-\\s+", "_M_", edata$contrast, perl = TRUE)), sep=".") # names of contrasts
 
       # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
@@ -936,6 +940,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
         )
         edata <- summary(ee)
         econ <- ee@linfct
+        econ[abs(econ) < 1e-8] <- 0 # round tiny contrasts due to floating point
         enames <- paste(trend_var, apply(edata[, comb, drop = FALSE], 1, paste, collapse = "."), sep = ".")
 
         # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
@@ -1170,7 +1175,7 @@ mobj_refit_lm <- function(mobj, new_data) {
 #' internal helper function to setup a linear model for a given l1, l2, or l3 model
 #' 
 #' @param mobj a model object to be populated or modified
-#' @param model_formula a formula of the model to be fit
+#' @param model_formula a character string specifying the formula of the model to be fit
 #' @param data a data.frame containing all columns used in model fitting
 #' @param id_cols a character vector of column names in \code{data} that identify the observations
 #'   and can be used for merging the model against related datasets
@@ -1194,7 +1199,7 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
     }
   }
 
-  checkmate::assert_formula(model_formula)
+  checkmate::assert_string(model_formula)
   checkmate::assert_data_frame(data)
   checkmate::assert_subset(id_cols, names(data))
 
@@ -1203,7 +1208,7 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
     data$dummy <- seq_len(nrow(data))
   }
 
-  model_formula <- update.formula(model_formula, "dummy ~ .") # add LHS
+  model_formula <- update.formula(as.formula(model_formula), "dummy ~ .") # add LHS
 
   # use model formula from parent object
   # model_formula <- terms(mobj$lmfit)
@@ -1254,12 +1259,27 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
     }
   }
 
+  # apply just-in-time factor reference releveling
+  if (!is.null(mobj$reference_level)) {
+    for (cc in seq_along(mobj$reference_level)) {
+      cname <- names(mobj$reference_level)[cc]
+      if (!is.factor(data[[cname]])) data[[cname]] <- factor(data[[cname]])
+      ref <- mobj$reference_level[cc]
+      if (!ref %in% levels(data[[cname]])) {
+        default_lev <- names(which.max(table(data[[cname]])))
+        lg$warn("The requested reference level: %s is not available. Defaulting to %s", ref, default_lev)
+        ref <- default_lev
+      }
+      data[[cname]] <- relevel(data[[cname]], ref=ref)
+    }
+  }
+
   # keep track of data used for fitting model for refitting in case of missing data
   mobj$model_data <- data %>% dplyr::select(!!model_vars)
 
   # fit model and populate model information
   mobj$lmfit <- lm(model_formula, data)
-  mobj$model_formula <- model_formula
+  mobj$model_formula <- as.character(update.formula(as.formula(model_formula), "NULL ~ .")) # remove LHS and convert to string
   mobj$model_matrix <- model.matrix(mobj$lmfit)
   mobj$regressors <- colnames(mobj$model_matrix) # actual regressors after expanding categorical variables
 
@@ -1271,7 +1291,7 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
     cat(paste(bad_terms, collapse = ", "), "\n\n")
 
     # find unaliased (good) terms in the model
-    good_terms <- colnames(modelmat)[!(colnames(modelmat) %in% bad_terms)]
+    good_terms <- colnames(mobj$model_matrix)[!(colnames(mobj$model_matrix) %in% bad_terms)]
     good_terms <- good_terms[!good_terms == "(Intercept)"]
 
     if (length(good_terms) == 0L) {
@@ -1286,10 +1306,10 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
     newf <- as.formula(paste("dummy ~", paste(good_terms, collapse = " + ")))
 
     # also generate a model data.frame that expands dummy codes for terms, retaining only good variables
-    # mobj$model_matrix_noalias <- modelmat[, grep(":", good_terms, fixed = TRUE, value = TRUE, invert = TRUE)]
-    # modeldf <- as.data.frame(mobj$model_matrix_noalias)
-    # modeldf$dummy <- data$dummy # copy across dummy DV for fitting
-    mobj$lmfit_noalias <- lm(newf, data)
+    mobj$model_matrix_noalias <- mobj$model_matrix[, grep(":", good_terms, fixed = TRUE, value = TRUE, invert = TRUE)]
+    modeldf <- as.data.frame(mobj$model_matrix_noalias)
+    modeldf$dummy <- data$dummy # copy across dummy DV for fitting
+    mobj$lmfit_noalias <- lm(newf, modeldf)
     mobj$aliased_terms <- bad_terms
 
     # N.B. emmeans needs to calculate contrasts on the original design to see the factor structure
