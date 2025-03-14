@@ -65,14 +65,14 @@ library(glue)
 test_df <- data.frame(x=1:10)
 library(fmri.pipeline)
 d_batch <- R_batch_job$new(
-    job_name = glue("test1"), n_cpus = 1, mem_per_cpu = "4g",
-    wall_time = "10:00:00", scheduler = "sbatch",
-    # pass relevant vars to the batch
-    input_objects = fmri.pipeline:::named_list(test_df),
-    r_packages = "fmri.pipeline",
-    r_code = c(
-        "Sys.sleep(1)"
-    )
+  job_name = glue("test1"), n_cpus = 1, mem_per_cpu = "4g",
+  wall_time = "10:00:00", scheduler = "sbatch",
+  # pass relevant vars to the batch
+  input_objects = fmri.pipeline:::named_list(test_df),
+  r_packages = "fmri.pipeline",
+  r_code = c(
+    "Sys.sleep(1)"
+  )
 )
 
 d_batch$submit()
@@ -80,16 +80,16 @@ d_batch$submit()
 
 # local batch
 d_batch <- R_batch_job$new(
-    job_name = glue("test1"), n_cpus = 1, mem_per_cpu = "4g",
-    wall_time = "10:00:00", scheduler = "local",
-    sqlite_db = "~/job_tracker.sqlite",
-    # pass relevant vars to the batch
-    input_objects = fmri.pipeline:::named_list(test_df),
-    r_packages = "fmri.pipeline",
-    r_code = c(
-        "Sys.getenv('JOBID')",
-        "Sys.sleep(8)"
-    )
+  job_name = glue("test1"), n_cpus = 1, mem_per_cpu = "4g",
+  wall_time = "10:00:00", scheduler = "local",
+  sqlite_db = "~/job_tracker.sqlite",
+  # pass relevant vars to the batch
+  input_objects = fmri.pipeline:::named_list(test_df),
+  r_packages = "fmri.pipeline",
+  r_code = c(
+    "Sys.getenv('JOBID')",
+    "Sys.sleep(8)"
+  )
 )
 
 d_batch$submit()
@@ -122,9 +122,9 @@ dbFetch(res)
 res <- dbSendQuery(con, "INSERT INTO batch_job last_insert_rowid()")
 dbFetch(res)
 
-    res <- dbSendStatement(con, "UPDATE Cellar SET WS_ID = ? WHERE Cellar_ID = ?", param=list(ws_id_added, ws_import_cellarid))
-    stopifnot(dbGetRowsAffected(res) == 1L) #make sure we have updated a row
-    dbClearResult(res)
+res <- dbSendStatement(con, "UPDATE Cellar SET WS_ID = ? WHERE Cellar_ID = ?", param=list(ws_id_added, ws_import_cellarid))
+stopifnot(dbGetRowsAffected(res) == 1L) #make sure we have updated a row
+dbClearResult(res)
 
 # basic ideas
 
@@ -132,4 +132,28 @@ dbFetch(res)
 # 2) always add code to the end of the job to update time_ended and job_status. If the script runs to the last line, then we know that the script completed successfully
 # 3) trap exit with on.exit() for failures
 # 4) potentially trap any other problems in the batch script itself, though that would require some sort of command line SQLITE update
-# 5) 
+
+# test batch sequence
+
+
+# library(glue)
+# library(fmri.pipeline)
+d_batch <- R_batch_job$new(
+  job_name = glue("test1"), n_cpus = 1, mem_per_cpu = "4g",
+  wall_time = "10:00:00", scheduler = "local",
+  # pass relevant vars to the batch
+  r_packages = "fmri.pipeline",
+  r_code = c(
+    "Sys.sleep(10)"
+  )
+)
+
+d_batch2 <- d_batch$copy(job_name = "test2")
+d_batch3 <- d_batch$copy(job_name = "test2")
+
+d_seq <- R_batch_sequence$new(
+  d_batch, d_batch2, d_batch3
+)
+
+d_seq$submit()
+jids <- d_seq$get_job_ids()

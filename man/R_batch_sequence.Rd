@@ -15,6 +15,7 @@ Description of R_batch_sequence R6 class
 \item \href{#method-batch_sequence-add}{\code{R_batch_sequence$add()}}
 \item \href{#method-batch_sequence-submit}{\code{R_batch_sequence$submit()}}
 \item \href{#method-batch_sequence-generate}{\code{R_batch_sequence$generate()}}
+\item \href{#method-batch_sequence-get_job_ids}{\code{R_batch_sequence$get_job_ids()}}
 \item \href{#method-batch_sequence-clone}{\code{R_batch_sequence$clone()}}
 }
 }
@@ -71,6 +72,16 @@ submit the job sequence to the scheduler or local compute
 Calls each job's $generate() method so that scripts can be examined without running the sequence
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$generate()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-batch_sequence-get_job_ids"></a>}}
+\if{latex}{\out{\hypertarget{method-batch_sequence-get_job_ids}{}}}
+\subsection{Method \code{get_job_ids()}}{
+Return a named vector of the job ids for all jobs in this sequence
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$get_job_ids()}\if{html}{\out{</div>}}
 }
 
 }
