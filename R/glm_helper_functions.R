@@ -334,18 +334,18 @@ generate_motion_regressors <- function(motion_params_file = "motion.par",
 
   # https://wiki.cam.ac.uk/bmuwiki/FMRI
   if (rot_units=="rad") {
-    FD <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * sum(abs(x))) +
+    framewise_displacement <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * sum(abs(x))) +
       apply(mot_deriv[, c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
   } else if (rot_units=="deg") {
-    FD <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * (pi / 180) * sum(abs(x))) +
+    framewise_displacement <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * (pi / 180) * sum(abs(x))) +
       apply(mot_deriv[, c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
   } else {
     stop("unknown")
   }
-  mot <- cbind(mot, FD = FD)
+  mot <- cbind(mot, framewise_displacement = framewise_displacement)
 
   # Demean all columns, if requested
-  # Note that this is not used internally at present to avoid surprising results when testing motion thresholds (e.g., FD)
+  # Note that this is not used internally at present to avoid surprising results when testing motion thresholds (e.g., framewise_displacement)
   if (isTRUE(demean)) {
     mot <- mot[, lapply(.SD, function(x) { x - mean(x, na.rm=TRUE) }) ]
   }
