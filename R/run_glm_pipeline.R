@@ -42,7 +42,8 @@ l3_model_names = "prompt", glm_software = NULL) {
     mem_total = "16G",
     r_code = "gpa <- finalize_pipeline_configuration(gpa)", r_packages = "fmri.pipeline",
     batch_code = get_compute_environment(gpa),
-    scheduler_options = gpa$parallel$sched_args
+    scheduler_options = gpa$parallel$sched_args,
+    sqlite_db = gpa$output_locations$sqlite_db
   )
 
   if (is.null(gpa$finalize_complete) || isFALSE(gpa$finalize_complete)) {

@@ -141,7 +141,7 @@ R_batch_job <- R6::R6Class("batch_job",
       # job tracking
 
       syntax <- "cat(paste('Job start time:', Sys.time()), '\\n')"
-      if (!is.null(self$sqlite_db)) syntax <- c(syntax, glue::glue("fmri.pipeline::update_batch_job_status('{self$sqlite_db}', Sys.getenv('JOBID'), 'STARTED')"))
+      if (!is.null(self$sqlite_db)) syntax <- c(syntax, glue::glue("fmri.pipeline::update_tracked_job_status('{self$sqlite_db}', Sys.getenv('JOBID'), 'STARTED')"))
 
       if (isTRUE(self$print_session_info)) {
         syntax <- c(
@@ -180,8 +180,8 @@ R_batch_job <- R6::R6Class("batch_job",
           "}"
         )
       }
-
-      failed_str <- if (!is.null(self$sqlite_db)) glue::glue("    fmri.pipeline::update_batch_job_status('{self$sqlite_db}', Sys.getenv('JOBID'), 'FAILED')") else NULL
+      
+      failed_str <- if (!is.null(self$sqlite_db)) glue::glue("    fmri.pipeline::update_tracked_job_status('{self$sqlite_db}', Sys.getenv('JOBID'), 'FAILED', cascade = TRUE)") else NULL
       syntax <- c(
         syntax,
         glue::glue("tryCatch(source(\"{private$get_r_file_name()}\", echo=TRUE, max.deparse.length=2000),"),
@@ -203,12 +203,18 @@ R_batch_job <- R6::R6Class("batch_job",
         syntax <- c(
           syntax,
           "if (exists('child_job_ids') && inherits(child_job_ids, c('numeric', 'integer', 'character'))) {",
+          glue::glue("  sapply(child_job_ids, function(id) fmri.pipeline::add_tracked_job_parent(sqlite_db = '{self$sqlite_db}', job_id = id, parent_job_id = Sys.getenv('JOBID')))"),          
           paste0(
-            "  fmri.pipeline::wait_for_job(child_job_ids, quiet=FALSE",
+            "  success <- fmri.pipeline::wait_for_job(child_job_ids, quiet=FALSE",
             ", repolling_interval=", self$repolling_interval,
             ", max_wait=", lubridate::period_to_seconds(dhms(self$wall_time)),
             ", scheduler='", self$scheduler, "')"
           ),
+          if (isTRUE(self$all_children_successful)) {
+            glue::glue("  if (isFALSE(success)) {{ fmri.pipeline::update_tracked_job_status('{self$sqlite_db}', Sys.getenv('JOBID'), 'FAILED', cascade = TRUE, exclude = child_job_ids); stop() }}") 
+          } else { 
+            NULL
+          },
           "} else {",
           "  warning('Attempt to wait for child jobs failed due to non-existent or improper child_job_ids variable.')",
           "}"
@@ -228,7 +234,7 @@ R_batch_job <- R6::R6Class("batch_job",
         "cat(paste('Job end time:', Sys.time()), '\\n')"
       )
         
-      if (!is.null(self$sqlite_db)) syntax <- c(syntax, glue::glue("fmri.pipeline::update_batch_job_status('{self$sqlite_db}', Sys.getenv('JOBID'), 'COMPLETED')"))
+      if (!is.null(self$sqlite_db)) syntax <- c(syntax, glue::glue("fmri.pipeline::update_tracked_job_status('{self$sqlite_db}', Sys.getenv('JOBID'), 'COMPLETED')"))
 
       message("Writing R script to: ", private$get_compute_file_name())
       writeLines(syntax, con = private$get_compute_file_name())
@@ -243,90 +249,19 @@ R_batch_job <- R6::R6Class("batch_job",
       save(list = ls(all.names = TRUE, envir = self$input_objects), envir = self$input_objects, file = self$input_rdata_file)
     },
 
-    submit_sqlite = function(str, param=NULL) {
-      checkmate::assert_string(str)
-
-      if (!checkmate::test_file_exists(self$sqlite_db)) {
-        private$create_sqlite_db()
-      }
-
-      # open sqlite connection and execute query
-      con <- DBI::dbConnect(RSQLite::SQLite(), self$sqlite_db)
-      res <- DBI::dbExecute(con, str, param)
-      DBI::dbDisconnect(con)
-
-    },
-
-    # not currently exposed or used
-    reset_sqlite_db = function() {
-      # this file has the SQL syntax to setup (and reset) the database
-      # reset_sql <- "
-      # SET foreign_key_checks = 0;
-      # DROP TABLE IF EXISTS batch_job;
-      # SET foreign_key_checks = 1;
-      # "
-      reset_sql <- "DELETE FROM batch_job" # delete all records
-    },
-
-    create_sqlite_db = function() {
-      job_spec_sql <- "
-        CREATE TABLE batch_job (
-          id INTEGER PRIMARY KEY,
-          parent_id INTEGER,
-          job_id VARCHAR NOT NULL UNIQUE,
-          job_name VARCHAR,
-          batch_directory VARCHAR,
-          batch_file VARCHAR,
-          compute_file VARCHAR,
-          r_file VARCHAR,
-          n_nodes INTEGER CHECK (n_nodes >= 1),
-          n_cpus INTEGER CHECK (n_cpus >= 1),
-          wall_time VARCHAR,
-          mem_per_cpu VARCHAR,
-          mem_total VARCHAR,
-          r_code TEXT,
-          scheduler VARCHAR,
-          scheduler_options VARCHAR,
-          job_obj BLOB,
-          time_submitted INTEGER,
-          time_started INTEGER,
-          time_ended INTEGER,
-          status VARCHAR(24),
-          FOREIGN KEY (parent_id) REFERENCES batch_job (id)
-        );
-        "
-
-      # open sqlite connection
-      con <- DBI::dbConnect(RSQLite::SQLite(), self$sqlite_db)
-      res <- DBI::dbExecute(con, job_spec_sql)
-      DBI::dbDisconnect(con)
-
-    },
-
-    sqlite_insert_job = function() {
-      if (is.null(self$sqlite_db) || is.null(private$job_id)) return(invisible(NULL)) # skip out if not using DB
-
-      sql <- "INSERT INTO batch_job
-        (job_id, job_name, batch_directory,
-        batch_file, compute_file, r_file,
-        n_nodes, n_cpus, wall_time,
-        mem_per_cpu, mem_total, r_code,
-        scheduler, scheduler_options, job_obj,
-        time_submitted, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-      
-      # convert object to raw
+    # helper to gather arguments for tracking, specifically for an R batch job
+    gather_tracking_args = function() {
+      if (is.null(self$sqlite_db)) return(NULL) # return NULL if not tracking
       job_obj <- if (isTRUE(self$sqlite_cache_obj))  serialize(self, NULL) else NULL
-      private$submit_sqlite(
-        sql,
-        list(private$job_id, self$job_name, self$batch_directory,
-        private$get_batch_file_name(), private$get_compute_file_name(), private$get_r_file_name(),
-        self$n_nodes, self$n_cpus, self$wall_time,
-        self$mem_per_cpu, self$mem_total, paste(self$r_code, collapse="\n"),
-        self$scheduler, paste(self$scheduler_options, collapse="\n"), list(job_obj), as.character(Sys.time()), "QUEUED")
-      )
+      scheduler_options <- if (is.null(self$scheduler_options)) NA else paste(self$scheduler_options, collapse="\n")
+      tracking_args <- list(job_name = self$job_name, batch_directory = self$batch_directory,
+                            compute_file = private$get_compute_file_name(), 
+                            code_file = private$get_r_file_name(),
+                            n_nodes = self$n_nodes, n_cpus = self$n_cpus, wall_time = self$wall_time,
+                            mem_per_cpu = self$mem_per_cpu, mem_total = self$mem_total,
+                            scheduler_options = scheduler_options, job_obj = list(job_obj))
+      return(tracking_args)
     }
-
 
   ),
   public = list(
@@ -335,7 +270,7 @@ R_batch_job <- R6::R6Class("batch_job",
 
     #' @field depends_on_parents logical or character string indicating whether this job should wait until
     #'    \code{parent_jobs} complete. If a character string is passed, it indicates which named elements of
-    #'    \code{parent_jobs} are must complete before this job begins.
+    #'    \code{parent_jobs} must complete before this job begins.
     depends_on_parents = FALSE,
 
     #' @field job_name a user-defined name for the job used for specifying job dependencies and informative job
@@ -345,6 +280,10 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @field wait_for_children if TRUE, code will be inserted to wait for all jobs in a vector called
     #'    \code{child_job_ids} to finish before the batch exits. It's up to your code to use this variable name
     wait_for_children = FALSE,
+    
+    #' @field all_children_successful if TRUE, all jobs in vector \code{child_job_ids} 
+    #'    must be successful for this job to finish (see \code{wait_for_children} field)
+    all_children_successful = FALSE,
 
     #' @field wall_time The amount of time requested on the job scheduler, following d-hh:mm:ss format. Defaults to
     #'    "4:00:00", which is 4 hours.
@@ -374,7 +313,7 @@ R_batch_job <- R6::R6Class("batch_job",
     #'    be loaded by subsequent jobs.
     output_rdata_file = NULL,
 
-    #' @field sqlite_db Not used yet, but will be used for job tracking in future
+    #' @field sqlite_db File path to tracking SQLite database
     sqlite_db = NULL,
 
     #' @field batch_id Not currently used, but intended for job sequence tracking
@@ -415,7 +354,7 @@ R_batch_job <- R6::R6Class("batch_job",
     #'   problems with the compute environment or R installation.
     print_session_info = TRUE,
 
-    #' @field print_environment If `TRUE``, print the `Sys.getenv()` when the job starts. This can produce a lot of output,
+    #' @field print_environment If `TRUE`, print the `Sys.getenv()` when the job starts. This can produce a lot of output,
     #'   but can be useful if certain environment variables are not being found when your job runs, leading it to fail.
     print_environment = FALSE,
 
@@ -442,6 +381,7 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param r_packages A character vector of R packages to be loaded when compute script runs
     #' @param scheduler The scheduler to be used for this compute. Options are 'slurm', 'torque', or 'local'.
     #' @param wait_for_children If TRUE, do not end this job until all child jobs have completed
+    #' @param all_children_successful If TRUE, don't count this job as successful unless all child jobs are successful
     #' @param input_rdata_file The name of the environment to be loaded at the beginning of the R batch prior to executing code
     #' @param input_objects A list object in the current execution environment to be cached and used as input to the R batch.
     #'   This is mutually exclusive with input_rdata_file at present.
@@ -455,7 +395,7 @@ R_batch_job <- R6::R6Class("batch_job",
     initialize = function(batch_directory = NULL, parent_jobs = NULL, job_name = NULL, n_nodes = NULL, n_cpus = NULL,
                           wall_time = NULL, mem_per_cpu = NULL, mem_total = NULL, batch_id = NULL, r_code = NULL, r_script = NULL,
                           post_children_r_code = NULL, batch_code = NULL, r_packages = NULL, scheduler = NULL, wait_for_children = NULL,
-                          input_rdata_file = NULL, input_objects = NULL, output_rdata_file = NULL, sqlite_db = NULL,
+                          all_children_successful = NULL, input_rdata_file = NULL, input_objects = NULL, output_rdata_file = NULL, sqlite_db = NULL,
                           scheduler_options = NULL, repolling_interval = NULL, print_session_info = TRUE, print_environment = FALSE) {
 
       if (!is.null(batch_directory)) {
@@ -490,7 +430,7 @@ R_batch_job <- R6::R6Class("batch_job",
         checkmate::assert_string(mem_total)
         self$mem_total <- mem_total
       }
-
+      
       if (!is.null(batch_id)) self$batch_id <- as.character(batch_id)
 
       if (!is.null(r_script)) {
@@ -559,6 +499,11 @@ R_batch_job <- R6::R6Class("batch_job",
         checkmate::assert_logical(wait_for_children, len = 1L)
         self$wait_for_children <- wait_for_children
       }
+      
+      if (!is.null(all_children_successful)) {
+        checkmate::assert_logical(all_children_successful, len = 1L)
+        self$all_children_successful <- all_children_successful
+      }
 
       if (!is.null(post_children_r_code)) {
         stopifnot(wait_for_children == TRUE) # don't let the user try it
@@ -616,19 +561,18 @@ R_batch_job <- R6::R6Class("batch_job",
           warning("Could not add parent job dependency because one or more depend_on_parents elements were not in parent_jobs")
         }
       }
-
+            
       message("Submitting job: ", self$job_name)
 
       # TODO: if a job_id already exists and submit is called again, do we check job status, insist a 'forced' submission?
       private$job_id <- fmri.pipeline::cluster_job_submit(batch_script,
         scheduler = self$scheduler,
-        wait_jobs = wait_jobs, repolling_interval = self$repolling_interval
+        wait_jobs = wait_jobs, repolling_interval = self$repolling_interval, 
+        tracking_sqlite_db = self$sqlite_db,
+        tracking_args = private$gather_tracking_args()
       )
 
       message("Job received job id: ", private$job_id)
-      private$sqlite_insert_job()
-
-      # now record this job ID into the R batch script 
 
       if (!is.null(cd) && dir.exists(cd)) setwd(cd) # reset working directory (don't attempt if that directory is absent)
 
@@ -767,65 +711,3 @@ R_batch_sequence <- R6::R6Class("batch_sequence",
     }
   )
 )
-
-
-#' record job failure in SQLite database
-#' @param sqlite_db character string specifying the SQLite database used for job tracking
-#' @param jobid character string specifying the job id to update as failed
-#' @param status character string specifying the job status to set. Must be one of: 
-#'   "QUEUED", "STARTED", "FAILED", "COMPLETED"
-#' @importFrom glue glue
-#' @importFrom DBI dbConnect dbExecute dbDisconnect
-#' @export
-update_batch_job_status <- function(sqlite_db = NULL, jobid = NULL, status) {
-  if (!checkmate::test_string(sqlite_db)) return(invisible(NULL))
-  checkmate::assert_string(status)
-  status <- toupper(status)
-  checkmate::assert_subset(status, c("QUEUED", "STARTED", "FAILED", "COMPLETED"))
-  
-  if (is.numeric(jobid)) jobid <- as.character(jobid)
-  if (!checkmate::test_string(jobid)) return(invisible(NULL)) # quiet failure on invalid job id
-
-  now <- as.character(Sys.time())
-  time_field <- switch(status,
-    QUEUED = "time_submitted",
-    STARTED = "time_started",
-    FAILED = "time_ended",
-    COMPLETED = "time_ended"
-  )
-
-  tryCatch({
-    con <- dbConnect(RSQLite::SQLite(), sqlite_db)
-    res <- dbExecute(con, glue("UPDATE batch_job SET STATUS = ?, {time_field} = ? WHERE job_id = ?"), param = list(status, now, jobid))
-    dbDisconnect(con)
-  }, error = function(e) { print(e); return(NULL)})
-
-  return(invisible(NULL))
-
-}
-
-#' query job status
-#' @param jobid the batch job id
-#' @param sqlite_db character string of sqlite database
-#' @importFrom DBI dbConnect
-#' @importFrom RSQLite SQLite
-get_batch_job_status <- function(jobid = NULL, return_children = FALSE, sqlite_db) {
-
-  on.exit(try(dbDisconnect(con)))
-  if (is.numeric(jobid)) jobid <- as.character(jobid)
-  if (!checkmate::test_string(jobid)) return(invisible(NULL))
-  if (!checkmate::test_file_exists(sqlite_db)) {
-    warning("Cannot find SQLite database at: ", sqlite_db)
-  }
-  
-  con <- dbConnect(RSQLite::SQLite(), sqlite_db)
-
-  str <- "SELECT * FROM batch_job WHERE job_id = ?"
-
-  df <- dbGetQuery(con, str, param = list(jobid))
-
-  # rehydrate job_obj back into R6 class
-  if (nrow(df) > 0L) df$job_obj <- lapply(df$job_obj, function(x) if (!is.null(x)) unserialize(x))
-  return(df)
-  
-}
