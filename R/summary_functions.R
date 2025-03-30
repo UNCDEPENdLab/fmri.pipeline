@@ -226,7 +226,7 @@ summary.l1_model_set_signals <- function(sl) {
     cat("  Generate beta series:", as.character(this$beta_series), "\n")
     cat(
       "  Multiply convolved regressor against time series:",
-      ifelse(this$ts_multiplier == FALSE || is.null(this$ts_multiplier),
+      ifelse(is.null(this$ts_multiplier || isFALSE(this$ts_multiplier)),
         "FALSE", this$ts_multiplier
       ), "\n"
     )

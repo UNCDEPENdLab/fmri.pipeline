@@ -334,18 +334,18 @@ generate_motion_regressors <- function(motion_params_file = "motion.par",
 
   # https://wiki.cam.ac.uk/bmuwiki/FMRI
   if (rot_units=="rad") {
-    FD <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * sum(abs(x))) +
+    framewise_displacement <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * sum(abs(x))) +
       apply(mot_deriv[, c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
   } else if (rot_units=="deg") {
-    FD <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * (pi / 180) * sum(abs(x))) +
+    framewise_displacement <- apply(mot_deriv[, c("drx", "dry", "drz")], 1, function(x) 50 * (pi / 180) * sum(abs(x))) +
       apply(mot_deriv[, c("dtx", "dty", "dtz")], 1, function(x) sum(abs(x)))
   } else {
     stop("unknown")
   }
-  mot <- cbind(mot, FD = FD)
+  mot <- cbind(mot, framewise_displacement = framewise_displacement)
 
   # Demean all columns, if requested
-  # Note that this is not used internally at present to avoid surprising results when testing motion thresholds (e.g., FD)
+  # Note that this is not used internally at present to avoid surprising results when testing motion thresholds (e.g., framewise_displacement)
   if (isTRUE(demean)) {
     mot <- mot[, lapply(.SD, function(x) { x - mean(x, na.rm=TRUE) }) ]
   }
@@ -847,7 +847,8 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
       ee <- emmeans(lmfit, as.formula(paste("~", vv)), weights = spec$weights)
       edata <- summary(ee)
       econ <- ee@linfct
-      enames <- as.character(edata[[vv]]) # names of contrasts
+      econ[abs(econ) < 1e-8] <- 0 # round tiny contrasts due to floating point
+      enames <- unname(apply(edata[strsplit(vv, ":")[[1]]], 1, paste, collapse=".")) # combine multi-factor contrasts, if relevant
 
       # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
       which_na <- is.na(edata$emmean)
@@ -874,6 +875,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     edata <- summary(ee)
 
     econ <- ee@linfct
+    econ[abs(econ) < 1e-8] <- 0 # round tiny contrasts due to floating point
     enames <- apply(edata[, spec$cat_vars, drop = FALSE], 1, function(x) { paste(names(x), x, sep=".", collapse = "_") })
 
     # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
@@ -893,6 +895,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   if (isTRUE(spec$overall_response) && is.null(c_overall)) {
     ee <- emmeans(lmfit, ~1, weights = spec$weights)
     econ <- ee@linfct
+    econ[abs(econ) < 1e-8] <- 0 # round tiny contrasts due to floating point
     rownames(econ) <- paste0(prefix, "overall")
     colnames(econ) <- c_colnames
     c_overall <- econ
@@ -906,6 +909,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
       pp <- pairs(ee)
       edata <- summary(pp)
       econ <- pp@linfct
+      econ[abs(econ) < 1e-8] <- 0 # round tiny contrasts due to floating point
       enames <- paste(vv, make.names(sub("\\s+-\\s+", "_M_", edata$contrast, perl = TRUE)), sep=".") # names of contrasts
 
       # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
@@ -936,6 +940,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
         )
         edata <- summary(ee)
         econ <- ee@linfct
+        econ[abs(econ) < 1e-8] <- 0 # round tiny contrasts due to floating point
         enames <- paste(trend_var, apply(edata[, comb, drop = FALSE], 1, paste, collapse = "."), sep = ".")
 
         # if any emmeans are not estimable, then this is likely due to aliasing. For now, drop
@@ -969,6 +974,11 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     c_custom
   )
 
+  if (is.null(cmat_full)) {
+    # no contrasts specified! Not good, but for now, just create an empty matrix and let upstream handle bothering the user
+    cmat_full <- matrix(numeric(0), nrow=0, ncol=length(c_colnames), dimnames=list(NULL, c_colnames))
+  }
+
   # handle contrasts from the full matrix that should be deleted
   # these are processed dynamically here so that the same set can be dropped if a contrast is respecified for a data subset or subject
   if (!is.null(spec$delete)) {
@@ -988,7 +998,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   dupe_list <- get_dupe_rows(cmat)
   drop_rows <- c()
   if (length(dupe_list) > 0L) {    
-    message("Duplicate contrasts found in your matrix. This can occur for many benign reasons, but we need you do say what you want
+    message("Duplicate contrasts found in your matrix. This can occur for many benign reasons, but we need you to say what you want
       to call these contrasts in the output so that it is clear to you.\n")
     
     for (dd in dupe_list) {
@@ -1001,7 +1011,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     mobj$contrast_spec$delete <- unique(c(mobj$contrast_spec$delete, rownames(cmat)[drop_rows]))
   } 
 
-  # duplicated does not give user any control over which one to retain (in terms of contrast name)
+  # duplicated does not give user any control over which one to retain (in terms of contrast name) -- now superseded by duplicate resolution above
   # dupes <- duplicated(cmat, MARGIN = 1)
   dupes <- rep(FALSE, nrow(cmat))
   dupes[drop_rows] <- TRUE
@@ -1029,7 +1039,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
 
 # helper function to identify duplicate contrasts
 get_dupe_rows <- function(mat, enforce_rownames=FALSE) {
-  stopifnot(inherits(mat, "matrix"))
+  if (!inherits(mat, "matrix")) return(list()) # return empty list if we are not passed a contrast matrix
   
   # rows to check -- start with all, then winnow
   rtc <- seq_len(nrow(mat))
@@ -1104,7 +1114,7 @@ respecify_l2_models_by_subject <- function(mobj, data) {
 
   # create a nested data.table object for fitting each id + session separately
   data <- data.table(data, key = c("id", "session"))
-  data$dummy <- rnorm(nrow(data))
+  data$dummy <- seq_len(nrow(data))
   dsplit <- data[, .(dt = list(.SD)), by = c("id", "session")]
 
   # use model formula from parent object
@@ -1165,7 +1175,7 @@ mobj_refit_lm <- function(mobj, new_data) {
 #' internal helper function to setup a linear model for a given l1, l2, or l3 model
 #' 
 #' @param mobj a model object to be populated or modified
-#' @param model_formula a formula of the model to be fit
+#' @param model_formula a character string specifying the formula of the model to be fit
 #' @param data a data.frame containing all columns used in model fitting
 #' @param id_cols a character vector of column names in \code{data} that identify the observations
 #'   and can be used for merging the model against related datasets
@@ -1189,16 +1199,16 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
     }
   }
 
-  checkmate::assert_formula(model_formula)
+  checkmate::assert_string(model_formula)
   checkmate::assert_data_frame(data)
   checkmate::assert_subset(id_cols, names(data))
 
   # verify that there is a dummy DV for lm fitting
   if (!"dummy" %in% names(data)) {
-    data$dummy <- rnorm(nrow(data))
+    data$dummy <- seq_len(nrow(data))
   }
 
-  model_formula <- update.formula(model_formula, "dummy ~ .") # add LHS
+  model_formula <- update.formula(as.formula(model_formula), "dummy ~ .") # add LHS
 
   # use model formula from parent object
   # model_formula <- terms(mobj$lmfit)
@@ -1249,12 +1259,27 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
     }
   }
 
+  # apply just-in-time factor reference releveling
+  if (!is.null(mobj$reference_level)) {
+    for (cc in seq_along(mobj$reference_level)) {
+      cname <- names(mobj$reference_level)[cc]
+      if (!is.factor(data[[cname]])) data[[cname]] <- factor(data[[cname]])
+      ref <- mobj$reference_level[cc]
+      if (!ref %in% levels(data[[cname]])) {
+        default_lev <- names(which.max(table(data[[cname]])))
+        lg$warn("The requested reference level: %s is not available. Defaulting to %s", ref, default_lev)
+        ref <- default_lev
+      }
+      data[[cname]] <- relevel(data[[cname]], ref=ref)
+    }
+  }
+
   # keep track of data used for fitting model for refitting in case of missing data
   mobj$model_data <- data %>% dplyr::select(!!model_vars)
 
   # fit model and populate model information
   mobj$lmfit <- lm(model_formula, data)
-  mobj$model_formula <- model_formula
+  mobj$model_formula <- as.character(update.formula(as.formula(model_formula), "NULL ~ .")) # remove LHS and convert to string
   mobj$model_matrix <- model.matrix(mobj$lmfit)
   mobj$regressors <- colnames(mobj$model_matrix) # actual regressors after expanding categorical variables
 
@@ -1266,7 +1291,7 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
     cat(paste(bad_terms, collapse = ", "), "\n\n")
 
     # find unaliased (good) terms in the model
-    good_terms <- colnames(modelmat)[!(colnames(modelmat) %in% bad_terms)]
+    good_terms <- colnames(mobj$model_matrix)[!(colnames(mobj$model_matrix) %in% bad_terms)]
     good_terms <- good_terms[!good_terms == "(Intercept)"]
 
     if (length(good_terms) == 0L) {
@@ -1281,10 +1306,10 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
     newf <- as.formula(paste("dummy ~", paste(good_terms, collapse = " + ")))
 
     # also generate a model data.frame that expands dummy codes for terms, retaining only good variables
-    # mobj$model_matrix_noalias <- modelmat[, grep(":", good_terms, fixed = TRUE, value = TRUE, invert = TRUE)]
-    # modeldf <- as.data.frame(mobj$model_matrix_noalias)
-    # modeldf$dummy <- data$dummy # copy across dummy DV for fitting
-    mobj$lmfit_noalias <- lm(newf, data)
+    mobj$model_matrix_noalias <- mobj$model_matrix[, grep(":", good_terms, fixed = TRUE, value = TRUE, invert = TRUE)]
+    modeldf <- as.data.frame(mobj$model_matrix_noalias)
+    modeldf$dummy <- data$dummy # copy across dummy DV for fitting
+    mobj$lmfit_noalias <- lm(newf, modeldf)
     mobj$aliased_terms <- bad_terms
 
     # N.B. emmeans needs to calculate contrasts on the original design to see the factor structure
@@ -1830,119 +1855,6 @@ setdiff_list_combn <- function(l) {
     }
   }
   return(invisible(NULL))
-}
-
-#' Function to generate a run_data object from a BIDS-compliant folder
-#' @param bids_dir a directory containing BIDS-compliant processed data for analysis
-#' @param modality the subfolder within \code{bids_dir} that contains data of a certain modality.
-#'   Almost always 'func', which is the default.
-#' @param type at present, always 'task' to denote this part of the BIDS filename... Not totally sure what else it could be
-#' @param task_name the name of the task, which is appended with \code{type}
-#' @param suffix an optional suffix in the expected filename (just before the file extension)
-#' @return a data.frame containing all run_nifti and confound_input_file results for subjects in the folder
-#' @details The files should generally have a name like
-#'   sub-220256_task-ridl3_space-MNI152NLin2009cAsym_desc-preproc_bold_postprocessed.nii.gz
-#'   and be located in a folder like: /proj/mnhallqlab/proc_data/sub-220256/func/
-#'   where 'func' is the \code{modality}, 'task' is the \code{type}, 'ridl' is the \code{task_name}, and
-#'   '_postprocessed' is the \code{suffix}.
-#' @importFrom dplyr bind_rows
-#' @export
-generate_run_data_from_bids <- function(bids_dir, modality="func", type="task", task_name="ridl", suffix="_postprocessed", anat_root=NULL, fmap_root=NULL) {
-  checkmate::assert_directory_exists(bids_dir)
-  checkmate::assert_string(modality)
-  checkmate::assert_string(type)
-  checkmate::assert_string(task_name)
-  checkmate::assert_string(suffix, null.ok=TRUE)
-  sub_dirs <- grep("^.*/?sub-", list.dirs(bids_dir, recursive = FALSE), value = TRUE)
-
-  slist <- lapply(sub_dirs, function(ss) {
-    id <- sub("^sub-", "", basename(ss))
-    mr_dir <- ss
-
-    if (is.null(anat_root)) anat_dir <- file.path(ss, "anat")
-    else anat_dir <- file.path(anat_root, basename(ss), "anat")
-
-    if (dir.exists(anat_dir)) {
-      t1w <- Sys.glob(glue("{anat_dir}/sub-{id}*_T1w.nii.gz"))
-      if (length(t1w) > 1L) {
-        warning(glue("Using first of multiple T1w files: {paste(t1w, collapse=', ')}"))
-        t1w <- t1w[1L]
-      } else if (length(t1w) == 0L) {
-        t1w <- NA_character_
-      }
-    } else {
-      t1w <- NA_character_
-    }
-
-    # this is weakly developed -- works for A>>P and P>>A spin echos only
-    if (is.null(fmap_root)) fmap_dir <- file.path(ss, "fmap")
-    else fmap_dir <- file.path(fmap_root, basename(ss), "fmap")
-
-    if (dir.exists(fmap_dir)) {
-      se_pos <- Sys.glob(glue("{fmap_dir}/sub-{id}*-{task_name}_dir-PA*.nii.gz"))
-       if (length(se_pos) > 1L) {
-        warning(glue("Using first of multiple SE P>>A files: {paste(se_pos, collapse=', ')}"))
-        se_pos <- se_pos[1L]
-      } else if (length(se_pos) == 0L) {
-        se_pos <- NA_character_
-      }
-
-      se_neg <- Sys.glob(glue("{fmap_dir}/sub-{id}*-{task_name}_dir-AP*.nii.gz"))
-      if (length(se_neg) > 1L) {
-        warning(glue("Using first of multiple SE A>>P files: {paste(se_neg, collapse=', ')}"))
-        se_neg <- se_neg[1L]
-      } else if (length(se_neg) == 0L) {
-        se_neg <- NA_character_
-      }
-    } else {
-      se_pos <- NA_character_
-      se_neg <- NA_character_
-    }
-
-    expect_dir <- file.path(ss, modality)
-    if (!checkmate::test_directory_exists(expect_dir)) {
-      warning(glue("Cannot find expected modality directory: {expect_dir}"))
-      return(NULL)
-    }
-
-    # I wonder if nii_files and confound_files could diverge in order, become mismatched
-    nii_files <- Sys.glob(glue("{expect_dir}/sub*_{type}-{task_name}*{suffix}.nii.gz"))
-    if (length(nii_files) == 0L) {
-      warning(glue("No NIfTI file matches in: {expect_dir}"))
-      return(NULL)
-    }
-
-    sbref_files <- Sys.glob(glue("{expect_dir}/sub*_{type}-{task_name}*sbref.nii.gz"))
-
-    if (length(sbref_files) > 0L && length(nii_files) != length(sbref_files)) {
-      warning(glue("Cannot align nifti and sbref files for {expect_dir}"))
-      return(NULL)
-    } else if (length(sbref_files) == 0L) {
-      sbref_files <- NA_character_
-    }
-
-    confound_files <- Sys.glob(glue("{expect_dir}/sub*_{type}-{task_name}*-confounds*.tsv"))
-
-    if (length(confound_files) > 0L && length(nii_files) != length(confound_files)) {
-      warning(glue("Cannot align nifti and confound files for {expect_dir}"))
-      return(NULL)
-    } else if (length(confound_files) == 0L) {
-      confound_files <- NA_character_
-    }
-
-    # if only one matching NIfTI is found, we likely have a single-run scenario and may not expect a run-<x> syntax
-    if (all(grepl(glue(".*sub-.*_{type}-{task_name}_run-\\d+.*"), nii_files, perl=TRUE))) {
-      run_number <- as.integer(sub(glue(".*sub-.*_{type}-{task_name}_run-(\\d+).*"), "\\1", nii_files, perl = TRUE))
-    } else if (length(nii_files) == 1L) {
-      run_number <- 1
-    } else {
-      warning(glue("Cannot parse run_number from these files: {paste(nii_files, collapse=' ')}"))
-    }
-
-    data.frame(id, task_name, mr_dir, run_number, run_nifti = nii_files, sbref_nifti = sbref_files, confound_input_file = confound_files, t1w, se_pos, se_neg)
-  })
-
-  dplyr::bind_rows(slist)
 }
 
 preprocess_all_functional <- function(run_df, output_directory = NULL, cleanup_failed = TRUE) {

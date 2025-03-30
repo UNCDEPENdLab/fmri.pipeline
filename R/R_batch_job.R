@@ -696,6 +696,18 @@ R_batch_sequence <- R6::R6Class("batch_sequence",
       # call generation steps for each job (mostly for testing)
       lapply(private$sequence_jobs, function(x) x$generate())
       return(self)
+    },
+    
+    #' @description Return a named vector of the job ids for all jobs in this sequence
+    get_job_ids = function() {
+      ids <- sapply(private$sequence_jobs, function(x) setNames(x$get_job_id(), x$job_name))
+      dupe_names <- duplicated(names(ids))
+      if (any(dupe_names)) {
+        nm <- paste(unique(names(ids)[dupe_names]), collapse=", ")
+        warning("The following sequence objects have identical names: ", nm, ". Check that you find the right id!")
+      }
+      
+      return(ids)
     }
   )
 )

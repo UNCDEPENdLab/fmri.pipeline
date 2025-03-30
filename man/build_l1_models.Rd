@@ -21,7 +21,7 @@ build_l1_models(
 }
 \arguments{
 \item{gpa}{a \code{glm_pipeline_arguments} object containing an analysis pipeline to which $l1_models
-shoudl be added. If $l1_models is already present, these will be amended.}
+should be added. If $l1_models is already present, these will be amended.}
 
 \item{trial_data}{a data.frame containing trial-level data for one or more subjects}
 

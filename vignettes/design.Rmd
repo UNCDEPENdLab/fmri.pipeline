@@ -222,12 +222,12 @@ These considerations are elaborated in Satterthwaite et al., 2013, NeuroImage an
 
 One way to control for head movement artifacts in GLMs is to include regressors in the design matrix that absorb all unique variance for a volume in which the participant moved her/his head. These regressors are sometimes called 'spike regressors' because they have a value of 1 at the moment of movement and values of 0 for all other volumes. This coding scheme leads the variance attributable to that volume to be captured by the spike regressor, as opposed to substantive regressors from the task. See Siegel et al., 2014, Human Brain Mapping, for additional details.
 
-In fmri.pipeline, spike regressors can be added by specifying a `$spike_volumes` expression in `$confound_settings`. This R expression is evaluated against the motion parameters for the subject, which can include any of the 24 possible motion parameters above plus the framewise displacement (called `FD` by the pipeline). Any volume for which the `$spike_volumes` expression is TRUE will yield a spike regressor to effectively censors that timepoint from estimates of other regressors.
+In fmri.pipeline, spike regressors can be added by specifying a `$spike_volumes` expression in `$confound_settings`. This R expression is evaluated against the motion parameters for the subject, which can include any of the 24 possible motion parameters above plus the framewise displacement (called `framewise_displacement` by the pipeline). Any volume for which the `$spike_volumes` expression is TRUE will yield a spike regressor to effectively censors that timepoint from estimates of other regressors.
 
 Notably, the expression can be amended to censor volumes that precede or follow the volume for which `$spike_volumes` was TRUE. For example, when a spike occurs, if you would like to remove the previous two volumes, as well as the following volume, you can use the syntax:
 
 ```
-gpa$confound_settings$spike_volumes <- "-2:1; FD > 0.9"
+gpa$confound_settings$spike_volumes <- "-2:1; framewise_displacement > 0.9"
 ```
 
 The expression preceding the semi-colon denotes which volumes around the spike should be censored. This expression uses R's vector notation, so
@@ -236,13 +236,13 @@ you can use a range like -1:1 (-1, 0, 1) or you can use a comma-separated list t
 If you do not provide a range expression, spike regressors will only be generated for volumes at which the spike occurred (0):
 
 ```
-gpa$confound_settings$spike_volumes <- "FD > 0.9"
+gpa$confound_settings$spike_volumes <- "framewise_displacement > 0.9"
 ```
 
 You can also provide multiple definitions for spikes, which will be evaluated and added to the confounds:
 
 ```
-gpa$confound_settings$spike_volumes <- c(fd0p9 = "-1,0; FD > 0.9", big_translate = "tx > 2 | ty > 2 | tz > 2")
+gpa$confound_settings$spike_volumes <- c(fd0p9 = "-1,0; framewise_displacement > 0.9", big_translate = "tx > 2 | ty > 2 | tz > 2")
 ```
 
 # Overview of GPA structure

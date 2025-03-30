@@ -2,14 +2,14 @@
 #'
 #' @param mobj \code{l1_model_spec} or \code{hi_model_spec} object
 #' @param signals a list of signals that provide information about regressor specification
-#' @param from_spec a list of settings for this model based on an external YAML/JSON specification file
+#' @param spec_list a list of settings for this model based on an external YAML/JSON specification file
 #' @keywords internal
 #' @author Michael Hallquist
 #' @importFrom magrittr %>%
 #' @importFrom emmeans emmeans emtrends
 #' @importFrom lgr get_logger
 #' @importFrom checkmate assert_multi_class assert_integerish
-specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
+specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
   checkmate::assert_multi_class(mobj, c("l1_model_spec", "l1_wi_spec", "hi_model_spec")) # verify that we have an object of known structure
   checkmate::assert_list(signals, null.ok = TRUE)
 
@@ -26,6 +26,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
   weights <- "cells"
   cat_vars <- c()
   cont_vars <- c()
+  delete <- c() # contrasts to be deleted based on user specification or redundancy
 
   # subfunction to populate contrast_spec and create $contrast_list from spec
   # uses lexical scope of specify_contrasts
@@ -39,6 +40,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     mobj$contrast_spec$weights <- weights
     mobj$contrast_spec$cat_vars <- cat_vars
     mobj$contrast_spec$regressors <- mobj$regressors
+    mobj$contrast_spec$delete <- delete
     mobj <- get_contrasts_from_spec(mobj)
   }
 
@@ -48,18 +50,81 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
   }
 
   prompt_contrasts <- FALSE
-  if (!is.null(from_spec)) {
-    if (!is.null(from_spec$contrasts$include_diagonal)) {
-      checkmate::assert_logical(from_spec$contrasts$include_diagonal, len = 1L)
-      include_diagonal <- from_spec$contrasts$include_diagonal
+  if (!is.null(spec_list)) {
+    if (!is.null(spec_list$diagonal)) {
+      checkmate::assert_logical(spec_list$diagonal, len = 1L)
+      include_diagonal <- spec_list$diagonal
     } else {
       lg$debug("In contrast specification from spec file, including diagonal contrasts by default")
       include_diagonal <- TRUE
     }
 
-    # still prompt for contrasts on yaml input since it doesn't ask about within-subjects factors etc.
-    # prompt_contrasts <- TRUE
+    if (!is.null(spec_list$cond_means)) {
+      checkmate::assert_character(spec_list$cond_means)
+      cond_means <- spec_list$cond_means
+    }
+
+    if (!is.null(spec_list$pairwise_diffs)) {
+      checkmate::assert_character(spec_list$pairwise_diffs)
+      pairwise_diffs <- spec_list$pairwise_diffs
+    }
+
+    if (!is.null(spec_list$cell_means)) {
+      checkmate::assert_logical(spec_list$cell_means, len = 1L)
+      cell_means <- spec_list$cell_means
+    }
+
+    if (!is.null(spec_list$overall_response)) {
+      checkmate::assert_logical(spec_list$overall_response, len = 1L)
+      overall_response <- spec_list$overall_response
+    }
+
+    if (!is.null(spec_list$simple_slopes)) {
+      # checkmate::assert_character(spec_list$simple_slopes)
+      simple_slopes <- spec_list$simple_slopes
+    }
+
+    if (!is.null(spec_list$weights)) {
+      checkmate::assert_string(spec_list$weights)
+      checkmate::assert_subset(spec_list$weights, c("equal", "cells", "proportional", "flat"))
+      weights <- spec_list$weights
+    } else {
+      lg$debug("In contrast specficiation from spec file, setting emmeans weights to 'cells' by default")
+      weights <- "cells"
+    }
+
+    if (!is.null(spec_list$delete)) {
+      checkmate::assert_character(spec_list$delete)
+      delete <- spec_list$delete
+    }
+
+    # populate categorical vars for within-subject contrast and higher-level models
+    if (inherits(mobj, c("l1_wi_spec", "hi_model_spec"))) {
+      term_labels <- attr(terms(mobj$lmfit), "term.labels") # names of regressors
+      dclass <- attr(mobj$lmfit$terms, "dataClasses")[term_labels] # omit response variable
+      cat_vars <- names(dclass[which(dclass %in% c("factor", "character"))])
+    }
+
+    # now handle population of within-subject contrasts (wi_models)
+
+    if (!is.null(spec_list$wi_contrasts)) {
+      checkmate::assert_list(spec_list$wi_contrasts)
+
+      for (ff in seq_along(spec_list$wi_contrasts)) {
+        sig <- names(spec_list$wi_contrasts)[ff]
+
+        wi_obj <- list(
+          level = 1L, lmfit = signals[[sig]]$wi_model, signal_name = sig,
+          wi_factors = signals[[sig]]$wi_factors, wi_formula = signals[[sig]]$wi_formula
+        )
+        class(wi_obj) <- c("list", "l1_wi_spec")
+
+        mobj$wi_models[[sig]] <- specify_contrasts(wi_obj, spec_list = spec_list$wi_contrasts[[ff]])
+      }
+    }
+
     mobj <- populate_mobj_contrasts(mobj)
+
   } else if (is.null(mobj$contrast_spec)) {
     mobj$contrast_spec <- list()
     prompt_contrasts <- TRUE
@@ -81,25 +146,21 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     return(mobj)
   }
 
-  # handle diagonal contrasts
+  # handle diagonal contrasts and L1 within-factor modulation of signals
   if (inherits(mobj, "l1_wi_spec")) {
     include_diagonal <- FALSE # for within-subject factor, no need to re-ask about diagonal contrasts for a given factor
     cat("\n\n---------\n")
     cat(glue("The signal {mobj$signal_name} is modulated by the following within-subject factors: {c_string(mobj$wi_factors)}.\n", .trim=FALSE))
     cat(glue("  Please specify contrasts for this signal based on this model: {deparse(mobj$wi_formula, width.cutoff=500)}.\n\n", .trim=FALSE))
-  } else {
-    include_diagonal <- menu(c("Yes", "No"), title = "Do you want to include diagonal contrasts for each regressor?")
-    include_diagonal <- ifelse(include_diagonal == 1L, TRUE, FALSE)
-  }
-
-  # in case of level 1 object, look for any within-subject factors and prompt for relevant contrasts of each
-  if (mobj$level == 1L && inherits(mobj, "l1_model_spec")) {
+  } else if (mobj$level == 1L && inherits(mobj, "l1_model_spec")) {
+    has_wi_contrasts <- FALSE # default overridden below if relevant
+    # in case of level 1 object, look for any within-subject factors and prompt for relevant contrasts of each
     if (is.null(signals)) {
       lg$warn("An L1 model has been passed to specify_contrasts without a signals list. Cannot check for within-subject factors.")
     } else {
       wi_factors <- sapply(mobj$signals, function(x) !is.null(signals[[x]]$wi_factors))
       if (any(wi_factors)) {
-        #setup models for each wi factor
+        # setup models for each wi factor
         for (ss in names(wi_factors)[wi_factors]) {
           wi_obj <- list(
             level = 1L, lmfit = signals[[ss]]$wi_model, signal_name = ss,
@@ -108,8 +169,25 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
           class(wi_obj) <- c("list", "l1_wi_spec")
           mobj$wi_models[[ss]] <- specify_contrasts(wi_obj)
         }
+        has_wi_contrasts <- sapply(mobj$wi_models, function(m) {
+          if (is.null(m$contrasts) || nrow(m$contrasts) == 0L) FALSE else TRUE
+        })
       }
     }
+
+    # add L1 diagonal contrasts automatically if there are no wi_factors or the user didn't ask for wi_contrasts
+    if (!any(has_wi_contrasts)) {
+      lg$info("Automatically adding diagonal contrasts")
+      include_diagonal <- TRUE
+    } else {
+      # if we have wi contrasts, then prompt whether we also want overall diagonal contrasts
+      include_diagonal <- menu(c("Yes", "No"), title = "Do you want to include diagonal contrasts for each regressor?")
+      include_diagonal <- ifelse(include_diagonal == 1L, TRUE, FALSE)
+    }
+  } else {
+    # at l2 and l3, ask about diagonal contrasts    
+    include_diagonal <- menu(c("Yes", "No"), title = "Do you want to include diagonal contrasts for each regressor?")
+    include_diagonal <- ifelse(include_diagonal == 1L, TRUE, FALSE)
   }
 
   format_prompt <- function(vars, signal_name=NULL) {
@@ -154,7 +232,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     )
     if (is.null(weights)) weights <- "cells"
 
-    # handle model-predicted means for each level of each factor
+    # handle model-predicted means for each level of each factor (marginalizing over any other factors)
     for (vv in seq_along(cat_vars)) {
       title_str <- paste0(
         "Do you want to include model-predicted means for ",
@@ -166,19 +244,35 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
       if (isTRUE(ii)) {
         cond_means <- c(cond_means, cat_vars[vv])
       }
+    }
 
+    # for categorical variables and their interactions, ask about pairwise differences, computed by emmeans
+    emm_vars <- cat_vars
+    if (any(int_terms > 1)) {
+      cat_int <- sapply(term_labels[which(int_terms > 1)], function(tt) {
+        term_split <- strsplit(tt, ":")[[1]] # split terms on colon
+        all(term_split %in% cat_vars)
+      })
+
+      if (any(cat_int)) {
+        emm_vars <- c(emm_vars, names(cat_int)[cat_int])
+      }
+    }
+    
+    # handle pairwise differences for all factors (and interactions, if specified)
+    for (vv in seq_along(emm_vars)) {
       title_str <- paste0(
         "Do you want to include pairwise differences for ",
-        ifelse(inherits(mobj, "l1_wi_spec"), paste(cat_vars[vv], "modulation of", mobj$signal_name), cat_vars[vv]), "?"
+        ifelse(inherits(mobj, "l1_wi_spec"), paste(emm_vars[vv], "modulation of", mobj$signal_name), emm_vars[vv]), "?"
       )
       ii <- menu(c("Yes", "No"), title = title_str)
       ii <- ifelse(ii == 1L, TRUE, FALSE)
       if (isTRUE(ii)) {
-        pairwise_diffs <- c(pairwise_diffs, cat_vars[vv])
+        pairwise_diffs <- c(pairwise_diffs, emm_vars[vv])
       }
     }
 
-    # handle model-predicted means for each cell of a factorial design
+    # handle model-predicted means for each *cell* of a factorial design
     if (length(cat_vars) > 1L) {
       title_str <- glue(
         ifelse(inherits(mobj, "l1_wi_spec"), "For {mobj$signal_name}, do ", "Do "),
@@ -218,14 +312,11 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     }
   }
 
-
   # populate contrast specification object
   mobj <- populate_mobj_contrasts(mobj)
 
   cmat_base <- matrix(numeric(0), nrow = 0, ncol = length(mobj$regressors), dimnames = list(NULL, mobj$regressors))
   cmat <- mobj$contrasts
-
-
 
   # N.B. For now, hand off full model matrix and contrasts to fMRI fitting function (e.g., feat) and
   # let it handle the rank degeneracy. We may need to come back here and drop bad contrasts and use
@@ -239,7 +330,8 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
       "You will probably need to fix the contrasts by hand!",
       sep = "\n"
     )
-    has_alias <- which(apply(cmat[, mobj$aliased_terms], 1, function(x) {
+
+    has_alias <- which(apply(cmat[, mobj$aliased_terms, drop=F], 1, function(x) {
       any(abs(x - 0) > 1e-5)
     }))
 
@@ -249,7 +341,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, from_spec = NULL) {
     }
 
     # Not used at present
-    cmat_reduce <- cmat[, !colnames(cmat) %in% mobj$aliased_terms]
+    cmat_reduce <- cmat[, !colnames(cmat) %in% mobj$aliased_terms, drop=F]
     # write.csv(cmat_reduce, file = "cmat_test_reduce.csv")
   }
 

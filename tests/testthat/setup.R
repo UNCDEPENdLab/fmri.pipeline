@@ -115,9 +115,9 @@ build_gpa_base <- function(
     subject_data_file = "sample_subject_data.csv",
     cache_file = "gpa_base.rds",
     scheduler = "slurm", drop_volumes = 2,
-    exclude_run = "max(FD) > 5 | sum(FD > .9)/length(FD) > .10",
+    exclude_run = "max(framewise_displacement) > 5 | sum(framewise_displacement > .9)/length(framewise_displacement) > .10",
     exclude_subject = "n_good_runs < 4",
-    truncate_run = "(FD > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
+    truncate_run = "(framewise_displacement > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
     spike_volumes = NULL) {
 
   # Read in trial, run, and subject dataframes

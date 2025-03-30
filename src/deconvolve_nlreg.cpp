@@ -53,10 +53,10 @@ arma::mat deconvolve_nlreg(arma::mat BOLDobs, const arma::vec& kernel,
 
   //double sd_i;
   //double m_i;
-
-  arma::vec col_means = arma::mean(BOLDobs);
-  //cout << "means" << col_means << endl;
-
+  
+  arma::rowvec col_means = arma::mean(BOLDobs, 0);
+  // Rcout << "column means" << col_means << endl;
+  
   if (normalize == true) {
     //cout << "normalizing data" << endl;
     // for (int i=0; i < P; i++) {
@@ -65,8 +65,8 @@ arma::mat deconvolve_nlreg(arma::mat BOLDobs, const arma::vec& kernel,
     //   m_i = arma::mean(col_i);
     // }
 
-    arma::vec col_sds = arma::stddev(BOLDobs);
-    //cout << "sds" << col_sds << endl;
+    arma::rowvec col_sds = arma::stddev(BOLDobs, 0);
+    // Rcout << "column sds" << col_sds << endl;
 
     BOLDobs.each_row() -= col_means; //subtract means
     BOLDobs.each_row() /= col_sds; //divide by sds
@@ -166,7 +166,7 @@ arma::mat deconvolve_nlreg(arma::mat BOLDobs, const arma::vec& kernel,
 
     decon_results.col(i) = encoding;
   }
-
+  
   if (trim_kernel == true) {
     // remove the initial timepoints corresponding to HRF (so that returned signal matches in time and length)
     decon_results.shed_rows(0, K-2);
@@ -174,3 +174,23 @@ arma::mat deconvolve_nlreg(arma::mat BOLDobs, const arma::vec& kernel,
 
   return(decon_results);
 }
+
+/*** R
+library(neuRosim)
+TR=1
+design <- simprepTemporal(totaltime=200, onsets=seq(1,200,40),
+                          durations=20, effectsize=1, TR=TR, hrf="double-gamma")
+ts <- simTSfmri(design=design, SNR=4, noise="white")
+kernel <- fmri.pipeline:::spm_hrf(TR)$hrf
+
+r_decon <- deconvolve_nlreg(BOLDobs = ts, kernel=kernel, normalize=TRUE, beta=60)
+lines(r_decon, type="l", col="orange")
+# r_decon <- deconvolve_nlreg_r(BOLDobs = ts, kernel=kernel, normalize=TRUE, beta=1) #original
+# lines(r_decon, type="l", col="green")
+
+lines(ovec, type="l", col="red")
+
+tsmat <- do.call(cbind, lapply(1:50, function(x) { ts }))
+system.time(decon_mat <- deconvolve_nlreg(BOLDobs = tsmat, kernel=kernel, normalize=TRUE, trim_kernel = TRUE, beta=60))
+
+*/

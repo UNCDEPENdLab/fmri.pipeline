@@ -153,16 +153,24 @@ fit_wi_model <- function(sobj) {
   }
 
   wi_df <- sobj$value %>%
-    mutate(dummy = rnorm(n())) %>%
+    mutate(dummy = 1:n()) %>%
     mutate(across(!!sobj$wi_factors, factor)) # always force wi_factors to be stored as factor to make contrasts straightforward
-  ffit <- update.formula(sobj$wi_formula, "dummy ~ .")
-
+  
+  ffit <- update.formula(as.formula(sobj$wi_formula), "dummy ~ .")
   sobj$wi_model <- lm(ffit, wi_df)
   return(sobj)
-
 }
   
-
+#' S3 method to convert formula to character
+#' @param x a formula to convert to character
+#' @param ... not used
+#' @details copied from formula.tools to avoid NAMESPACE import
+#' @export
+as.character.formula <- function(x, ...) { 
+  form <- paste( deparse(x), collapse=" " )
+  form <- gsub( "\\s+", " ", form, perl=FALSE ) # remove multiple spaces
+  return(form)
+}
 
 #obsolete
 # # helper function to expand beta series
