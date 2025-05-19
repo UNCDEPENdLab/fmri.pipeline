@@ -8,15 +8,20 @@
 submit_tracking_query = function(str, sqlite_db, param = NULL) {
   # previously called submit_sqlite()
   checkmate::assert_string(str)
-
-  # check if tracking db exists; if not, create it
-  if (!checkmate::test_file_exists(sqlite_db)) {
+  
+  # check if tracking table exists in sqlite_db; if not, create it
+  con <- dbConnect(RSQLite::SQLite(), sqlite_db) # establish connection
+  sqliteSetBusyHandler(con, 10 * 1000) # busy_timeout of 10 seconds
+  table_exists <- dbExistsTable(con, "job_tracking")
+  dbDisconnect(con)
+  
+  if (isFALSE(table_exists)) {
     create_tracking_db(sqlite_db)
   }
-
+  
   # open sqlite connection and execute query
   submit_sqlite_query(str = str, sqlite_db = sqlite_db, param = param)
-
+  
 }
 
 #' Internal helper function to reset tracking SQLite database
