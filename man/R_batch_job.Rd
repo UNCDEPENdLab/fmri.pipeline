@@ -15,13 +15,16 @@ Description of R_batch_job R6 class
 
 \item{\code{depends_on_parents}}{logical or character string indicating whether this job should wait until
 \code{parent_jobs} complete. If a character string is passed, it indicates which named elements of
-\code{parent_jobs} are must complete before this job begins.}
+\code{parent_jobs} must complete before this job begins.}
 
 \item{\code{job_name}}{a user-defined name for the job used for specifying job dependencies and informative job
 status queries on a job scheduler}
 
 \item{\code{wait_for_children}}{if TRUE, code will be inserted to wait for all jobs in a vector called
 \code{child_job_ids} to finish before the batch exits. It's up to your code to use this variable name}
+
+\item{\code{all_children_successful}}{if TRUE, all jobs in vector \code{child_job_ids} 
+must be successful for this job to finish (see \code{wait_for_children} field)}
 
 \item{\code{wall_time}}{The amount of time requested on the job scheduler, following d-hh:mm:ss format. Defaults to
 "4:00:00", which is 4 hours.}
@@ -42,7 +45,7 @@ to the batch job at execution}
 \item{\code{output_rdata_file}}{The name of the environment to be saved at the end of the R batch execution, which can then
 be loaded by subsequent jobs.}
 
-\item{\code{sqlite_db}}{Not used yet, but will be used for job tracking in future}
+\item{\code{sqlite_db}}{File path to tracking SQLite database}
 
 \item{\code{batch_id}}{Not currently used, but intended for job sequence tracking}
 
@@ -72,7 +75,7 @@ This is mostly relevant to the 'local' scheduler.}
 \item{\code{print_session_info}}{If TRUE, print the `sessionInfo()` and `Sys.info()` when the job starts. Useful for debugging
 problems with the compute environment or R installation.}
 
-\item{\code{print_environment}}{If `TRUE``, print the `Sys.getenv()` when the job starts. This can produce a lot of output,
+\item{\code{print_environment}}{If `TRUE`, print the `Sys.getenv()` when the job starts. This can produce a lot of output,
 but can be useful if certain environment variables are not being found when your job runs, leading it to fail.}
 
 \item{\code{sqlite_cache_obj}}{If `TRUE`, copy this object into the SQLite database at submission time. This is mostly useful for
@@ -116,6 +119,7 @@ Create a new R_batch_job object for execution on an HPC cluster
   r_packages = NULL,
   scheduler = NULL,
   wait_for_children = NULL,
+  all_children_successful = NULL,
   input_rdata_file = NULL,
   input_objects = NULL,
   output_rdata_file = NULL,
@@ -163,6 +167,8 @@ job begins.}
 \item{\code{scheduler}}{The scheduler to be used for this compute. Options are 'slurm', 'torque', or 'local'.}
 
 \item{\code{wait_for_children}}{If TRUE, do not end this job until all child jobs have completed}
+
+\item{\code{all_children_successful}}{If TRUE, don't count this job as successful unless all child jobs are successful}
 
 \item{\code{input_rdata_file}}{The name of the environment to be loaded at the beginning of the R batch prior to executing code}
 
