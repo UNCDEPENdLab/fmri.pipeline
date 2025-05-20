@@ -610,7 +610,8 @@ R_batch_job <- R6::R6Class("batch_job",
           r_code <- capture.output(cat(as.character(r_code), sep = "\n"))
         }
         cloned$r_code <- r_code
-        if (!is.null(post_children_r_code)) {
+      }
+      if (!is.null(post_children_r_code)) {
         checkmate::assert_multi_class(post_children_r_code, c("expression", "character"))
         if (is.expression(post_children_r_code)) { # expand post_children_r_code expression as character vector
           post_children_r_code <- capture.output(cat(as.character(post_children_r_code), sep = "\n"))
