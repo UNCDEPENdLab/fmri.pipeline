@@ -87,12 +87,13 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   #subfunction to handle variable=value and variable combinations
   paste_args <- function(str_vec) {
     nms <- names(str_vec)
+    stopifnot(!is.null(nms))
     sapply(seq_along(str_vec), function(x) {
       if (is.na(str_vec[x])) {
         return(nms[x]) #just the name of the env variable (forwards from environment)
       } else {
-        #force argument to be quoted to avoid problems with spaces
-        val <- ifelse(grepl("^[\"'].*[\"']$", str_vec[x], perl=TRUE), str_vec[x], paste0("\"", str_vec[x], "\""))
+        # force argument to be quoted to avoid problems with spaces
+        val <- shQuote(str_vec[x], type = "sh")
         return(paste0(nms[x], "=", val))
       }
     })
