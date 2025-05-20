@@ -145,13 +145,15 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     }
 
     # for direct execution, need to pass environment variables by prepending
-    if (isTRUE(echo)) cat(paste(env_variables, bin, script), "\n")
+    cmd <- paste(env_variables, bin, script)
+    if (isTRUE(echo)) cat(cmd, "\n") # echo command to terminal
     # submit the job script and return the jobid by forking to background and returning PID
-    jobres <- system(paste(env_variables, bin, script, ">", sub_stdout, "2>", sub_stderr, "& echo $! >", sub_pid), wait = FALSE)
+    jobres <- system(paste(cmd, ">", sub_stdout, "2>", sub_stderr, "& echo $! >", sub_pid), wait = FALSE)
     Sys.sleep(.05) #sometimes the pid file is not in place when file.exists executes -- add a bit of time to ensure that it reads
     jobid <- if (file.exists(sub_pid)) scan(file = sub_pid, what = "char", sep = "\n", quiet = TRUE) else ""
   } else {
-    if (isTRUE(echo)) cat(paste(scheduler, sched_args, script), "\n")
+    cmd <- paste(scheduler, sched_args, script)
+    if (isTRUE(echo)) cat(cmd, "\n")
     # submit the job script and return the jobid
     jobres <- system2(scheduler, args = paste(sched_args, script), stdout = sub_stdout, stderr = sub_stderr)
     jobid <- if (file.exists(sub_stdout)) scan(file = sub_stdout, what = "char", sep = "\n", quiet = TRUE) else ""
@@ -188,11 +190,13 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 
   if (!is.null(wait_jobs)) {
     # add any parent jobs using the wait_jobs argument (defaults to last parent id in list)
-    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = wait_jobs[length(wait_jobs)]) 
+    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = wait_jobs[length(wait_jobs)])
   } else if (!is.null(tracking_args$parent_job_id)) {
     # in the case that a parent job id is passed in through the tracking_args list
-    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = tracking_args$parent_job_id) 
+    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = tracking_args$parent_job_id)
   }
+  
+  attr(jobid, "cmd") <- cmd # add the command executed as an attribute
 
   return(jobid)
 }
