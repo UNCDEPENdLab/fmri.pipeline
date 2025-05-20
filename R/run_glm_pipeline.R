@@ -42,7 +42,8 @@ l3_model_names = "prompt", glm_software = NULL) {
     mem_total = "16G",
     r_code = "gpa <- finalize_pipeline_configuration(gpa)", r_packages = "fmri.pipeline",
     batch_code = get_compute_environment(gpa),
-    scheduler_options = gpa$parallel$sched_args
+    scheduler_options = gpa$parallel$sched_args,
+    sqlite_db = gpa$output_locations$sqlite_db
   )
 
   if (is.null(gpa$finalize_complete) || isFALSE(gpa$finalize_complete)) {
@@ -78,7 +79,8 @@ l3_model_names = "prompt", glm_software = NULL) {
       l1_execute_batch <- f_batch$copy(
         job_name = "run_l1", n_cpus = 1,
         wall_time = gpa$parallel$fsl$l1_feat_alljobs_time,
-        r_code = "child_job_ids <- run_feat_sepjobs(gpa, level = 1L)" # execute l1 jobs
+        r_code = "child_job_ids <- run_feat_sepjobs(gpa, level = 1L)", # execute l1 jobs
+        post_children_r_code = "gpa <- refresh_l1_status(gpa, level = 1L)" # refresh l1 feat status after all jobs complete
       )
 
       l1_execute_batch$depends_on_parents <- "setup_l1"

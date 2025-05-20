@@ -47,7 +47,8 @@
 #' @export
 cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
                            env_variables=NULL, export_all=FALSE, echo=TRUE, fail_on_error=FALSE, 
-                           wait_jobs=NULL, wait_signal="afterok", repolling_interval=60) {
+                           wait_jobs=NULL, wait_signal="afterok", repolling_interval=60, 
+                           tracking_sqlite_db=NULL, tracking_args=list()) {
 
   checkmate::assert_string(script)
   checkmate::assert_file_exists(script)
@@ -56,6 +57,10 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   checkmate::assert_logical(export_all, max.len = 1L)
   checkmate::assert_logical(echo, max.len = 1L)
   checkmate::assert_logical(fail_on_error, max.len=1L)
+  if (is.character(tracking_args) || is.numeric(tracking_args)) tracking_args <- as.list(tracking_args) # coerce tracking args to list
+  if (length(tracking_args) > 0 && is.null(tracking_sqlite_db)) {
+    warning("Tracking arguments provided to `cluster_job_submit` but `tracking_sqlite_db` is NULL")
+  }
 
   if (scheduler %in% c("torque", "qsub")) {
     scheduler <- "qsub" # simpler internal tracking
@@ -82,12 +87,13 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   #subfunction to handle variable=value and variable combinations
   paste_args <- function(str_vec) {
     nms <- names(str_vec)
+    stopifnot(!is.null(nms))
     sapply(seq_along(str_vec), function(x) {
       if (is.na(str_vec[x])) {
         return(nms[x]) #just the name of the env variable (forwards from environment)
       } else {
-        #force argument to be quoted to avoid problems with spaces
-        val <- ifelse(grepl("^[\"'].*[\"']$", str_vec[x], perl=TRUE), str_vec[x], paste0("\"", str_vec[x], "\""))
+        # force argument to be quoted to avoid problems with spaces
+        val <- shQuote(str_vec[x], type = "sh")
         return(paste0(nms[x], "=", val))
       }
     })
@@ -135,16 +141,19 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     if (!is.null(wait_jobs)) {
       message("Waiting for the following jobs to finish: ", paste(wait_jobs, collapse=","))
       wait_for_job(wait_jobs, repolling_interval = repolling_interval, scheduler = scheduler)
+      # ZV: grab return code here for parent job failing?
     }
 
     # for direct execution, need to pass environment variables by prepending
-    if (isTRUE(echo)) cat(paste(env_variables, bin, script), "\n")
+    cmd <- paste(env_variables, bin, script)
+    if (isTRUE(echo)) cat(cmd, "\n") # echo command to terminal
     # submit the job script and return the jobid by forking to background and returning PID
-    jobres <- system(paste(env_variables, bin, script, ">", sub_stdout, "2>", sub_stderr, "& echo $! >", sub_pid), wait = FALSE)
+    jobres <- system(paste(cmd, ">", sub_stdout, "2>", sub_stderr, "& echo $! >", sub_pid), wait = FALSE)
     Sys.sleep(.05) #sometimes the pid file is not in place when file.exists executes -- add a bit of time to ensure that it reads
     jobid <- if (file.exists(sub_pid)) scan(file = sub_pid, what = "char", sep = "\n", quiet = TRUE) else ""
   } else {
-    if (isTRUE(echo)) cat(paste(scheduler, sched_args, script), "\n")
+    cmd <- paste(scheduler, sched_args, script)
+    if (isTRUE(echo)) cat(cmd, "\n")
     # submit the job script and return the jobid
     jobres <- system2(scheduler, args = paste(sched_args, script), stdout = sub_stdout, stderr = sub_stderr)
     jobid <- if (file.exists(sub_stdout)) scan(file = sub_stdout, what = "char", sep = "\n", quiet = TRUE) else ""
@@ -165,7 +174,29 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     }
   } else {
     jobid <- sub("Submitted batch job ", "", jobid, fixed = TRUE) # replace irrelevant details if needed
+    if (!is.null(tracking_args)) tracking_args$status <- "QUEUED" # on successful submission, tracking status defaults to "QUEUED"
   }
+
+  if (!is.null(tracking_args)) {
+    # populate tracking arguments that are undefined and can be defined at this point
+    tracking_args <- populate_list_arg(tracking_args, "batch_file", script)
+    tracking_args <- populate_list_arg(tracking_args, "scheduler", scheduler)
+    tracking_args <- populate_list_arg(tracking_args, "scheduler_options", sched_args, append = TRUE)
+  }
+
+  # once a job_id has been generated, we add it to the tracking db
+  # if a job has a NULL id or the tracking_sqlite_db arg is NULL, the function will return invisible NULL
+  insert_tracked_job(sqlite_db = tracking_sqlite_db, job_id = jobid, tracking_args = tracking_args)
+
+  if (!is.null(wait_jobs)) {
+    # add any parent jobs using the wait_jobs argument (defaults to last parent id in list)
+    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = wait_jobs[length(wait_jobs)])
+  } else if (!is.null(tracking_args$parent_job_id)) {
+    # in the case that a parent job id is passed in through the tracking_args list
+    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = tracking_args$parent_job_id)
+  }
+  
+  attr(jobid, "cmd") <- cmd # add the command executed as an attribute
 
   return(jobid)
 }

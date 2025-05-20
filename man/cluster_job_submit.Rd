@@ -16,7 +16,9 @@ cluster_job_submit(
   fail_on_error = FALSE,
   wait_jobs = NULL,
   wait_signal = "afterok",
-  repolling_interval = 60
+  repolling_interval = 60,
+  tracking_sqlite_db = NULL,
+  tracking_args = list()
 )
 }
 \arguments{

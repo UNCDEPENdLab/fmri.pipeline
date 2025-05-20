@@ -22,6 +22,11 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   lg <- lgr::get_logger(paste0("glm_pipeline/l", level, "_estimation"))
   lg$set_threshold(gpa$lgr_threshold)
 
+  # retreive sqlite_db
+  tracking_sqlite_db <- gpa$output_locations$sqlite_db
+  # retrieve cmd line update function
+  upd_job_status_path <- system.file("bin/upd_job_status.R", package = "fmri.pipeline")
+
   # TODO: support named subsetting in model_names, like list(l1_model="pe_only", l2_model=c("l2_1", "l2_2"))
   # level-specific copy-paste is a bit clunky here, but at least it's clear...
   if (level == 1) {
@@ -163,7 +168,8 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "",
       get_compute_environment(gpa, "fsl"),
       "",
-      "cd $SLURM_SUBMIT_DIR"
+      "cd $SLURM_SUBMIT_DIR",
+      "job_id=$SLURM_JOB_ID"
     )
 
   } else if (gpa$scheduler == "torque") {
@@ -179,7 +185,8 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "",
       get_compute_environment(gpa, "fsl"),
       "",
-      "cd $PBS_O_WORKDIR"
+      "cd $PBS_O_WORKDIR",
+      "job_id=$PBS_JOBID"
     )
   }
 
@@ -234,8 +241,11 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "function feat_killed() {",
       "  kill_time=$( date )",
       "  echo $kill_time > \"${odir}/.feat_fail\"",
+      paste("  Rscript", upd_job_status_path, "--job_id" , "'$job_id'", "--sqlite_db", tracking_sqlite_db, "--status", "FAILED"),
+      "  exit 1",
       "}",
       "trap feat_killed SIGTERM",
+      paste("Rscript", upd_job_status_path, "--job_id" , "'$job_id'", "--sqlite_db", tracking_sqlite_db, "--status", "STARTED"),
       sep = "\n", file = outfile, append = TRUE
     )
     if (level == 3L) {
@@ -243,14 +253,36 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     } else {
       cat(paste("feat_runner", thisrun, "&"), file=outfile, sep="\n", append=TRUE)
     }
-    cat("wait\n\n", file=outfile, append=TRUE)
+    cat("wait",
+        paste("Rscript", upd_job_status_path, "--job_id" , "'$job_id'", "--sqlite_db", tracking_sqlite_db, "--status", "COMPLETED"),
+        "\n\n",
+        sep="\n", file=outfile, append=TRUE)
     if (level != 3L) {
       cat(paste(
         "bash", system.file("bash/gen_feat_reg_dir", package = "fmri.pipeline"),
         unique(dirname(thisrun))
       ), sep = "\n", file = outfile, append = TRUE)
     }
-    joblist[j] <- cluster_job_submit(outfile, scheduler=gpa$scheduler)
+
+    # gather tracking arguments
+    if (!is.null(tracking_sqlite_db)) {
+      tracking_args <- list(job_name = paste0("featsep_l", level, "_", j), 
+                            batch_directory = feat_output_directory,
+                            n_nodes = 1,
+                            n_cpus = feat_cpus,
+                            wall_time = feat_time,
+                            scheduler_options = gpa$parallel$sched_args)
+      if (level == 3) {
+        tracking_args$mem_total <- feat_memgb
+      } else {
+        tracking_args$mem_per_cpu <- feat_memgb
+      }
+      if (wait_for != "") tracking_args$parent_job_id <- wait_for
+    } else {
+      tracking_args = NULL
+    }
+
+    joblist[j] <- cluster_job_submit(outfile, scheduler = gpa$scheduler, tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args)
     #joblist[j] <- "dummy"
   }
 

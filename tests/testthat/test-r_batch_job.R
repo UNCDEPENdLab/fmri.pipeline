@@ -149,7 +149,7 @@ d_batch <- R_batch_job$new(
 )
 
 d_batch2 <- d_batch$copy(job_name = "test2")
-d_batch3 <- d_batch$copy(job_name = "test2")
+d_batch3 <- d_batch$copy(job_name = "test3")
 
 d_seq <- R_batch_sequence$new(
   d_batch, d_batch2, d_batch3
