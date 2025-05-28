@@ -80,7 +80,7 @@ l3_model_names = "prompt", glm_software = NULL) {
         job_name = "run_l1", n_cpus = 1,
         wall_time = gpa$parallel$fsl$l1_feat_alljobs_time,
         r_code = "child_job_ids <- run_feat_sepjobs(gpa, level = 1L)", # execute l1 jobs
-        post_children_r_code = "gpa <- refresh_l1_status(gpa, level = 1L)" # refresh l1 feat status after all jobs complete
+        post_children_r_code = "gpa <- refresh_feat_status(gpa, level = 1L)" # refresh l1 feat status after all jobs complete
       )
 
       l1_execute_batch$depends_on_parents <- "setup_l1"
