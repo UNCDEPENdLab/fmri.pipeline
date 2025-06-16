@@ -2,7 +2,7 @@
 % Please edit documentation in R/fsl_helper_functions.R
 \name{refresh_feat_status}
 \alias{refresh_feat_status}
-\title{small helper function to look at feat outputs and files to determine if execution is complete}
+\title{Helper function to look at feat outputs and files to determine if execution is complete}
 \usage{
 refresh_feat_status(gpa, level = 1L, lg = NULL)
 }
@@ -10,12 +10,13 @@ refresh_feat_status(gpa, level = 1L, lg = NULL)
 \item{gpa}{a \code{glm_pipeline_arguments object}}
 
 \item{level}{the level of analysis to be refreshed (1, 2, or 3)}
+
+\item{lg}{an optional lgr logger object used for logging}
 }
 \value{
 a modified copy of \code{gpa} with the feat columns of
   $l1_model_setup, $l2_model_setup, or $l3_model_setup refreshed
 }
 \description{
-small helper function to look at feat outputs and files to determine if execution is complete
+Helper function to look at feat outputs and files to determine if execution is complete
 }
-\keyword{internal}
