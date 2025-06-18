@@ -193,7 +193,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
           {
             load(bdm_out_file)
             if (!exists("d_obj") || is.null(d_obj)) {
-              lg$warning("Regenerating design because d_obj is missing/NULL in extant BDM file: %s.", bdm_out_file)
+              lg$warn("Regenerating design because d_obj is missing/NULL in extant BDM file: %s.", bdm_out_file)
               TRUE # regenerate
             } else {
               FALSE # use cache
