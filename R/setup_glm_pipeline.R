@@ -289,10 +289,37 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   if ("confound_input_file" %in% names(run_data)) run_data$confound_input_file <- as.character(run_data$confound_input_file)
 
   if (!is.null(l1_models)) {
-    if (checkmate::test_string(l1_models) && l1_models[1L] == "prompt") {
-      l1_models <- build_l1_models(trial_data = trial_data)
+    if (checkmate::test_string(l1_models)) {
+      if (l1_models == "prompt") l1_models <- build_l1_models(trial_data = trial_data)
+      else if (checkmate::test_file_exists(l1_models)) l1_models <- build_l1_models(from_spec_file = l1_models) # treat input as YAML spec file
+      else stop("Don't know how to interpret l1_models argument: ", l1_models)
     } else if (!checkmate::test_class(l1_models, "l1_model_set")) {
-      stop("l1_models argument is not of class l1_model_set. Use build_l1_model to create this.")
+      stop("l1_models argument is not of class l1_model_set. Use build_l1_models to create this.")
+    }
+  } # else allow nulls in case user wants to specify things later
+
+  if (!is.null(l2_models)) {
+    if (checkmate::test_string(l2_models)) {
+      if (l2_models == "prompt") {
+        l2_models <- build_l2_models(trial_data = trial_data)
+      } else if (checkmate::test_file_exists(l2_models)) {
+        l2_models <- build_l2_models(from_spec_file = l2_models)
+      } # treat input as YAML spec file
+      else {
+        stop("Don't know how to interpret l2_models argument: ", l2_models)
+      }
+    } else if (!checkmate::test_class(l2_models, "hi_model_set")) {
+      stop("l2_models argument is not of class hi_model_set. Use build_l2_models to create this.")
+    }
+  } # else allow nulls in case user wants to specify things later
+  
+  if (!is.null(l3_models)) {
+    if (checkmate::test_string(l3_models)) {
+      if (l3_models == "prompt") l3_models <- build_l3_models(trial_data = trial_data)
+      else if (checkmate::test_file_exists(l3_models)) l3_models <- build_l3_models(from_spec_file = l3_models) # treat input as YAML spec file
+      else stop("Don't know how to interpret l3_models argument: ", l3_models)
+    } else if (!checkmate::test_class(l3_models, "hi_model_set")) {
+      stop("l3_models argument is not of class hi_model_set. Use build_l3_models to create this.")
     }
   } # else allow nulls in case user wants to specify things later
 
