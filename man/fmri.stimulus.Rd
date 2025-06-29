@@ -6,10 +6,10 @@
 \usage{
 fmri.stimulus(
   n_vols = 1,
-  onsets = c(1),
-  durations = c(1),
-  values = c(1),
-  times = NULL,
+  onsets = NULL,
+  durations = NULL,
+  values = NULL,
+  units = "time",
   center_values = FALSE,
   rm_zeros = TRUE,
   convolve = TRUE,
@@ -29,14 +29,16 @@ fmri.stimulus(
 \arguments{
 \item{n_vols}{The number of volumes (scans) to be output in the convolved regressor}
 
-\item{onsets}{A vector of times (in scans) specifying event onsets}
+\item{onsets}{A vector of times (in volumes or seconds) specifying event onsets}
 
-\item{durations}{A vector of durations (in seconds) for each event}
+\item{durations}{A vector of durations (in volumes or seconds) for each event}
 
 \item{values}{A vector of parametric values used as regressor heights prior to convolution}
 
-\item{times}{A vector of times (in seconds) specifying event onsets. If times are passed in, the onsets
-argument (which is in scans) is ignored. That is, \code{onsets} and \code{times} are mutually exclusive.}
+\item{units}{Specifies the units of measurement for `onsets` and `durations`. If `"seconds"`,
+these are interpreted in terms of time in seconds. If `"volumes"`, onsets and durations are
+interpreted in terms of the volumes of the scan. Thus, an onset of `1` in volumes refers
+to time = 0s, and by extension, `time = (volume - 1)*tr`. Default: `"seconds"`.}
 
 \item{center_values}{Whether to demean values vector before convolution}
 
