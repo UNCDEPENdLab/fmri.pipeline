@@ -68,7 +68,7 @@ get_collin_events <- function(dmat) {
     custom_reg <- grep("^custom_", names(run))
     if (length(custom_reg) > 0L) { run <- run[-1*custom_reg]}
 
-    #check correlations among regressors for trial-wise estimates
+    # check correlations among regressors for trial-wise estimates
 
     #get the union of all trial numbers across regressors
     utrial <- sort(unique(unlist(lapply(run, function(regressor) { regressor[, "trial"]}))))
@@ -177,24 +177,28 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
     })
   } else {
     # Issue with convolution of each run separately is that the normalization and mean centering are applied within-run.
-    # In the case of EV, for example, this will always scale the regressor in terms of relative differences in value within
+    # In the case of expected value in a Q-learning model, for example, this will always scale the regressor in terms of relative differences in value within
     # run, but will fail to capture relative differences across run (e.g., if value tends to be higher in run 8 than run 1).
 
     dmat_sumruns <- lapply(1:dim(dmat)[2L], function(reg) {
-      thisreg <- dmat[, reg]
-      concattiming <- do.call(rbind, lapply(seq_along(thisreg), function(run) {
-        timing <- thisreg[[run]]
+      this_reg <- dmat[, reg]
+      concat_timing <- do.call(rbind, lapply(seq_along(this_reg), function(run) {
+        timing <- this_reg[[run]]
         timing[, "onset"] <- timing[, "onset"] + ifelse(run > 1, run_timing[run-1], 0)
         timing
       }))
 
+      attr(concat_timing, "event") <- attr(this_reg[[1]], "event")
+      attr(concat_timing, "physio_only") <- attr(this_reg[[1]], "physio_only")
+
       #concat runs of the ts_multiplier within the current regressor
-      concat_ts_multiplier <- do.call(c, bdm_args$ts_multiplier[[reg]])
+      this_ts_multiplier <- bdm_args$ts_multiplier[[reg]]
+      concat_ts_multiplier <- if (is.null(this_ts_multiplier)) NULL else do.call(c, this_ts_multiplier)
 
       #convolve concatenated events with hrf
-      all.convolve <- convolve_regressor(n_vols=sum(bdm_args$run_volumes), reg=concattiming, tr=bdm_args$tr,
+      all.convolve <- convolve_regressor(n_vols=sum(bdm_args$run_volumes), reg=concat_timing, tr=bdm_args$tr,
                          normalization=bdm_args$normalizations[reg], rm_zeros = bdm_args$rm_zeros[reg],
-                         center_values=bdm_args$center_values, convmax_1=bdm_args$convmax_1[j],
+                         center_values=bdm_args$center_values, convmax_1=bdm_args$convmax_1[reg],
                          demean_convolved = FALSE, high_pass=bdm_args$high_pass, convolve=convolve,
                          ts_multiplier=concat_ts_multiplier,
                          hrf_parameters = bdm_args$hrf_parameters, lg=lg)
@@ -283,27 +287,30 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
     stop(msg)
   }
 
+  event_name <- attr(reg, "event")
+  reg_name <- attr(reg, "reg_name")
+  physio_only <- ifelse(isTRUE(attr(reg, "physio_only")), TRUE, FALSE)
+
   # check for the possibility that the onset of an event falls after the number of good volumes in the run
   # if so, this should be omitted from the convolution altogether
   which_high <- (reg[, "onset"] / tr) >= n_vols
 
   if (any(which_high, na.rm=TRUE)) {
     if (isTRUE(convolve)) {
-      lg$warn("At least one event onset falls on or after last volume of run. Omitting this from model.")
+      lg$warn("At least one %s event onset for %s falls on or after last volume of run. Omitting this from model.", attr(reg, "event"), attr(reg, "reg_name"))
       lg$warn("%s", capture.output(print(reg[which_high, ])))
     }
 
-    r_orig <- reg
     reg <- reg[!which_high, , drop = FALSE] #this loses attributes, need to copy them over for code to work as expected
-    attr(reg, "event") <- attr(r_orig, "event")
-    attr(reg, "reg_name") <- attr(r_orig, "reg_name")
   }
 
   hrf_max <- NULL #only used for durmax_1 normalization
 
-  normeach <- FALSE #signals evtmax_1 scaling
+  normeach <- FALSE # indicates evtmax_1 scaling
   if (!convolve) {
-    normalize_hrf <- FALSE #irrelevant when we are not convolving
+    normalize_hrf <- FALSE # irrelevant when we are not convolving
+  } else if (physio_only) {
+    normalize_hrf <- FALSE # irrelevant for pure physio convolution (no events)
   } else if (normalization == "evtmax_1") {
     normalize_hrf <- TRUE
     normeach <- TRUE
@@ -323,22 +330,30 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
     normalize_hrf <- FALSE
   } else { stop("unrecognized normalization: ", normalization) }
 
-  #cleanup NAs and zeros in the regressor before proceeding with placing it onto the time grid
-  cleaned <- cleanup_regressor(reg[, "onset"], reg[, "duration"], reg[, "value"], rm_zeros = rm_zeros)
-  times <- cleaned$times; durations <- cleaned$durations; values <- cleaned$values
+  if (physio_only) {
+    times <- NULL
+    durations <- NULL
+    values <- NULL
+  } else {
+    # cleanup NAs and zeros in the regressor before proceeding with placing it onto the time grid
+    cleaned <- cleanup_regressor(reg[, "onset"], reg[, "duration"], reg[, "value"], rm_zeros = rm_zeros)
+    times <- cleaned$times
+    durations <- cleaned$durations
+    values <- cleaned$values
 
-  if (length(times) == 0L) {
-    lg$warn("No non-zero events for regressor to be convolved. Returning all-zero result for fMRI GLM.")
-    ret <- matrix(0, nrow=n_vols, ncol=1)
-    colnames(ret) <- attr(reg, "reg_name")
-    return(ret)
-  }
+    if (length(times) == 0L) {
+      lg$warn("No non-zero events for regressor to be convolved. Returning all-zero result for fMRI GLM.")
+      ret <- matrix(0, nrow = n_vols, ncol = 1)
+      colnames(ret) <- reg_name
+      return(ret)
+    }
 
-  # Handle mean centering of parametric values prior to convolution
-  # This is useful when one wishes to dissociate variance due to parametric modulation versus stimulus occurrence
-  # Don't demean a constant regressor such as an event regressor (all values = 1)
-  if (length(values) > 1L && !all(is.na(values)) && center_values && sd(values, na.rm=TRUE) > 1e-5) {
-    values <- values - mean(values, na.rm=TRUE)
+    # Handle mean centering of parametric values prior to convolution
+    # This is useful when one wishes to dissociate variance due to parametric modulation versus stimulus occurrence
+    # Don't demean a constant regressor such as an event regressor (all values = 1)
+    if (length(values) > 1L && !all(is.na(values)) && center_values && sd(values, na.rm = TRUE) > 1e-5) {
+      values <- values - mean(values, na.rm = TRUE)
+    }
   }
 
   # Split regressor into separate events prior to convolution
@@ -429,7 +444,7 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
   }
 
   #name the matrix columns appropriately
-  colnames(tc_conv) <- attr(reg, "reg_name")
+  colnames(tc_conv) <- reg_name
   return(tc_conv)
 }
 

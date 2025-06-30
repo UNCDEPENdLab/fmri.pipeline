@@ -50,8 +50,8 @@ test_that("fmri.stimulus returns correct unconvolved stimulus", {
 
 # 6. ts_multiplier only
 test_that("fmri.stimulus works with ts_multiplier only", {
-  tsvec <- (1:n_vols) / 90
-  stim <- fmri.stimulus(n_vols = n_vols, tr = TR, ts_multiplier = tsvec, convolve = TRUE)
-  expect_equal(length(stim), n_vols)
-  expect_true(any(stim != 0))
+    tsvec <- (1:n_vols) / 90
+    stim <- fmri.stimulus(n_vols = n_vols, tr = TR, ts_multiplier = tsvec, convolve = TRUE)
+    expect_equal(length(stim), n_vols)
+    expect_true(any(stim != 0))
 })

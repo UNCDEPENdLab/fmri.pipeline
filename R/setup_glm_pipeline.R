@@ -26,6 +26,11 @@ setOldClass(c("bg_subtrial_data", "data.frame"))
 #'   (i.e., a combined long format, where variables at different levels are all included as columns). In this case,
 #'   \code{setup_glm_pipeline} will detect which variables occur at each level and parse these accordingly into
 #'   \code{subject_data} and \code{run_data}.
+#' @param ppi_data An optional `data.frame` containing physiological signals (e.g., deconvolved time series in seed ROIs) that
+#'   can be used in setting up the level 1 models for a PPI analysis. Specifically, if this `data.frame` is provided, you will be
+#'   able to create interaction regressors for any convolved event-related signal and the columns of `ppi_data`. This data.frame
+#'   must include subject id, session id (if relevant), and run_number as columns. All additional columns should be eligible
+#'   physiological signals for PPI analysis.
 #' @param vm A named character vector containing key identifying columns in \code{subject_data} and
 #'   \code{trial_data}. Minimally, this vector should contain the elements 'id'
 #' @param bad_ids An optional vector of ids in \code{subject_data} and \code{trial_data} that should be excluded from analysis.
@@ -75,6 +80,7 @@ setOldClass(c("bg_subtrial_data", "data.frame"))
 setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm",
                                output_directory = file.path(getwd(), analysis_name),
                                subject_data = NULL, run_data = NULL, trial_data = NULL,
+                               ppi_data = NULL,
                                group_output_directory = "default",
                                output_locations = "default",
                                vm = c(
@@ -193,12 +199,12 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   run_data <- validate_input_data(run_data, vm, lg, level="run")
 
   # handle setup of TR as global versus run-level
-  if (is.null(tr) && is.null(run_data$tr)) {
+  if (is.null(tr) && is.null(run_data[["tr"]])) {
     stop("A TR was not provided in the setup_glm_pipeline call or in run_data. Please provide one or the other.")
-  } else if (!is.null(tr) && is.null(run_data$tr)) {
+  } else if (!is.null(tr) && is.null(run_data[["tr"]])) {
     # single TR applies to all runs. Copy it to run_data as a variable
     run_data$tr <- tr
-  } else if (!is.null(tr) && !is.null(run_data$tr)) {
+  } else if (!is.null(tr) && !is.null(run_data[["tr"]])) {
     warning(
       "TR provided in both the setup_glm_pipeline call and in run_data. ",
       "We will use the values in run_data and ignore the tr argument to setup_glm_pipeline."
@@ -234,10 +240,14 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   # check completeness of subject data and correct any data expectation problems
   subject_data <- validate_input_data(subject_data, vm, lg, level="subject")
 
+  # handle optional PPI data
+  ppi_data <- validate_input_data(ppi_data, vm, lg, level="ppi")
+
   # convert all names to internal conventions from this point forward
   names(trial_data) <- names_to_internal(trial_data, vm)
   names(run_data) <- names_to_internal(run_data, vm)
   names(subject_data) <- names_to_internal(subject_data, vm)
+  names(ppi_data) <- names_to_internal(ppi_data, vm)
 
   # whether to run a 2-level or 3-level analysis
   multi_run <- ifelse(length(unique(trial_data$run_number)) > 1L, TRUE, FALSE)
@@ -331,6 +341,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     subject_data = subject_data,
     run_data = run_data,
     trial_data = trial_data,
+    ppi_data = ppi_data,
     vm = vm,
     bad_ids = bad_ids,
     tr = tr,
@@ -543,12 +554,13 @@ setup_compute_environment <- function(gpa) {
 #' @importFrom dplyr is_grouped_df ungroup
 #' @keywords internal
 validate_input_data <- function(df, vm, lg, level = "trial") {
+  if (is.null(df)) return(NULL) # allow quick NULL return on NULL input
   checkmate::assert_data_frame(df)
 
   # having a grouped data.frame can cause problems (e.g., having the grouping variable unexpectedly come back as a column in select)
   if (is_grouped_df(df)) df <- df %>% ungroup()
 
-  # enforce id column in trial_data
+  # enforce id column in all input data
   if (!vm["id"] %in% names(df)) {
     msg <- sprintf("Cannot find expected id column %s in %s data. Is your variable mapping (vm) correct?", vm["id"], level)
     lg$error(msg)
@@ -561,9 +573,16 @@ validate_input_data <- function(df, vm, lg, level = "trial") {
   }
 
   # for trial and run data, code default run_number of 1, if missing
-  if (level != "subject" && !vm["run_number"] %in% names(df)) {
-    lg$debug("Adding run_number = 1 to %s data", level)
-    df[[vm["run_number"]]] <- 1L
+  if (level != "subject")  {
+    if (!vm["run_number"] %in% names(df)) {
+      lg$debug("Adding run_number = 1 to %s data", level)
+      df[[vm["run_number"]]] <- 1L
+    }
+    if (!checkmate::test_integerish(df[[vm["run_number"]]], lower=1L, upper=1000L)) {
+      msg <- sprintf("%s must contain positive integers", vm["run_number"])
+      lg$error(msg)
+      stop(msg)
+    }
   }
 
   # verify that block data contain block-level variation
@@ -588,6 +607,8 @@ validate_input_data <- function(df, vm, lg, level = "trial") {
     class(df) <- c("bg_trial_data", class(df)) 
   } else if (level == "subtrial" & !inherits(df, "bg_subtrial_data")) {
     class(df) <- c("bg_subtrial_data", class(df))
+  } else if (level == "ppi" & !inherits(df, "bg_ppi_data")) {
+    class(df) <- c("bg_ppi_data", class(df))
   }
 
   return(df)
