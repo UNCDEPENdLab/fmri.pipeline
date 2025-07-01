@@ -175,6 +175,7 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
       #names(df) <- dimnames(dmat)[[2L]]
       return(df)
     })
+    
   } else {
     # Issue with convolution of each run separately is that the normalization and mean centering are applied within-run.
     # In the case of expected value in a Q-learning model, for example, this will always scale the regressor in terms of relative differences in value within
@@ -364,13 +365,15 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
     
     #for each event, convolve it with hrf, normalize, then sum convolved events to get full timecourse
     normed_events <- sapply(seq_along(times), function(i) {
+
+      # TODO: sort out normalization for case where we use ts_multiplier and evtmax_1 -- for now, it's a bad idea at the end of a run
       #obtain unit-convolved duration-modulated regressor to define HRF prior to modulation by parametric regressor
       stim_conv <- fmri.stimulus(
         n_vols = n_vols, values = 1.0, onsets = times[i], durations = durations[i], tr = tr, demean = FALSE,
-        center_values = FALSE, convolve = convolve, ts_multiplier = ts_multiplier,
+        center_values = FALSE, convolve = convolve, ts_multiplier = ts_multiplier, # ts_multiplier = NULL, #
         a1 = hrf_parameters["a1"], a2 = hrf_parameters["a2"], b1 = hrf_parameters["b1"], b2 = hrf_parameters["b2"], cc = hrf_parameters["cc"]
       )
-
+      
       if (normeach) {
         if (times[i] + durations[i] > (n_vols*tr - 20)) {
           # When the event occurs at the end of the time series and is the only event (i.e., as in evtmax_1),
@@ -390,7 +393,7 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
 
           mid_vol <- n_vols*tr/2
           stim_at_center <- fmri.stimulus(n_vols=n_vols, values=1.0, onsets=mid_vol, durations=durations[i], tr=tr, demean=FALSE, 
-            center_values=FALSE, convolve = convolve, ts_multiplier=ts_multiplier,
+            center_values=FALSE, convolve = convolve, ts_multiplier=ts_multiplier, # ts_multiplier = NULL, 
             a1=hrf_parameters["a1"], a2=hrf_parameters["a2"], b1=hrf_parameters["b1"], b2=hrf_parameters["b2"], cc=hrf_parameters["cc"])
 
           # Rescale HRF to a max of 1.0 for each event, regardless of duration -- EQUIVALENT TO dmUBLOCK(1). 
@@ -403,7 +406,7 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
       } else if (normalize_hrf == TRUE && normeach == FALSE) {
         stim_conv <- stim_conv/hrf_max #rescale HRF to a max of 1.0 for long event -- EQUIVALENT TO dmUBLOCK(0)
       }
-
+      
       stim_conv <- stim_conv*values[i] #for each event, multiply by parametric regressor value
     })
 
@@ -543,6 +546,10 @@ fmri.stimulus <- function(n_vols = 1, onsets = NULL, durations = NULL, values = 
     gamma1/c1 - a2*gamma2/c2
   }
   
+  downsample <- function(vec) {
+    vec[seq(1, n_vols, by = microtime_resolution)]
+  }
+  
   convolve_stimulus <- function(stimulus, n_vols, tr, method) {
     #  zero pad stimulus vector with 20 TRs on left and right to avoid bounding/edge effects in convolve
     padding <- 20 * microtime_resolution
@@ -559,7 +566,7 @@ fmri.stimulus <- function(n_vols = 1, onsets = NULL, durations = NULL, values = 
     out <- out[-(1:padding)][1:n_vols] # drop padding
     
     # subset the elements of the upsampled grid back onto the observed TR grid
-    out <- out[seq(1, n_vols, by = microtime_resolution)]
+    out <- downsample(out)
     
     if (convmax_1) out <- out / max(out) # renormalize to max=1 if requested
     if (demean) out <- out - mean(out, na.rm = TRUE) # demean if requested
@@ -580,7 +587,7 @@ fmri.stimulus <- function(n_vols = 1, onsets = NULL, durations = NULL, values = 
   # Handle the special ts_multiplier-only case -- convolve with HRF and return immediately
   if (is.null(onsets)) {
     if (!is.null(ts_multiplier)) {
-      out <- if (convolve) convolve_stimulus(ts_multiplier, n_vols, tr, conv_method) else ts_multiplier
+      out <- if (convolve) convolve_stimulus(ts_multiplier, n_vols, tr, conv_method) else downsample(ts_multiplier)
       return(out)
     } else {
       stop("onsets is NULL, and no ts_multiplier was provided")
@@ -629,7 +636,7 @@ fmri.stimulus <- function(n_vols = 1, onsets = NULL, durations = NULL, values = 
   if (!is.null(ts_multiplier)) stim <- stim * ts_multiplier # handle PPI interaction term
   
   if (!convolve) {
-    out <- stim[seq(1, n_vols, by = microtime_resolution)]
+    out <- downsample(stim)
   } else {
     out <- convolve_stimulus(stim, n_vols, tr, conv_method)
   }
