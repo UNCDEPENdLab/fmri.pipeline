@@ -8,6 +8,13 @@ Description of R_batch_sequence R6 class
 
 Description of R_batch_sequence R6 class
 }
+\section{Public fields}{
+\if{html}{\out{<div class="r6-fields">}}
+\describe{
+\item{\code{sequence_id}}{Optional identifier for all jobs in this sequence, used for job tracking}
+}
+\if{html}{\out{</div>}}
+}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
@@ -25,7 +32,7 @@ Description of R_batch_sequence R6 class
 \subsection{Method \code{new()}}{
 create a new R_batch_sequence object
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$new(..., joblist = NULL)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$new(..., joblist = NULL, sequence_id = NULL)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -34,6 +41,9 @@ create a new R_batch_sequence object
 \item{\code{...}}{One or more R_batch_job objects to be run in sequence}
 
 \item{\code{joblist}}{Optional list of jobs to be used instead of ...}
+
+\item{\code{sequence_id}}{Optional identifier for all jobs in this sequence;
+used for job tracking}
 }
 \if{html}{\out{</div>}}
 }

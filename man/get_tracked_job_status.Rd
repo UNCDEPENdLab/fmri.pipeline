@@ -8,6 +8,7 @@ get_tracked_job_status(
   job_id = NULL,
   return_children = FALSE,
   return_parent = FALSE,
+  sequence_id = NULL,
   sqlite_db
 )
 }
@@ -17,6 +18,8 @@ get_tracked_job_status(
 \item{return_children}{Return child jobs of this job}
 
 \item{return_parent}{Return parent jobs of this job}
+
+\item{sequence_id}{Alternatively return all jobs with sequence ID; cannot specify both job ID and sequence ID}
 
 \item{sqlite_db}{Character string of sqlite database}
 }

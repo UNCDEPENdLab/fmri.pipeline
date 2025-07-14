@@ -35,7 +35,7 @@ insert_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number =
   if (isTRUE(immediate)) {
     # cf. https://blog.r-hub.io/2021/03/13/rsqlite-parallel/
     con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
-    DBI::dbExecute(con, "PRAGMA busy_timeout = 10000") # retry write operations several times (10 s)
+    RSQLite::sqliteSetBusyHandler(con, get_default_sqlite_busy_timeout()) # retry write operations several times
     on.exit(try(DBI::dbDisconnect(con)))
   } else if (is.null(gpa$sqlite_con) || !DBI::dbIsValid(gpa$sqlite_con)) {
     con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
@@ -196,21 +196,71 @@ read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, 
 #' @param str Character query statement to execute
 #' @param params Optional list of parameters to pass to statement
 #' @param busy_timeout Time (in s) after which to retry write operations; default is 10 s
+#' @param return_result Logical. If TRUE submits DBI::dbGetQuery instead of DBI::dbExecute;
+#'                        Only use if expecting something in return for your query
 #' 
-#' @return description
 #' @importFrom DBI dbConnect dbExecute dbDisconnect
 #' @importFrom RSQLite sqliteSetBusyHandler
 #' 
 #' @keywords internal
-submit_sqlite_query <- function(str = NULL, sqlite_db = NULL, param = NULL, busy_timeout = 10) {
-  
+submit_sqlite_query <- function(str = NULL, sqlite_db = NULL, param = NULL, 
+                                busy_timeout = NULL, return_result = FALSE) {
+  checkmate::assert_logical(return_result)
   if(is.null(str) | is.null(sqlite_db)) return(invisible(NULL))
+  if(is.null(busy_timeout)) busy_timeout <- get_default_sqlite_busy_timeout()
   
   con <- dbConnect(RSQLite::SQLite(), sqlite_db) # establish connection
+  sqliteSetBusyHandler(con, busy_timeout) # busy_timeout arg in seconds * 1000 ms
   
-  sqliteSetBusyHandler(con, busy_timeout * 1000) # busy_timeout arg in seconds * 1000 ms
-  res <- dbExecute(con, str, param = param) # execute query
+  if (isTRUE(return_result)) {
+    res <- dbGetQuery(con, str, param = param) # execute query and return result
+  } else {
+    res <- dbExecute(con, str, param = param) # execute query
+  }
+  
   dbDisconnect(con) # disconnect
   
-  return(invisible(res)) # return number of rows affected by the statement
+  return(invisible(res))
 }
+
+
+#' helper function to check if a table exists in an SQLite database
+#' 
+#' @param sqlite_db Character path to SQLite database
+#' @param table Character string name of table
+#' 
+#' @importFrom DBI dbConnect dbExistsTable dbDisconnect
+#' @importFrom RSQLite sqliteSetBusyHandler
+#' 
+#' @keywords internal
+sqlite_table_exists <- function(sqlite_db = NULL, table = NULL, busy_timeout = NULL) {
+  
+  if(is.null(sqlite_db) | is.null(table)) return(invisible(FALSE))
+  if(is.null(busy_timeout)) busy_timeout <- get_default_sqlite_busy_timeout()
+  
+  con <- dbConnect(RSQLite::SQLite(), sqlite_db) # establish connection
+  sqliteSetBusyHandler(con, busy_timeout) # busy_timeout arg in seconds * 1000 ms
+  table_exists <- dbExistsTable(con, table)
+  dbDisconnect(con)
+  
+  return(table_exists)
+  
+}
+
+#' helper function to get generic busy timeout
+#' 
+#' @param ms Logical. Return in milliseconds? If FALSE, returns in seconds
+#' 
+#' @keywords internal
+get_default_sqlite_busy_timeout <- function(ms = T) {
+  
+  default_seconds <- 10
+  
+  if (isTRUE(ms)) {
+    return(default_seconds * 1000)
+  } else {
+    return(default_seconds)
+  }
+  
+}
+

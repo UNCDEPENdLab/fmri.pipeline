@@ -342,6 +342,7 @@ setup_output_locations <- function(gpa, lg = NULL) {
     ),
     scheduler_scripts = file.path(gpa$output_directory, "scheduler_scripts"),
     sqlite_db = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".sqlite")),
+    project_config_json = file.path(gpa$output_directory, "project_config.json"),
     object_cache = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".rds")),
     setup_l1_log_txt = file.path(gpa$output_directory, "setup_l1_models.txt"),
     setup_l1_log_json = file.path(gpa$output_directory, "setup_l1_models.json"),

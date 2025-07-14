@@ -65,25 +65,29 @@ l3_model_names = "prompt", glm_software = NULL) {
 
   if (!is.null(model_list$l1_model_names)) {
     # batch job for setting up l1 models -- calls setup_l1_models to create relevant FSFs
-      l1_setup_batch <- f_batch$copy(
-        job_name = "setup_l1", n_cpus = gpa$parallel$l1_setup_cores,
-        wall_time = gpa$parallel$l1_setup_time, mem_total = gpa$parallel$l1_setup_memgb,
-        r_code = sprintf(
-          "gpa <- setup_l1_models(gpa, l1_model_names=%s)", paste(deparse(model_list$l1_model_name), collapse = "")
-        )
+    l1_setup_batch <- f_batch$copy(
+      job_name = "setup_l1", n_cpus = gpa$parallel$l1_setup_cores,
+      wall_time = gpa$parallel$l1_setup_time, mem_total = gpa$parallel$l1_setup_memgb,
+      r_code = sprintf(
+        "gpa <- setup_l1_models(gpa, l1_model_names=%s)", paste(deparse(model_list$l1_model_name), collapse = "")
       )
+    )
 
-      l1_setup_batch$depends_on_parents <- "finalize_configuration"
+    l1_setup_batch$depends_on_parents <- "finalize_configuration"
 
-      # batch job for executing l1 jobs (and waiting) after setup
-      l1_execute_batch <- f_batch$copy(
-        job_name = "run_l1", n_cpus = 1,
-        wall_time = gpa$parallel$fsl$l1_feat_alljobs_time,
-        r_code = "child_job_ids <- run_feat_sepjobs(gpa, level = 1L)" # execute l1 jobs
-      )
+    # batch job for executing l1 jobs (and waiting) after setup
+    l1_execute_batch <- f_batch$copy(
+      job_name = "run_l1", n_cpus = 1,
+      wall_time = gpa$parallel$fsl$l1_feat_alljobs_time,
+      r_code = "child_job_ids <- run_feat_sepjobs(gpa, level = 1L)" # execute l1 jobs
+    )
 
-      l1_execute_batch$depends_on_parents <- "setup_l1"
-      l1_execute_batch$wait_for_children <- TRUE # need to wait for l1 feat jobs to complete before moving to l2/l3
+    l1_execute_batch$depends_on_parents <- "setup_l1"
+    l1_execute_batch$wait_for_children <- TRUE # need to wait for l1 feat jobs to complete before moving to l2/l3
+    
+    run_l1 <- TRUE
+  } else {
+    run_l1 <- FALSE
   }
 
 
@@ -104,6 +108,10 @@ l3_model_names = "prompt", glm_software = NULL) {
 
     l2_batch$depends_on_parents <- "run_l1"
     l2_batch$wait_for_children <- TRUE # need to wait for l2 feat jobs to complete before moving to l3
+    
+    run_l2 <- TRUE
+  } else {
+    run_l2 <- FALSE
   }
 
   
@@ -120,6 +128,10 @@ l3_model_names = "prompt", glm_software = NULL) {
 
     l3_batch$depends_on_parents <- ifelse(isTRUE(gpa$multi_run), "setup_run_l2", "run_l1")
     l3_batch$wait_for_children <- TRUE # need to wait for l3 feat jobs to complete before moving to cleanup
+    
+    run_l3 <- TRUE
+  } else {
+    run_l3 <- FALSE
   }
 
   # cleanup step: refresh l3 feat status and copy gpa back to main directory
@@ -132,13 +144,22 @@ l3_model_names = "prompt", glm_software = NULL) {
   )
 
   cleanup_batch$depends_on_parents <- "setup_run_l3"
+  
+  run_cleanup <- TRUE # always TRUE for now
 
   if (isTRUE(run_finalize)) {
-    glm_batch <- R_batch_sequence$new(f_batch, l1_setup_batch, l1_execute_batch, l2_batch, l3_batch, cleanup_batch)
+    glm_batch <- R_batch_sequence$new(f_batch, l1_setup_batch, l1_execute_batch, 
+                                      l2_batch, l3_batch, cleanup_batch, sequence_id = batch_id)
   } else {
-    glm_batch <- R_batch_sequence$new(l1_setup_batch, l1_execute_batch, l2_batch, l3_batch, cleanup_batch)
+    glm_batch <- R_batch_sequence$new(l1_setup_batch, l1_execute_batch, 
+                                      l2_batch, l3_batch, cleanup_batch, sequence_id = batch_id)
   }
   glm_batch$submit()
+  
+  job_sequence <- list(finalize = run_finalize, l1 = run_l1, 
+                       l2 = run_l2, l3 = run_l3, cleanup = run_cleanup) # logicals of which jobs were submitted
+  update_project_config(gpa = gpa, job_sequence = job_sequence, 
+                        sequence_id = batch_id, batch_directory) # update config file with this run's details
 }
 
 #' helper function to guide user through process of choosing which models to run in GLM pipeline
