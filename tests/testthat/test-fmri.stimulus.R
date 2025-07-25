@@ -1,6 +1,3 @@
-library(testthat)
-library(fmri)
-
 # Define reusable variables
 TR <- 2
 n_vols <- 100
@@ -45,7 +42,7 @@ test_that("fmri.stimulus returns correct unconvolved stimulus", {
   stim <- fmri.stimulus(n_vols = n_vols, onsets = TR * (onsets - 1), durations = TR,
                         units = "time", tr = TR, convolve = FALSE)
   expect_equal(length(stim), n_vols)
-  expect_equal(length(which(stim != 0)), length(onsets) * TR)
+  expect_equal(length(which(stim != 0)), length(onsets))
 })
 
 # 6. ts_multiplier only
