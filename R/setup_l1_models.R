@@ -288,6 +288,9 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
   #append l1 setup to gpa
   gpa$l1_model_setup <- all_subj_l1_combined
+  
+  # refresh l1 model status in $l1_model_setup
+  gpa <- refresh_feat_status(gpa, level=1L, lg=lg)
 
   return(gpa)
 
