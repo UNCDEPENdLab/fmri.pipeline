@@ -15,6 +15,7 @@
 #' @return a TRUE/FALSE indicating whether the record was successfully inserted
 #' @importFrom checkmate assert_integerish test_null assert_data_frame assert_string
 #' @importFrom DBI dbDataType dbConnect dbDisconnect dbIsValid dbCommit dbRollback dbBegin
+#' @importFrom RSQLite sqliteSetBusyHandler
 #' @importFrom glue glue_sql
 insert_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number = NULL, data = NULL,
                              table = NULL, delete_extant = TRUE, append = TRUE, overwrite = FALSE, immediate=FALSE) {
@@ -31,18 +32,16 @@ insert_df_sqlite <- function(gpa = NULL, id = NULL, session = NULL, run_number =
   checkmate::assert_logical(append, null.ok = FALSE, len = 1L)
   checkmate::assert_logical(overwrite, null.ok = FALSE, len = 1L)
   
-  # open connection if needed
+  # open connection
+  con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
+  on.exit(try(DBI::dbDisconnect(con)), add = TRUE)
+
   if (isTRUE(immediate)) {
     # cf. https://blog.r-hub.io/2021/03/13/rsqlite-parallel/
-    con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
-    DBI::dbExecute(con, "PRAGMA busy_timeout = 10000") # retry write operations several times (10 s)
-    on.exit(try(DBI::dbDisconnect(con)))
-  } else if (is.null(gpa$sqlite_con) || !DBI::dbIsValid(gpa$sqlite_con)) {
-    con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
-    on.exit(try(DBI::dbDisconnect(con)))
-  } else {
-    con <- gpa$sqlite_con # recycle connection
+    # DBI::dbExecute(con, "PRAGMA busy_timeout = 10000") # retry write operations several times (10 s)
+    sqliteSetBusyHandler(con, 10 * 1000) # busy_timeout of 10 seconds
   }
+  
   
   # handle columns in data that are not in table
   has_table <- DBI::dbExistsTable(con, table)
@@ -137,10 +136,8 @@ read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, 
   if (is.null(gpa)) {
     checkmate::assert_string(db_file)
     checkmate::assert_file_exists(db_file)
-    extant_con <- NULL
   } else {
     db_file <- gpa$output_locations$sqlite_db
-    extant_con <- gpa$sqlite_con
   }
   if (checkmate::test_null(id)) stop("read_df_sqlite requires a specific id for lookup")
   checkmate::assert_integerish(session, lower = 1, null.ok = TRUE)
@@ -150,12 +147,8 @@ read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, 
   checkmate::assert_logical(drop_keys, len = 1L)
   
   # open connection if needed
-  if (is.null(extant_con) || !DBI::dbIsValid(extant_con)) {
-    con <- DBI::dbConnect(RSQLite::SQLite(), db_file)
-    on.exit(try(DBI::dbDisconnect(con)))
-  } else {
-    con <- extant_con # recycle connection
-  }
+  con <- DBI::dbConnect(RSQLite::SQLite(), db_file)
+  on.exit(try(DBI::dbDisconnect(con)))
   
   # if table does not exist, then query is invalid (just return NULL)
   if (!DBI::dbExistsTable(con, table)) {
