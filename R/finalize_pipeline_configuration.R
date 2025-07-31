@@ -14,6 +14,7 @@
 finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_logical(refinalize, len = 1L)
+  
   lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
   lg$set_threshold(gpa$lgr_threshold)
 
@@ -30,23 +31,16 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
 
   # l1 models must be specified to get started (hard enforcement)
   if (!checkmate::test_class(gpa$l1_models, "l1_model_set")) {
-    msg <- "Could not find valid $l1_models specification in gpa. Be sure to run build_l1_models() before proceeding!"
-    lg$error(msg)
-    stop(msg)
+    log_error(lg, "Could not find valid $l1_models specification in gpa. Be sure to run build_l1_models() before proceeding!")
   }
-
   # l2 models are optional and depend on whether it's a multi-run setup
   if (isTRUE(gpa$multi_run) && !checkmate::test_class(gpa$l2_models, "hi_model_set")) {
-    msg <- "Could not find valid $l2_models specification in gpa. We will proceed, but weird things may happen! I suggest running build_l2_models()."
-    lg$warn(msg)
-    warning(msg)
+    log_warn(lg, "Could not find valid $l2_models specification in gpa. We will proceed, but weird things may happen! I suggest running build_l2_models().")
   }
 
   # l3 models are optional but almost always should be in place
   if (!checkmate::test_class(gpa$l3_models, "hi_model_set")) {
-    msg <- "Could not find valid $l3_models specification in gpa. We will proceed, but weird things may happen! I suggest running build_l3_models()."
-    lg$warn(msg)
-    warning(msg)
+    log_warn(lg, "Could not find valid $l3_models specification in gpa. We will proceed, but weird things may happen! I suggest running build_l3_models().")
   }
 
   # new approach: use internal model names for creating output directories at subject level
@@ -59,17 +53,11 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
 
   if (!is.null(gpa$run_number_regex)) {
     if (stringr::str_count(gpa$run_number_regex, stringr::fixed("(")) != 1L) {
-      stop(
-        "run_number_regex: ", gpa$run_number_regex,
-        " must have exactly one opening parenthesis, denoting start of run number capture"
-      )
+      log_error(lg, "run_number_regex: %s must have exactly one opening parenthesis, denoting start of run number capture", gpa$run_number_regex)
     }
 
     if (stringr::str_count(gpa$run_number_regex, stringr::fixed(")")) != 1L) {
-      stop(
-        "run_number_regex: ", gpa$run_number_regex,
-        " must have exactly one closing parenthesis, denoting end of run number capture"
-      )
+      log_error(lg, "run_number_regex: %s must have exactly one closing parenthesis, denoting end of run number capture", gpa$run_number_regex)
     }
   }
 
@@ -156,7 +144,7 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
   gpa$glm_settings$fsl <- populate_defaults(gpa$glm_settings$fsl, fsl_defaults)
 
   # process confound settings
-  gpa <- finalize_confound_settings(gpa, lg)
+  gpa <- finalize_confound_settings(gpa)
 
   # populate subject exclusions
   gpa <- calculate_subject_exclusions(gpa)
@@ -185,8 +173,9 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
   return(gpa)
 }
 
-setup_parallel_settings <- function(gpa, lg = NULL) {
-  checkmate::assert_class(lg, "Logger")
+setup_parallel_settings <- function(gpa) {
+
+  lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
 
   # ---- PARALLELISM SETUP
   specify_cores <- function(gpa, field_name, default=1L) {
@@ -298,9 +287,10 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
 }
 
 # helper function for settings up $output_directory and $output_locations
-setup_output_locations <- function(gpa, lg = NULL) {
-  checkmate::assert_class(lg, "Logger")
+setup_output_locations <- function(gpa) {
 
+  lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
+  
   # sort out file locations
   if (is.null(gpa$output_directory) || gpa$output_directory == "default") {
     gpa$output_directory <- file.path(getwd(), gpa$analysis_name)
@@ -372,8 +362,9 @@ setup_output_locations <- function(gpa, lg = NULL) {
 #' @param lg a Logger object for logging results of confound processing
 #' @keywords internal
 #' @importFrom parallel mclapply
-finalize_confound_settings <- function(gpa, lg) {
-  checkmate::assert_class(lg, "Logger")
+finalize_confound_settings <- function(gpa) {
+  
+  lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
 
   # validate confound settings
@@ -476,7 +467,7 @@ finalize_confound_settings <- function(gpa, lg) {
   # }, mc.cores = gpa$parallel$finalize_cores)
 
   # add onset + offset + isi data to run_data so that get_l1_confounds can handle run truncation appropriately
-  gpa <- populate_last_events(gpa, lg)
+  gpa <- populate_last_events(gpa)
 
   # for each run, calculate confounds, exclusions, and truncation
   run_list <- lapply(seq_len(nrow(gpa$run_data)), function(ii) {
@@ -486,9 +477,7 @@ finalize_confound_settings <- function(gpa, lg) {
   if (length(unique(sapply(run_list, length))) == 1L) {
     gpa$run_data <- data.table::rbindlist(run_list)
   } else {
-    msg <- "Lengths of confound run_df elements have different lengths. Cannot recombine"
-    lg$error(msg)
-    stop(msg)
+    log_error(lg, "Lengths of confound run_df elements have different lengths. Cannot recombine")
   }
 
   return(gpa)

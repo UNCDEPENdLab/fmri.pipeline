@@ -722,14 +722,16 @@ calculate_subject_exclusions <- function(gpa) {
 
 #' Internal function to add last_onset and last_offset columns to gpa$run_data based on events in l1_models
 #' @param gpa a \code{glm_pipeline_arguments} object containing valid $run_data and $l1_models objects
-#' @param lg a Logger object for logging results
 #' @details The last_onset and last_offset columns are calculated for each run based on the timing of all
 #'   events in the $l1_models$events list. These are then used to facilitate run truncation if the user
 #'   requests truncation after a final onset or offset.
 #' @return a modified copy of gpa with $run_data populated with last_offset and last_onset columns (times in seconds)
 #' @keywords internal
 #' @importFrom dplyr summarize group_by left_join
-populate_last_events <- function(gpa, lg) {
+populate_last_events <- function(gpa) {
+
+  lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
+
   # get all events as a long data.frame
   m_events <- data.table::rbindlist(lapply(gpa$l1_models$events, function(this_event) this_event$data))
 

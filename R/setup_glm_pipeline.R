@@ -172,7 +172,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   vm <- default_vm # reassign full vm
 
   # validate completeness of trial data
-  trial_data <- validate_input_data(trial_data, vm, lg, level="trial")
+  trial_data <- validate_input_data(trial_data, vm, level="trial")
 
   # create run data, if needed
   if (is.null(run_data)) {
@@ -196,7 +196,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   }
 
   # check completeness of run data and correct any data expectation problems
-  run_data <- validate_input_data(run_data, vm, lg, level="run")
+  run_data <- validate_input_data(run_data, vm, level="run")
 
   # handle setup of TR as global versus run-level
   if (is.null(tr) && is.null(run_data[["tr"]])) {
@@ -238,10 +238,10 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   }
 
   # check completeness of subject data and correct any data expectation problems
-  subject_data <- validate_input_data(subject_data, vm, lg, level="subject")
+  subject_data <- validate_input_data(subject_data, vm, level="subject")
 
   # handle optional PPI data
-  ppi_data <- validate_input_data(ppi_data, vm, lg, level="ppi")
+  ppi_data <- validate_input_data(ppi_data, vm, level="ppi")
 
   # convert all names to internal conventions from this point forward
   names(trial_data) <- names_to_internal(trial_data, vm)
@@ -267,13 +267,11 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   setdiff_list_combn(all_ids)
 
   if (length(match_ids) == 0L) {
-    msg <- "No ids are in common across subject_data, run_data, and trial_data! We cannot proceed with setup."
-    lg$error(msg)
-    stop(msg)
+    log_error(lg, "No ids are in common across subject_data, run_data, and trial_data! We cannot proceed with setup.")
   } else if (length(match_ids) < length(union_ids)) {
-    lg$warn("The ids in subject_data, run_data, and trial_data are not identical. Only the ids in common will be analyzed!")
-    lg$warn(glue("Number of non-matching ids: {length(union_ids) - length(match_ids)}"))
-    lg$warn(glue("Dropped ids: {paste(setdiff(union_ids, match_ids), collapse=', ')}"))
+    log_warn(lg, "The ids in subject_data, run_data, and trial_data are not identical. Only the ids in common will be analyzed!
+                    \n Number of non-matching ids: {length(union_ids) - length(match_ids)}
+                    \n Dropped ids: {paste(setdiff(union_ids, match_ids), collapse=', ')}")
   }
 
   subject_data <- subject_data %>% dplyr::filter(id %in% !!match_ids)
@@ -284,11 +282,9 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   subj_counts <- subject_data %>% count(id, session)
   if (any(subj_counts$n > 1)) {
     subj_dupes <- subj_counts %>% dplyr::filter(n > 1)
-    msg <- "At least one id + session combination in subject_data is duplicated. All rows in subject_data must represent unique observations!"
-    lg$error(msg)
-    lg$error("Problematic entries: ")
-    lg$error("%s", capture.output(print(subject_data %>% dplyr::inner_join(subj_dupes, by=c("id", "session")))))
-    stop(msg)
+    log_error(lg, "At least one id + session combination in subject_data is duplicated. All rows in subject_data must represent unique observations!
+                    \nProblematic entries:\n%s",
+                    capture.output(print(subject_data %>% dplyr::inner_join(subj_dupes, by=c("id", "session")))))
   }
 
   # force as.character so that class attributes always match between missing runs and valid runs that are truncated (affects rbindlist)
@@ -374,7 +370,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   class(gpa) <- c("list", "glm_pipeline_arguments")
 
   # populate $output_locations
-  gpa <- setup_output_locations(gpa, lg)
+  gpa <- setup_output_locations(gpa)
 
   # copy in settings passed by user
   gpa$parallel <- parallel
@@ -385,7 +381,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   gpa$sys_info <- info # populate full system information to object
 
   # populate $parallel
-  gpa <- setup_parallel_settings(gpa, lg)
+  gpa <- setup_parallel_settings(gpa)
 
   # initial checks on compute environment
   test_compute_environment(gpa, stop_on_fail=FALSE)
@@ -553,7 +549,10 @@ setup_compute_environment <- function(gpa) {
 #' helper function to verify contents of subject, run, block, trial, and subtrial data
 #' @importFrom dplyr is_grouped_df ungroup
 #' @keywords internal
-validate_input_data <- function(df, vm, lg, level = "trial") {
+validate_input_data <- function(df, vm, level = "trial") {
+
+  lg <- lgr::get_logger("glm_pipeline/setup_glm_pipeline")
+
   if (is.null(df)) return(NULL) # allow quick NULL return on NULL input
   checkmate::assert_data_frame(df)
 
@@ -562,9 +561,7 @@ validate_input_data <- function(df, vm, lg, level = "trial") {
 
   # enforce id column in all input data
   if (!vm["id"] %in% names(df)) {
-    msg <- sprintf("Cannot find expected id column %s in %s data. Is your variable mapping (vm) correct?", vm["id"], level)
-    lg$error(msg)
-    stop(msg)
+    log_error(lg, "Cannot find expected id column %s in %s data. Is your variable mapping (vm) correct?", vm["id"], level)
   }
 
   if (!vm["session"] %in% names(df)) {
@@ -579,18 +576,14 @@ validate_input_data <- function(df, vm, lg, level = "trial") {
       df[[vm["run_number"]]] <- 1L
     }
     if (!checkmate::test_integerish(df[[vm["run_number"]]], lower=1L, upper=1000L)) {
-      msg <- sprintf("%s must contain positive integers", vm["run_number"])
-      lg$error(msg)
-      stop(msg)
+      log_error(lg, "%s must contain positive integers", vm["run_number"])
     }
   }
 
   # verify that block data contain block-level variation
   if (level == "block") {
     if (!vm["block_number"] %in% names(df)) {
-      msg <- sprintf("Cannot find expected block column %s in %s data. Is your variable mapping (vm) correct?", vm["block_number", level])
-      lg$error(msg)
-      stop(msg)
+      log_error(lg, "Cannot find expected block column %s in %s data. Is your variable mapping (vm) correct?", vm["block_number"], level)
     }
   }
 
@@ -615,6 +608,7 @@ validate_input_data <- function(df, vm, lg, level = "trial") {
 }
 
 #' internal function to validate the contents of a block data.frame
+#' @description NVD dont know where the lg here is coming from since this function is not called anywhere 
 #' @importFrom dplyr group_by summarise n n_distinct filter
 #' @keywords internal
 validate_block_data <- function(df) {

@@ -20,7 +20,7 @@ l3_model_names = "prompt", glm_software = NULL) {
   lg <- lgr::get_logger("glm_pipeline/run_glm_pipeline")
   lg$set_threshold(gpa$lgr_threshold)
 
-  model_list <- choose_glm_set(gpa, l1_model_names, l2_model_names, l3_model_names, lg)
+  model_list <- choose_glm_set(gpa, l1_model_names, l2_model_names, l3_model_names)
   if (is.null(model_list)) { return(invisible(NULL)) } # user canceled
 
   batch_id <- uuid::UUIDgenerate()
@@ -151,8 +151,9 @@ l3_model_names = "prompt", glm_software = NULL) {
 #' @return a named list containing all models that were selected along with additional information
 #'   about whether to rerun existing models
 #' @keywords internal
-choose_glm_set <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, l3_model_names=NULL, lg=NULL) {
-  checkmate::assert_class(lg, "Logger")
+choose_glm_set <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, l3_model_names=NULL) {
+
+  lg <- lgr::get_logger("glm_pipeline/run_glm_pipeline")
 
   if (is.null(l1_model_names)) {
     lg$debug("l1_model_names was NULL. Defaulting to running all l1 models")
@@ -174,10 +175,7 @@ choose_glm_set <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, l3_mod
   for (nn in names(m_list)) {
     # enforce that all, none, and prompt must be singleton arguments
     if (any(m_list[[nn]] %in% c("all", "none", "prompt")) && length(m_list[[nn]]) > 1L) {
-      log_error(
-        lg,
-        "Argument {nn} has value 'all', 'none', or 'prompt'. These must be passed alone, not with other model names."
-      )
+      log_error(lg, "Argument {nn} has value 'all', 'none', or 'prompt'. These must be passed alone, not with other model names.")
     }
   }
 
