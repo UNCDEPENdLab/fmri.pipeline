@@ -7,34 +7,20 @@ test_that("test finalize_pipeline_configuration", {
   trial_data_file <- "sample_trial_data.csv.gz"
   run_data_file <- "sample_run_data.csv"
   subject_data_file <- "sample_subject_data.csv"
+  gpa_cache_file <- "gpa_tests_build_l1_models.rds"
   cache_file <- "gpa_tests_base_build_l1_models.rds"
 
-  # run set_glm_pipeline()
-  gpa <- get_gpa_base(analysis_name = analysis_name, 
-    test_data_base_dir = test_data_base_dir, 
-    trial_data_file = trial_data_file,
-    run_data_file = run_data_file,
-    subject_data_file = subject_data_file,
-    cache_file = cache_file,
-    scheduler = "slurm", drop_volumes = 2,
-    exclude_run = "max(FD) > 5 | sum(FD > .9)/length(FD) > .10",
-    exclude_subject = "n_good_runs < 4",
-    truncate_run = "(FD > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
-    spike_volumes = NULL
-  )
+  # run building l1, l2, l3 models
+  gpa <- create_gpa(
+      analysis_name = analysis_name,
+      test_data_base_dir = test_data_base_dir,
+      spec_file = l1_spec_file,
+      trial_data_file = trial_data_file,
+      run_data_file = run_data_file,
+      subject_data_file = subject_data_file,
+      gpa_cache_file = gpa_cache_file,
+      cache_file = cache_file)
 
-  # setup compute enviroment
-  gpa <- setup_compute_environment(gpa)
-
-  # Build L1 models
-  gpa <- build_l1_models(gpa, from_spec_file = file.path(test_data_base_dir, l1_spec_file))
-
-  # Build L2 models
-  gpa <- build_l2_models(gpa)
-
-  # Build L3 models
-  gpa <- build_l3_models(gpa)
-  # gpa_old <- gpa
   # finalize pipeline configuration
   gpa <- finalize_pipeline_configuration(gpa)
 
@@ -69,5 +55,66 @@ test_that("test finalize_pipeline_configuration", {
 
   # check if correct number of subjects were excluded
   expect_equal(sum(gpa$subject_data$exclude_subject), 0)
+
+  # test with flankers dataset -----------------------------------------------
+
+  analysis_name = "gpa_flanker_tests"
+  test_data_base_dir = "/proj/mnhallqlab/no_backup/flanker-fmriprep"
+  spec_file = "/proj/mnhallqlab/users/nidhi/fmri.pipeline_testing/fmri.pipeline/tests/testthat/testdata/int.yaml"
+  trial_data_file = "/proj/mnhallqlab/users/nidhi/fmri.pipeline_testing/fmri.pipeline/tests/testthat/testdata/flankers_trial_data.csv"
+  run_data_file = "/proj/mnhallqlab/users/nidhi/fmri.pipeline_testing/fmri.pipeline/tests/testthat/testdata/flankers_run_data.csv"
+  subject_data_file = "/proj/mnhallqlab/users/nidhi/fmri.pipeline_testing/fmri.pipeline/tests/testthat/testdata/flankers_subject_data.csv"
+  gpa_cache_file = "/proj/mnhallqlab/users/nidhi/fmri.pipeline_testing/fmri.pipeline/tests/testthat/testdata/gpa.rds"
+  cache_file = "/proj/mnhallqlab/users/nidhi/fmri.pipeline_testing/fmri.pipeline/tests/testthat/testdata/gpa_base.rds"
+
+  gpa_flanker <- create_flanker_gpa(
+    analysis_name = analysis_name,
+    test_data_base_dir = test_data_base_dir,
+    spec_file = spec_file,
+    trial_data_file = trial_data_file,
+    run_data_file = run_data_file,
+    subject_data_file = subject_data_file,
+    gpa_cache_file = gpa_cache_file,
+    cache_file = cache_file
+  )
+
+  # finalize pipeline configuration
+  gpa_flanker <- finalize_pipeline_configuration(gpa_flanker)
+
+  # check if the finalize pipeline configuration worked
+  expect_true(gpa_flanker$finalize_complete)
+
+  gpa_flanker$run_data$exclude_run
+
+  # test that crashes -----------------------------------------------
+  
+  # ---- point to the wrong confounds file ----
+  # all subjects clock8 confound file is replaced with clock1 confound file
+
+  analysis_name <- "gpa_tests_build_l1_models_wrong_confound"
+  test_data_base_dir <- "/proj/mnhallqlab/projects/fmri.pipeline_test_data"
+  l1_spec_file <- "sample_2_L1_spec.yaml"
+  trial_data_file <- "sample_trial_data.csv.gz"
+  run_data_file <- "sample_run_data_wrong_confound.csv"
+  subject_data_file <- "sample_subject_data.csv"
+  gpa_cache_file <- "gpa_tests_build_l1_models_wrong_confound.rds"
+  cache_file <- "gpa_tests_base_build_l1_models_wrong_confound.rds"
+
+  # run building l1, l2, l3 models
+  gpa_wrong <- create_gpa(
+      analysis_name = analysis_name,
+      test_data_base_dir = test_data_base_dir,
+      l1_spec_file = l1_spec_file,
+      trial_data_file = trial_data_file,
+      run_data_file = run_data_file,
+      subject_data_file = subject_data_file,
+      gpa_cache_file = gpa_cache_file,
+      cache_file = cache_file)
+
+  # finalize pipeline configuration
+  gpa_wrong <- finalize_pipeline_configuration(gpa_wrong)
+
+  # TODO What should I expect different?
+
 
 })
