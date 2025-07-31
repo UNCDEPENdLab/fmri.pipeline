@@ -68,7 +68,7 @@ get_collin_events <- function(dmat) {
     custom_reg <- grep("^custom_", names(run))
     if (length(custom_reg) > 0L) { run <- run[-1*custom_reg]}
 
-    #check correlations among regressors for trial-wise estimates
+    # check correlations among regressors for trial-wise estimates
 
     #get the union of all trial numbers across regressors
     utrial <- sort(unique(unlist(lapply(run, function(regressor) { regressor[, "trial"]}))))
@@ -175,26 +175,31 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
       #names(df) <- dimnames(dmat)[[2L]]
       return(df)
     })
+    
   } else {
     # Issue with convolution of each run separately is that the normalization and mean centering are applied within-run.
-    # In the case of EV, for example, this will always scale the regressor in terms of relative differences in value within
+    # In the case of expected value in a Q-learning model, for example, this will always scale the regressor in terms of relative differences in value within
     # run, but will fail to capture relative differences across run (e.g., if value tends to be higher in run 8 than run 1).
 
     dmat_sumruns <- lapply(1:dim(dmat)[2L], function(reg) {
-      thisreg <- dmat[, reg]
-      concattiming <- do.call(rbind, lapply(seq_along(thisreg), function(run) {
-        timing <- thisreg[[run]]
+      this_reg <- dmat[, reg]
+      concat_timing <- do.call(rbind, lapply(seq_along(this_reg), function(run) {
+        timing <- this_reg[[run]]
         timing[, "onset"] <- timing[, "onset"] + ifelse(run > 1, run_timing[run-1], 0)
         timing
       }))
 
+      attr(concat_timing, "event") <- attr(this_reg[[1]], "event")
+      attr(concat_timing, "physio_only") <- attr(this_reg[[1]], "physio_only")
+
       #concat runs of the ts_multiplier within the current regressor
-      concat_ts_multiplier <- do.call(c, bdm_args$ts_multiplier[[reg]])
+      this_ts_multiplier <- bdm_args$ts_multiplier[[reg]]
+      concat_ts_multiplier <- if (is.null(this_ts_multiplier)) NULL else do.call(c, this_ts_multiplier)
 
       #convolve concatenated events with hrf
-      all.convolve <- convolve_regressor(n_vols=sum(bdm_args$run_volumes), reg=concattiming, tr=bdm_args$tr,
+      all.convolve <- convolve_regressor(n_vols=sum(bdm_args$run_volumes), reg=concat_timing, tr=bdm_args$tr,
                          normalization=bdm_args$normalizations[reg], rm_zeros = bdm_args$rm_zeros[reg],
-                         center_values=bdm_args$center_values, convmax_1=bdm_args$convmax_1[j],
+                         center_values=bdm_args$center_values, convmax_1=bdm_args$convmax_1[reg],
                          demean_convolved = FALSE, high_pass=bdm_args$high_pass, convolve=convolve,
                          ts_multiplier=concat_ts_multiplier,
                          hrf_parameters = bdm_args$hrf_parameters, lg=lg)
@@ -272,9 +277,7 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
                                    high_pass=NULL, convolve=TRUE, ts_multiplier=NULL,
                                    hrf_parameters=c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35), lg=NULL) {
 
-  if (is.null(lg)) {
-    lg <- lgr::get_logger()
-  }
+  if (is.null(lg)) lg <- lgr::get_logger()
 
   #reg should be a matrix containing, minimally: trial, onset, duration, value
   stopifnot(is.matrix(reg))
@@ -285,27 +288,30 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
     stop(msg)
   }
 
+  event_name <- attr(reg, "event")
+  reg_name <- attr(reg, "reg_name")
+  physio_only <- ifelse(isTRUE(attr(reg, "physio_only")), TRUE, FALSE)
+
   # check for the possibility that the onset of an event falls after the number of good volumes in the run
   # if so, this should be omitted from the convolution altogether
   which_high <- (reg[, "onset"] / tr) >= n_vols
 
   if (any(which_high, na.rm=TRUE)) {
     if (isTRUE(convolve)) {
-      lg$warn("At least one event onset falls on or after last volume of run. Omitting this from model.")
+      lg$warn("At least one %s event onset for %s falls on or after last volume of run. Omitting this from model.", attr(reg, "event"), attr(reg, "reg_name"))
       lg$warn("%s", capture.output(print(reg[which_high, ])))
     }
 
-    r_orig <- reg
     reg <- reg[!which_high, , drop = FALSE] #this loses attributes, need to copy them over for code to work as expected
-    attr(reg, "event") <- attr(r_orig, "event")
-    attr(reg, "reg_name") <- attr(r_orig, "reg_name")
   }
 
   hrf_max <- NULL #only used for durmax_1 normalization
 
-  normeach <- FALSE #signals evtmax_1 scaling
+  normeach <- FALSE # indicates evtmax_1 scaling
   if (!convolve) {
-    normalize_hrf <- FALSE #irrelevant when we are not convolving
+    normalize_hrf <- FALSE # irrelevant when we are not convolving
+  } else if (physio_only) {
+    normalize_hrf <- FALSE # irrelevant for pure physio convolution (no events)
   } else if (normalization == "evtmax_1") {
     normalize_hrf <- TRUE
     normeach <- TRUE
@@ -315,7 +321,7 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
     # this is my hacky way to figure out the peak value for durmax_1 setup
     # obtain an estimate of the peak HRF height of a long event convolved with the HRF at these settings of a1, b1, etc.
     hrf_boxcar <- fmri.stimulus(
-      n_vols = 300 / tr, values = 1.0, times = 100, durations = 100, tr = tr,
+      n_vols = 300 / tr, values = 1.0, onsets = 100, durations = 100, tr = tr,
       demean = FALSE, # don't mean center for computing max height
       a1 = hrf_parameters["a1"], a2 = hrf_parameters["a2"], b1 = hrf_parameters["b1"],
       b2 = hrf_parameters["b2"], cc = hrf_parameters["cc"]
@@ -325,22 +331,30 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
     normalize_hrf <- FALSE
   } else { stop("unrecognized normalization: ", normalization) }
 
-  #cleanup NAs and zeros in the regressor before proceeding with placing it onto the time grid
-  cleaned <- cleanup_regressor(reg[, "onset"], reg[, "duration"], reg[, "value"], rm_zeros = rm_zeros)
-  times <- cleaned$times; durations <- cleaned$durations; values <- cleaned$values
+  if (physio_only) {
+    times <- NULL
+    durations <- NULL
+    values <- NULL
+  } else {
+    # cleanup NAs and zeros in the regressor before proceeding with placing it onto the time grid
+    cleaned <- cleanup_regressor(reg[, "onset"], reg[, "duration"], reg[, "value"], rm_zeros = rm_zeros)
+    times <- cleaned$times
+    durations <- cleaned$durations
+    values <- cleaned$values
 
-  if (length(times) == 0L) {
-    lg$warn("No non-zero events for regressor to be convolved. Returning all-zero result for fMRI GLM.")
-    ret <- matrix(0, nrow=n_vols, ncol=1)
-    colnames(ret) <- attr(reg, "reg_name")
-    return(ret)
-  }
+    if (length(times) == 0L) {
+      lg$warn("No non-zero events for regressor to be convolved. Returning all-zero result for fMRI GLM.")
+      ret <- matrix(0, nrow = n_vols, ncol = 1)
+      colnames(ret) <- reg_name
+      return(ret)
+    }
 
-  # Handle mean centering of parametric values prior to convolution
-  # This is useful when one wishes to dissociate variance due to parametric modulation versus stimulus occurrence
-  # Don't demean a constant regressor such as an event regressor (all values = 1)
-  if (length(values) > 1L && !all(is.na(values)) && center_values && sd(values, na.rm=TRUE) > 1e-5) {
-    values <- values - mean(values, na.rm=TRUE)
+    # Handle mean centering of parametric values prior to convolution
+    # This is useful when one wishes to dissociate variance due to parametric modulation versus stimulus occurrence
+    # Don't demean a constant regressor such as an event regressor (all values = 1)
+    if (length(values) > 1L && !all(is.na(values)) && center_values && sd(values, na.rm = TRUE) > 1e-5) {
+      values <- values - mean(values, na.rm = TRUE)
+    }
   }
 
   # Split regressor into separate events prior to convolution
@@ -351,13 +365,15 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
     
     #for each event, convolve it with hrf, normalize, then sum convolved events to get full timecourse
     normed_events <- sapply(seq_along(times), function(i) {
+
+      # TODO: sort out normalization for case where we use ts_multiplier and evtmax_1 -- for now, it's a bad idea at the end of a run
       #obtain unit-convolved duration-modulated regressor to define HRF prior to modulation by parametric regressor
       stim_conv <- fmri.stimulus(
-        n_vols = n_vols, values = 1.0, times = times[i], durations = durations[i], tr = tr, demean = FALSE,
-        center_values = FALSE, convolve = convolve, ts_multiplier = ts_multiplier,
+        n_vols = n_vols, values = 1.0, onsets = times[i], durations = durations[i], tr = tr, demean = FALSE,
+        center_values = FALSE, convolve = convolve, ts_multiplier = ts_multiplier, # ts_multiplier = NULL, #
         a1 = hrf_parameters["a1"], a2 = hrf_parameters["a2"], b1 = hrf_parameters["b1"], b2 = hrf_parameters["b2"], cc = hrf_parameters["cc"]
       )
-
+      
       if (normeach) {
         if (times[i] + durations[i] > (n_vols*tr - 20)) {
           # When the event occurs at the end of the time series and is the only event (i.e., as in evtmax_1),
@@ -376,8 +392,8 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
           lg$debug(msg)
 
           mid_vol <- n_vols*tr/2
-          stim_at_center <- fmri.stimulus(n_vols=n_vols, values=1.0, times=mid_vol, durations=durations[i], tr=tr, demean=FALSE, 
-            center_values=FALSE, convolve = convolve, ts_multiplier=ts_multiplier,
+          stim_at_center <- fmri.stimulus(n_vols=n_vols, values=1.0, onsets=mid_vol, durations=durations[i], tr=tr, demean=FALSE, 
+            center_values=FALSE, convolve = convolve, ts_multiplier=ts_multiplier, # ts_multiplier = NULL, 
             a1=hrf_parameters["a1"], a2=hrf_parameters["a2"], b1=hrf_parameters["b1"], b2=hrf_parameters["b2"], cc=hrf_parameters["cc"])
 
           # Rescale HRF to a max of 1.0 for each event, regardless of duration -- EQUIVALENT TO dmUBLOCK(1). 
@@ -390,14 +406,14 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
       } else if (normalize_hrf == TRUE && normeach == FALSE) {
         stim_conv <- stim_conv/hrf_max #rescale HRF to a max of 1.0 for long event -- EQUIVALENT TO dmUBLOCK(0)
       }
-
+      
       stim_conv <- stim_conv*values[i] #for each event, multiply by parametric regressor value
     })
 
     tc_conv <- apply(normed_events, 1, sum) #sum individual HRF regressors for combined time course
   } else {
     #handle unnormalized convolution
-    tc_conv <- fmri.stimulus(n_vols=n_vols, values=values, times=times, durations=durations, tr=tr, demean=FALSE,
+    tc_conv <- fmri.stimulus(n_vols=n_vols, values=values, onsets=times, durations=durations, tr=tr, demean=FALSE,
       center_values=FALSE, convolve = convolve, ts_multiplier = ts_multiplier,
       a1=hrf_parameters["a1"], a2=hrf_parameters["a2"], b1=hrf_parameters["b1"], b2=hrf_parameters["b2"], cc=hrf_parameters["cc"])
   }
@@ -431,7 +447,7 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
   }
 
   #name the matrix columns appropriately
-  colnames(tc_conv) <- attr(reg, "reg_name")
+  colnames(tc_conv) <- reg_name
   return(tc_conv)
 }
 
@@ -444,11 +460,13 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
 #' to dissociate it from stimulus occurrence (when event regressor also in model)
 #'
 #' @param n_vols The number of volumes (scans) to be output in the convolved regressor
-#' @param onsets A vector of times (in scans) specifying event onsets
-#' @param durations A vector of durations (in seconds) for each event
+#' @param onsets A vector of times (in volumes or seconds) specifying event onsets
+#' @param durations A vector of durations (in volumes or seconds) for each event
 #' @param values A vector of parametric values used as regressor heights prior to convolution
-#' @param times A vector of times (in seconds) specifying event onsets. If times are passed in, the onsets
-#'   argument (which is in scans) is ignored. That is, \code{onsets} and \code{times} are mutually exclusive.
+#' @param units Specifies the units of measurement for `onsets` and `durations`. If `"seconds"`,
+#'   these are interpreted in terms of time in seconds. If `"volumes"`, onsets and durations are
+#'   interpreted in terms of the volumes of the scan. Thus, an onset of `1` in volumes refers
+#'   to time = 0s, and by extension, `time = (volume - 1)*tr`. Default: `"seconds"`.
 #' @param center_values Whether to demean values vector before convolution
 #' @param rm_zeros Whether to remove zeros from events vector prior to convolution. Generally a good idea since we typically 
 #'   center values prior to convolution, and retaining zeros will lead them to be non-zero after mean centering.
@@ -470,170 +488,162 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
 #'
 #' @importFrom stats approx convolve
 #' @export
-fmri.stimulus <- function(n_vols=1, onsets=c(1), durations=c(1), values=c(1), times=NULL, center_values=FALSE,
-                          rm_zeros=TRUE, convolve=TRUE, tr=2, ts_multiplier=NULL, demean=TRUE, convmax_1=FALSE,
-                          a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35, conv_method="r", microtime_resolution=20) {
-
-  #double gamma function
-  double_gamma_hrf <- function(x, a1=6, a2=12, b1=0.9, b2=0.9, cc=0.35) {
+fmri.stimulus <- function(n_vols = 1, onsets = NULL, durations = NULL, values = NULL, units="time",
+                              center_values = FALSE, rm_zeros = TRUE, convolve = TRUE, tr = 2,
+                              ts_multiplier = NULL, demean = TRUE, convmax_1 = FALSE,
+                              a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35,
+                              conv_method = "r", microtime_resolution = 20) {
+  
+  checkmate::assert_integerish(n_vols, lower = 1, len = 1L)
+  checkmate::assert_numeric(onsets, lower = 0, null.ok = TRUE)
+  checkmate::assert_numeric(durations, lower = 0, null.ok = TRUE)
+  checkmate::assert_numeric(values, null.ok = TRUE)
+  if (is.null(values)) values <- 1 # default to unit height
+  checkmate::assert_string(units)
+  checkmate::assert_subset(units, c("time", "scans", "volumes"))
+  if (units=="scans") units <- "volumes" # for internal simplicity
+  if (units=="volumes" && !is.null(onsets)) {
+    checkmate::assert_integerish(onsets, lower = 1)
+    if (any(onsets < 1)) stop("For onsets in volumes/scans, onset = 1 is time = 0. Make sure all volume onsets are positive.")
+  }
+  
+  # if relevant, upsample ts_multiplier using linear interpolation to microtime sampling rate
+  if (!is.null(ts_multiplier)) {
+    checkmate::assert_vector(ts_multiplier, strict=TRUE)
+    if (length(ts_multiplier) != n_vols) {
+      stop(glue::glue("Length of ts_multiplier ({length(ts_multiplier)}) does not match n_vols ({n_vols})"))
+    } else {
+      ts_multiplier <- approx(ts_multiplier, n = n_vols * microtime_resolution)$y
+    }
+  }
+  
+  # redefine number of volumes in upsampled space
+  n_vols <- n_vols * microtime_resolution
+  
+  # convert TR into higher microtime units (e.g., TR=2s with microtime 20 yields TR = 0.1s)
+  tr <- tr / microtime_resolution
+  
+  # Double-gamma function
+  double_gamma_hrf <- function(x, a1=6, a2=12, b1=0.9, b2=0.9, cc=0.35, tr = 1) {
+    # The b1 and b2 parameters control the width (spread) of the gamma functions and are specified in seconds
+    # Thus, divide by the TR to get the HRF in volumes
+    b1 <- b1/tr; b2 <- b2/tr
     d1 <- a1 * b1
     d2 <- a2 * b2
     c1 <- ( x/d1 )^a1
     c2 <- cc * ( x/d2 )^a2
-    res <- c1 * exp(-(x-d1)/b1) - c2 * exp(-(x-d2)/b2)
-    res
+    c1 * exp(-(x-d1)/b1) - c2 * exp(-(x-d2)/b2)
   }
-
+  
+  # Double-gamma with original Glover values -- not currently used
+  #    As seen in Glover 1999, page 420. Using values for the auditory cortex (canonical Glover).
+  #    Variables are named after those in the paper. 
   double_gamma_glover <- function(t, n1 = 6, t1=0.9, a2=0.35, n2=12, t2=0.9) {
     gamma1 <- t^n1 * exp(-t/t1)
     gamma2 <- t^n2 * exp(-t/t2)
     c1 <- max(gamma1)
     c2 <- max(gamma2)
-    res <- gamma1/c1 - a2*gamma2/c2
-    return(res)
+    gamma1/c1 - a2*gamma2/c2
   }
-
-  # xx <- double_gamma_hrf(1:30)
-  # yy <- double_gamma_glover(1:30)
-  # plot(xx, type="b")
-  # lines(yy, type="b", col="blue")
-  # summary(xx-yy)
   
-  # def original_glover(t, n1=6., t1=0.9, a2=0.35, n2=12., t2=0.9):
-  #   """ As seen in Glover 1999, page 420. Using values for the auditory cortex (canonical Glover).
-  #   Variables are named after those in the paper. 
-  #   """
-  # gamma1 = t ** n1 * np.exp(-t / t1)
-  # gamma2 = t ** n2 * np.exp(-t / t2)
-  # 
-  # c1 = gamma1.max()
-  # c2 = gamma2.max()
-  # 
-  # return gamma1 / c1 - a2 * gamma2 / c2
-  # 
+  downsample <- function(vec) {
+    vec[seq(1, n_vols, by = microtime_resolution)]
+  }
   
-  #verify that ts_multiplier is n_vols in length
-  if (!is.null(ts_multiplier)) { stopifnot(is.vector(ts_multiplier) && length(ts_multiplier) == n_vols) }
-
-  if (!is.null(times)) {
-    cleaned <- cleanup_regressor(times, durations, values, rm_zeros = rm_zeros)
-    times <- cleaned$times; durations <- cleaned$durations; values <- cleaned$values
-  } else {
-    cleaned <- cleanup_regressor(onsets, durations, values, rm_zeros = rm_zeros)
-    onsets <- cleaned$times; durations <- cleaned$durations; values <- cleaned$values
-  }
-
-  #handle mean centering of parametric values prior to convolution
-  #this is useful when one wishes to dissociate variance due to parametric modulation versus stimulus occurrence
-  if (!all(is.na(values)) && isTRUE(center_values) && !all(abs(values - 1.0) < 1e-5)) {
-    values <- values - mean(values, na.rm=TRUE)
-  }
-
-  if (is.null(times)) {
-    #onsets are specified in terms of scans (i.e., use onsets argument)
-    microtime_resolution <- 1
-  } else {
-    #verify that there are events to be modeled in the time vector
-    if (length(times) == 0L) {
-      warning("No non-zero events for regressor to be convolved. Returning all-zero result for fMRI GLM.")
-      return(rep(0, n_vols))
-    } else if (all(times >= n_vols*tr)) {
-      #all events fall outside of the modeled time window
-      return(rep(0, n_vols))
+  convolve_stimulus <- function(stimulus, n_vols, tr, method) {
+    #  zero pad stimulus vector with 20 TRs on left and right to avoid bounding/edge effects in convolve
+    padding <- 20 * microtime_resolution
+    padded <- c(rep(0, padding), stimulus, rep(0, padding))
+    if (method == "cpp") {
+      out <- convolve_double_gamma(padded, a1, a2, b1 / tr, b2 / tr, cc) / microtime_resolution
+    } else {
+      # Compute the double-gamma HRF for one event, scale to be as long as time series.
+      # This goes from last-to-first volume since this is reversed in convolution
+      hrf <- double_gamma_hrf(((2 * padding) + n_vols):1, a1, a2, b1, b2, cc, tr)
+      out <- convolve(padded, hrf) / microtime_resolution
     }
 
-    #upsample time grid by a factor (default 20) to get best estimate of hrf at each volume
-    onsets <- times/tr*microtime_resolution
-    durations <- durations/tr*microtime_resolution
-    tr <- tr/microtime_resolution
-    n_vols <- n_vols*microtime_resolution
-
+    out <- out[-(1:padding)][1:n_vols] # drop padding
+    
+    # subset the elements of the upsampled grid back onto the observed TR grid
+    out <- downsample(out)
+    
+    if (convmax_1) out <- out / max(out) # renormalize to max=1 if requested
+    if (demean) out <- out - mean(out, na.rm = TRUE) # demean if requested
+    return(out)
+  }
+  
+  construct_stimulus <- function(onsets, durations, values, n_vols) {
+    stim <- rep(0, n_vols)
+    for (i in seq_along(onsets)) {
+      if (durations[i] == 0) durations[i] <- 1L # support instantaneous events -- one-volume Dirac delta
+      idx <- seq(from = onsets[i], length.out = durations[i])
+      idx <- idx[idx <= n_vols]
+      stim[idx] <- values[i]
+    }
+    stim
+  }
+  
+  # Handle the special ts_multiplier-only case -- convolve with HRF and return immediately
+  if (is.null(onsets)) {
     if (!is.null(ts_multiplier)) {
-      #upsample ts_multiplier using linear interpolation
-      ts_multiplier <- approx(ts_multiplier, n=n_vols)$y
+      out <- if (convolve) convolve_stimulus(ts_multiplier, n_vols, tr, conv_method) else downsample(ts_multiplier)
+      return(out)
+    } else {
+      stop("onsets is NULL, and no ts_multiplier was provided")
     }
-
   }
+  
+  ### Standard event-based design
+  # Convert onsets (in scans/volumes) to times (in seconds)
+  if (units == "volumes") {
+    # convert volumes to times in seconds
+    onsets <- (onsets - 1) * tr * microtime_resolution
+    durations <- durations * tr * microtime_resolution
+  }
+  
+  cleaned <- cleanup_regressor(onsets, durations, values, rm_zeros = rm_zeros)
+  onsets <- cleaned$times / tr + 1 # re-express in volumes -- add 1 for one-based indexing in microtime space
+  durations <- cleaned$durations / tr
+  values <- cleaned$values
+  
+  # Mean center parametric values
+  if (isTRUE(center_values) && !all(is.na(values)) && !all(abs(values - 1.0) < 1e-5)) {
+    values <- values - mean(values, na.rm = TRUE)
+  }
+  
   number_of_onsets <- length(onsets)
-
-  if (length(durations) == 1) {
-    durations <- rep(durations, number_of_onsets)
-  } else if (length(durations) != number_of_onsets)  {
-    msg <- glue("Length of durations vector ({length(durations)}) does not match the number of onsets ({number_of_onsets})!")
-    lg$error
+  if (length(durations) == 1L) {
+    durations <- rep(durations, length(onsets))
+  } else if (length(durations) != number_of_onsets) {
+    msg <- glue::glue("Length of durations vector ({length(durations)}) does not match the number of onsets ({number_of_onsets})!")
     stop(msg)
   }
-
-  if (length(values) == 1) {
-    #use the same regressor height (usually 1.0) for all onsets
-    values <- rep(values, number_of_onsets)
+  
+  if (length(values) == 1L) {
+    values <- rep(values, length(onsets))
   } else if (length(values) != number_of_onsets) {
-    stop("Length of values vector does not match the number of onsets!")
+    msg <- glue::glue("Length of values vector ({length(values)}) does not match the number of onsets ({number_of_onsets})!")
+    stop(msg)
   }
-
+  
   if (any(onsets >= n_vols)) {
-    #remove any events that begin outside the modeled time window
-    badonsets <- onsets >= n_vols
-    onsets <- onsets[!badonsets]
-    durations <- durations[!badonsets]
-    values <- values[!badonsets]
-    number_of_onsets <- number_of_onsets - sum(badonsets)
+    keep <- onsets < n_vols
+    onsets <- onsets[keep]; durations <- durations[keep]; values <- values[keep]
   }
-
-  stimulus <- rep(0, n_vols)
-
-  for (i in 1:number_of_onsets) {
-    for (j in onsets[i]:(onsets[i]+durations[i]-1)) {
-      stimulus[j] <- values[i]
-    }
-  }
-
-  #always truncate the stimulus back down to the target output length
-  #if a stimulus starts after the last modeled timepoint or extends into it, stimulus
-  #will become longer than expected, causing a convolution error. For now, be quiet about it,
-  #but perhaps we should let the user know when he/she specifies a time vector that extends into
-  #unmodeled timepoints
-  stimulus <- stimulus[1:n_vols]
-
-  #if we have a time-based modulator of the signal, multiply it against the stimulus vector before convolution
-  if (!is.null(ts_multiplier)) {
-    stimulus <- stimulus * ts_multiplier
-  }
-
-  #  zero pad stimulus vector with 20 TRs on left and right to avoid bounding/edge effects in convolve
-  stimulus <- c(rep(0,20*microtime_resolution),stimulus,rep(0,20*microtime_resolution))
-
-  if (conv_method=="cpp") {
-    regressor <- convolve_double_gamma(stimulus, a1, a2, b1/tr, b2/tr, cc)/microtime_resolution
-  } else if (conv_method=="r") {
-    #compute the double-gamma HRF for one event, scale to be as long as time series
-    #this goes from last-to-first volume since this is reversed in convolution
-    hrf_values <- double_gamma_hrf(((40*microtime_resolution)+n_vols):1, a1, a2, b1/tr, b2/tr, cc)
-    #hrf_values <- double_gamma_glover(((40*microtime_resolution)+n_vols):1, n1=a1, t1=b1/tr, a2=cc, n2=a1, t2=b2/tr)
-    regressor <- convolve(stimulus, hrf_values)/microtime_resolution
-  }
-
-  regressor <- regressor[-(1:(20*microtime_resolution))][1:n_vols]
-  regressor <- regressor[unique((microtime_resolution:n_vols)%/%microtime_resolution)*microtime_resolution]
-  dim(regressor) <- c(n_vols/microtime_resolution,1)
-
-  #rescale regressor to maximum height of 1.0 for scaling similarity across instances (see hrf_convolve_normalize for details)
-  #only applicable to convolve regressors
-  if (convmax_1 && convolve) { regressor <- regressor/max(regressor) }
-
+  
+  stim <- construct_stimulus(onsets, durations, values, n_vols)
+  if (!is.null(ts_multiplier)) stim <- stim * ts_multiplier # handle PPI interaction term
+  
   if (!convolve) {
-    # just return the box car without convolving by HRF
-    # remove zero padding
-    stimulus <- stimulus[-(1:(20 * microtime_resolution))][1:n_vols]
-    
-    # subset the elements of the upsampled grid back onto the observed TRs
-    stimulus <- stimulus[unique((microtime_resolution:n_vols)%/%microtime_resolution)*microtime_resolution]
-    return(stimulus)
-  } else if (demean) {
-    regressor - mean(regressor, na.rm=TRUE)
+    out <- downsample(stim)
   } else {
-    regressor
+    out <- convolve_stimulus(stim, n_vols, tr, conv_method)
   }
+  
+  # for debugging, return pre-convolution stimulus
+  # attr(out, "stimulus") <- stim
+  return(out)
 }
 
 #' compute a moving average smooth over a time series (here, a vector of RTs)

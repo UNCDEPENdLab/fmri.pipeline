@@ -7,6 +7,7 @@
 build_l1_models(
   gpa = NULL,
   trial_data = NULL,
+  ppi_data = NULL,
   l1_model_set = NULL,
   from_spec_file = NULL,
   onset_cols = NULL,

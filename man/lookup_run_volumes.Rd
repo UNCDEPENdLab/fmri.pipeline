@@ -15,9 +15,4 @@ the number of volumes in \code{nifti}
 \description{
 Helper function to obtain the number of volumes in a 4D nifti file
 }
-\details{
-This function prefers to use fslval instead of an internal R library
-  because both oro.nifti and RNifti are rather slow to obtain a single value from
-  the NIfTI header
-}
 \keyword{internal}

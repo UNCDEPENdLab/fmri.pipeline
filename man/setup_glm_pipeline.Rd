@@ -11,6 +11,7 @@ setup_glm_pipeline(
   subject_data = NULL,
   run_data = NULL,
   trial_data = NULL,
+  ppi_data = NULL,
   group_output_directory = "default",
   output_locations = "default",
   vm = c(id = "id", session = "session", run_number = "run_number", block_number =
@@ -64,6 +65,12 @@ If you wish, you can pass a single trial-level data frame that also contains all
 (i.e., a combined long format, where variables at different levels are all included as columns). In this case,
 \code{setup_glm_pipeline} will detect which variables occur at each level and parse these accordingly into
 \code{subject_data} and \code{run_data}.}
+
+\item{ppi_data}{An optional `data.frame` containing physiological signals (e.g., deconvolved time series in seed ROIs) that
+can be used in setting up the level 1 models for a PPI analysis. Specifically, if this `data.frame` is provided, you will be
+able to create interaction regressors for any convolved event-related signal and the columns of `ppi_data`. This data.frame
+must include subject id, session id (if relevant), and run_number as columns. All additional columns should be eligible
+physiological signals for PPI analysis.}
 
 \item{vm}{A named character vector containing key identifying columns in \code{subject_data} and
 \code{trial_data}. Minimally, this vector should contain the elements 'id'}

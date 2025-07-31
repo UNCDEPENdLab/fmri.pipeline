@@ -45,7 +45,7 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
   get_job_status <- function() { # use variables in parent environment
     if (scheduler %in% c("slurm", "sbatch")) {
       status <- slurm_job_status(job_ids)
-      state <- sapply(status$State, function(x) {
+      state <- vapply(status$State, function(x) {
         switch(x,
           "BOOT_FAIL" = "failed",
           "CANCELLED" = "cancelled",
@@ -61,23 +61,24 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
           "REVOKED" = "failed",
           "SUSPENDED" = "suspended",
           "TIMEOUT" = "failed",
-          "MISSING" = "missing" # scheduler has not registered the job
+          "MISSING" = "missing",
+          "unknown"
         )
-      })
+      }, character(1))    
     } else if (scheduler %in% c("sh", "local")) {
       status <- local_job_status(job_ids)
-      state <- sapply(status$STAT, function(x) {
+      state <- vapply(status$STAT, function(x) {
         switch(x,
           "C" = "complete",
-          "I" = "running", # idle/sleeping
+          "I" = "running",
           "R" = "running",
-          "S" = "running", # sleeping
+          "S" = "running",
           "T" = "suspended",
           "U" = "running",
-          "Z" = "failed", # zombie
-          stop("Unable to understand job state: ", x)
+          "Z" = "failed",
+          "unknown"
         )
-      })
+      }, character(1))     
     } else if (scheduler %in% c("torque", "qsub")) {
       # QSUB
       status <- torque_job_status(job_ids)
@@ -106,7 +107,7 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
     status <- get_job_status()
 
     # update wait time
-    wait_total <- difftime(Sys.time(), wait_start, units = "sec")
+    wait_total <- as.numeric(difftime(Sys.time(), wait_start, units = "secs"))
 
     # Debugging
     # cat("Wait so far: ", wait_total, "\n")
@@ -181,14 +182,16 @@ slurm_job_status <- function(job_ids = NULL, user = NULL, sacct_format = "jobid,
   # cat(cmd, "\n")
   res <- system2("sacct", args = cmd, stdout = TRUE)
 
-  df_base <- data.frame(JobID = job_ids)
+  # Create base job ID data frame
+  df_base <- data.frame(JobID = job_ids, stringsAsFactors = FALSE)
   df_empty <- df_base %>%
     mutate(
       Submit = NA_character_,
       Timelimit = NA_character_,
       Start = NA_character_,
       End = NA_character_,
-      State = "MISSING"
+      State = "MISSING",
+      stringsAsFactors = FALSE
     )
 
   # handle non-zero exit status -- return empty data
@@ -205,17 +208,23 @@ slurm_job_status <- function(job_ids = NULL, user = NULL, sacct_format = "jobid,
     out <- data.table::fread(text = res, data.table=FALSE)
   }
 
-  if (!checkmate::test_subset(c("JobID", "State"), names(out))) {
-    warning("Missing columns in sacct output")
+  # Check required fields
+  if (!all(c("JobID", "State") %in% names(out))) {
+    warning("Missing required columns in sacct output")
     return(df_empty)
   }
 
   out$JobID <- as.character(out$JobID)
-  df <- df_base %>%
-    dplyr::left_join(out, by = "JobID") %>%
-    mutate(State = if_else(is.na(State), "MISSING", State))
 
-  return(df)
+  merged <- merge(df_base, out, by = "JobID", all.x = TRUE)
+
+  if ("State" %in% names(merged)) {
+    merged$State[is.na(merged$State)] <- "MISSING"
+  } else {
+    merged$State <- "MISSING"
+  }
+
+  return(merged)
 }
 
 # torque does not keep information about completed jobs available in qstat or qselect
@@ -285,8 +294,8 @@ local_job_status <- function(job_ids = NULL, user = NULL,
     stopifnot(length(res) > 1)
     # fread and any other parsing can break down with consecutive spaces in body of output.
     # This happens with lstart and start, avoid these for now.
-    #header <- gregexpr("\\b", res[1], perl = T)
-    #l2 <- gregexpr("\\b", res[2], perl=T)
+    # header <- gregexpr("\\b", res[1], perl = T)
+    # l2 <- gregexpr("\\b", res[2], perl=T)
     dt <- data.table::fread(text = res)
   }
 
