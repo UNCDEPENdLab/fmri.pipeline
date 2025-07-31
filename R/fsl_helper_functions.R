@@ -104,8 +104,7 @@ get_feat_status <- function(feat_dir, feat_fsf=NULL, lg=NULL, prefix=NULL) {
       lg$debug("Feat directory is complete: %s", feat_dir)
       timing_file <- file.path(feat_dir, ".feat_complete")
       if (file.exists(file.path(feat_dir, ".feat_fail"))) {
-        lg$warn("Both .feat_complete and .feat_fail objects exist in %s", feat_dir)
-        lg$warn("Assuming that .feat_complete reflects a successful completion of feat")
+        log_warn(lg, "Both .feat_complete and .feat_fail objects exist in %s. Assuming that .feat_complete reflects a successful completion of feat.", feat_dir)
       }
       feat_checks$feat_complete <- TRUE
       feat_checks$feat_failed <- FALSE
@@ -127,8 +126,7 @@ get_feat_status <- function(feat_dir, feat_fsf=NULL, lg=NULL, prefix=NULL) {
            feat_checks$feat_execution_end <- timing[2L]
            feat_checks$feat_execution_min <- as.numeric(difftime(timing[2L], timing[1L], units = "mins"))
          } else {
-           lg$warn("Did not find two timing entries in %s.", timing_file)
-           lg$warn("File contents: %s", timing)
+           log_warn(lg, "Did not find two timing entries in %s. File contents: %s", timing_file, timing)
          }
        }
     }
@@ -177,7 +175,7 @@ add_custom_feat_syntax <- function(fsf_syntax, feat_args, lg=NULL) {
     this_name <- names(feat_args)[ii]
     this_value <- feat_args[[ii]]
     if (length(this_value) > 1L) {
-      lg$warn("feat_args: Cannot handle settings with multiple values: %s. Skipping out.", this_name)
+      log_warn(lg, "feat_args: Cannot handle settings with multiple values: %s. Skipping out.", this_name)
       next
     } else {
       lg$debug("Adding custom feat setting: %s = %s", this_name, this_value)
@@ -200,27 +198,36 @@ add_custom_feat_syntax <- function(fsf_syntax, feat_args, lg=NULL) {
 #' Helper function to look at feat outputs and files to determine if execution is complete
 #'
 #' @param gpa a \code{glm_pipeline_arguments object}
-#' @param level the level of analysis to be refreshed (1, 2, or 3)
-#' @param lg an optional lgr logger object used for logging
+#' @param level the level of analysis to be refreshed (1L, 2L, or 3L)
+#' @param lg_level the level of model setup i.e. which setup_lx_model function is calling refresh_feat_status function  (1, 2, or 3)
 #' @return a modified copy of \code{gpa} with the feat columns of
 #'   $l1_model_setup, $l2_model_setup, or $l3_model_setup refreshed
 #'
 #' @export
 #' @importFrom dplyr select
 #' @importFrom purrr pmap_dfr
-refresh_feat_status <- function(gpa, level = 1L, lg = NULL) {
+refresh_feat_status <- function(gpa, level = 1L, lg_level = 1L) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_integerish(level, lower = 1L, upper = 3L)
-  checkmate::assert_class(lg, "Logger", null.ok = TRUE)
+  checkmate::assert_integerish(lg_level, lower = 1L, upper = 3L)
+
+  lg_name <- case_when(
+    lg_level == 1L ~ "l1_setup",
+    lg_level == 2L ~ "l2_setup",
+    lg_level == 3L ~ "l3_setup",
+    TRUE ~ NULL
+  )
+  lg <- lgr::get_logger(paste0("glm_pipeline/", lg_name))
+
   setup_name <- paste0("l", level, "_model_setup")
 
   if ("fsl" %in% gpa$glm_software && setup_name %in% names(gpa)) {
     if (is.null(lg)) lg <- lgr::get_logger()
     orig <- gpa[[setup_name]]$fsl
     if (is.null(orig) || (is.data.frame(orig) && nrow(orig) == 0L)) {
-      lg$warn("Could not find populated $fsl object in gpa$%s$fsl", setup_name)
+      log_warn(lg, "Could not find populated $fsl object in gpa$%s$fsl", setup_name)
     } else if (!"feat_fsf" %in% names(orig)) {
-      lg$warn("No $feat_fsf field in gpa$%s$fsl", setup_name)
+      log_warn(lg, "No feat_fsf field in gpa$%s$fsl", setup_name)
     } else {
       lg$info("Found existing %s field. Refreshing status of L%d feat execution and outputs.", setup_name, level)
       refresh <- orig %>%

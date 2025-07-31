@@ -83,10 +83,10 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   # For single-run data, L1 inputs must be complete for entry into L3
   if (isTRUE(gpa$multi_run)) {
     # refresh l2 model status in $l2_model_setup
-    gpa <- refresh_feat_status(gpa, level = 2L, lg = lg)
+    gpa <- refresh_feat_status(gpa, level = 2L, lg_level = 3L)
   } else {
     # refresh l1 model status in $l1_model_setup
-    gpa <- refresh_feat_status(gpa, level = 1L, lg = lg)
+    gpa <- refresh_feat_status(gpa, level = 1L, lg_level = 3L)
   }
 
   excluded_runs <- gpa$run_data %>%
@@ -102,13 +102,13 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   }
 
   # make sure l1 models have already been generated
-  enforce_glms_complete(gpa, level = 1L, lg)
+  enforce_glms_complete(gpa, level = 1L, lg_level = 3L)
 
   if (isTRUE(gpa$multi_run)) {
     lg$info("In setup_l3_models, using a multi-run 3-level setup with runs (l1), subjects (l2), sample (l3)")
 
     # in multi-run setup, an l2_model_setup must be present
-    enforce_glms_complete(gpa, level = 2L, lg)
+    enforce_glms_complete(gpa, level = 2L, lg_level = 3L)
 
   } else {
     lg$info("In setup_l3_models, using a single run 2-level setup with subjects (l1), sample (l3)")
@@ -149,10 +149,10 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     dplyr::filter(l3_cope_number == 1L) %>%
     dplyr::select(-l3_cope_number, -l3_cope_name)
 
-  to_run <- get_feat_l3_inputs(gpa, l3_cope_input_df, lg)
+  to_run <- get_feat_l3_inputs(gpa, l3_cope_input_df)
 
   if (length(to_run) == 0L) {
-    lg$warn("No feat l3 inputs returned from get_feat_l3_inputs. Is it possible no lower-level analyses are complete?")
+    log_warn(lg, "No feat inputs returned from get_feat_l3_inputs. Is it possible no lower-level analyses are complete?")
     return(gpa)
   }
 
@@ -167,32 +167,29 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     if ("fsl" %in% gpa$glm_software) {
 
       if (nrow(model_info) <= 3) {
-        lg$warn(
-          "Fewer than 4 complete feat input directories for l1 model %s, l2 model %s, l3 model %s",
-          model_info$l1_model[1L], model_info$l2_model[1L], model_info$l3_model[1L]
-        )
+        log_warn(lg, "Fewer than 4 complete feat input directories for l1 model %s, l2 model %s, l3 model %s", model_info$l1_model[1L], model_info$l2_model[1L], model_info$l3_model[1L])
         l3_file_setup$fsl <- NULL
       }
 
       # setup Feat L3 files for each combination of lower-level models
       l3_file_setup$fsl <- tryCatch(fsl_l3_model(model_info, gpa = gpa),
         error = function(e) {
-          lg$error(
-            "Problem with fsl_l3_model. L1 Model: %s, L2 Model: %s, L3 model %s",
-            model_info$l1_model[1L], model_info$l2_model[1L], model_info$l3_model[1L]
+          log_error(lg,
+            "Problem with fsl_l3_model. L1 Model: %s, L2 Model: %s, L3 model %s.
+            \nError message: %s",
+            model_info$l1_model[1L], model_info$l2_model[1L], model_info$l3_model[1L], as.character(e)
           )
-          lg$error("Error message: %s", as.character(e))
           return(NULL)
         }
       )
     }
 
-    if ("spm" %in% gpa$glm_software) {
-      lg$warn("spm not supported in setup_l3_models")
+    if ("spm" %in% gpa$glm_software) {\
+      log_warn(lg, "spm not supported in setup_l3_models")
     }
 
     if ("afni" %in% gpa$glm_software) {
-      lg$warn("afni not supported in setup_l3_models")
+      log_warn(lg, "afni not supported in setup_l3_models")
     }
 
     return(l3_file_setup)
@@ -224,13 +221,13 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   # the expressions for l3 output locations should not generate any duplicate fsfs
   dupe_fsfs <- duplicated(gpa$l3_model_setup$fsl$feat_fsf)
   if (any(dupe_fsfs, na.rm = TRUE)) {
-    lg$warn("There are duplicate fsfs in gpa$l3_model_setup$fsl.")
-    lg$warn("This suggests a problem with gpa$output_locations$feat_l3_fsf and gpa$output_locations$feat_l3_directory settings.")
-    lg$warn("gpa$output_locations$feat_l3_fsf: %s", gpa$output_locations$feat_l3_fsf)
-    lg$warn("gpa$output_locations$feat_l3_directory: %s", gpa$output_locations$feat_l3_directory)
+    log_warn(lg, "There are duplicate fsfs in gpa$l3_model_setup$fsl. 
+      \nThis suggests a problem with gpa$output_locations$feat_l3_fsf and gpa$output_locations$feat_l3_directory settings.
+      \ngpa$output_locations$feat_l3_fsf: %s.
+      \ngpa$output_locations$feat_l3_directory: %s.",
+      gpa$output_locations$feat_l3_fsf, gpa$output_locations$feat_l3_directory)
     lg$debug("%s", capture.output(print(gpa$l3_model_setup$fsl[dupe_fsfs, ])))
   }
-
   return(gpa)
 }
 
@@ -352,11 +349,11 @@ get_fsl_l3_model_df <- function(gpa, model_df, subj_df=NULL) {
   return(combined)
 }
 
-get_feat_l3_inputs <- function(gpa, l3_cope_config, lg=NULL) {
+get_feat_l3_inputs <- function(gpa, l3_cope_config) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_data_frame(l3_cope_config)
+  lg <- lgr::get_logger("glm_pipeline/l3_setup")
 
-  if (is.null(lg)) { lg <- lgr::get_logger() }
   if (isTRUE(gpa$multi_run)) {
     # feat directories in $l2_model_setup
     feat_inputs <- gpa$l2_model_setup$fsl %>%

@@ -1595,32 +1595,33 @@ named_vector <- function(...) {
 # }
 
 
-enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
+enforce_glms_complete <- function(gpa, level=1L, lg_level = 1L) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
-  checkmate::assert_integerish(level, lower=1L, upper=3L)
-  checkmate::assert_class(lg, "Logger")
+  checkmate::assert_integerish(level, lower = 1L, upper = 3L)
+  checkmate::assert_class(lg_level, lower = 1L, upper = 3L)
+    
+  lg_name <- case_when(
+    lg_level == 1L ~ "l1_setup",
+    lg_level == 2L ~ "l2_setup",
+    lg_level == 3L ~ "l3_setup",
+    TRUE ~ NULL
+  )
+  lg <- lgr::get_logger(paste0("glm_pipeline/", lg_name))
 
   obj_name <- glue("l{level}_model_setup")
   expect_class <- glue("l{level}_setup")
   obj <- gpa[[obj_name]]
 
   if (is.null(obj) || !inherits(obj, expect_class)) {
-    msg <- sprintf("No l%d_model_setup found in the glm pipeline object.", level)
-    lg$error(msg)
-    stop(msg)
+    log_error(lg, "No l%d_model_setup found in the glm pipeline object.", level)
   } else {
     if ("fsl" %in% gpa$glm_software) {
       nmiss <- sum(obj$fsl$feat_complete == FALSE)
       n_feat_runs <- nrow(obj$fsl)
       if (nmiss == n_feat_runs) {
-        msg <- sprintf("All feat runs in %s$fsl are incomplete.", obj_name)
-        lg$error(msg)
-        stop(msg)
+        log_error(lg, "All feat runs in %s$fsl are incomplete.", obj_name)
       } else if (nmiss > 0) {
-        lg$warn(
-          "There are %d missing FEAT outputs in %s$fsl. Using complete %d outputs.",
-          nmiss, obj_name, n_feat_runs - nmiss
-        )
+        log_warn(lg, "There are %d missing FEAT outputs in %s$fsl. Using complete %d outputs.", nmiss, obj_name, n_feat_runs - nmiss)
       }
     }
   }

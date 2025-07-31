@@ -47,7 +47,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   # data.frame. We need more of an append/update approach, perhaps like the sqlite setup for the overall pipeline.
 
   # refresh status of feat inputs and outputs at level 1 before continuing
-  gpa <- refresh_feat_status(gpa, level=1L, lg=lg)
+  gpa <- refresh_feat_status(gpa, level=1L, lg_level = 1L)
 
   #setup parallel worker pool, if requested
   if (!is.null(gpa$parallel$l1_setup_cores) && gpa$parallel$l1_setup_cores[1L] > 1L) {
@@ -87,12 +87,12 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
     # ensure that we have a TR column and that TR does not vary by run
     if (!"tr" %in% names(rdata)) {
-      subj_lg$error("No tr column in run data for subject: %s, session: %d", subj_id, subj_session)
+      log_error(subj_lg, "No tr column in run data for subject: %s, session: %d", subj_id, subj_session)
       return(NULL)
     }
 
     if (length(unique(rdata$tr)) > 1L) {
-      subj_lg$error("More than one TR value for runs within a subject. This is not currently supported! subject: %s, session: %d", subj_id, subj_session)
+      log_error(subj_lg, "More than one TR value for runs within a subject. This is not currently supported! subject: %s, session: %d", subj_id, subj_session)
       return(NULL)
     }
 
@@ -214,7 +214,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
             }
           },
           error = function(e) {
-            lg$error("Failed to load BDM file: %s with error: %s. I will regenerate the design matrix.", bdm_out_file, e)
+            log_error(lg, "Failed to load BDM file: %s with error: %s. I will regenerate the design matrix.", bdm_out_file, e)
             return(TRUE)
           }
         )
@@ -240,8 +240,9 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         bdm_args$ts_multipliers <- ts_multiplier_data
 
         d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error = function(e) {
-          subj_lg$error("Failed build_design_matrix for id: %s, session: %s, model: %s", subj_id, subj_session, this_model)
-          subj_lg$error("Error message: %s", as.character(e))
+          log_error(subj_lg, 
+          "Failed build_design_matrix for id: %s, session: %s, model: %s.
+          \nError message: %s", subj_id, subj_session, this_model, as.character(e))
           return(NULL)
         })
 
@@ -264,8 +265,10 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
             )
           },
           error = function(e) {
-            lg$error("Problem with fsl_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)
-            lg$error("Error message: %s", as.character(e))
+            log_error(lg, 
+              "Problem with fsl_l1_model. Model: %s, Subject: %s, Session: %s.
+              \nError message: %s", 
+              this_model, subj_id, subj_session, as.character(e))
             return(NULL)
           }
         )
