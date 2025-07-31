@@ -1,0 +1,110 @@
+onsets:
+- onset
+- response_time
+durations: duration
+isis: ~
+wi_factors:
+- cond
+- wifake
+values: response_time
+events:
+  e_onset:
+    onset: onset
+    duration: duration
+signals:
+  s_onset:
+    event: e_onset
+    normalization: none
+    value_fixed: 1.0
+    value_type: unit
+    demean_convolved: yes
+    add_deriv: no
+    beta_series: no
+  s_onset_int:
+    event: e_onset
+    normalization: none
+    value_fixed: 1.0
+    value_type: unit
+    wi_formula: ~wifake + cond + wifake:cond - 1
+    wi_factors:
+    - wifake
+    - cond
+    demean_convolved: yes
+    add_deriv: no
+    beta_series: no
+l1_models:
+  l1simple:
+    signals: s_onset
+    diagonal: yes
+    cell_means: no
+    overall_response: no
+    weights: cells
+  l1int:
+    signals: s_onset_int
+    diagonal: yes
+    cell_means: no
+    overall_response: no
+    weights: cells
+    delete:
+    - EV_s_onset_int.wifakeright
+    - EV_s_onset_int.wifakeleft
+    wi_contrasts:
+      s_onset_int:
+        diagonal: no
+        cond_means:
+        - wifake
+        - cond
+        pairwise_diffs:
+        - wifake
+        - cond
+        - wifake:cond
+        cell_means: yes
+        overall_response: yes
+        weights: cells
+l2_models:
+  l2:
+    level: 2
+    model_formula: ~run_number
+    num2fac: run_number
+    reference_level:
+      run_number: '1'
+    diagonal: yes
+    cell_means: no
+    cond_means: run_number
+    pairwise_diffs: run_number
+    overall_response: yes
+    weights: cells
+    delete: run_number.1
+l3_models:
+  l3age:
+    level: 3
+    model_formula: ~age
+    covariate_transform:
+      age: mean
+    diagonal: yes
+    cell_means: no
+    overall_response: yes
+    weights: cells
+    delete: EV_(Intercept)
+    fsl_outlier_deweighting: yes
+  l3int:
+    level: 3
+    model_formula: ~age + gender + age:gender
+    covariate_transform:
+      age: mean
+    reference_level:
+      gender: M
+    diagonal: yes
+    cell_means: no
+    cond_means: gender
+    pairwise_diffs: gender
+    overall_response: yes
+    simple_slopes:
+      age:
+      - gender
+    weights: cells
+    delete:
+    - EV_age
+    - EV_(Intercept)
+    fsl_outlier_deweighting: yes
+
