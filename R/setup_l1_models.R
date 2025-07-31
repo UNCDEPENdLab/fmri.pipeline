@@ -75,6 +75,8 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
     subj_id <- subj_df$id
     subj_session <- subj_df$session
 
+    subj_lg <- get_subject_logger("glm_pipeline/l1_setup", gpa, subj_id, subj_session, "setup_l1")
+
     # find the run data for analysis
     rdata <- gpa$run_data %>% dplyr::filter(id == !!subj_id & session == !!subj_session & run_nifti_present == TRUE)
     run_nifti <- get_mr_abspath(rdata, "run_nifti")
@@ -85,12 +87,12 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
     # ensure that we have a TR column and that TR does not vary by run
     if (!"tr" %in% names(rdata)) {
-      lg$error("No tr column in run data for subject: %s, session: %d", subj_id, subj_session)
+      subj_lg$error("No tr column in run data for subject: %s, session: %d", subj_id, subj_session)
       return(NULL)
     }
 
     if (length(unique(rdata$tr)) > 1L) {
-      lg$error("More than one TR value for runs within a subject. This is not currently supported! subject: %s, session: %d", subj_id, subj_session)
+      subj_lg$error("More than one TR value for runs within a subject. This is not currently supported! subject: %s, session: %d", subj_id, subj_session)
       return(NULL)
     }
 
@@ -104,19 +106,19 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
     # process files
     if (length(run_nifti) == 0L) {
-      lg$warn("Unable to find any preprocessed fMRI files in dir: %s", subj_mr_dir)
+      log_warn(subj_lg, "Unable to find any preprocessed fMRI files in dir: {subj_mr_dir}")
       return(NULL)
     } else if (any(!file.exists(run_nifti))) {
       nii_present <- file.exists(run_nifti)
-      lg$warn("Could not find some of the expected preprocessed fMRI files. These will be dropped.")
-      lg$warn("Missing: %s", run_nifti[!nii_present])
+      log_warn(subj_lg, "Could not find some of the expected preprocessed fMRI files. These will be dropped.")
+      log_warn(subj_lg, "Missing: {run_nifti[!nii_present]}")
       run_nifti <- run_nifti[nii_present]
       mr_run_nums <- mr_run_nums[nii_present]
       l1_confound_files <- l1_confound_files[nii_present]
       run_volumes <- run_volumes[nii_present]
       exclude_run <- exclude_run[nii_present]
     } else {
-      lg$debug(paste("MR files to analyze:", run_nifti)) # log files that were found
+      subj_lg$debug(paste("MR files to analyze:", run_nifti)) # log files that were found
     }
 
     lg$debug("Volumes in run_nifti: %s", paste(run_volumes, collapse = ", "))
@@ -170,13 +172,10 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
             dplyr::filter(id == !!subj_id & session == !!subj_session)
 
           if (nrow(this_signal$value) == 0L) {
-            msg <- glue(
-              "In L1 model setup, failed to find any rows in in gpa$l1_models$signals${this_signal$name}$value",
-              " for id: {subj_id}, session: {subj_session}, model: {this_model}.\n  We will create an empty regressor.",
-              .trim = FALSE
+            log_warn(
+              subj_lg,
+              "In L1 model setup, failed to find any rows in in gpa$l1_models$signals{this_signal$name}$value for id: {subj_id}, session: {subj_session}, model: {this_model}.\n  We will create an empty regressor."
             )
-            lg$warn(msg)
-            warning(msg)
           }
 
           # refit wi model if needed
@@ -184,9 +183,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
             this_signal <- fit_wi_model(this_signal)
           }
         } else {
-          msg <- "Unable to sort out how to refit wi_model with signal that doesn't have a data.frame in the $value slot"
-          lg$error(msg)
-          stop(msg)
+          log_error(subj_lg, "Unable to sort out how to refit wi_model with signal that doesn't have a data.frame in the $value slot")
         }
         return(this_signal)
       })
@@ -239,12 +236,12 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         bdm_args$run_data <- mr_df
         bdm_args$runs_to_output <- mr_run_nums
         bdm_args$output_directory <- file.path(l1_output_dir, "timing_files")
-        bdm_args$lg <- lg
+        bdm_args$lg <- subj_lg
         bdm_args$ts_multipliers <- ts_multiplier_data
 
         d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error = function(e) {
-          lg$error("Failed build_design_matrix for id: %s, session: %s, model: %s", subj_id, subj_session, this_model)
-          lg$error("Error message: %s", as.character(e))
+          subj_lg$error("Failed build_design_matrix for id: %s, session: %s, model: %s", subj_id, subj_session, this_model)
+          subj_lg$error("Error message: %s", as.character(e))
           return(NULL)
         })
 

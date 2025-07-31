@@ -117,9 +117,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
         dplyr::filter(exclude_run == FALSE & exclude_subject == FALSE)
 
       if (nrow(run_data) == 0L) {
-        msg <- "In setup_l3_models, no runs survived the exclude_subject and exclude_run step."
-        lg$warn(msg)
-        warning(msg)
+        log_warn(lg, "In setup_l3_models, no runs survived the exclude_subject and exclude_run step.")
         return(NULL)
       }
   }

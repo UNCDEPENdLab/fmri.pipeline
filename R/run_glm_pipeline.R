@@ -174,12 +174,10 @@ choose_glm_set <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, l3_mod
   for (nn in names(m_list)) {
     # enforce that all, none, and prompt must be singleton arguments
     if (any(m_list[[nn]] %in% c("all", "none", "prompt")) && length(m_list[[nn]]) > 1L) {
-      msg <- sprintf(
-        "Argument %s has value 'all', 'none', or 'prompt'. These must be passed alone, not with other model names.", 
-        m_list[[nn]]
+      log_error(
+        lg,
+        "Argument {nn} has value 'all', 'none', or 'prompt'. These must be passed alone, not with other model names."
       )
-      lg$error(msg)
-      stop(msg)
     }
   }
 

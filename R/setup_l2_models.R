@@ -82,17 +82,12 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL) {
     dplyr::select(id, session, run_number, exclude_run, exclude_subject)
 
   if (nrow(run_data) == 0L) {
-    msg <- "In setup_l2_models, no runs survived the exclude_subject and exclude_run step."
-    lg$warn(msg)
-    warning(msg)
+    log_warn(lg, "In setup_l2_models, no runs survived the exclude_subject and exclude_run step.")
     return(NULL)
   }
 
   if (is.null(gpa$l1_model_setup) || !inherits(gpa$l1_model_setup, "l1_setup")) {
-    lg$error("No l1_model_setup found in the glm pipeline object.")
-    lg$error("You must run setup_l1_models before running setup_l2_models.")
-    stop("No l1_model_setup found in the glm pipeline object.",
-    "You must run setup_l1_models before running setup_l2_models.")
+    log_error(lg, "No l1_model_setup found in the glm pipeline object. You must run setup_l1_models before running setup_l2_models.")
   }
 
   # respecify L2 models for each subject based on available runs
