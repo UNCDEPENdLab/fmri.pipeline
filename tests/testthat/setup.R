@@ -149,6 +149,7 @@ build_gpa_base <- function(
     exclude_run = "max(framewise_displacement) > 5 | sum(framewise_displacement > .9)/length(framewise_displacement) > .10",
     exclude_subject = "n_good_runs < 4",
     truncate_run = "(framewise_displacement > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
+    tr = 1.0,
     spike_volumes = NULL) {
 
 
@@ -164,7 +165,7 @@ build_gpa_base <- function(
     run_data = run_df,
     subject_data = subj_df, # output_directory = tempdir(), # vm = c(id = "id", run_number = "run"),
     n_expected_runs = 8,
-    tr = 1.0,
+    tr = tr, # 1.0,
     drop_volumes = drop_volumes,
     l1_models=NULL, l2_models=NULL, l3_models=NULL,
     confound_settings = list(
@@ -210,23 +211,23 @@ build_gpa <- function(
   analysis_name = "gpa_tests",
   test_data_base_dir = "tests/testthat/testdata",
   gpa_cache_file = "gpa.rds",
-  l1_spec_file = "sample_spec.yaml", #"sample_L1_spec.yaml",
+  spec_file = "sample_spec.yaml", #"sample_L1_spec.yaml",
   ...
 ) {
   # run set_gm_pipeline()
   gpa <- get_gpa_base(analysis_name = analysis_name, test_data_base_dir = test_data_base_dir, ...)
 
   # setup compute enviroment
-  gpa <- setup_compute_environment(gpa)
-
+  gpa <- setup_compute_environment(gpa, preselect_action = 5L)
+  
   # Build L1 models
-  gpa <- build_l1_models(gpa, from_spec_file = file.path(test_data_base_dir, l1_spec_file))
+  gpa <- build_l1_models(gpa, from_spec_file = file.path(test_data_base_dir, spec_file))
 
   # Build L2 models
-  gpa <- build_l2_models(gpa)
+  gpa <- build_l2_models(gpa) #, from_spec_file = file.path(test_data_base_dir, spec_file))
 
   # Build L3 models
-  gpa <- build_l3_models(gpa)
+  gpa <- build_l3_models(gpa) #, from_spec_file = file.path(test_data_base_dir, spec_file))
 
   # Save final RDS object
   saveRDS(gpa, file = file.path(test_data_base_dir, gpa_cache_file))
@@ -254,7 +255,7 @@ get_gpa <- function(
 create_gpa <- function(
   analysis_name = "gpa_tests",
   test_data_base_dir = "/proj/mnhallqlab/projects/fmri.pipeline_test_data",
-  l1_spec_file = "sample_2_L1_spec.yaml",
+  spec_file = "sample_2_L1_spec.yaml",
   trial_data_file = "sample_trial_data.csv.gz",
   run_data_file = "sample_run_data.csv",
   subject_data_file = "sample_subject_data.csv",
@@ -265,7 +266,7 @@ create_gpa <- function(
     analysis_name = analysis_name,
     test_data_base_dir = test_data_base_dir,
     gpa_cache_file = gpa_cache_file,
-    l1_spec_file = l1_spec_file,
+    spec_file = spec_file,
     
     # need to figure out what to pass here
     trial_data_file = trial_data_file,
@@ -274,11 +275,77 @@ create_gpa <- function(
 
     cache_file = cache_file,
     scheduler = "slurm", drop_volumes = 2,
-    exclude_run = "max(FD) > 5 | sum(FD > .9)/length(FD) > .10",
+    exclude_run = "max(framewise_displacement) > 5 | sum(framewise_displacement > .9)/length(framewise_displacement) > .10",
     exclude_subject = "n_good_runs < 4",
-    truncate_run = "(FD > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
-    spike_volumes = NULL
+    truncate_run = "(framewise_displacement > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
+    spike_volumes = NULL,
+    tr = 1.0
   )
   # TODO check if we need to run get_gpa each time or we could add a if statment to not run this function if the gpa object already exists in a saved file?
+  return(gpa)
+}
+
+create_gpa_wrong_tr <- function(
+  analysis_name = "gpa_tests",
+  test_data_base_dir = "/proj/mnhallqlab/projects/fmri.pipeline_test_data",
+  spec_file = "sample_2_L1_spec.yaml",
+  trial_data_file = "sample_trial_data.csv.gz",
+  run_data_file = "sample_run_data.csv",
+  subject_data_file = "sample_subject_data.csv",
+  gpa_cache_file = "gpa.rds",
+  cache_file = "gpa_base.rds"
+) {
+  gpa <- get_gpa(
+    analysis_name = analysis_name,
+    test_data_base_dir = test_data_base_dir,
+    gpa_cache_file = gpa_cache_file,
+    spec_file = spec_file,
+    
+    # need to figure out what to pass here
+    trial_data_file = trial_data_file,
+    run_data_file = run_data_file,
+    subject_data_file = subject_data_file,
+
+    cache_file = cache_file,
+    scheduler = "slurm", drop_volumes = 2,
+    exclude_run = "max(framewise_displacement) > 5 | sum(framewise_displacement > .9)/length(framewise_displacement) > .10",
+    exclude_subject = "n_good_runs < 4",
+    truncate_run = "(framewise_displacement > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
+    spike_volumes = NULL,
+    tr = 2.0
+  )
+  # TODO check if we need to run get_gpa each time or we could add a if statment to not run this function if the gpa object already exists in a saved file?
+  return(gpa)
+}
+
+create_gpa_break_fsf <- function(
+  analysis_name = "gpa_tests",
+  test_data_base_dir = "/proj/mnhallqlab/projects/fmri.pipeline_test_data",
+  spec_file = "sample_2_L1_spec.yaml",
+  trial_data_file = "sample_trial_data.csv.gz",
+  run_data_file = "sample_run_data.csv",
+  subject_data_file = "sample_subject_data.csv",
+  gpa_cache_file = "gpa.rds",
+  cache_file = "gpa_base.rds"
+) {
+  gpa <- get_gpa(
+    analysis_name = analysis_name,
+    test_data_base_dir = test_data_base_dir,
+    gpa_cache_file = gpa_cache_file,
+    spec_file = spec_file,
+    
+    # need to figure out what to pass here
+    trial_data_file = trial_data_file,
+    run_data_file = run_data_file,
+    subject_data_file = subject_data_file,
+
+    cache_file = cache_file,
+    scheduler = "slurm", drop_volumes = 2,
+    exclude_run = "max(framewise_displacement) > 5 | sum(framewise_displacement > .9)/length(framewise_displacement) > .10",
+    exclude_subject = "n_good_runs < 4",
+    truncate_run = "(framewise_displacement > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
+    spike_volumes = NULL,
+    tr = 1.0
+  )
   return(gpa)
 }

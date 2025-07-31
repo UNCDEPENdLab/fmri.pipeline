@@ -2,7 +2,7 @@
 gpa <- create_gpa(
     analysis_name = "gpa_tests_l2l3_18feb2025",
     test_data_base_dir = "/proj/mnhallqlab/projects/fmri.pipeline_test_data",
-    l1_spec_file = "sample_2_L1_spec.yaml",
+    spec_file = "sample_2_L1_spec.yaml",
     trial_data_file = "sample_trial_data.csv.gz",
     run_data_file = "sample_run_data.csv",
     subject_data_file = "sample_subject_data.csv",
