@@ -109,7 +109,7 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL) {
   all_l2_list <- foreach(
     model_info = iter(model_set, by = "row"), .inorder = FALSE,
     .packages = c("fmri.pipeline", "dplyr", "data.table"),
-    .export = c("lg", "gpa", "fsl_l2_model")
+    .export = c("fsl_l2_model") # "lg", "gpa", 
   ) %dopar% {
 
     model_info <- model_info # avoid complaints about visible global binding in R CMD check
@@ -177,6 +177,9 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL) {
 
   # append l2 setup to gpa
   gpa$l2_model_setup <- all_subj_l2_combined
+
+  # refresh l2 model status in $l2_model_setup
+  gpa <- refresh_feat_status(gpa, level = 2L, lg = lg)
 
   return(gpa)
 }
