@@ -1,101 +1,163 @@
+---
+title: "fmri.pipeline quick start guide"
+author: "Nidhi Desai, Hannah Evans"
+date: "06 Aug 2025"
+output:
+  html_document:
+    code_folding: show
+    df_print: kable
+    mathjax: default
+    number_sections: yes
+    theme: spacelab
+    toc: yes
+  pdf_document:
+    code_folding: show
+    df_print: kable
+    number_sections: yes
+    toc: yes
+    toc_depth: 4
+---
 # Overview
 
 **`fmri.pipeline`** is an R package for running full fMRI GLM analyses in FSL and other software. It allows users to specify the models they want to run at the trial-level (Level 1), run-level (Level 2), and subject-level (Level 3). `fmri.pipeline` sets up the timing files, design files, etc., and runs all the specified models in an automated way. Each job is scheduled with specific dependencies—for example, the Level 2 analysis will only begin once the Level 1 analysis successfully completes.
 
 `fmri.pipeline` allows users to interactively build their Level 1–3 models, making it easy to set up contrasts and models of interest. It is ideal for users with a clear conceptual understanding of what they want to do but who may not know how to execute these ideas in FSL (e.g., Feat).
 
-A major asset of using `fmri.pipeline` is that it handles model estimation for **any combination of models across levels**. The pipeline fits all combinations of Level 1, Level 2, and Level 3 models for a given dataset.
+A major asset of using `fmri.pipeline` is that it handles model estimation for any combination of models across levels. The pipeline fits all combinations of Level 1, Level 2, and Level 3 models for a given dataset.
 
 **Example:**
 
 Consider the following scenario:
-* **Level 1**: One model includes a parametric modulator for working memory load, another includes only onsets for encoding and retrieval.
-* **Level 2**: One model includes average task difficulty as a continuous covariate, another treats it as a categorical variable.
-* **Level 3**: One model includes nonverbal intelligence, another includes both age and nonverbal intelligence.
+
+  * **Level 1**: One model includes a parametric modulator for working memory load, another includes only onsets for encoding and retrieval.
+  * **Level 2**: One model includes average task difficulty as a continuous covariate, another treats it as a categorical variable.
+  * **Level 3**: One model includes nonverbal intelligence, another includes both age and nonverbal intelligence.
 
 In this case, `fmri.pipeline` will fit eight model combinations (2 × 2 × 2) and provide labeled outputs for each.
 
 `fmri.pipeline` adopts the following three-level structure for fMRI analysis:
 
-* **Level 1**: Run-level analysis of the BOLD time series. Design matrix includes convolved regressors for task-related events.
-* **Level 2**: Subject-level analysis that integrates Level 1 effects across all runs. Can include between-run manipulations or covariates.
-* **Level 3**: Sample-level analysis estimating effects acr qoss all subjects. Design matrix includes between-subjects predictors (e.g., age, trait anxiety).
+  * **Level 1**: Run-level analysis of the BOLD time series. Design matrix includes convolved regressors for task-related events.
+  * **Level 2**: Subject-level analysis that integrates Level 1 effects across all runs. Can include between-run manipulations or covariates.
+  * **Level 3**: Sample-level analysis estimating effects acr qoss all subjects. Design matrix includes between-subjects predictors (e.g., age, trait anxiety).
 
-If there is only **one run of a task per subject**, only Level 1 and Level 3 models are built and fit. There is no Level 2 analysis. While some might consider this the second level, `fmri.pipeline` retains its fixed nomenclature:
-* Level 1 = Runs
-* Level 2 = Within-subject run combination
-* Level 3 = Across-subject analysis
+If there is only one run of a task per subject, only Level 1 and Level 3 models are built and fit. There is no Level 2 analysis that combines parameter estimates from multiple runs. 
+
+`fmri.pipeline` follows this nomenclature:
+
+  * Level 1 = Runs
+  * Level 2 = Within-subject run combination
+  * Level 3 = Across-subject analysis
 
 ---
 
 # Setting Up Your Data
 
 `fmri.pipeline` expects three dataframes:
-1. Trial-level
-2. Run-level
-3. Subject-level
+
+  1. Trial-level
+  2. Run-level
+  3. Subject-level
 
 ## Required Columns
 
-* `id: A character string or number that uniquely identifies a single subject in the dataset. 
-* `trial`: The sequential order in which tasks were presented in a run, spanning across blocks. For example, if you have a run of fMRI data where participants play 4 runs of a block and each block has 15 trials, the trial number may originally be listed as 1-15 for each block. Before giving your trial-level data to fmri.pipeline, the trial column should be changed to 1-60, disregarding the trial as it pertains to block. The trial number should always be in reference to the run of fMRI data. 
-* `run_number`: An integer referring to the fMRI acquisition number of a task run for a single subject. For example, if a participant played a task twice in two separate fMRI acquisitions, the run_number would be 1 for the first task and 2 for the second task. If they played a task twice within one single fMRI acquisition, the run_number would be 1 for both. This is only relevant if you have multiple fMRI runs of a task. If you do not provide run_number in your input data, fmri.pipeline will add a run_number value of 1 to all subjects.
-* `session`: A character string or number or number that refers to the occasion on which the data were acquired. This is only relevant to datasets where you scan subjects in multiple sessions such as a longitudinal study. If you do not provide session in your input data, fmri.pipeline will add a session value of 1 to all subjects. 
-* `run_nifti`: The pathway to the preprocessed nifti file for the run to be included in analysis.
+There are a few columns that are expected in these dataframes and should be named as followed:
+
+  * `id`: A character string or number that uniquely identifies a single subject in the dataset. 
+  * `trial`: The sequential order in which tasks were presented in a run, spanning across blocks. For example, if you have a run of fMRI data where participants play 4 runs of a block and each block has 15 trials, the trial number may originally be listed as 1-15 for each block. Before giving your trial-level data to fmri.pipeline, the trial column should be changed to 1-60, disregarding the trial as it pertains to block. The trial number should always be in reference to the run of fMRI data. 
+  * `run_number`: An integer referring to the fMRI acquisition number of a task run for a single subject. For example, if a participant played a task twice in two separate fMRI acquisitions, the run_number would be 1 for the first task and 2 for the second task. If they played a task twice within one single fMRI acquisition, the run_number would be 1 for both. This is only relevant if you have multiple fMRI runs of a task. If you do not provide run_number in your input data, fmri.pipeline will add a run_number value of 1 to all subjects.
+  * `session`: A character string or number or number that refers to the occasion on which the data were acquired. This is only relevant to datasets where you scan subjects in multiple sessions such as a longitudinal study. If you do not provide session in your input data, fmri.pipeline will add a session value of 1 to all subjects. 
+  * `run_nifti`: The pathway to the preprocessed nifti file for the run to be included in analysis.
 
 ## Trial-Level Dataframe
 
 The trial-level dataframe should include trial-varying factors such as trial onset times, durations, and any parametric modulators that should be convolved with the HRF.
 
-A stacked long-form data frame where each row is one trial per subject for all runs. 
-*Other required columns*:
-* `onset`, `duration`: Onset times and duration for each event you will include in the analysis.
-* `condition`, `rt`: Trial-level variables
-* Any parametric modulators that should be convolved with the HRF (Note that all parametric modulators will automatically be mean-centered by run)
+This data frame should stack data for all runs and subjects (i.e., long form) using the id, session, run_number, and trial columns to uniquely identify each row. Any variables in this data frame can be introduced as onset, duration, or value components of a given HRF-convolved regressor.
+
+Any parametric modulators that should be convolved with the HRF (Note that all parametric modulators will automatically be mean-centered by run)
 
 Each row must be one trial of data, and multiple events can be included in a single trial. For example, you can include onset and duration columns for a choice event and a feedback event in the same trial row. When you build your level 1 models, you will be able to specify different events with this information. Any variables in this data frame can be introduced as onset, duration, or value components of a given HRF-convolved regressor.
 
-*Optional columns*:
-* Interstimulus intervals
-* Intertrial intervals
-* Parametric modulators (automatically mean-centered by run)
-* Within-run condition factors (for example, if some trials participants receive positive feedback and others they receive negative feedback, you may wish to include a contrast that just looks at brain activity when someone receives a certain type of feedback)
+*Required Columns*:
 
-**TODO**
-FOR EACH trial-, run-, and subject-level dataframe: 
-I would include an example of these dataframes (just like 5 lines) so people get an idea of what each dataframe might end up looking like, with both the required and optional columns! 
+  * `id`: A character string or number that uniquely identifies a single subject in the dataset.
+  * `trial`: The sequential order in which tasks were presented in a run, spanning across blocks.
+  * `run_number`: An integer referring to the fMRI acquisition number of a task run for a single subject. Add this column, if multiple runs exists.
+  * `session`: A character string or number or number that refers to the occasion on which the data were acquired. Add this column, if multiple sessions.
+  * `Onset times and durations`: that you would like to use in your analysis, for each event you wish to include in analysis (in seconds relative to the start of the scan). Note that if a duration is fixed for an event across all trials, you can forego having a duration column; when building your level-1 model, you can enter a fixed number rather than a column of this dataframe.
+
+*Optional columns*:
+
+  * Interstimulus intervals
+  * Intertrial intervals
+  * Parametric modulators (automatically mean-centered by run)
+  * Within-run condition factors (for example, if some trials participants receive positive feedback and others they receive negative feedback, you may wish to include a contrast that just looks at brain activity when someone receives a certain type of feedback)
+
+Example of trial level dataframe:
+
+| id    | run_number | trial | emotion | clock_onset | clock_dur | feedback_onset | feedback_dur | iti_onset | iti_dur | v_entropy  |  pe_max  | 
+|-------|------------|-------|---------|-------------|-----------|----------------|--------------|-----------|---------|------------|----------|
+| 10637 | 1          | 1     | fear    | 8.0685      | 1.051     | 9.1857         | 0.9          | 10.0851   | 5.1     | NA         | 26.27952 |
+| 10637 | 1          | 2     | fear    | 15.2016     | 2.451     | 17.7182        | 0.9          | 18.6181   | 1.1     | 0.5849534  | 54.04684 | 
+| 10637 | 1          | 3     | fear    | 19.7348     | 2.251     | 22.0513        | 0.9          | 22.9512   | 2.1     | 0.8419403  | 33.34110 | 
+| 10637 | 1          | 4     | fear    | 25.0678     | 2.784     | 27.9178        | 0.9          | 28.8176   | 0.1     | 0.8309496  | 59.23074 | 
+| 10637 | 1          | 5     | fear    | 28.9177     | 3.001     | 31.9842        | 0.9          | 32.8841   | 1.1     | 0.8880351  | -11.77906| 
 
 ## Run-Level Dataframe
 
 The run-level dataframe should include any run-varying factors and the location of the nifti files you wish to include in analysis. Each row of data will be an fMRI acquisition for a specific task. 
 
 *Required columns*:
-* `id`: A character string or number that uniquely identifies a single subject in the dataset. 
-* `run_nifti`: To inform the pipeline the location of the nifti file for a run
-* `run_number`: An integer referring to the fMRI acquisition number of a task run for a single subject. Add this column, if multiple runs exists.
-* `session`: A character string or number or number that refers to the occasion on which the data were acquired. Add this column, if multiple sessions.
+
+  * `id`: A character string or number that uniquely identifies a single subject in the dataset. 
+  * `run_nifti`: To inform the pipeline the location of the nifti file for a run
+  * `run_number`: An integer referring to the fMRI acquisition number of a task run for a single subject. Add this column, if multiple runs exists.
+  * `session`: A character string or number or number that refers to the occasion on which the data were acquired. Add this column, if multiple sessions.
 
 Similar to the trial-level dataframe, you can include any within-subject factors you want to include in analysis (for example, if there is a run where participants receive predominantly happy faces and another run where participants receive predominantly negative feedback in your task design, you may wish to include them as contrasts in your Level 2 analysis). 
 
-*Optional*:
-* `mr_dir`: Path to the directory contianing fMRI data for each run.
-* `tr`: temporal resolution of the run. This is only necessary if the temporal resolution changed during the study and certain fMRI acquisitions have differing temporal resolution. This is not needed if the temporal resolution is the same for all runs of data to be included in analysis, as the TR will be specified when you set up the analysis (see gpa object setup section). 
-* Within-subject condition factors for contrasts in Level 2.
-* `confound_input_file`: Path to nuisance regressors
-* Optional: Run-level covariates (e.g., `emotion`, `stim_type`)
+*Optional columns*:
 
+  * `mr_dir`: Path to the directory containing fMRI data for each run.
+  * `tr`: temporal resolution of the run. This is only necessary if the temporal resolution changed during the study and certain fMRI acquisitions have differing temporal resolution. This is not needed if the temporal resolution is the same for all runs of data to be included in analysis, as the TR will be specified when you set up the analysis (see gpa object setup section). 
+  * Within-subject condition factors for contrasts in Level 2 (e.g., `emotion`, `stim_type`).
+  * `confound_input_file`: Path to nuisance regressors
+
+Example of run level dataframe:
+
+| id    | mr_dir                                                  | run_number | emotion | run_nifti                                                                         | confound_input_file                                                             |
+|-------|---------------------------------------------------------|------------|---------|-----------------------------------------------------------------------------------|---------------------------------------------------------------------------------|
+| 10637 | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock1 | 1          | fear    | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock1/nfaswuktm_clock1_5.nii.gz | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock1/nuisance_regressors.txt |
+| 10637 | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock2 | 2          | scram   | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock2/nfaswuktm_clock2_5.nii.gz | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock2/nuisance_regressors.txt |
+| 10637 | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock3 | 3          | fear    | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock3/nfaswuktm_clock3_5.nii.gz | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock3/nuisance_regressors.txt |
+| 10637 | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock4 | 4          | scram   | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock4/nfaswuktm_clock4_5.nii.gz | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock4/nuisance_regressors.txt |
+| 10637 | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock5 | 5          | happy   | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock5/nfaswuktm_clock5_5.nii.gz | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock5/nuisance_regressors.txt |
 
 ## Subject-Level Dataframe
 
 The subject-level dataframe should include any subject-varying factors you wish to include in analysis. Each row of data will be a specific subject’s information. 
 
 *Required columns*:
-* `id`: A character string or number that uniquely identifies a single subject in the dataset. 
-* `session`: A character string or number or number that refers to the occasion on which the data were acquired. Add this column, if multiple sessions.
-* Subject-varying factors: group, age, sex, scores, etc., for Level 3 analysis.
-* `mr_dir`: Path to the directory contianing fMRI data for each subject.
+
+  * `id`: A character string or number that uniquely identifies a single subject in the dataset. 
+  * `session`: A character string or number or number that refers to the occasion on which the data were acquired. Add this column, if multiple sessions.
+
+*Optional columns*:
+
+  * `Subject-varying factors`: group, age, sex, scores, etc., for Level 3 analysis.
 
 If you want to use the pipeline in manual mode, you need to provide these three dataframes as input and the pipeline can walk you through the rest of the process of building the models.
+
+Example of subject level dataframe:
+
+| id    | age     | adult | female | scandate   |
+|-------|---------|-------|--------|------------|
+| 10637 | 16.7009 | 0     | 0      | 2014-03-04 |
+| 10638 | 16.2136 | 0     | 0      | 2014-05-07 |
+| 10711 | 18.3190 | 1     | 0      | 2014-08-26 |
+| 10717 | 15.7290 | 0     | 1      | 2014-08-13 |
+| 10767 | 15.4524 | 0     | 1      | 2014-08-14 |
 
 ---
 
@@ -104,10 +166,13 @@ If you want to use the pipeline in manual mode, you need to provide these three 
 This guide describes how to create a `gpa` object for your dataset using the `fmri.pipeline` R package. The `gpa` object (short for **GLM Pipeline Arguments**) stores configuration for single- and multi-level GLM analysis including subject, run, and trial data, model specifications, and compute environment settings.
 
 ## Prerequisites
-* Trial level data (could be loaded from a csv file)
-* Run level data (could be loaded from a csv file)
-* Subject level data (could be loaded from a csv file)
-* L1 model specification yaml file (e.g., `my_spec.yaml`) describing the first-level model structure.
+
+  * Trial level data (could be loaded from a csv file)
+  * Run level data (could be loaded from a csv file)
+  * Subject level data (could be loaded from a csv file)
+  * L1 model specification yaml file (e.g., `my_spec.yaml`) describing the first-level model structure.
+
+<br><br>
 
 ## Step 1: Prepare the Data
 
@@ -118,6 +183,7 @@ trial_df <- read.csv("sample_trial_data.csv.gz")
 run_df <- read.csv("sample_run_data.csv")
 subj_df <- read.csv("sample_subject_data.csv")
 ```
+<br><br>
 
 ## Step 2: Use `setup_glm_pipeline()` to setup GLM models for each level of analysis
 
@@ -183,40 +249,44 @@ gpa <- setup_glm_pipeline(analysis_name="12may2025",
 
 **Common Input Parameters**
 
-* `analysis_name`: a character string that uniquely names your analysis, and is used in output folder names and saved `.RData` or `.rds` files; for example, `"emotion_analysis_march2025"`.
-* `scheduler`: a character string that indicates which job scheduling system to use; typically `"slurm"` on HPC clusters, or `"local"` for local analysis. Possible options are `"slurm"`, `"torque"`, `"local"`. 
-* `output_directory`: a character string that specifies the folder where the pipeline output (e.g., FSF scripts, design matrices, submission scripts) will be stored. If not specified, defaults to the current working directory (`getwd()`).
-* `trial_data`: a data frame containing trial-level data with one row per trial per subject. This is required and must include identifying variables (e.g., `id`, `trial`, `run_number`) and timing (e.g., `onset`, `duration` in seconds with respect to the start of the scan).
-* `run_data`: a data frame containing run-level data. This is required if not embedded in `trial_data`. It should include identifying variables (e.g., `id`, `run_number`, `mr_dir`, `run_nifti`) and can also include run-level covariates (e.g., `emotion`).
-* `subject_data`: a data frame containing subject-level covariates. This is required for Level 3 analyses and should include identifying variables (e.g., `id`) and demographic variables (e.g., `age`, `sex`).
-* `block_data`: an optional data frame containing block-level task information (e.g., task periods spanning multiple trials). Blocks are superordinate to trials and subordinate to runs. Useful for block designs or hybrid paradigms. Data should be stacked in long form.
+  * `analysis_name`: a character string that uniquely names your analysis, and is used in output folder names and saved `.RData` or `.rds` files; for example, `"emotion_analysis_march2025"`.
+  * `scheduler`: a character string that indicates which job scheduling system to use; typically `"slurm"` on HPC clusters, or `"local"` for local analysis. Possible options are `"slurm"`, `"torque"`, `"local"`. 
+  * `output_directory`: a character string that specifies the folder where the pipeline output (e.g., FSF scripts, design matrices, submission scripts) will be stored. If not specified, defaults to the current working directory (`getwd()`).
+  * `trial_data`: a data frame containing trial-level data with one row per trial per subject. This is required and must include identifying variables (e.g., `id`, `trial`, `run_number`) and timing (e.g., `onset`, `duration` in seconds with respect to the start of the scan).
+  * `run_data`: a data frame containing run-level data. This is required if not embedded in `trial_data`. It should include identifying variables (e.g., `id`, `run_number`, `mr_dir`, `run_nifti`) and can also include run-level covariates (e.g., `emotion`).
+  * `subject_data`: a data frame containing subject-level covariates. This is required for Level 3 analyses and should include identifying variables (e.g., `id`) and demographic variables (e.g., `age`, `sex`).
+  * `block_data`: an optional data frame containing block-level task information (e.g., task periods spanning multiple trials). Blocks are superordinate to trials and subordinate to runs. Useful for block designs or hybrid paradigms. Data should be stacked in long form.
 
 **Optional Inputs**
 
-* `vm`: a named character vector specifying the key identifying variables (e.g., `id`, `run_number`, `session`, `run_number`, `block_number`, `trial`, `run_trial`, `subtrial`, `mr_dir`, `run_nifti`,`exclude_subject`). This is rarely changed and only modified if your column names differ from the defaults.
-* `bad_ids`: a character vector of IDs to exclude from all levels of analysis. This is optional and can be used to filter out specific subjects.
-* `mr_dir_column`: a character string specifying the column name in `run_data` that contains the directory path to the fMRI data for each run. This is optional and defaults to `"mr_dir"`.
-* `fmri_file_regex`: a character string specifying the regular expression to match fMRI file names in `run_data`. This is optional and defaults to `"nifti"`.
-* `run_number_regex`: a character string specifying the regular expression to match run numbers in `run_data`. This is optional and defaults to `"run_number"`.
-* `tr`: a numeric value for the repetition time of the scanning sequence in seconds. Used for setting up design matrices. If this is NULL, the function will look for a `tr` field in the `run_data` object, which specifies TR at run level.
-* `drop_volumes`:  an integer number of volumes to drop from the fMRI data and convolved regressors prior to analysis. Default setting is 0.
-* `l1_models`: An `l1_model_set` object containing all level 1 (run) models to be included in GLM pipeline. If `prompt` is passed, `setup_glm_pipeline` will call `build_l1_models` to setup l1 models interactively. Optionally, this argument can be `NULL` if you want to setup l1 models later, though the resulting object will not be functional within the pipeline until l1 models are provided.
-* `l2_models`:An `hi_model_set` object containing all level 2 (subject) models to be included in GLM pipeline.
-* `l3_models`:An `hi_model_set` object containing all level 3 (sample) models to be included in GLM pipeline.
-* `confound_settings`: A list containing settings for confound regressors, such as:
-  * `motion_params_file`: Path to motion parameters file (e.g., `"motion.par"`).
-  * `confound_input_file`: Path to nuisance regressors file (e.g., `"nuisance_regressors.txt"`).
-  * `l1_confound_regressors`: List of columns to use as nuisance regressors.
-  * `exclude_run`, `exclude_subject`, `truncate_run`: Expressions used to exclude runs or subjects based on motion. If you have exclude_run and/or exclude_subject as columns in your run_data or subject_data, the pipeline will use that in complement with these expressions. truncate_run can be possible to use data for a particiapnt for the timepoints when the framewise displacement was not high enough to be excluded. When an expression is provided, which returns a vector of TRUE or FALSE for each volume, then it takes one timepoint before the first TRUE value in a series and starts truncating the run from that timepoint onwards. You can also specify an expression which returns a volume number to be excluded. In addition to any columns in your confound file and `framewise_displacement` calculated by the pipeline, you can also use `time`, `volume`, `last_onset`, `last_offset` (time of last event offset in seconds) in your expressions.
-* `parallel`: A list containing parallelization settings, such as SLURM job parameters like `finalize_time`, `fsl$l2_feat_time`, etc.
-* `glm_settings`: A list of additional settings for GLM software, such as FSL or AFNI. This is typically left at default.
-* `additional`: A list of additional settings for GLM software, such as FSL or AFNI. This is typically left at default.
-* `output_locations`: A list of output directories for different levels of analysis, such as `feat_l1_directory`, `feat_l2_directory`, `feat_l3_directory`, and `sqlite_db`. These are used to specify where the results will be stored.
-* `group_output_directory`: A character string specifying the directory where group-level results will be stored. This is optional and defaults to the `output_directory`.
-* `lgr_threshold`: A character string specifying the logging level for the pipeline. Options include `"info"`, `"warn"`, `"error"`, `"debug"`, etc. Default is `"info"`.
+  * `vm`: a named character vector specifying the key identifying variables (e.g., `id`, `run_number`, `session`, `run_number`, `block_number`, `trial`, `run_trial`, `subtrial`, `mr_dir`, `run_nifti`,`exclude_subject`). This is rarely changed and only modified if your column names differ from the defaults.
+  * `bad_ids`: a character vector of IDs to exclude from all levels of analysis. This is optional and can be used to filter out specific subjects.
+  * `mr_dir_column`: a character string specifying the column name in `run_data` that contains the directory path to the fMRI data for each run. This is optional and defaults to `"mr_dir"`.
+  * `fmri_file_regex`: a character string specifying the regular expression to match fMRI file names in `run_data`. This is optional and defaults to `"nifti"`.
+  * `run_number_regex`: a character string specifying the regular expression to match run numbers in `run_data`. This is optional and defaults to `"run_number"`.
+  * `tr`: a numeric value for the repetition time of the scanning sequence in seconds. Used for setting up design matrices. If this is NULL, the function will look for a `tr` field in the `run_data` object, which specifies TR at run level.
+  * `drop_volumes`:  an integer number of volumes to drop from the fMRI data and convolved regressors prior to analysis. Default setting is 0.
+  * `l1_models`: An `l1_model_set` object containing all level 1 (run) models to be included in GLM pipeline. If `prompt` is passed, `setup_glm_pipeline` will call `build_l1_models` to setup l1 models interactively. Optionally, this argument can be `NULL` if you want to setup l1 models later, though the resulting object will not be functional within the pipeline until l1 models are provided.
+  * `l2_models`:An `hi_model_set` object containing all level 2 (subject) models to be included in GLM pipeline.
+  * `l3_models`:An `hi_model_set` object containing all level 3 (sample) models to be included in GLM pipeline.
+  * `confound_settings`: A list containing settings for confound regressors, such as:
+    * `motion_params_file`: Path to motion parameters file (e.g., `"motion.par"`).
+    * `confound_input_file`: Path to nuisance regressors file (e.g., `"nuisance_regressors.txt"`).
+    * `l1_confound_regressors`: List of columns to use as nuisance regressors.
+    * `exclude_run`, `exclude_subject`, `truncate_run`: Expressions used to exclude runs or subjects based on motion. If you have exclude_run and/or exclude_subject as columns in your run_data or subject_data, the pipeline will use that in complement with these expressions. truncate_run can be possible to use data for a particiapnt for the timepoints when the framewise displacement was not high enough to be excluded. When an expression is provided, which returns a vector of TRUE or FALSE for each volume, then it takes one timepoint before the first TRUE value in a series and starts truncating the run from that timepoint onwards. You can also specify an expression which returns a volume number to be excluded. In addition to any columns in your confound file and `framewise_displacement` calculated by the pipeline, you can also use `time`, `volume`, `last_onset`, `last_offset` (time of last event offset in seconds) in your expressions.
+  * `parallel`: A list containing parallelization settings, such as SLURM job parameters like `finalize_time`, `fsl$l2_feat_time`, etc. These options are useful for changing the maximum time and memory for each step of the analysis as to avoid out of time and out of memory errors; for example, if you expect your L1 analysis will take several days, you can increase the maximum time (e.g., fsl$l1_feat_time <- “48:00:00) and memory (e.g., fsl$l1_feat_memgb <- “24”) as needed. 
+  * `glm_settings`: A list of additional settings for GLM software, such as FSL or AFNI. This is typically left at default.
+  * `additional`: A list of additional settings for GLM software, such as FSL or AFNI. This is typically left at default.
+  * `output_locations`: A list of output directories for different levels of analysis, such as `feat_l1_directory`, `feat_l2_directory`, `feat_l3_directory`, and `sqlite_db`. These are used to specify where the results will be stored.
+  * `group_output_directory`: A character string specifying the directory where group-level results will be stored. This is optional and defaults to the `output_directory`.
+  * `lgr_threshold`: A character string specifying the logging level for the pipeline. Options include `"info"`, `"warn"`, `"error"`, `"debug"`, etc. Default is `"info"`.
+
+<br><br>
 
 ## Step 3: build each level of models
 **Building the models can be done in two ways: using a YAML specification file or interactively. We will discuss both methods here.**
+
+<br><br>
 
 ### Setting up the L1, L2, and L3 models interactively
 If you run the `build_l1_models()`, `build_l2_models()` and `build_l3_models()` functions without specifying `from_spec_file` input, you will get to build the models interactively.
@@ -226,6 +296,8 @@ gpa <- build_l1_models(gpa)
 gpa <- build_l2_models(gpa)
 gpa <- build_l3_models(gpa)
 ```
+
+<br><br>
 
 #### Building level 1 models interactively
 One way to build Level 1 models interactively is the specify `l1_models = "prompt"` in the `setup_glm_pipeline()` function. This will call the `build_l1_models()` function, which allows you to build Level 1 models interactively.
@@ -238,54 +310,120 @@ The `build_l1_models()` function will walk you through the process of building t
 
 When defining a new level 1 model you will be prompted to enter the following:
 
-# TODO Nidhi: Maybe add 1) to 6) points within a section for event setup menu.
+1) Do you want to add these columns to possible onsets?  
+  This prompt will help you select event onset columns. It will show you a set of event columns that have the word ‘onset’ in their name. You can select columns from the trial-level data frame that will be used as event onsets in the model. These columns must contain onset times in seconds relative to the start of the scan. You can select multiple columns, and the pipeline will create separate regressors for each selected column. Note that event onsets must be in seconds relative to the scan start time.  
+  If you select “No”, the pipeline will ask if you would like to modify the event onset columns. You can:  
+      (1) add new onset columns  
+      (2) delete existing onset columns  
+      (3) complete the onset selection  
+  If you choose to add new onset columns, it will present you with a list of all columns in the trial-level data frame to select as the onset columns. Note that it is acceptable that there are additional columns selected in these steps which are eventually unused in the model.
 
-1) Do you want to add these columns to possible onsets?
-This prompt will help you select event onset columns. It will show you a set of event columns that have the word 'onset' in their name. You can select columns from the trial-level data frame that will be used as event onsets in the model. These columns must contain onset times in seconds relative to the start of the scan. You can select multiple columns, and the pipeline will create separate regressors for each selected column. Note that event onsets must be in seconds relative to the scan start time.
-If you select "No", the pipeline will ask if you would you like to modify the event onset columns? You can (1) add new onset columns, (2) delect existing onset columns, or (3) complete the onset selection.
-If you choose to add new onset columns, it will present you with a list of all columns in the trial-level data frame to select as the onset columns.
-Note that it is acceptable that there are addional columns selected in these steps which are eventually unused in the model.
+2) Would you like to modify the event duration columns?  
+  This prompt will help you select event duration columns. You can select columns from the trial-level data frame that will be used as event durations in the model. These columns must contain durations in seconds relative to the start of the scan.  
+  If you select “No”, the pipeline will ask if you would like to modify the event duration columns. You can:  
+      (1) add new duration columns  
+      (2) delete existing duration columns  
+      (3) complete the duration selection  
+  Note that event durations must be in seconds relative to the scan start time. If you choose to add new duration columns, it will present you with a list of all columns in the trial-level data frame to select as the duration columns. The duration column is optional if an event has a fixed duration, because when building your events, you can specify a fixed number of seconds as the duration of an event.
 
-2) Would you like to modify the event duration columns?
-This prompt will help you select event duration columns. You can select columns from the trial-level data frame that will be used as event durations in the model. These columns must contain durations in seconds relative to the start of the scan. If you select "No", the pipeline will ask if you would you like to modify the event duration columns? You can (1) add new duration columns, (2) delect existing duration columns, or (3) complete the duration selection. Note that event durations must be in seconds relative to the scan start time.
-If you choose to add new duration columns, it will present you with a list of all columns in the trial-level data frame to select as the duration columns.  
+3) Do you want to add these columns to possible ISI/ITIs?  
+  This prompt will help you select interstimulus/intertrial interval columns. You can select columns from the trial-level data frame that will be used as ISI/ITI durations in the model. These columns must contain ISI/ITI durations in seconds.
+  If you select “No”, the pipeline will ask if you would like to modify the ISI/ITI columns. You can:  
+      (1) add new ISI/ITI columns  
+      (2) delete existing ISI/ITI columns  
+      (3) complete the ISI/ITI selection
+  If you say “Yes” to the automatically detected columns, it will ask if you would like to modify the event ISI/ITI columns. If you choose to add new ISI/ITI columns, it will present you with a list of all columns in the trial-level data frame to select as the ISI/ITI columns. ISI can be used in `truncate_runs`.
 
-3) Do you want to add these columns to possible ISI/ITIs? 
-This prompt will help you select interstimulus/intertrial interval columns. You can select columns from the trial-level data frame that will be used as ISI/ITI durations in the model. These columns must contain ISI/ITI durations in seconds. If you select "No", the pipeline will ask if you would you like to modify the ISI/ITI columns? You can (1) add new ISI/ITI columns, (2) delect existing ISI/ITI columns, or (3) complete the ISI/ITI selection.
-If you say "Yes" to the automatically detected columns, it will ask if you would like to modify the event ISI/ITI columns. If you choose to add new ISI/ITI columns, it will present you with a list of all columns in the trial-level data frame to select as the ISI/ITI columns. ISI can be used in truncate_runs.
+4) Would you like to modify the event parametric value columns?  
+  This prompt will help you select continuous parametric modulator event values columns. You can select columns from the trial-level data frame that will be used as parametric modulators in the model. These columns must contain continuous values that will be convolved with the HRF.  
+  If you select “No”, the pipeline will ask if you would like to modify the event parametric value columns. You can:  
+      (1) add new parametric value columns  
+      (2) delete existing parametric value columns  
+      (3) complete the parametric value selection  
+  If you choose to add new parametric value columns, it will present you with a list of all columns in the trial-level data frame to select as the parametric value columns.
 
-4) Would you like to modify the event parametric value columns?
-This prompt will help you select continuous parametric modulator event values columns. You can select columns from the trial-level data frame that will be used as parametric modulators in the model. These columns must contain continuous values that will be convolved with the HRF. If you select "No", the pipeline will ask if you would like to modify the event parametric value columns? You can (1) add new parametric value columns, (2) delect existing parametric value columns, or (3) complete the parametric value selection.
-If you choose to add new parametric value columns, it will present you with a list of all columns in the trial-level data frame to select as the parametric value columns.    
+5) Would you like to modify the event within-subject factor columns?  
+  This prompt will help you select within-subject factor columns that can be used in specifying signals. You can select columns from the trial-level data frame that will be used as within-subject factors in the model. These columns can be used to specify signals that are convolved with the HRF.  
+  If you select “No”, the pipeline will ask if you would like to modify the event within-subject factor columns. You can:  
+      (1) add new within-subject factor columns  
+      (2) delete existing within-subject factor columns  
+      (3) complete the within-subject factor selection  
+  If you choose to add new within-subject factor columns, it will present you with a list of all columns in the trial-level data frame to select as the within-subject factor columns.
 
-5) Would you like to modify the event within-subject factor columns? 
-This prompt will help you select within-subject factor columns that can be used in specifying signals.. You can select columns from the trial-level data frame that will be used as within-subject factors in the model. These columns can be used to specify signals that are convolved with the HRF. If you select "No", the pipeline will ask if you would like to modify the event within-subject factor columns? You can (1) add new within-subject factor columns, (2) delect existing within-subject factor columns, or (3) complete the within-subject factor selection.
-If you choose to add new within-subject factor columns, it will present you with a list of all columns in the trial-level data frame to select as the within-subject factor columns.
+6) Specify all events that can be added to a GLM model.  
+  This builds 'events' which consist of onset times, durations, and optional ITI/ISI. This prompt will present options to:  
+      (1) add new events  
+      (2) delete existing events  
+      (3) complete the event selection  
+  If you press (1) to add an event, it will first ask you for the event name and then provide options from the preselected event onset columns. Then it will ask you to choose the event duration. You can select a fixed duration or select a column from the previously chosen duration columns.  
+  Lastly, it will ask you to select the ITI/ISI column or specify a fixed ITI/ISI value. If you do not want to add an ITI/ISI column, you can select "No". If you select a column, it will use that column as the ITI/ISI for the event.
 
-6) Specify all events that can be added to a GLM model.
-This builds 'events' which consist of onset times, durations, and optional ITI/ISI. This prompt will prsent options to (1) add new events, (2) delect existing events, or (3) complete the event selection. If you press 1 to add an event, firstly it will ask you the event name and then provide options from the preselected event onset columns. Then it will ask you to choose the event duration. You can select a fixed duration or select a column from the previously choosen duration columns. Lastly, it will ask you to select the ITI/ISI column or specific a fixed ITI/ISI value. If you do not want to add an ITI/ISI column, you can select "No". If you select a column, it will use that column as the ITI/ISI for the event.
+7) Signal setup menu to build a set of signals that can be included as regressors in the level 1 model.  
+  This builds signals, which consist of an event, an event value (amplitude), and convolution and regressor settings.  
 
-7) Signal setup menu to build a set of signals that can be included as regressors in the level 1 model.
-This builds 'signals', which consist of an event, an event value (amplitude), and convolution and regressor settings. 
-  (a) This prompt will present options to (1) add signal, (2) modify existing signal, (3) delect existing signals, or (3) complete the signal setup. If you press 1 to add a signal, it will ask you to specify the signal name. It will provide a list of previously defined events and ask you with which event is this signal aligned. Once you select an event, it will ask you if the signal should be modelled only for specific trials.
-  (b) Next it will ask you what should be the pre-convolution value of the regressor. You will have the option to select (1) Unit height (1.0), (2) specify fixed value, or (3) select a parametric modulator. Note if signals are not speecified, it will default to unit height regressors with no HRF normalization. 
-  (c) If you specify a parametric modulator, it will ask you if this signal is modulated by one or more within-subject factors. If yes, then you will need to specify which within-subject factor(s) modulate this signal and is there an interaction between the factors. 
-  # (TODO Nidhi: there are more steps after this of setting up the contrasts, try running an example and make notes)
-  (d) It will also ask how should the HRF be normalized in convolution? (1) none, (2) evtmax_1 (aka dmUBLOCK(1); HRF max of 1.0 for each event, regardless of duration), or (3) durmax_1 (aka dmUBLOCK; HRF maxing at 1.0 as events become longer (1.0 around 15 sec)). This questions is regarding what you want to do with the height of the convolved regressor as events get longer. If no normalization is performed (no rescalling of HRF), then you are saying that events which last longer have larger BOLD activity, which is not supported in the literature especially for higher order cognition. evtmax_1 option caps the HRF height at 1.0, therefore if we have longer event durations the HRF will stay at 1.0 for a longer duration. durmax_1 option allows HRF height variation attributed to duration, but it is capped at 1.0 such that the maximum height is 1.0 for longer events. We recommend for unit height regression choose `none`, for parametric signal choose `evtmax_1`.
-  (e) Next it will ask you if you want to change any of the advanced options.
-    (i) No temporal derivative: temporal gradient is on the gradient between assumed vs no-assumed HRF shape GLM analysis. In the assumed shape just convolves with the HRF. In the no-assumed shape we have flexible basis function which try to fit exact response within the trial. Temporal gradient is one step away from the assumed shape towards the no-assumed shape view. It takes the first time difference of the covolved regressor and adds both in the model and it gives us a better fit to the data when the actual bold response deviates from the canonical HRF. Default: No.
-    (ii) Demean convolved signal: this makes sure that the intercept in the model would represent the mean of the other regressors. Default: No.
-    (iii) No beta series: should the pipeline generate beta series for this signal (one regressor per trial). If you say Yes, instead of having one regressor for this event you'll have n trials regressors. Mostly this is used to look at functional connectivity as it captures the within-person variation in neural activity. Default: No. 
-    (iv) No time series multiplier (PPI)
+   (a) This prompt will present options to:  
+       1. Add signal  
+       2. Modify existing signal  
+       3. Delete existing signals  
+       4. Complete the signal setup
+       If you press **1** to add a signal, it will ask you to specify the signal name.  
+       It will provide a list of previously defined events and ask you with which event this signal is aligned.  
+       Once you select an event, it will ask you if the signal should be modelled only for specific trials.
 
-8) Model setup menu to build set of models
-  (a) This prompt will prsent options to (1) add model, (2) modify model, (3) delete model, or (4) done with L1 model setup. 
-  (b) If you press 1 to add an event, firstly it will ask you the model name and then provide a list of predefined signals that could be added to the model. You can add from the signals list by add the corresponding numbers separated by a space.
-  (c) Next it will ask you if you want to include diagonal contrasts for each regressor. Note: If you have a parametric modulator in the model make sure to have its occurrence regressor in the model as well. 
-  (d) Next contrast setup menu will appear. You will have the option to (1) add contrast, (2) show contrast, (3) delete contrast, or (4) done with contrast setup.
-  # Hannah: can you add more notes on contrast setup menu.
-  (e) You can keep on adding models by choosing `(1) Add model`. After you are done with model setup, you can choose `(4) Done with l1 model setup`
+   (b) Next it will ask you what should be the pre-convolution value of the regressor.  
+       You will have the option to select:  
+       1. Unit height (1.0)  
+       2. Specify fixed value  
+       3. Select a parametric modulator  
+       **Note:** If signals are not specified, it will default to unit height regressors with no HRF normalization.
 
+   (c) If you specify a parametric modulator, it will ask you if this signal is modulated by one or more within-subject factors.  
+       If yes, then you will need to specify which within-subject factor(s) modulate this signal and whether there is an interaction between the factors.
+
+   (d) It will also ask how the HRF should be normalized in convolution:  
+       1. **none** – no rescaling of HRF.  
+       2. **evtmax_1** – HRF max of 1.0 for each event, regardless of duration.  
+       3. **durmax_1** – HRF height varies with duration, capped at 1.0 for long events.  
+       *Recommendation:* For unit height regression choose `none`. For parametric signals choose `evtmax_1`.
+
+   (e) Next it will ask if you want to change any of the advanced options:  
+       (i) *No temporal derivative*: Temporal gradient is the difference between assumed HRF shape (canonical) and no-assumed shape (basis set).  
+           It adds the first time difference of the convolved regressor for better fit when actual BOLD response deviates from the canonical HRF. Default: No.
+       (ii) *Demean convolved signal*: Ensures intercept represents the mean of the other regressors. Default: No.
+       (iii) *No beta series*: If Yes, generates a regressor per trial (used in functional connectivity).  Default: No.
+       (iv) *No time series multiplier (PPI)*
+
+8) Model setup menu to build a set of models.  
+
+    (a) This prompt will present options to:  
+        1. Add model  
+        2. Modify model  
+        3. Delete model  
+        4. Done with L1 model setup  
+
+    (b) If you press **1** to add a model, it will first ask you for the model name and then provide a list of predefined signals that can be added to the model.  
+        You can add from the signals list by entering the corresponding numbers separated by a space.
+
+    (c) Next it will ask you if you want to include diagonal contrasts for each regressor.  
+        **Note:** If you have a parametric modulator in the model, make sure to include its occurrence regressor in the model as well.
+
+    (d) Next, the contrast setup menu will appear. You will have the option to:  
+        1. Add contrast  
+        2. Show contrast  
+        3. Delete contrast  
+        4. Done with contrast setup  
+
+        Based on your answers to the previous prompts, a series of contrasts will already be generated.  
+        You can choose **(2)** *Show contrast* to view these contrasts.  
+        If there are any contrasts you wish to delete or add, you can do so here.  
+        If you add any contrasts, you can either:  
+        1) Enter a vector of numeric values, one for each regressor in the order they are displayed (e.g., `1 0 -1 0 0`), or  
+        2) Enter name=value pairs for relevant coefficients (e.g., `pos_feedback = 1 neg_feedback = -1`).
+
+    (e) You can continue adding models by choosing **(1) Add model**.  
+        After you are done with model setup, choose **(4) Done with L1 model setup**.
+
+<br><br>
 
 #### Building level 2 models interactively
 `build_l2_models()` function walks you through the process of building the model you want to run at the subject level.
@@ -312,15 +450,15 @@ Diagonal contrasts give one coefficient for the explanatory variable, i.e., one 
 This is regarding how model-predicted means or contrasts should handle unbalanced designs. In many fMRI tasks, the number of trials or runs per condition is unbalanced. For example, a task might have 4 runs of scrambled faces, 2 runs of fearful faces, and 2 runs of happy faces. In this case, if you choose "Equal", the contrasts will treat all levels of a factor equally, regardless of how many observations there are for each level. If you choose "Cell", the contrasts will weight the levels according to their sample sizes.
 
 6) Do you want to include model-predicted means for each level of the regressor?
-# Hannah could you add notes here
-
+If you want the mean-activation pattern of a regressor, you can specify so here. Emmeans will figure out how to marginalize over the other covariates to give you the mean pattern of activation for each regressor. 
 
 7) Do you want to include pairwise differences for each level of the regressor?
-# Hannah could you add notes here
-
+The pipeline will only ask you this if you specify any within-subject factor columns as part of your model. For example, if one run of your task has a happy face shown to a participant and another run of your task has a fearful face shown to them, you may have a column in your run data frame that specifies what emotional face was shown to a participant in each run of the task they completed. If you wish to compare how their brain activity may differ depending on the emotional face presented to them in different runs, you should include pairwise differences for each level of the emotional face regressor. Emmeans will then specify different contrasts that show brain activity for each level (e.g., brain maps for when participants are shown happy faces) and differences in brain activity depending on which level of regressor they are shown (e.g., brain activity that responds more strongly to happy faces than fearful faces). Contrasts that compare between levels will be named level1_M_level2 (e.g., happy_M_fearful), with the M meaning minus. There will be pairwise comparison contrasts for each potential level combination. 
 
 8) Do you want to include the overall average response?
-The could be duplicate contrasts in your matrix. This can occur for many benign reasons, but wyou need to specify what you want to call these contrasts in the output so that it is clear.
+This asks if you want the overall brain map at the average of all covariates. There could be duplicate contrasts in your matrix. This can occur for many benign reasons, but you need to specify what you want to call these contrasts in the output so that it is clear.
+
+<br><br>
 
 #### Building level 3 models interactively
 `build_l3_models()` function walks you through the process of building the model you want to run at the sample level.
@@ -337,7 +475,7 @@ When defining a new model you will be prompted to enter the following:
 A model name which will be used in folder names and output.
 
 2) Do you want to specific the model formula or walk through the model builder?
-- You can specify a model formula. You need to supply the right hand side of a regression model. Syntax is similar to `lm()` function in R formula syntax.
+You can specify a model formula. You need to supply the right hand side of a regression model. Syntax is similar to `lm()` function in R formula syntax.
 e.g. ~ 1 (intercept only), ~ age_at_scan, ~ age_at_scan + gender, ~ age_at_scan * gender. Use ~1 for intercept only model. Implicitely, the model always adds the intercept term (1+) to the model if other regressors are mentioned in the specify model option.
 
 3) Include diagonal contrasts for each regressor?
@@ -362,8 +500,7 @@ Do you want to include model-predicted simple slopes of covariates across levels
 Back in the main build_l3_models() menu, you will see a list of all models you've defined so far and you would have the option to add another model, modify an existing model, delete a model and finish with building level 3 models.
 If you would like to see the model saved in the gpa object, you can call `str(gpa$l3_models)` to see the list of models you have defined so far.
 
-# Hannah, could you add notes on outlier deweighting option in level 3
-
+<br><br>
 
 ### Setting up the L1, L2, and L3 models using a YAML specification file
 You can also specify the models using a YAML specification file and passing it to the `from_spec_file` input parameter to the `build_l1_models`, `build_l2_models` and `build_l3_models` functions. The YAML file can contain the model specifications for Level 1, Level 2, and Level 3 models.
@@ -438,11 +575,18 @@ signals:
     trial_subset_expression: rt_csv < 4
     normalization: evtmax_1
     parametric_modulator: pe_max
+
+  NF_inf_interaction_wifactor: 
+    event: feedback 
+    normalization: none 
+    value_fixed: 1 
+    wi_factors: [InfusionType, Feedback] 
+    wi_formula: ~ InfusionType*Feedback - 1 
 ```
 
 4. The fourth set of outer layer options are the l1 models that can be used in the model specification. Each model will have a name, a list of signals, and contrasts settings.
 Each model can include a set of signals predefined in the signals section of the yaml file and added with dashes on new lines. You can also specify whether diagonal contrasts should be included. The `contrasts` field can include a boolean value for `include_diagonal`. You can specify include_diagonal as `yes` or `no` to indicate whether diagonal contrasts should be included.
-# Hannah have you done any more complicated contrasts setup that you could add information on here?
+
 The l1 models can be structured as follows:
 ```yaml
 l1_models:
@@ -499,29 +643,31 @@ l3_models:
     fsl_outlier_deweighting: no
 ```
 
-
+<br><br>
 
 ## Step 4: Run the Pipeline
 To run the pipeline, you can use the `run_glm_pipeline()` function. This function will execute all specified models across levels, scheduling jobs as needed.
 ```{r, eval=FALSE}
 run_glm_pipeline(gpa)
 ``` 
-# This function will:
-1) Validate the `gpa` object.
-2) Create output directories based on the `gpa$output_locations` settings.
-3) Generate job submission scripts for each model.
-4) Submit jobs to the specified scheduler (e.g., SLURM, Torque).
+This function will:
+  1) Validate the `gpa` object.
+  2) Create output directories based on the `gpa$output_locations` settings.
+  3) Generate job submission scripts for each model.
+  4) Submit jobs to the specified scheduler (e.g., SLURM, Torque).
 
 Note: If you are running the pipeline on a local machine, you can set `scheduler = "local"` in the `gpa` object.
 
 When you run `run_glm_pipeline(gpa)`, it will prompt you to choose the level 1 models to run. You can select one or more models from the list of defined Level 1 models. Similarly, you can choose Level 2 and Level 3 models to run.
 This steps will create separate jobs for each conceptually separate steps: finalize, setup_l1, run_l1, setup_l2, run_l2, setup_l3, run_l3. Each job will be submitted to the scheduler with the appropriate job dependencies.
 
+<br><br>
 
 ## Step 5: Monitor Progress
 You can monitor the progress of the pipeline by checking the output directories specified in `gpa$output_locations`. The pipeline will create a structured output directory for each analysis, including directories for Level 1, Level 2, and Level 3 analyses, as well as job submission scripts and logs.
 
 ---
+<br><br>
 
 # Output directory structure
 `fmri.pipeline` organizes outputs in a structured way similar to Brain Imaging Data Structure (BIDS) format. 
@@ -555,7 +701,7 @@ The output directory structure is as follows:
 
   * .sqlite: SQLite database for tracking analysis progress and results
 
-`fmri.pipeline` also gives considerable flexibility in how you want to structure your outputs by changing the contents of gpa$output_locations object. The output location can be a dynamic expression (based on `glue` R package) that gets evaluated when the package is run. This is the default expresson for first-level FEAT directories: `"{gpa$output_directory}/feat_l1/sub-{id}/ses-{session}/{l1_model_name}"`. The contains inside the curly brackets are evaluated at runtime, so you can use any variable in the `gpa` object to specify the output location.
+`fmri.pipeline` also gives considerable flexibility in how you want to structure your outputs by changing the contents of `gpa$output_locations` object. The output location can be a dynamic expression (based on `glue` R package) that gets evaluated when the package is run. This is the default expresson for first-level FEAT directories: `"{gpa$output_directory}/feat_l1/sub-{id}/ses-{session}/{l1_model_name}"`. The contents inside the curly brackets are evaluated at runtime, so you can use any variable in the `gpa` object to specify the output location.
 
 
 ---
