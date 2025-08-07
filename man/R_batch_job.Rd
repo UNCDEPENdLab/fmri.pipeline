@@ -47,8 +47,6 @@ be loaded by subsequent jobs.}
 
 \item{\code{sqlite_db}}{File path to tracking SQLite database}
 
-\item{\code{batch_id}}{Not currently used, but intended for job sequence tracking}
-
 \item{\code{batch_directory}}{Location of batch scripts to be written}
 
 \item{\code{batch_code}}{Shell code to be included in the batch script prior to the R code to be run. This can include
@@ -83,6 +81,13 @@ detailed debugging and is not generally recommended because it can increase the 
 }
 \if{html}{\out{</div>}}
 }
+\section{Active bindings}{
+\if{html}{\out{<div class="r6-active-bindings">}}
+\describe{
+\item{\code{sequence_id}}{Used to identify sequence when using R_batch_sequence}
+}
+\if{html}{\out{</div>}}
+}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
@@ -111,7 +116,6 @@ Create a new R_batch_job object for execution on an HPC cluster
   wall_time = NULL,
   mem_per_cpu = NULL,
   mem_total = NULL,
-  batch_id = NULL,
   r_code = NULL,
   r_script = NULL,
   post_children_r_code = NULL,
@@ -151,8 +155,6 @@ job begins.}
 \item{\code{mem_per_cpu}}{The amount of memory to be requested per cpu}
 
 \item{\code{mem_total}}{The total amount of memory to requested by the job}
-
-\item{\code{batch_id}}{The batch id (not currently used)}
 
 \item{\code{r_code}}{A character vector or expression containing R code to be executed}
 

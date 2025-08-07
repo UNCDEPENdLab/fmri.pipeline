@@ -57,6 +57,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   checkmate::assert_logical(export_all, max.len = 1L)
   checkmate::assert_logical(echo, max.len = 1L)
   checkmate::assert_logical(fail_on_error, max.len=1L)
+  if (!is.null(wait_jobs)) checkmate::assert_character(wait_jobs)
   if (is.character(tracking_args) || is.numeric(tracking_args)) tracking_args <- as.list(tracking_args) # coerce tracking args to list
   if (length(tracking_args) > 0 && is.null(tracking_sqlite_db)) {
     warning("Tracking arguments provided to `cluster_job_submit` but `tracking_sqlite_db` is NULL")
@@ -190,10 +191,10 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 
   if (!is.null(wait_jobs)) {
     # add any parent jobs using the wait_jobs argument (defaults to last parent id in list)
-    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = wait_jobs[length(wait_jobs)])
+    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = wait_jobs[length(wait_jobs)], child_level = 1) 
   } else if (!is.null(tracking_args$parent_job_id)) {
     # in the case that a parent job id is passed in through the tracking_args list
-    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = tracking_args$parent_job_id)
+    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = tracking_args$parent_job_id, child_level = 1) 
   }
   
   attr(jobid, "cmd") <- cmd # add the command executed as an attribute

@@ -10,10 +10,7 @@ submit_tracking_query = function(str, sqlite_db, param = NULL) {
   checkmate::assert_string(str)
   
   # check if tracking table exists in sqlite_db; if not, create it
-  con <- dbConnect(RSQLite::SQLite(), sqlite_db) # establish connection
-  sqliteSetBusyHandler(con, 10 * 1000) # busy_timeout of 10 seconds
-  table_exists <- dbExistsTable(con, "job_tracking")
-  dbDisconnect(con)
+  table_exists <- sqlite_table_exists(sqlite_db, "job_tracking")
   
   if (isFALSE(table_exists)) {
     create_tracking_db(sqlite_db)
@@ -52,8 +49,10 @@ create_tracking_db = function(sqlite_db) {
     CREATE TABLE job_tracking (
       id INTEGER PRIMARY KEY,
       parent_id INTEGER,
+      child_level INTEGER DEFAULT 0,
       job_id VARCHAR NOT NULL UNIQUE,
       job_name VARCHAR,
+      sequence_id VARCHAR,
       batch_directory VARCHAR,
       batch_file VARCHAR,
       compute_file VARCHAR,
@@ -81,6 +80,8 @@ create_tracking_db = function(sqlite_db) {
 #' Internal helper funciton to insert a job into the tracking SQLite database
 #'
 #' @param sqlite_db Path to SQLite database used for tracking
+#' @param job_id Character id of job to insert
+#' @param tracking_args List of named tracking arguments
 #'
 #' @keywords internal
 insert_tracked_job = function(sqlite_db, job_id, tracking_args = list()) {
@@ -89,28 +90,30 @@ insert_tracked_job = function(sqlite_db, job_id, tracking_args = list()) {
   if (is.numeric(job_id)) job_id <- as.character(job_id)
   if (is.null(tracking_args$status)) tracking_args$status <- "QUEUED" # default value of first status
 
-  sql <- "INSERT INTO job_tracking
-    (job_id, job_name, batch_directory,
+  insert_job_sql <- "INSERT INTO job_tracking
+    (job_id, job_name, sequence_id, batch_directory,
     batch_file, compute_file, code_file,
     n_nodes, n_cpus, wall_time,
     mem_per_cpu, mem_total,
     scheduler, scheduler_options, job_obj,
     time_submitted, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
   # gather tracking parameters into a list
-  param <- list(job_id, tracking_args$job_name, tracking_args$batch_directory, 
-                tracking_args$batch_file, tracking_args$compute_file, tracking_args$code_file, 
+  param <- list(job_id, tracking_args$job_name, tracking_args$sequence_id, 
+                tracking_args$batch_directory, tracking_args$batch_file, 
+                tracking_args$compute_file, tracking_args$code_file, 
                 tracking_args$n_nodes, tracking_args$n_cpus, tracking_args$wall_time, 
                 tracking_args$mem_per_cpu, tracking_args$mem_total, tracking_args$scheduler,
-                tracking_args$scheduler_options, tracking_args$job_obj, as.character(Sys.time()), tracking_args$status)
+                tracking_args$scheduler_options, tracking_args$job_obj, 
+                as.character(Sys.time()), tracking_args$status)
   
   for (i in 1:length(param)) {
     param[[i]] <- ifelse(is.null(param[[i]]), NA, param[[i]]) # convert NULL values to NA for dbExecute
   }
   
   # order the tracking arguments to match the query; status is always 'QUEUED' when first added to the database
-  submit_tracking_query(str = sql, sqlite_db = sqlite_db, param = param)
+  submit_tracking_query(str = insert_job_sql, sqlite_db = sqlite_db, param = param)
 }
 
 
@@ -119,23 +122,38 @@ insert_tracked_job = function(sqlite_db, job_id, tracking_args = list()) {
 #' @param sqlite_db Path to SQLite database used for tracking
 #' @param job_id Job id of job for which to add a parent
 #' @param parent_job_id Job id of the parent job to job_id
+#' @param child_level Level of child; currently supports two levels
 #'
 #' @importFrom DBI dbConnect dbExecute dbDisconnect
 #' @export
-add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id = NULL) {
+add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id = NULL, child_level = 1) {
   # skip out if not using DB or job_id/parent_id is NULL
-  if (is.null(sqlite_db) || is.null(job_id) || is.null(parent_job_id)) return(invisible(NULL)) 
+  if (is.null(sqlite_db) || is.null(job_id) || is.null(parent_job_id)) return(invisible(NULL))
+  if (isFALSE(child_level %in% 1:2)) child_level <- NA # if level not 1 or 2, return NA
   if (is.numeric(job_id)) job_id <- as.character(job_id)
   if (is.numeric(parent_job_id)) parent_job_id <- as.character(parent_job_id)
 
-  sql <- "UPDATE job_tracking
-  SET parent_id = (SELECT id FROM job_tracking WHERE job_id = ?)
-  WHERE job_id = ?"
+  # retrieve sequence id from parent
+  sequence_id_sql <- "SELECT sequence_id FROM job_tracking WHERE job_id = ?"
+  sequence_id <- tryCatch({
+    # open sqlite connection and execute query
+    id <- submit_sqlite_query(str = sequence_id_sql, sqlite_db = sqlite_db, 
+                        param = list(parent_job_id), return_result = TRUE)
+    if(!is.null(id[1,1])) { id[1,1] } else { NA }
+  }, error = function(e) { print(e); NA})
   
+  
+  add_parent_sql <- "UPDATE job_tracking
+    SET parent_id = (SELECT id FROM job_tracking WHERE job_id = ?), 
+      sequence_id = ?,
+      child_level = ?
+    WHERE job_id = ?"
   tryCatch({
     # open sqlite connection and execute query
-    submit_sqlite_query(str = sql, sqlite_db = sqlite_db, param = list(parent_job_id, job_id))
+    submit_sqlite_query(str = add_parent_sql, sqlite_db = sqlite_db, 
+                        param = list(parent_job_id, sequence_id, child_level, job_id))
   }, error = function(e) { print(e); return(NULL)})
+  
 }
 
 
@@ -200,30 +218,47 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status, c
 #' @param sqlite_db Character string of sqlite database
 #' @param return_children Return child jobs of this job
 #' @param return_parent Return parent jobs of this job
+#' @param sequence_id Alternatively return all jobs with sequence ID; cannot specify both job ID and sequence ID
 #' 
 #' @return An R data.frame version of the tracking database
 #' @importFrom DBI dbConnect
 #' @importFrom RSQLite SQLite
 #' @export
-get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, return_parent = FALSE, sqlite_db) {
+get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, return_parent = FALSE, 
+                                   sequence_id = NULL, sqlite_db) {
   
   on.exit(try(dbDisconnect(con)))
-
-  if (is.numeric(job_id)) job_id <- as.character(job_id)
-  if (!checkmate::test_string(job_id)) return(invisible(NULL))
-  checkmate::assert_logical(return_children)
-  checkmate::assert_logical(return_parent)
   if (!checkmate::test_file_exists(sqlite_db)) {
     warning("Cannot find SQLite database at: ", sqlite_db)
   }
   
+  stopifnot("Must specify `job_id` or `sequence_id`, not both" =
+              is.null(job_id) || is.null(sequence_id))
+  
+  if (!is.null(sequence_id)) {
+    
+    if (is.numeric(sequence_id)) sequence_id <- as.character(sequence_id)
+    if (!checkmate::test_string(sequence_id)) return(invisible(NULL))
+    
+    str <- paste0("SELECT * FROM job_tracking WHERE sequence_id = ?")
+    param <- list(sequence_id)
+    
+  } else {
+
+    if (is.numeric(job_id)) job_id <- as.character(job_id)
+    if (!checkmate::test_string(job_id)) return(invisible(NULL))
+    checkmate::assert_logical(return_children)
+    checkmate::assert_logical(return_parent)
+    
+    str <- paste0("SELECT * FROM job_tracking WHERE job_id = ?", 
+                  ifelse(return_children, " OR parent_id = (SELECT id FROM job_tracking WHERE job_id = ?)", ""),
+                  ifelse(return_parent, " OR id = (SELECT parent_id FROM job_tracking WHERE job_id = ?)", ""))
+  
+    param <- as.list(rep(job_id, 1 + return_children + return_parent))
+  }
+  
   con <- dbConnect(RSQLite::SQLite(), sqlite_db)
-  
-  
-  str <- paste0("SELECT * FROM job_tracking WHERE job_id = ?", 
-                ifelse(return_children, " OR parent_id = (SELECT id FROM job_tracking WHERE job_id = ?)", ""),
-                ifelse(return_parent, " OR id = (SELECT parent_id FROM job_tracking WHERE job_id = ?)", ""))
-  df <- dbGetQuery(con, str, param = as.list(rep(job_id, 1 + return_children + return_parent)))
+  df <- dbGetQuery(con, str, param = param)
   
   # rehydrate job_obj back into R6 class
   if (nrow(df) > 0L) df$job_obj <- lapply(df$job_obj, function(x) if (!is.null(x)) unserialize(x))
