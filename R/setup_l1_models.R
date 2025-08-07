@@ -63,7 +63,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   # loop over each subject, identify relevant fMRI data, and setup level 1 analysis files
   # all_subj_l1_list <- lapply(seq_len(nrow(gpa$subject_data)), function(ii) {
   #   subj_df <- gpa$subject_data[ii, ]
-
+  
   all_subj_l1_list <- foreach(
     subj_df = iter(gpa$subject_data, by = "row"), .inorder = FALSE, .packages = c("dplyr", "fmri.pipeline"), .errorhandling = "remove",
     .export = c(
@@ -75,7 +75,8 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
     subj_id <- subj_df$id
     subj_session <- subj_df$session
 
-    subj_lg <- get_subject_logger("glm_pipeline/l1_setup", gpa, subj_id, subj_session, "setup_l1")
+    subj_lg <- get_subject_logger("glm_pipeline/l1_setup", gpa = gpa, id = subj_id, prefix = "setup_l1")
+    subj_lg$info("Testing")
 
     # find the run data for analysis
     rdata <- gpa$run_data %>% dplyr::filter(id == !!subj_id & session == !!subj_session & run_nifti_present == TRUE)
@@ -121,7 +122,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       subj_lg$debug(paste("MR files to analyze:", run_nifti)) # log files that were found
     }
 
-    lg$debug("Volumes in run_nifti: %s", paste(run_volumes, collapse = ", "))
+    subj_lg$debug("Volumes in run_nifti: %s", paste(run_volumes, collapse = ", "))
 
     # get all events that pertain to this participant
     m_events <- data.table::rbindlist(
@@ -172,10 +173,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
             dplyr::filter(id == !!subj_id & session == !!subj_session)
 
           if (nrow(this_signal$value) == 0L) {
-            log_warn(
-              subj_lg,
-              "In L1 model setup, failed to find any rows in in gpa$l1_models$signals{this_signal$name}$value for id: {subj_id}, session: {subj_session}, model: {this_model}.\n  We will create an empty regressor."
-            )
+            log_warn(subj_lg, "In L1 model setup, failed to find any rows in in gpa$l1_models$signals{this_signal$name}$value for id: {subj_id}, session: {subj_session}, model: {this_model}.\n  We will create an empty regressor.")
           }
 
           # refit wi model if needed
@@ -194,27 +192,27 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       )
 
       if (!dir.exists(l1_output_dir)) {
-        lg$info("Creating subject output directory: %s", l1_output_dir)
+        subj_lg$info("Creating subject output directory: %s", l1_output_dir)
         dir.create(l1_output_dir, showWarnings = FALSE, recursive = TRUE)
       }
 
       bdm_out_file <- file.path(l1_output_dir, paste0(gpa$l1_models$models[[this_model]]$name, "_bdm_setup.RData"))
       run_bdm <- TRUE
       if (file.exists(bdm_out_file)) {
-        lg$info("Loading BDM info from extant file: %s", bdm_out_file)
+        subj_lg$info("Loading BDM info from extant file: %s", bdm_out_file)
         # Attempt to load BDM. If it fails, re-run build_design matrix
         run_bdm <- tryCatch(
           {
             load(bdm_out_file)
             if (!exists("d_obj") || is.null(d_obj)) {
-              lg$warn("Regenerating design because d_obj is missing/NULL in extant BDM file: %s.", bdm_out_file)
+              subj_lg$warn("Regenerating design because d_obj is missing/NULL in extant BDM file: %s.", bdm_out_file)
               TRUE # regenerate
             } else {
               FALSE # use cache
             }
           },
           error = function(e) {
-            log_error(lg, "Failed to load BDM file: %s with error: %s. I will regenerate the design matrix.", bdm_out_file, e)
+            log_error(subj_lg, "Failed to load BDM file: %s with error: %s. I will regenerate the design matrix.", bdm_out_file, e)
             return(TRUE)
           }
         )
@@ -238,6 +236,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         bdm_args$output_directory <- file.path(l1_output_dir, "timing_files")
         bdm_args$lg <- subj_lg
         bdm_args$ts_multipliers <- ts_multiplier_data
+        bdm_args$log_subid <- subj_id
 
         d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error = function(e) {
           log_error(subj_lg, 
@@ -265,7 +264,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
             )
           },
           error = function(e) {
-            log_error(lg, 
+            log_error(subj_lg, 
               "Problem with fsl_l1_model. Model: %s, Subject: %s, Session: %s.
               \nError message: %s", 
               this_model, subj_id, subj_session, as.character(e))
@@ -284,14 +283,14 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         # Setup spm run-level models for each combination of signals
         # spm_files <- tryCatch(spm_l1_model(d_obj, gpa, this_model, run_nifti),
         #   error=function(e) {
-        #     lg$error("Problem running spm_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)
-        #     lg$error("Error message: %s", as.character(e))
+        #     subj_lg$error("Problem running spm_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)
+        #     subj_lg$error("Error message: %s", as.character(e))
         #     return(NULL)
         #   })
       }
     }
 
-    lg$info("Completed processing of subject: %s", subj_id)
+    subj_lg$info("Completed processing of subject: %s", subj_id)
     return(l1_file_setup)
   }
 

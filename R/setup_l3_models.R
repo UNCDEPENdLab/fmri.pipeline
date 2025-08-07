@@ -184,7 +184,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
       )
     }
 
-    if ("spm" %in% gpa$glm_software) {\
+    if ("spm" %in% gpa$glm_software) {
       log_warn(lg, "spm not supported in setup_l3_models")
     }
 

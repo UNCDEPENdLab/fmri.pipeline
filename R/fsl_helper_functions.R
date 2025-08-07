@@ -211,11 +211,11 @@ refresh_feat_status <- function(gpa, level = 1L, lg_level = 1L) {
   checkmate::assert_integerish(level, lower = 1L, upper = 3L)
   checkmate::assert_integerish(lg_level, lower = 1L, upper = 3L)
 
-  lg_name <- case_when(
+  lg_name <- dplyr::case_when(
     lg_level == 1L ~ "l1_setup",
     lg_level == 2L ~ "l2_setup",
     lg_level == 3L ~ "l3_setup",
-    TRUE ~ NULL
+    TRUE ~ NA_character_
   )
   lg <- lgr::get_logger(paste0("glm_pipeline/", lg_name))
 

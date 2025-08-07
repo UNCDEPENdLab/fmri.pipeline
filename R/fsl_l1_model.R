@@ -26,7 +26,7 @@ fsl_l1_model <- function(
   checkmate::assert_string(model_name) # single string
   if (is.null(nvoxels)) { nvoxels <- rep(5e4, length(run_nifti)) } #arbitrarily use 50k voxels in fsf
 
-  lg <- lgr::get_logger("glm_pipeline/l1_setup")
+  lg <- lgr::get_logger(glue::glue("glm_pipeline/l1_setup/subject_{id}"))
   lg$set_threshold(gpa$lgr_threshold)
 
   if (!is.null(d_obj$run_nifti)) {

@@ -66,11 +66,15 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL) {
     dplyr::filter(exclude_run == TRUE | exclude_subject == TRUE)
 
   if (nrow(excluded_runs) > 0L) {
-    lg$info("In setup_l2_models, the following runs will be excluded from L2 modeling: ")
-    lg$info(
-      "  subject: %s, session: %s, run_number: %s",
-      excluded_runs$id, excluded_runs$session, excluded_runs$run_number
-    )
+    for(jj in seq_along(unique(excluded_runs$id))) {
+      temp_excluded_runs <- excluded_runs %>% dplyr::filter(id == unique(excluded_runs$id)[jj])
+      subj_lg <- lgr::get_logger(glue::glue("glm_pipeline/l1_setup/subject_{temp_excluded_runs$id[1]}"))
+      subj_lg$info("In setup_l2_models, the following runs will be excluded from L2 modeling: ")
+      subj_lg$info(
+        "  subject: %s, session: %s, run_number: %s",
+        temp_excluded_runs$id, temp_excluded_runs$session, temp_excluded_runs$run_number
+      )
+    }
   }
 
   # only retain good runs and subjects

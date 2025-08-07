@@ -31,8 +31,9 @@ l3_model_names = "prompt", glm_software = NULL) {
   # that is amended as each batch job runs and completes.
   batch_directory <- file.path(gpa$output_locations$scheduler_scripts, paste0("batch_", batch_id))
   if (!dir.exists(batch_directory)) dir.create(batch_directory, recursive = TRUE)
+  gpa$output_directory$batch_directory <- batch_directory
   gpa_cache <- file.path(batch_directory, "run_pipeline_cache.RData")
-  save(gpa, file=gpa_cache)
+  save(gpa, file=gpa_cache) 
 
   # batch job to finalize pipeline configuration
   f_batch <- R_batch_job$new(
@@ -140,6 +141,7 @@ l3_model_names = "prompt", glm_software = NULL) {
     glm_batch <- R_batch_sequence$new(l1_setup_batch, l1_execute_batch, l2_batch, l3_batch, cleanup_batch)
   }
   glm_batch$submit()
+  return(gpa)
 }
 
 #' helper function to guide user through process of choosing which models to run in GLM pipeline

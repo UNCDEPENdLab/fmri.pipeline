@@ -344,7 +344,7 @@ build_design_matrix <- function(
   iti_post = 12,
   ts_multipliers=NULL, #time series regressors that can be multiplied against signals prior to convolution
   additional_regressors = NULL, #allow for additional regression text file to be implemented. need separate file for each
-  lg = NULL
+  log_subid = NULL # to be used when called from per subject loop inside setup_l1_models()
 ) {
 
   checkmate::assert_character(write_timing_files, null.ok=TRUE)
@@ -365,7 +365,11 @@ build_design_matrix <- function(
   checkmate::assert_integerish(run_data$run_number, lower = 1)
   checkmate::assert_integerish(drop_volumes, lower = 0)
 
-  if (is.null(lg)) lg <- lgr::get_logger()
+  if (is.null(log_subid)) {
+    lg <- lgr::get_logger()
+  } else{
+    lg <- lgr::get_logger(glue::glue("glm_pipeline/l1_setup/subject_{log_subid}"))
+  }
 
   # If drop_volumes is just 1 in length, assume it applies to all runs
   # This will only have an effect if run_data does not already have a drop_volumes column
