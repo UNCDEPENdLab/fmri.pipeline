@@ -27,7 +27,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   checkmate::assert_subset(l1_model_names, names(gpa$l1_models$models))
   checkmate::assert_data_frame(gpa$subject_data)
   checkmate::assert_data_frame(gpa$run_data)
-  checkmate::assert_subset(c("id", "session", "run_number", "run_nifti", "exclude_run"), names(gpa$run_data)) # required columns
+  checkmate::assert_names(names(gpa$run_data), must.include = c("id", "session", "run_number", "run_nifti", "exclude_run")) # required columns
 
   #if no model subset is requested, output all models
   if (is.null(l1_model_names)) l1_model_names <- names(gpa$l1_models$models)
@@ -145,6 +145,23 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
     for (ii in seq_along(l1_model_names)) {
       this_model <- l1_model_names[ii]
 
+      # look for all ts_multiplier columns used in model signals
+      ts_multiplier_cols <- unlist(lapply(gpa$l1_models$signals[gpa$l1_models$models[[this_model]]$signals], function(this_signal) {
+        if (isFALSE(this_signal$ts_multiplier)) {
+          return(NULL)
+        } else {
+          return(this_signal$ts_multiplier)
+        }
+      }))
+
+      # pull corresponding ppi data for these columns, pass to BDM
+      ts_multiplier_data <- if (!is.null(ts_multiplier_cols)) {
+        gpa$ppi_data %>%
+          dplyr::filter(id == !!subj_id & session == !!subj_session)
+      } else {
+        NULL
+      }
+        
       # setup design matrix for any given software package
       m_signals <- lapply(gpa$l1_models$signals[gpa$l1_models$models[[this_model]]$signals], function(this_signal) {
         # filter down to this id if the signal is a data.frame
@@ -193,7 +210,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
           {
             load(bdm_out_file)
             if (!exists("d_obj") || is.null(d_obj)) {
-              lg$warning("Regenerating design because d_obj is missing/NULL in extant BDM file: %s.", bdm_out_file)
+              lg$warn("Regenerating design because d_obj is missing/NULL in extant BDM file: %s.", bdm_out_file)
               TRUE # regenerate
             } else {
               FALSE # use cache
@@ -223,6 +240,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         bdm_args$runs_to_output <- mr_run_nums
         bdm_args$output_directory <- file.path(l1_output_dir, "timing_files")
         bdm_args$lg <- lg
+        bdm_args$ts_multipliers <- ts_multiplier_data
 
         d_obj <- tryCatch(do.call(build_design_matrix, bdm_args), error = function(e) {
           lg$error("Failed build_design_matrix for id: %s, session: %s, model: %s", subj_id, subj_session, this_model)

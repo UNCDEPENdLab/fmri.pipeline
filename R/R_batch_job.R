@@ -225,10 +225,12 @@ R_batch_job <- R6::R6Class("batch_job",
 
         # add any post-children R code to be executed (e.g., combining outputs from the child jobs)
         if (!is.null(self$post_children_r_code)) {
-          syntax <- c(
-            syntax,
-            self$post_children_r_code
-          )
+          syntax <- c(syntax, self$post_children_r_code)
+
+          # if user includes post_children_r_code, we should re-save the cache in case the post-children code modifies important variables (e.g., gpa)
+          if (!is.null(self$output_rdata_file)) {
+            syntax <- c(syntax, paste0("save.image(file='", self$output_rdata_file, "')"))
+          }
         }
       }
 
@@ -610,7 +612,8 @@ R_batch_job <- R6::R6Class("batch_job",
     #' @param wall_time The compute time requested on the cluster dd-HH:MM:SS
     #' @param mem_total The total amount of memory (RAM) requested by the job
     #' @param r_code A character vector or expression containing R code to be executed
-    copy = function(job_name=NULL, n_nodes=NULL, n_cpus=NULL, wall_time=NULL, mem_total=NULL, r_code=NULL) {
+    #' @param post_children_r_code The R code to be executed after child jobs have completed
+    copy = function(job_name=NULL, n_nodes=NULL, n_cpus=NULL, wall_time=NULL, mem_total=NULL, r_code=NULL, post_children_r_code=NULL) {
       cloned <- self$clone(deep = TRUE)
       cloned$reset_file_names()
 
@@ -625,6 +628,13 @@ R_batch_job <- R6::R6Class("batch_job",
           r_code <- capture.output(cat(as.character(r_code), sep = "\n"))
         }
         cloned$r_code <- r_code
+      }
+      if (!is.null(post_children_r_code)) {
+        checkmate::assert_multi_class(post_children_r_code, c("expression", "character"))
+        if (is.expression(post_children_r_code)) { # expand post_children_r_code expression as character vector
+          post_children_r_code <- capture.output(cat(as.character(post_children_r_code), sep = "\n"))
+        }
+        cloned$post_children_r_code <- post_children_r_code
       }
 
       return(cloned)

@@ -141,6 +141,30 @@ generate_feature_armadillo <- function(encoding, K) {
     .Call(`_fmri_pipeline_generate_feature_armadillo`, encoding, K)
 }
 
+#' Get Dimensions of a NIfTI Image
+#'
+#' Reads the header of a NIfTI file and returns its image dimensions.
+#'
+#' This function uses the RNifti C++ API to efficiently extract the dimensions
+#' (e.g., x, y, z, time) of a NIfTI image without loading the entire image into memory.
+#'
+#' @name get_nifti_dim
+#' @param infile Character string. Path to a valid NIfTI file (e.g., `.nii` or `.nii.gz`).
+#'
+#' @return A numeric vector containing the dimensions of the image. For a 4D image,
+#'         the result will be a vector of length 4: \code{c(x, y, z, t)}.
+#'
+#' @examples
+#' \dontrun{
+#'   dims <- get_nifti_dim("sub-001_task-rest_bold.nii.gz")
+#' }
+#' @keywords internal
+NULL
+
+get_nifti_dim <- function(infile) {
+    .Call(`_fmri_pipeline_get_nifti_dim`, infile)
+}
+
 #' Sigmoid transform
 #'
 #' @name sigmoid

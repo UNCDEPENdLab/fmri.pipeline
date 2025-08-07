@@ -88,12 +88,13 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   #subfunction to handle variable=value and variable combinations
   paste_args <- function(str_vec) {
     nms <- names(str_vec)
+    stopifnot(!is.null(nms))
     sapply(seq_along(str_vec), function(x) {
       if (is.na(str_vec[x])) {
         return(nms[x]) #just the name of the env variable (forwards from environment)
       } else {
-        #force argument to be quoted to avoid problems with spaces
-        val <- ifelse(grepl("^[\"'].*[\"']$", str_vec[x], perl=TRUE), str_vec[x], paste0("\"", str_vec[x], "\""))
+        # force argument to be quoted to avoid problems with spaces
+        val <- shQuote(str_vec[x], type = "sh")
         return(paste0(nms[x], "=", val))
       }
     })
@@ -145,13 +146,15 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     }
 
     # for direct execution, need to pass environment variables by prepending
-    if (isTRUE(echo)) cat(paste(env_variables, bin, script), "\n")
+    cmd <- paste(env_variables, bin, script)
+    if (isTRUE(echo)) cat(cmd, "\n") # echo command to terminal
     # submit the job script and return the jobid by forking to background and returning PID
-    jobres <- system(paste(env_variables, bin, script, ">", sub_stdout, "2>", sub_stderr, "& echo $! >", sub_pid), wait = FALSE)
+    jobres <- system(paste(cmd, ">", sub_stdout, "2>", sub_stderr, "& echo $! >", sub_pid), wait = FALSE)
     Sys.sleep(.05) #sometimes the pid file is not in place when file.exists executes -- add a bit of time to ensure that it reads
     jobid <- if (file.exists(sub_pid)) scan(file = sub_pid, what = "char", sep = "\n", quiet = TRUE) else ""
   } else {
-    if (isTRUE(echo)) cat(paste(scheduler, sched_args, script), "\n")
+    cmd <- paste(scheduler, sched_args, script)
+    if (isTRUE(echo)) cat(cmd, "\n")
     # submit the job script and return the jobid
     jobres <- system2(scheduler, args = paste(sched_args, script), stdout = sub_stdout, stderr = sub_stderr)
     jobid <- if (file.exists(sub_stdout)) scan(file = sub_stdout, what = "char", sep = "\n", quiet = TRUE) else ""
@@ -193,6 +196,8 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     # in the case that a parent job id is passed in through the tracking_args list
     add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = tracking_args$parent_job_id, child_level = 1) 
   }
+  
+  attr(jobid, "cmd") <- cmd # add the command executed as an attribute
 
   return(jobid)
 }

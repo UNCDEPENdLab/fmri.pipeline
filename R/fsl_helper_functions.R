@@ -197,14 +197,15 @@ add_custom_feat_syntax <- function(fsf_syntax, feat_args, lg=NULL) {
 
 }
 
-#' small helper function to look at feat outputs and files to determine if execution is complete
+#' Helper function to look at feat outputs and files to determine if execution is complete
 #'
 #' @param gpa a \code{glm_pipeline_arguments object}
 #' @param level the level of analysis to be refreshed (1, 2, or 3)
+#' @param lg an optional lgr logger object used for logging
 #' @return a modified copy of \code{gpa} with the feat columns of
 #'   $l1_model_setup, $l2_model_setup, or $l3_model_setup refreshed
 #'
-#' @keywords internal
+#' @export
 #' @importFrom dplyr select
 #' @importFrom purrr pmap_dfr
 refresh_feat_status <- function(gpa, level = 1L, lg = NULL) {

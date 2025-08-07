@@ -266,7 +266,7 @@ get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, retur
 }
 
 
-# Internal helper function to update tracker_args object
+#' Internal helper function to update tracker_args object
 #'
 #' @param list_to_populate The list whose argument will be populated/updated
 #' @param arg_name The named list element to update
