@@ -97,7 +97,7 @@ fsl_l1_model <- function(
       l1_confound_file <- l1_confound_files[rr]
       if (!file.exists(l1_confound_file)) {
         lg$warn(
-          "Cannot find l1_confound_file for id: %d, session: %d, run_number: %d, file: %s",
+          "Cannot find l1_confound_file for id: %s, session: %d, run_number: %d, file: %s",
           id, session, feat_l1_df$run_number[rr], l1_confound_file
         )
       } else {

@@ -567,6 +567,11 @@ validate_input_data <- function(df, vm, lg, level = "trial") {
     stop(msg)
   }
 
+  # enforce that id is stored as a character vector so that joins between data.frames operate on a consistent character type
+  # regardless of how the id was coded in the input data
+  lg$debug("Converting id to character in %s data", level)
+  df[[vm["id"]]] <- as.character(df[[vm["id"]]])
+
   if (!vm["session"] %in% names(df)) {
     lg$debug("Adding session = 1 to %s data", level)
     df[[vm["session"]]] <- 1L
