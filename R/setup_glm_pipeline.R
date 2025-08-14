@@ -394,16 +394,23 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 #' @param gpa a \code{glm_pipeline_arguments} object
 #' @return a modified gpa object containing settings for the compute environment
 #' @export
-setup_compute_environment <- function(gpa) {
-  cat(c(
-    "\n",
-    "We will now handle setup of the compute environment on your system.",
-    "The commands you provide here are included at the beginning of scripts produced",
-    "by the pipeline in order to configure the environment for your system.",
-    "Typically, this includes commands to ensure that things like FSL or AFNI are in",
-    "your system's path so that these programs can be found. On high-performance clusters,",
-    "module configuration and loading are also common.", "\n"
-  ), sep = "\n")
+setup_compute_environment <- function(gpa, preselect_action = NULL) {
+
+  if(!is.null(preselect_action)) {
+    if (preselect_action %in% c(0L, 5L)){
+      cat(c("The environment is configured.", "\n"))
+    }
+  } else {
+    cat(c(
+      "\n",
+      "We will now handle setup of the compute environment on your system.",
+      "The commands you provide here are included at the beginning of scripts produced",
+      "by the pipeline in order to configure the environment for your system.",
+      "Typically, this includes commands to ensure that things like FSL or AFNI are in",
+      "your system's path so that these programs can be found. On high-performance clusters,",
+      "module configuration and loading are also common.", "\n"
+    ), sep = "\n")
+  }
 
   sanitize_compute_environment <- function(ll = NULL) {
     if (!is.list(ll)) ll <- list()
