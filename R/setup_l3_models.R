@@ -223,6 +223,9 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   # append l3 setup to gpa
   gpa$l3_model_setup <- all_subj_l3_combined
 
+  # refresh l3 model status in $l3_model_setup
+  gpa <- refresh_feat_status(gpa, level = 3L, lg = lg)
+
   # the expressions for l3 output locations should not generate any duplicate fsfs
   dupe_fsfs <- duplicated(gpa$l3_model_setup$fsl$feat_fsf)
   if (any(dupe_fsfs, na.rm = TRUE)) {

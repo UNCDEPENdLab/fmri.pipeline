@@ -1,4 +1,5 @@
 library(data.table)
+library(dplyr)
 library(fmri.pipeline)
 
 #' Build the trial dataframe from test data. This file is already saved in the repo, so should only be used to
@@ -8,7 +9,6 @@ build_trial_data_file <- function(test_data_base_dir = "tests/testthat/testdata"
   # Copy the cached trial data file in the MRI folder to the test data folder
   file.copy(file.path(test_data_base_dir, mri_data_folder, cache_file), file.path(test_data_base_dir, trial_data_file))
 }
-
 
 #' Build the run dataframe from test data. This file is already saved in the repo, so should only be used to
 #' adjust the run data file.
@@ -40,8 +40,9 @@ build_run_data_file <- function(test_data_base_dir = "tests/testthat/testdata", 
             run_dir_name <- basename(run_folder)
 
             run_number <- as.integer(gsub("clock", "", run_dir_name))  
-            mr_dir <- file.path(subject_dir_name, paste0("clock", run_number), "ica_aroma")
-            run_nifti <- file.path(mr_dir, "melodic_IC_thr_MNI2mm.nii")
+            # mr_dir <- file.path(subject_dir_name, paste0("clock", run_number), "ica_aroma")
+            mr_dir <- file.path(subject_folder, paste0("clock", run_number)) #, "ica_aroma")
+            run_nifti <- file.path(mr_dir, "ica_aroma", "melodic_IC_thr_MNI2mm.nii")
             confound_input_file <- file.path(mr_dir, "nuisance_regressors.txt")
 
             # Appending all once per run
@@ -59,8 +60,39 @@ build_run_data_file <- function(test_data_base_dir = "tests/testthat/testdata", 
                     mr_dir = mr_dir_list, run_number = run_number_list, 
                     run_nifti = run_nifti_list, confound_input_file = confound_input_file_list)
 
-    write.csv(run_df, file.path(test_data_base_dir, run_data_file), row.names = FALSE)
+    # write.csv(run_df, file.path(test_data_base_dir, run_data_file), row.names = FALSE)
+    write.csv(df, file.path(test_data_base_dir, run_data_file), row.names = FALSE)
 }
+
+# The following changes made by NVD in Jan/Feb 2025
+# build_run_data_file(test_data_base_dir = "/proj/mnhallqlab/projects/fmri.pipeline_test_data", mri_data_folder = "")
+# add emotion as a factor to the run data so we can add it as a l2 covariate
+# test_data_base_dir <- "/proj/mnhallqlab/projects/fmri.pipeline_test_data/"
+# trial_data_file <- "sample_trial_data.csv.gz"
+# trial_df <- read.csv(file.path(test_data_base_dir, trial_data_file))
+# # rt_csv column in currently in ms, converting to s
+# trial_df <- trial_df %>% mutate(rt_csv = rt_csv / 1000)
+# # save the updated trial data
+# write.csv(trial_df, file.path(test_data_base_dir, trial_data_file), row.names = FALSE)
+# trial_df <- trial_df %>% mutate(run_number = run)
+# run_data_file <- "sample_run_data.csv"
+# run_df <- read.csv(file.path(test_data_base_dir, run_data_file))
+# reduce duplicate rows for same run number
+# run_df <- run_df %>% distinct(id, run_number, .keep_all = TRUE)
+# change nifti filepath to the current file named nfaswuktm_clock<num>_5.nii
+# run_df <- run_df %>% rowwise() %>% mutate(run_nifti = gsub("ica_aroma/melodic_IC_thr_MNI2mm.nii", paste0("nfaswuktm_clock", toString(run_number), "_5.nii"), run_nifti)) %>% ungroup()
+# run_df <- run_df %>% left_join(trial_df %>% select(id, run_number, emotion), by = c("id", "run_number"))
+# write.csv(run_df, file.path(test_data_base_dir, run_data_file), row.names = FALSE)
+
+# Correc the wrong trial number sequence
+# test_data_base_dir <- "/proj/mnhallqlab/projects/fmri.pipeline_test_data/"
+# trial_data_file <- "sample_trial_data.csv.gz"
+# trial_df <- read.csv(file.path(test_data_base_dir, trial_data_file))
+# # for run 2 trial number starts from 51, it should start from 1 again. Apply this to all run numbers
+# trial_df <- trial_df %>% group_by(run) %>% mutate(trial = trial - min(trial) + 1) %>% ungroup()
+# trial_df <- trial_df %>% rename(run_number = run) # rename column run to run_number
+# # save the updated trial data
+# write.csv(trial_df, file.path(test_data_base_dir, trial_data_file), row.names = FALSE)
 
 #' Build the subject dataframe from test data. This file is already saved in the repo, so should only be used to
 #' adjust the run data file.
@@ -81,8 +113,7 @@ build_subject_data_file <- function(test_data_base_dir = "tests/testthat/testdat
 #' @return a minimal gpa list
 get_gpa_minimal <- function() {
   setup_glm_pipeline(
-    analysis_name = "gpa_tests",
-    output_directory = tempdir(),
+    analysis_name = "gpa_tests_l2l3", # output_directory = tempdir(),
     subject_data = data.frame(id=c(1, 2, 3)),
     trial_data = data.frame(id=c(1, 2, 3)),
     tr = 1.0,
@@ -96,8 +127,7 @@ get_gpa_minimal <- function() {
 #' @return a minimal gpa list
 get_gpa_no_models <- function() {
   setup_glm_pipeline(
-    analysis_name = "gpa_tests",
-    output_directory = tempdir(),
+    analysis_name = "gpa_tests_nol2l3",# output_directory = tempdir(),
     subject_data = get_subj_df(),
     trial_data = get_trial_df(),
     tr = 1.0,
@@ -109,6 +139,7 @@ get_gpa_no_models <- function() {
 #' 
 #' @param test_data_base_dir the base directory of the test data.
 build_gpa_base <- function(
+    analysis_name = "gpa_tests",
     test_data_base_dir = "tests/testthat/testdata",
     trial_data_file = "sample_trial_data.csv.gz",
     run_data_file = "sample_run_data.csv",
@@ -118,7 +149,9 @@ build_gpa_base <- function(
     exclude_run = "max(framewise_displacement) > 5 | sum(framewise_displacement > .9)/length(framewise_displacement) > .10",
     exclude_subject = "n_good_runs < 4",
     truncate_run = "(framewise_displacement > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
+    tr = 1.0,
     spike_volumes = NULL) {
+
 
   # Read in trial, run, and subject dataframes
   trial_df <- read.csv(file.path(test_data_base_dir, trial_data_file))
@@ -126,14 +159,13 @@ build_gpa_base <- function(
   subj_df <- read.csv(file.path(test_data_base_dir, subject_data_file))
 
   gpa <- setup_glm_pipeline(
-    analysis_name = "gpa_tests",
+    analysis_name = analysis_name,
     scheduler = scheduler,
     trial_data = trial_df,
     run_data = run_df,
-    subject_data = subj_df,
-    output_directory = tempdir(),
+    subject_data = subj_df, # output_directory = tempdir(), # vm = c(id = "id", run_number = "run"),
     n_expected_runs = 8,
-    tr = 1.0,
+    tr = tr, # 1.0,
     drop_volumes = drop_volumes,
     l1_models=NULL, l2_models=NULL, l3_models=NULL,
     confound_settings = list(
@@ -149,21 +181,23 @@ build_gpa_base <- function(
   )
 
   saveRDS(gpa, file = file.path(test_data_base_dir, cache_file))
+  return(gpa)
 }
 
 #' Get a populated GPA object. Pull the base gpa from cache if present; if not, run build_gpa_base.
 #' Model objects only loaded in from file for now until they can be programatically created from YAML.
 get_gpa_base <- function(
+  analysis_name = "gpa_tests",
   test_data_base_dir = "tests/testthat/testdata",
   cache_file = "gpa_base.rds",
   ...
 ) {
   # Check if gpa object is already cached, if not, build it
-  if (file.exists(file.path(test_data_base_dir, cache_file))) {
-    gpa <- readRDS(file.path(test_data_base_dir, cache_file))
-  } else {
-    gpa <- build_gpa_base(test_data_base_dir = test_data_base_dir, cache_file = cache_file, ...)
-  }
+  # if (file.exists(file.path(test_data_base_dir, cache_file))) {
+  #   gpa <- readRDS(file.path(test_data_base_dir, cache_file))
+  # } else {
+    gpa <- build_gpa_base(analysis_name = analysis_name, test_data_base_dir = test_data_base_dir, cache_file = cache_file, ...)
+  # }
 
   return(gpa)
 }
@@ -174,38 +208,144 @@ get_gpa_base <- function(
 #' This COULD be split up so that each model gets their own cache file, but that feels
 #' excessive for now. Just assume all models need to be rebuilt if gpa needs rebuilding.
 build_gpa <- function(
+  analysis_name = "gpa_tests",
   test_data_base_dir = "tests/testthat/testdata",
   gpa_cache_file = "gpa.rds",
-  l1_spec_file = "sample_L1_spec.yaml",
+  spec_file = "sample_spec.yaml", #"sample_L1_spec.yaml",
   ...
 ) {
-  gpa <- get_gpa_base(test_data_base_dir = test_data_base_dir, ...)
+  # run set_gm_pipeline()
+  gpa <- get_gpa_base(analysis_name = analysis_name, test_data_base_dir = test_data_base_dir, ...)
 
+  # setup compute enviroment
+  gpa <- setup_compute_environment(gpa, preselect_action = 5L)
+  
   # Build L1 models
-  gpa <- build_l1_models(gpa, from_spec_file = file.path(test_data_base_dir, l1_spec_file))
+  gpa <- build_l1_models(gpa, from_spec_file = file.path(test_data_base_dir, spec_file))
 
   # Build L2 models
-  gpa <- build_l2_models(gpa)
+  gpa <- build_l2_models(gpa) #, from_spec_file = file.path(test_data_base_dir, spec_file))
 
   # Build L3 models
-  gpa <- build_l3_models(gpa)
+  gpa <- build_l3_models(gpa) #, from_spec_file = file.path(test_data_base_dir, spec_file))
 
   # Save final RDS object
   saveRDS(gpa, file = file.path(test_data_base_dir, gpa_cache_file))
+  return(gpa)
 }
 
 #' Get a populated GPA object. Pull the base gpa and models from cache if present; if not, run build_gpa_base.
 get_gpa <- function(
+  analysis_name = "gpa_tests",
   test_data_base_dir = "tests/testthat/testdata",
   gpa_cache_file = "gpa.rds",
   ...
 ) {
   # Check if gpa object is already cached, if not, build it
-  if (file.exists(file.path(test_data_base_dir, gpa_cache_file))) {
-    gpa <- readRDS(file.path(test_data_base_dir, gpa_cache_file))
-  } else {
-    gpa <- build_gpa(test_data_base_dir = test_data_base_dir, gpa_cache_file = gpa_cache_file, ...)
-  }
+  # if (file.exists(file.path(test_data_base_dir, gpa_cache_file))) {
+  #   gpa <- readRDS(file.path(test_data_base_dir, gpa_cache_file))
+  # } else {
+    gpa <- build_gpa(analysis_name = analysis_name, test_data_base_dir = test_data_base_dir, gpa_cache_file = gpa_cache_file, ...)
+  # }
   
+  return(gpa)
+}
+
+#' Create a populated GPA object using all the inputs
+create_gpa <- function(
+  analysis_name = "gpa_tests",
+  test_data_base_dir = "/proj/mnhallqlab/projects/fmri.pipeline_test_data",
+  spec_file = "sample_2_L1_spec.yaml",
+  trial_data_file = "sample_trial_data.csv.gz",
+  run_data_file = "sample_run_data.csv",
+  subject_data_file = "sample_subject_data.csv",
+  gpa_cache_file = "gpa.rds",
+  cache_file = "gpa_base.rds"
+) {
+  gpa <- get_gpa(
+    analysis_name = analysis_name,
+    test_data_base_dir = test_data_base_dir,
+    gpa_cache_file = gpa_cache_file,
+    spec_file = spec_file,
+    
+    # need to figure out what to pass here
+    trial_data_file = trial_data_file,
+    run_data_file = run_data_file,
+    subject_data_file = subject_data_file,
+
+    cache_file = cache_file,
+    scheduler = "slurm", drop_volumes = 2,
+    exclude_run = "max(framewise_displacement) > 5 | sum(framewise_displacement > .9)/length(framewise_displacement) > .10",
+    exclude_subject = "n_good_runs < 4",
+    truncate_run = "(framewise_displacement > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
+    spike_volumes = NULL,
+    tr = 1.0
+  )
+  # TODO check if we need to run get_gpa each time or we could add a if statment to not run this function if the gpa object already exists in a saved file?
+  return(gpa)
+}
+
+create_gpa_wrong_tr <- function(
+  analysis_name = "gpa_tests",
+  test_data_base_dir = "/proj/mnhallqlab/projects/fmri.pipeline_test_data",
+  spec_file = "sample_2_L1_spec.yaml",
+  trial_data_file = "sample_trial_data.csv.gz",
+  run_data_file = "sample_run_data.csv",
+  subject_data_file = "sample_subject_data.csv",
+  gpa_cache_file = "gpa.rds",
+  cache_file = "gpa_base.rds"
+) {
+  gpa <- get_gpa(
+    analysis_name = analysis_name,
+    test_data_base_dir = test_data_base_dir,
+    gpa_cache_file = gpa_cache_file,
+    spec_file = spec_file,
+    
+    # need to figure out what to pass here
+    trial_data_file = trial_data_file,
+    run_data_file = run_data_file,
+    subject_data_file = subject_data_file,
+
+    cache_file = cache_file,
+    scheduler = "slurm", drop_volumes = 2,
+    exclude_run = "max(framewise_displacement) > 5 | sum(framewise_displacement > .9)/length(framewise_displacement) > .10",
+    exclude_subject = "n_good_runs < 4",
+    truncate_run = "(framewise_displacement > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
+    spike_volumes = NULL,
+    tr = 2.0
+  )
+  # TODO check if we need to run get_gpa each time or we could add a if statment to not run this function if the gpa object already exists in a saved file?
+  return(gpa)
+}
+
+create_gpa_break_fsf <- function(
+  analysis_name = "gpa_tests",
+  test_data_base_dir = "/proj/mnhallqlab/projects/fmri.pipeline_test_data",
+  spec_file = "sample_2_L1_spec.yaml",
+  trial_data_file = "sample_trial_data.csv.gz",
+  run_data_file = "sample_run_data.csv",
+  subject_data_file = "sample_subject_data.csv",
+  gpa_cache_file = "gpa.rds",
+  cache_file = "gpa_base.rds"
+) {
+  gpa <- get_gpa(
+    analysis_name = analysis_name,
+    test_data_base_dir = test_data_base_dir,
+    gpa_cache_file = gpa_cache_file,
+    spec_file = spec_file,
+    
+    # need to figure out what to pass here
+    trial_data_file = trial_data_file,
+    run_data_file = run_data_file,
+    subject_data_file = subject_data_file,
+
+    cache_file = cache_file,
+    scheduler = "slurm", drop_volumes = 2,
+    exclude_run = "max(framewise_displacement) > 5 | sum(framewise_displacement > .9)/length(framewise_displacement) > .10",
+    exclude_subject = "n_good_runs < 4",
+    truncate_run = "(framewise_displacement > 0.9 & time > last_offset) | (time > last_offset + last_isi)",
+    spike_volumes = NULL,
+    tr = 1.0
+  )
   return(gpa)
 }
