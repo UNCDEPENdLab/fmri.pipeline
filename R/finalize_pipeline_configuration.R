@@ -315,8 +315,10 @@ setup_output_locations <- function(gpa, lg = NULL) {
 
   if (length(unique(gpa$run_data$session)) == 1L) {
     feat_sub_directory <- file.path("{gpa$output_directory}", "feat_l1", "sub-{id}")
+    feat_l2_sub_directory <- file.path("{gpa$output_directory}", "feat_l2", "sub-{id}")
   } else {
     feat_sub_directory <- file.path("{gpa$output_directory}", "feat_l1", "sub-{id}", "ses-{session}")
+    feat_l2_sub_directory <- file.path("{gpa$output_directory}", "feat_l2", "sub-{id}", "ses-{session}")
   }
 
   output_defaults <- list(
@@ -325,7 +327,7 @@ setup_output_locations <- function(gpa, lg = NULL) {
     feat_sub_directory = feat_sub_directory,
     feat_ses_directory = feat_sub_directory, # no difference in defaults
     feat_l1_directory = file.path(feat_sub_directory, "{l1_model}"),
-    feat_l2_directory = feat_sub_directory,
+    feat_l2_directory = feat_l2_sub_directory,
     # default structure is like: L1m-abspexrew/L2m-modl2_l2c-EV_overall/L3m-int_only/FEAT_l1c-{l1_cope_name}.fsf
     feat_l3_directory = ifelse(isTRUE(gpa$multi_run),
       file.path("{gpa$output_directory}", "feat_l3", "L1m-{l1_model}", "L2m-{l2_model}_l2c-{l2_contrast}", "L3m-{l3_model}"),

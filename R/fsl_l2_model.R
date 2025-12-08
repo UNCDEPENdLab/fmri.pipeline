@@ -126,15 +126,15 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
     )
   }
 
-  # TODO: make this more flexible and actually use the $output_locations$feat_l2
-  fsl_l1_output_dir <- get_output_directory(
+  # Get L2 output directory using the configured feat_l2_directory location
+  fsl_l2_output_dir <- get_output_directory(
     id = id, session = session,
-    l1_model = l1_model, gpa = gpa, glm_software = "fsl", what = "l1"
+    l1_model = l1_model, l2_model = l2_model,
+    gpa = gpa, glm_software = "fsl", what = "l2"
   )
 
-  # TODO: make output location more flexible and not always relative to L1 outputs
-  l2_feat_dir <- file.path(fsl_l1_output_dir, paste0("FEAT_LVL2_", l2_model, ".gfeat"))
-  l2_feat_fsf <- file.path(fsl_l1_output_dir, paste0("FEAT_LVL2_", l2_model, ".fsf"))
+  l2_feat_dir <- file.path(fsl_l2_output_dir, paste0("FEAT_LVL2_", l2_model, ".gfeat"))
+  l2_feat_fsf <- file.path(fsl_l2_output_dir, paste0("FEAT_LVL2_", l2_model, ".fsf"))
 
   # add columns regarding whether inputs already exist and FEAT is already complete
   feat_l2_df <- feat_l2_df %>%

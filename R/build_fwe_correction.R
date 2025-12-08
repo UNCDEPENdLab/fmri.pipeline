@@ -264,7 +264,7 @@ build_3dclustsim_permutation <- function(to_fwe) {
     })
 
     # unnest the .gfeat/.feat structure to just have a 1D list of clustsim objects
-    fwe_list <- rlang::flatten(fwe_list)
+    fwe_list <- purrr::list_flatten(fwe_list)
 
     # build the clustsim objects into a list object that supports the $submit method (on all)
     clustsim_list <- afni_3dclustsim_list$new(obj_list = fwe_list)

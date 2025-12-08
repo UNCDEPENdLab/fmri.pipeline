@@ -807,11 +807,11 @@ visualize_design_matrix <- function(d, outfile=NULL, run_boundaries=NULL, events
   d <- as.data.frame(d)
   d$volume <- seq_len(nrow(d))
   d.m <- d %>% tidyr::gather(key="variable", value="value", -volume)
-  g <- ggplot2::ggplot(d.m, ggplot2::aes(x=volume, y=value)) + ggplot2::geom_line(size=1.2) + ggplot2::theme_bw(base_size=15) + ggplot2::facet_grid(variable ~ ., scales="free_y")
+  g <- ggplot2::ggplot(d.m, ggplot2::aes(x=volume, y=value)) + ggplot2::geom_line(linewidth=1.2) + ggplot2::theme_bw(base_size=15) + ggplot2::facet_grid(variable ~ ., scales="free_y")
 
   if (!is.null(run_boundaries)) {
     rundf <- data.frame(run=run_names, boundary=run_boundaries)
-    g <- g + ggplot2::geom_vline(data=rundf, ggplot2::aes(xintercept=boundary, color=run), size=1.3) + ggplot2::scale_color_discrete("Run") + #scale_color_brewer("Run", palette="Blues")
+    g <- g + ggplot2::geom_vline(data=rundf, ggplot2::aes(xintercept=boundary, color=run), linewidth=1.3) + ggplot2::scale_color_discrete("Run") + #scale_color_brewer("Run", palette="Blues")
       #theme(legend.key = element_rect(size = 2), legend.key.size = unit(1.5, 'lines'))
       ggplot2::guides(color=ggplot2::guide_legend(keywidth=0.3, keyheight=1.5, default.unit="lines")) #not beautifully spaced, but come back to this later...
   }
