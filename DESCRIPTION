@@ -1,8 +1,8 @@
 Package: fmri.pipeline
 Type: Package
 Title: Analysis of fMRI Data on HPC clusters
-Version: 0.2-3
-Date: 2024-10-02
+Version: 0.3
+Date: 2025-08-26
 Authors@R: c(person("Michael", "Hallquist", role = c("aut", "cre"),
     email = "michael.hallquist@gmail.com"))
 Maintainer: Michael Hallquist <michael.hallquist@gmail.com>

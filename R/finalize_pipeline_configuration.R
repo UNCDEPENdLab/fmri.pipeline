@@ -384,7 +384,7 @@ finalize_confound_settings <- function(gpa, lg) {
     motion_params_file = NULL,
     motion_params_colnames = NULL,
     confound_input_file = "confounds.tsv",
-    l1_confound_regressors = NULL, # column names in motion_params_file and/or confound_input_file
+    l1_confound_regressors = NULL, # column names in motion_params_file and/or confound_input_file ("all" to include all columns)
     exclude_run = "mean(framewise_displacement) > 0.5 | max(framewise_displacement) > 6",
     truncate_run = NULL, # example: framewise_displacement > 1 & time > last_onset
     spike_volumes = "framewise_displacement > 0.9",

@@ -361,3 +361,63 @@ test_that("test get_l1_confounds", {
 
 
 })
+
+test_that("run exclusion edge cases default to exclusion", {
+  lg <- lgr::get_logger("test-run-exclusion")
+  lg$set_threshold("fatal")
+
+  make_gpa <- function(exclude_run, run_exclusion_columns) {
+    gpa <- list(
+      confound_settings = list(
+        exclude_run = exclude_run,
+        run_exclusion_columns = run_exclusion_columns
+      ),
+      output_locations = list(
+        sqlite_db = tempfile(fileext = ".sqlite")
+      )
+    )
+    class(gpa) <- c("list", "glm_pipeline_arguments")
+    gpa
+  }
+
+  all_confounds <- data.frame(
+    framewise_displacement = c(0.1, 0.2, 0.3),
+    other = c(1, 2, 3)
+  )
+
+  # Missing exclusion columns -> exclude
+  gpa_missing <- make_gpa(
+    exclude_run = "mean(framewise_displacement) > 0.5 | max(badcol) > 6",
+    run_exclusion_columns = c("framewise_displacement", "badcol")
+  )
+  out_missing <- test_exclude_run(
+    gpa_missing, 1L, 1L, 1L, TRUE, all_confounds, lg,
+    confound_path = file.path(tempdir(), "confounds.tsv"),
+    motion_path = file.path(tempdir(), "motion.par")
+  )
+  expect_true(out_missing$exclude_run)
+
+  # Evaluation error -> exclude
+  gpa_error <- make_gpa(
+    exclude_run = "mean(framewise_displacement) >",
+    run_exclusion_columns = "framewise_displacement"
+  )
+  out_error <- test_exclude_run(
+    gpa_error, 1L, 1L, 1L, TRUE, all_confounds, lg,
+    confound_path = file.path(tempdir(), "confounds.tsv"),
+    motion_path = file.path(tempdir(), "motion.par")
+  )
+  expect_true(out_error$exclude_run)
+
+  # Expression returns multiple values -> exclude
+  gpa_multi <- make_gpa(
+    exclude_run = "framewise_displacement > 0.5",
+    run_exclusion_columns = "framewise_displacement"
+  )
+  out_multi <- test_exclude_run(
+    gpa_multi, 1L, 1L, 1L, TRUE, all_confounds, lg,
+    confound_path = file.path(tempdir(), "confounds.tsv"),
+    motion_path = file.path(tempdir(), "motion.par")
+  )
+  expect_true(out_multi$exclude_run)
+})

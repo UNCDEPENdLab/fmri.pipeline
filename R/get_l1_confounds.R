@@ -138,8 +138,20 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
     }
   }
   
+  confound_path <- NA_character_
+  motion_path <- NA_character_
+  if ("confound_input_file" %in% names(run_df)) {
+    confound_path <- get_mr_abspath(run_df, "confound_input_file")[1L]
+  }
+  if ("motion_params_file" %in% names(run_df)) {
+    motion_path <- get_mr_abspath(run_df, "motion_params_file")[1L]
+  }
+
   # COPIED FROM HERE read_confounds_motion_parameters
-  read_confounds_motion_parameters_output <- read_confounds_motion_parameters(gpa, id, session, run_number, run_df, expected_l1_confound_file, lg)
+  read_confounds_motion_parameters_output <- read_confounds_motion_parameters(
+    gpa, id, session, run_number, run_df, expected_l1_confound_file, lg,
+    confound_path = confound_path, motion_path = motion_path
+  )
   all_confounds <- read_confounds_motion_parameters_output$all_confounds
   motion_df <- read_confounds_motion_parameters_output$motion_df
 
@@ -160,7 +172,10 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   all_confounds <- all_confounds[run_df$first_volume:run_df$last_volume, , drop = FALSE]
   motion_df <- motion_df[run_df$first_volume:run_df$last_volume, , drop = FALSE]
 
-  exclude_run_output <- test_exclude_run(gpa, id, session, run_number, generate_run_exclusion_output$generate_run_exclusion, all_confounds, lg)
+  exclude_run_output <- test_exclude_run(
+    gpa, id, session, run_number, generate_run_exclusion_output$generate_run_exclusion,
+    all_confounds, lg, confound_path = confound_path, motion_path = motion_path
+  )
   # add run exclusion column to data.frame
   run_df$exclude_run <- exclude_run_output$exclude_run
 
@@ -266,13 +281,17 @@ test_generate_run_truncation <- function(gpa, id, session, run_number, lg){
 }
 
 #' helper function to read confounds and motion parameters and combine them
-read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_df, expected_l1_confound_file, lg) {
+read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_df, expected_l1_confound_file, lg,
+                                             confound_path = NA_character_, motion_path = NA_character_) {
 
   # read external confounds file (contains all volumes)
   confound_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_confound_inputs")
   if (is.null(confound_df) && isTRUE(run_df$confound_input_file_present[1])) {
     lg$debug("Generating l1 confounds for id: %s, session: %s, run_number: %s", id, session, run_number)
-    cfile <- get_mr_abspath(run_df, "confound_input_file")[1]
+    cfile <- confound_path
+    if (is.na(cfile) || !nzchar(cfile)) {
+      cfile <- get_mr_abspath(run_df, "confound_input_file")[1L]
+    }
     lg$debug("Reading confound file: %s", cfile)
     confound_df <- tryCatch(data.table::fread(cfile, data.table=FALSE, na.strings=gpa$confound_settings$na_strings),
     error = function(e) {
@@ -303,7 +322,10 @@ read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_d
   motion_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_motion_parameters")
   if (is.null(motion_df) && isTRUE(run_df$motion_params_present[1])) {
     lg$debug("Generating motion params for id: %s, session: %s, run_number: %s", id, session, run_number)
-    mfile <- get_mr_abspath(run_df, "motion_params_file")[1]
+    mfile <- motion_path
+    if (is.na(mfile) || !nzchar(mfile)) {
+      mfile <- get_mr_abspath(run_df, "motion_params_file")[1L]
+    }
     lg$debug("Reading motion file: %s", mfile)
 
     # Note: Avoid demeaning columns within generate_motion_regressors so that calculated regressors do not
@@ -364,7 +386,10 @@ read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_d
   # handle NA values in confounds -> convert to 0
   has_na <- sapply(all_confounds, anyNA)
   if (any(has_na)) {
-    lg$warn("NA values found in confounds file: %s", cfile)
+    source_file <- confound_path
+    if (is.na(source_file) || !nzchar(source_file)) source_file <- motion_path
+    if (is.na(source_file) || !nzchar(source_file)) source_file <- "<unknown>"
+    lg$warn("NA values found in confounds file: %s", source_file)
     lg$warn("These will be converted to 0s before evaluating exclude_run and writing l1_confound_file: %s", expected_l1_confound_file)
     all_confounds[, has_na] <- as.data.frame(apply(all_confounds[, has_na], 2, function(x) {
       x[is.na(x)] <- 0
@@ -375,13 +400,26 @@ read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_d
 }
 
 #' calculate whether to retain or exclude this run
-test_exclude_run <- function(gpa, id, session, run_number, generate_run_exclusion, all_confounds, lg) {
+test_exclude_run <- function(gpa, id, session, run_number, generate_run_exclusion, all_confounds, lg,
+                             confound_path = NA_character_, motion_path = NA_character_) {
   
-    # calculate whether to retain or exclude this run
+  format_cols <- function(cols, n = 10L) {
+    if (length(cols) == 0L) return("<none>")
+    sample_cols <- head(cols, n)
+    extra <- length(cols) - length(sample_cols)
+    suffix <- if (extra > 0L) paste0(" ... +", extra, " more") else ""
+    paste0(paste(sample_cols, collapse = ", "), suffix)
+  }
+
+  # calculate whether to retain or exclude this run
   if (isTRUE(generate_run_exclusion) && !is.null(gpa$confound_settings$exclude_run)) {
     if (!all(gpa$confound_settings$run_exclusion_columns %in% names(all_confounds))) {
-      lg$warn("Missing exclusion columns for subject: %s, session: %s", run_df$id[1L], run_df$session[1L])
+      lg$warn("Missing exclusion columns for subject: %s, session: %s", id, session)
       lg$warn("Column: %s", setdiff(gpa$confound_settings$run_exclusion_columns, names(all_confounds)))
+      lg$warn("Exclude-run expression: %s", gpa$confound_settings$exclude_run)
+      lg$warn("Confound file: %s", confound_path)
+      lg$warn("Motion params file: %s", motion_path)
+      lg$warn("Available confound columns (n=%d): %s", length(names(all_confounds)), format_cols(names(all_confounds)))
       lg$warn("We will exclude this run from analysis until this is resolved!")
       exclude_run <- TRUE
     } else {
@@ -394,6 +432,10 @@ test_exclude_run <- function(gpa, id, session, run_number, generate_run_exclusio
             gpa$confound_settings$exclude_run
           )
           lg$error("Defaulting to exclusion of run.")
+          lg$error("Exclude-run expression: %s", gpa$confound_settings$exclude_run)
+          lg$error("Confound file: %s", confound_path)
+          lg$error("Motion params file: %s", motion_path)
+          lg$error("Available confound columns (n=%d): %s", length(names(all_confounds)), format_cols(names(all_confounds)))
           return(TRUE)
         }
       )
@@ -402,6 +444,9 @@ test_exclude_run <- function(gpa, id, session, run_number, generate_run_exclusio
         lg$error("Run exclusion expression %s returned %d results!", gpa$confound_settings$exclude_run, length(exclude_run))
         lg$error("Modify the expression so that it returns a single TRUE/FALSE.")
         lg$error("Defaulting to exclusion of run.")
+        lg$error("Confound file: %s", confound_path)
+        lg$error("Motion params file: %s", motion_path)
+        lg$error("Available confound columns (n=%d): %s", length(names(all_confounds)), format_cols(names(all_confounds)))
         exclude_run <- TRUE
       }
     }
@@ -419,15 +464,23 @@ test_exclude_run <- function(gpa, id, session, run_number, generate_run_exclusio
 
 #' helper function to manipulate confounds
 confound_manipulations <- function(gpa, all_confounds, expected_l1_confound_file, run_df, demean, lg) {
-  
-  # check for missing confound columns
-  if (!all(gpa$confound_settings$l1_confound_regressors %in% names(all_confounds))) {
-    lg$warn("Missing confound columns for subject: %s, session: %s", run_df$id[1L], run_df$session[1L])
-    lg$warn("Column: %s", setdiff(gpa$confound_settings$l1_confound_regressors, names(all_confounds)))
-  }
+  requested <- gpa$confound_settings$l1_confound_regressors
+  use_all <- is.character(requested) && length(requested) == 1L && tolower(requested) == "all"
 
-  # trim l1 confounds to only those requested
-  all_confounds <- all_confounds[, intersect(gpa$confound_settings$l1_confound_regressors, names(all_confounds))]
+  if (isTRUE(use_all)) {
+    # avoid injecting derived columns into the model when using "all"
+    keep_cols <- setdiff(names(all_confounds), c("volume", "time"))
+    all_confounds <- all_confounds[, keep_cols, drop = FALSE]
+  } else {
+    # check for missing confound columns
+    if (!all(requested %in% names(all_confounds))) {
+      lg$warn("Missing confound columns for subject: %s, session: %s", run_df$id[1L], run_df$session[1L])
+      lg$warn("Column: %s", setdiff(requested, names(all_confounds)))
+    }
+
+    # trim l1 confounds to only those requested
+    all_confounds <- all_confounds[, intersect(requested, names(all_confounds))]
+  }
   num_cols <- sapply(all_confounds, class) %in% c("integer", "numeric")
   if (any(!num_cols)) {
     lg$warn("Confound file contains non-numeric columns. Not sure what will happen!")
