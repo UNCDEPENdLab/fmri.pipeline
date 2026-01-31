@@ -532,15 +532,8 @@ build_design_matrix <- function(
   # compute collinearity diagnostics on the unconvolved signals
   collin_diag_events <- get_collin_events(dmat)
 
-  #compute collinearity diagnostics on the convolved signals
-  collin_diag_convolved <- lapply(dmat_convolved, function(run) {
-    corvals <- cor(run, use="pairwise.complete.obs")
-    vif_mat <- data.frame(cbind(dummy=rnorm(nrow(run)), run)) #add dummy constant for vif
-    vif_form <- as.formula(paste("dummy ~ 1 +", paste(names(run), collapse=" + ")))
-
-    var_infl <- tryCatch(car::vif(lm(vif_form, data=vif_mat)), error=function(e) { NA }) #return NA if failure
-    list(r=corvals, vif=var_infl)
-  })
+  # compute collinearity diagnostics on the convolved signals
+  collin_diag_convolved <- compute_collinearity_convolved(dmat_convolved)
 
   # ============================================================================
   # STAGE 8: Add baseline regressors and finalize output
