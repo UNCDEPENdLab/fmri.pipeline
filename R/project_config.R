@@ -70,6 +70,7 @@ update_project_config <- function(gpa, job_sequence, sequence_id, batch_director
 #' @param sequence_id unique identifier of sequence
 #' 
 #' @keywords internal
+#' @noRd
 get_sequence_info <- function(config_file = NULL, sequence_id = NULL) {
   if (is.null(config_file) || is.null(sequence_id)) return(invisible(NULL))
   sequence_id <- as.character(sequence_id)

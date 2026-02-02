@@ -59,6 +59,6 @@ spm_sceptic_model <- function(subj_data, sceptic_signals, mrfiles, runlengths, m
   save(d, subj_data, events, signals, timingdir, runlengths, mrrunnums, all_nuisance, nuisance_concat, file=file.path(spm_run_output_dir, "designmatrix.RData"))
 
   spm_syntax <- generate_spm_mat(d, output_dir=spm_run_output_dir, nifti_tmpdir=spm_run_output_dir, concatenate_runs=TRUE,
-    condition_contrasts=TRUE, effects_of_interest_F=TRUE, generate_qsub=TRUE, execute_qsub=execute)
+    condition_contrasts=TRUE, effects_of_interest_F=TRUE, spm_execute_setup=execute)
 
 }

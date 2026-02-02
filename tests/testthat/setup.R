@@ -11,7 +11,14 @@
 
 library(data.table)
 library(dplyr)
-library(fmri.pipeline)
+
+# Always prefer the working tree when running tests from source.
+pkg_root <- normalizePath(file.path("..", ".."), mustWork = FALSE)
+if (requireNamespace("pkgload", quietly = TRUE) && file.exists(file.path(pkg_root, "DESCRIPTION"))) {
+  pkgload::load_all(pkg_root, export_all = FALSE, helpers = TRUE)
+} else {
+  stop("pkgload is required to run tests from the working tree. Install pkgload or run devtools::test().")
+}
 
 # ==============================================================================
 # Global Test Configuration

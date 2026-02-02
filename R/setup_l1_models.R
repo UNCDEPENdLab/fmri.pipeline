@@ -47,7 +47,7 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   # data.frame. We need more of an append/update approach, perhaps like the sqlite setup for the overall pipeline.
 
   # refresh status of feat inputs and outputs at level 1 before continuing
-  gpa <- refresh_feat_status(gpa, level=1L, lg=lg)
+  gpa <- refresh_glm_status(gpa, level=1L, lg=lg)
 
   #setup parallel worker pool, if requested
   if (!is.null(gpa$parallel$l1_setup_cores) && gpa$parallel$l1_setup_cores[1L] > 1L) {
@@ -67,13 +67,17 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   all_subj_l1_list <- foreach(
     subj_df = iter(gpa$subject_data, by = "row"), .inorder = FALSE, .packages = c("dplyr", "fmri.pipeline"), .errorhandling = "remove",
     .export = c(
-      "truncate_runs", "fsl_l1_model", "get_mr_abspath",
-      "get_output_directory", "run_fsl_command", "get_feat_status", "add_custom_feat_syntax"
+      "truncate_runs", "fsl_l1_model", "spm_l1_model", "get_spm_status",
+      "get_mr_abspath", "get_output_directory", "run_fsl_command",
+      "get_feat_status", "add_custom_feat_syntax"
     )
   ) %dopar% {
     subj_df <- subj_df # avoid complaints about visible global binding in R CMD check
     subj_id <- subj_df$id
     subj_session <- subj_df$session
+    glm_backends <- get_glm_backends(gpa)
+    backend_fsl <- glm_backends[["fsl"]]
+    backend_spm <- glm_backends[["spm"]]
 
     # find the run data for analysis
     rdata <- gpa$run_data %>% dplyr::filter(id == !!subj_id & session == !!subj_session & run_nifti_present == TRUE)
@@ -256,12 +260,12 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         if (is.null(d_obj)) next # skip to next iteration on error
       }
 
-      if ("fsl" %in% gpa$glm_software) {
+      if (!is.null(backend_fsl)) {
         # Setup FSL run-level models for each combination of signals
         # Returns a data.frame of feat l1 inputs and the fsf file
         feat_l1_df <- tryCatch(
           {
-            fsl_l1_model(
+            backend_fsl$l1_setup(
               id = subj_id, session = subj_session, l1_confound_files = l1_confound_files, d_obj = d_obj,
               gpa = gpa, this_model, nvoxels = nvoxels
             )
@@ -280,14 +284,25 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       }
 
       # TODO: finalize SPM approach
-      if ("spm" %in% gpa$glm_software) {
+      if (!is.null(backend_spm)) {
         # Setup spm run-level models for each combination of signals
-        # spm_files <- tryCatch(spm_l1_model(d_obj, gpa, this_model, run_nifti),
-        #   error=function(e) {
-        #     lg$error("Problem running spm_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)
-        #     lg$error("Error message: %s", as.character(e))
-        #     return(NULL)
-        #   })
+        spm_l1_df <- tryCatch(
+          {
+            backend_spm$l1_setup(
+              id = subj_id, session = subj_session, l1_confound_files = l1_confound_files,
+              d_obj = d_obj, gpa = gpa, model_name = this_model, run_nifti = run_nifti
+            )
+          },
+          error = function(e) {
+            lg$error("Problem running spm_l1_model. Model: %s, Subject: %s, Session: %s", this_model, subj_id, subj_session)
+            lg$error("Error message: %s", as.character(e))
+            return(NULL)
+          }
+        )
+
+        if (!is.null(spm_l1_df)) {
+          l1_file_setup$spm <- rbind(l1_file_setup$spm, spm_l1_df)
+        }
       }
     }
 
@@ -296,19 +311,25 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   }
 
   # N.B. rbindlist converts the bound elements into a single data.table object
+  spm_list <- lapply(all_subj_l1_list, "[[", "spm")
+  spm_combined <- NULL
+  if (!all(vapply(spm_list, is.null, logical(1)))) {
+    spm_combined <- rbindlist(spm_list, fill = TRUE)
+  }
+
   all_subj_l1_combined <- list(
-    fsl=rbindlist(lapply(all_subj_l1_list, "[[", "fsl")),
-    metadata=rbindlist(lapply(all_subj_l1_list, "[[", "metadata"))
-    #spm = rbindlist(lapply(all_subj_l1_list, "[[", "spm"))
+    fsl = rbindlist(lapply(all_subj_l1_list, "[[", "fsl"), fill = TRUE),
+    spm = spm_combined,
+    metadata = rbindlist(lapply(all_subj_l1_list, "[[", "metadata"), fill = TRUE)
   )
 
-  class(all_subj_l1_combined) <- c("list", "l1_setup")
+  class(all_subj_l1_combined) <- c("l1_setup", "list")
 
   #append l1 setup to gpa
   gpa$l1_model_setup <- all_subj_l1_combined
   
   # refresh l1 model status in $l1_model_setup
-  gpa <- refresh_feat_status(gpa, level=1L, lg=lg)
+  gpa <- refresh_glm_status(gpa, level=1L, lg=lg)
 
   return(gpa)
 

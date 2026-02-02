@@ -145,7 +145,7 @@ run_fsl_command <- function(args, fsldir = NULL, stdout = NULL, stderr = NULL, e
 # to setup the compute environment.
 # @param gpa a glm_pipeline_arguments object
 # @param what which programs to pull from the compute environment. If not specified, it pulls all
-#   programs. At present, the options are "global" (only global setup), "fsl", "afni", and "r".
+#   programs. At present, the options are "global" (only global setup), "fsl", "afni", "spm", and "r".
 get_compute_environment <- function(gpa, what="all") {
   # always include global
   compute_string <- gpa$parallel$compute_environment$global
@@ -156,6 +156,10 @@ get_compute_environment <- function(gpa, what="all") {
 
   if (any(what %in% c("all", "afni"))) {
     compute_string <- c(compute_string, gpa$parallel$compute_environment$afni)
+  }
+
+  if (any(what %in% c("all", "spm")) && "spm" %in% gpa$glm_software) {
+    compute_string <- c(compute_string, gpa$parallel$compute_environment$spm)
   }
 
   if (any(what %in% c("all", "r"))) {
@@ -226,6 +230,18 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
     )
   }
 
+  if (any(what %in% c("all", "spm"))) {
+    matlab_cmd <- gpa$glm_settings$spm$matlab_cmd
+    if (is.null(matlab_cmd) || !nzchar(matlab_cmd)) matlab_cmd <- "matlab"
+    prog_str <- c(
+      prog_str,
+      sprintf(
+        "%s_loc=$(command -v %s)\n      [ $? -eq 0 ] && %s_exists=1 || %s_exists=0\n      if [ $%s_exists -eq 0 ]; then\n        echo 'Cannot find %s!'\n        checks_passed=0\n      else\n        echo \"%s found: ${%s_loc}\"\n      fi",
+        matlab_cmd, matlab_cmd, matlab_cmd, matlab_cmd, matlab_cmd, matlab_cmd, matlab_cmd, matlab_cmd
+      )
+    )
+  }
+
   prog_str <- c(
     prog_str,
     "
@@ -243,6 +259,13 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
   res <- suppressWarnings(system(paste("bash", check_script), intern = TRUE))
   cat(res, sep = "\n")
   exit_code <- attr(res, "status")
+  if ("spm" %in% gpa$glm_software && isTRUE(gpa$glm_settings$spm$require_matlab)) {
+    matlab_cmd <- gpa$glm_settings$spm$matlab_cmd
+    if (is.null(matlab_cmd) || !nzchar(matlab_cmd)) matlab_cmd <- "matlab"
+    if (!is.null(exit_code) && exit_code != 0L) {
+      stop(sprintf("MATLAB command '%s' not available; spm.require_matlab is TRUE.", matlab_cmd))
+    }
+  }
   if (!is.null(exit_code) && exit_code == 1) {
     if (stop_on_fail) {
       stop("One or more problems were detected in the compute environment. Setup cannot continue.")
@@ -250,6 +273,48 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
       warning("One or more problems were detected in the compute environment. The pipeline may fail if these are not resolved.")
     }
   }
+}
+
+# Local SPM test using the configured MATLAB/Octave command and compute environment.
+# This is intended to catch missing SPM paths before submitting jobs.
+test_spm_compute_environment <- function(gpa, stop_on_fail = TRUE) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_logical(stop_on_fail, len = 1L)
+
+  matlab_cmd <- gpa$glm_settings$spm$matlab_cmd
+  if (is.null(matlab_cmd) || !nzchar(matlab_cmd)) matlab_cmd <- "matlab"
+  matlab_args <- gpa$glm_settings$spm$matlab_args
+  if (is.null(matlab_args) || !nzchar(matlab_args)) matlab_args <- "-nodisplay -nosplash -r"
+  matlab_exit <- gpa$glm_settings$spm$matlab_exit
+  if (is.null(matlab_exit)) matlab_exit <- "exit;"
+
+  spm_path <- gpa$glm_settings$spm$spm_path
+  if (is.null(spm_path) || !nzchar(spm_path)) {
+    msg <- "spm_path is not set; cannot validate SPM availability."
+    if (stop_on_fail) stop(msg) else warning(msg)
+    return(invisible(FALSE))
+  }
+
+  compute_env <- get_compute_environment(gpa, c("spm"))
+  spm_cmd <- paste0(
+    "addpath('", spm_path, "'); spm('defaults','fmri'); spm_jobman('initcfg'); ", matlab_exit
+  )
+  matlab_call <- paste(matlab_cmd, matlab_args, shQuote(spm_cmd))
+  cmd <- if (!is.null(compute_env) && length(compute_env) > 0L) {
+    paste(c(compute_env, matlab_call), collapse = " && ")
+  } else {
+    matlab_call
+  }
+
+  res <- suppressWarnings(system(cmd, intern = TRUE))
+  exit_code <- attr(res, "status")
+  if (!is.null(exit_code) && exit_code != 0L) {
+    msg <- paste("SPM compute environment check failed:", paste(res, collapse = "\n"))
+    if (stop_on_fail) stop(msg) else warning(msg)
+    return(invisible(FALSE))
+  }
+
+  invisible(TRUE)
 }
 
 #' internal function for getting a file extension that may include a compressed ending
@@ -1501,16 +1566,25 @@ hours_to_dhms <- function(hours, frac=FALSE) {
 #' helper function to refresh l3 model status and save gpa object from batch pipeline back to its cache
 #' 
 #' @param gpa a glm_pipeline_arguments object
+#' @param backend_cache_paths optional named character vector of backend cache files to merge
 #' @return a refreshed version of the gpa object
 #' @importFrom lgr get_logger
 #' @export
-cleanup_glm_pipeline <- function(gpa) {
+cleanup_glm_pipeline <- function(gpa, backend_cache_paths = NULL) {
   lg <- lgr::get_logger("glm_pipeline/cleanup_glm_pipeline")
   lg$set_threshold(gpa$lgr_threshold)
-  
-  gpa <- refresh_feat_status(gpa, level = 1L, lg = lg)
-  gpa <- refresh_feat_status(gpa, level = 2L, lg = lg)
-  gpa <- refresh_feat_status(gpa, level = 3L, lg = lg)
+
+  if (!is.null(backend_cache_paths)) {
+    checkmate::assert_character(backend_cache_paths)
+    if (is.null(names(backend_cache_paths)) || any(names(backend_cache_paths) == "")) {
+      warning("backend_cache_paths should be a named character vector keyed by backend.")
+    }
+    gpa <- merge_backend_caches(gpa, backend_cache_paths, lg = lg)
+  }
+
+  gpa <- refresh_glm_status(gpa, level = 1L, lg = lg)
+  gpa <- refresh_glm_status(gpa, level = 2L, lg = lg)
+  gpa <- refresh_glm_status(gpa, level = 3L, lg = lg)
   res <- tryCatch(saveRDS(gpa, file = gpa$output_locations$object_cache), error = function(e) {
     lg$error("Could not save gpa object to file: %s", gpa$output_locations$object_cache)
     return(NULL)
@@ -1531,6 +1605,49 @@ cleanup_glm_pipeline <- function(gpa) {
   }
 
   return(gpa)
+}
+
+merge_backend_caches <- function(shared_gpa, backend_cache_paths, lg = NULL) {
+  checkmate::assert_class(shared_gpa, "glm_pipeline_arguments")
+  checkmate::assert_character(backend_cache_paths)
+  if (is.null(lg)) lg <- lgr::get_logger()
+
+  for (backend_name in names(backend_cache_paths)) {
+    cache_path <- backend_cache_paths[[backend_name]]
+    if (!file.exists(cache_path)) {
+      lg$warn("Backend cache missing for %s: %s", backend_name, cache_path)
+      next
+    }
+
+    env <- new.env(parent = emptyenv())
+    load(cache_path, envir = env)
+    if (!exists("gpa", envir = env)) {
+      lg$warn("No gpa object found in backend cache: %s", cache_path)
+      next
+    }
+
+    backend_gpa <- env$gpa
+    if (!inherits(backend_gpa, "glm_pipeline_arguments")) {
+      lg$warn("Backend cache %s does not contain a glm_pipeline_arguments object.", cache_path)
+      next
+    }
+
+    for (level in 1:3) {
+      setup_name <- paste0("l", level, "_model_setup")
+      setup_class <- paste0("l", level, "_setup")
+
+      backend_setup <- backend_gpa[[setup_name]]
+      if (is.null(backend_setup) || !inherits(backend_setup, setup_class)) next
+
+      if (is.null(shared_gpa[[setup_name]]) || !inherits(shared_gpa[[setup_name]], setup_class)) {
+        shared_gpa[[setup_name]] <- backend_setup
+      } else if (backend_name %in% names(backend_setup)) {
+        shared_gpa[[setup_name]][[backend_name]] <- backend_setup[[backend_name]]
+      }
+    }
+  }
+
+  return(shared_gpa)
 }
 
 #' helper function to copy any missing fields in target
@@ -1621,6 +1738,23 @@ enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
         )
       }
     }
+
+    if ("spm" %in% gpa$glm_software) {
+      if (!is.null(obj$spm) && "spm_complete" %in% names(obj$spm)) {
+        nmiss <- sum(obj$spm$spm_complete == FALSE)
+        n_spm_runs <- nrow(obj$spm)
+        if (nmiss == n_spm_runs) {
+          msg <- sprintf("All SPM runs in %s$spm are incomplete.", obj_name)
+          lg$error(msg)
+          stop(msg)
+        } else if (nmiss > 0) {
+          lg$warn(
+            "There are %d missing SPM outputs in %s$spm. Using complete %d outputs.",
+            nmiss, obj_name, n_spm_runs - nmiss
+          )
+        }
+      }
+    }
   }
 
   return(invisible(NULL))
@@ -1634,7 +1768,7 @@ enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
 #' @return a character vector of user-specified model names at this level
 #' @keywords internal
 choose_glm_models <- function(gpa, model_names, level, lg=NULL) {
-  checkmate::assert_integerish(level, min = 1, max = 3)
+  checkmate::assert_integerish(level, lower = 1, upper = 3)
   all_m_names <- names(gpa[[paste0("l", level, "_models")]]$models)
   checkmate::assert_subset(model_names, c("prompt", "all", "none", all_m_names))
   if (is.null(lg)) lg <- lgr::get_logger("")

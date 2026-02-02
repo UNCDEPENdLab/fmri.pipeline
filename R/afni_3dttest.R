@@ -163,6 +163,10 @@ simulate_null_3dttest <- R6::R6Class("simulate_null_3dttest",
       # private$perm_batch$generate()
       private$perm_batch$submit()
     },
+    #' @description build the 3dttest++ command strings for each permutation job
+    #' @param include_complete If TRUE, include calls whose output files already exist.
+    #'   If FALSE, return only calls with missing outputs.
+    #' @return A character vector of 3dttest++ calls.
     get_3dttest_calls = function(include_complete = FALSE) {
       if (private$method == "residuals") {
         # 3dttest++ uses all caps for SDAT output and lower case for nii/BRIK output
@@ -198,6 +202,8 @@ simulate_null_3dttest <- R6::R6Class("simulate_null_3dttest",
         stop("Not implemented!")
       }
     },
+    #' @description return the permutation output files once available
+    #' @return A named character vector with entries for the mask file and permutation file.
     get_permutation_files = function() {
       if (!self$is_complete()) {
         stop("Cannot provide the permutation file because it doesn't yet exist! Try $submit()")
@@ -205,11 +211,14 @@ simulate_null_3dttest <- R6::R6Class("simulate_null_3dttest",
 
       c(mask_file = private$mask_file, permutation_file = private$combined_output_file)
     },
-    #' method to return R_batch_job to run 3dttest permutations
+    #' @description return the R_batch_job used to run 3dttest permutations
+    #' @return An R_batch_job object.
     get_batch = function() {
       private$generate_batch()
       return(private$perm_batch)
     },
+    #' @description indicate whether sdat output is enabled
+    #' @return A logical scalar.
     get_use_sdat = function() {
       private$use_sdat
     }

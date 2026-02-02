@@ -454,6 +454,9 @@ this erodes the retained atlas parcels to only include voxels that were in a clu
 are retained by this function. If \code{'default'} or \code{TRUE}, the subset atlas will be placed in the same
 folder as the 3dClusterize input image, with a filename that combines the atlas file name with the input/threshold
 image name. To disable creation of this file, set \code{output_atlas = FALSE}.}
+
+\item{\code{roi_stats}}{A character vector of summary stats to extract from the cluster-masked data file. Supported values:
+\code{"mean"}, \code{"min"}, \code{"max"}. Set to NULL to skip extraction.}
 }
 \if{html}{\out{</div>}}
 }

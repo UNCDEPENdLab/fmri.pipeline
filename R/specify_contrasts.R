@@ -51,6 +51,23 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
 
   prompt_contrasts <- FALSE
   if (!is.null(spec_list)) {
+    # If spec_list is malformed/empty, fall back to interactive prompts.
+    if (!checkmate::test_list(spec_list)) {
+      lg$warn("contrast spec_list is not a list; falling back to interactive contrast prompts.")
+      spec_list <- NULL
+    } else {
+      has_any_contrast_spec <- any(c(
+        "diagonal", "cond_means", "pairwise_diffs", "cell_means", "overall_response",
+        "simple_slopes", "weights", "delete", "wi_contrasts"
+      ) %in% names(spec_list))
+      if (!isTRUE(has_any_contrast_spec)) {
+        lg$warn("contrast spec_list is empty or missing contrast fields; falling back to interactive contrast prompts.")
+        spec_list <- NULL
+      }
+    }
+  }
+
+  if (!is.null(spec_list)) {
     if (!is.null(spec_list$diagonal)) {
       checkmate::assert_logical(spec_list$diagonal, len = 1L)
       include_diagonal <- spec_list$diagonal

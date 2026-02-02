@@ -101,7 +101,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                  confound_input_file = NULL, # assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
                                  confound_input_colnames = NULL, # names of confound columns -- if null, we will attempt to find a header row
                                  l1_confound_regressors = NULL, # column names in motion_params_file and/or confound_input_file ("all" to include all columns)
-                                 exclude_run = "mean(framewise_displacement) > 0.9 | max(framewise_displacement) > 6",
+                                 exclude_run = NULL,
                                  truncate_run = NULL, # "framewise_displacement > 1 & volume > last_onset"
                                  exclude_subject = NULL,
                                  spike_volumes = "framewise_displacement > 0.9"
@@ -514,6 +514,17 @@ setup_compute_environment <- function(gpa, preselect_action = NULL) {
     return(gpa)
   }
 
+  setup_spm_compute <- function(gpa) {
+    cat(c(
+      "Please provide any commands needed to make MATLAB or Octave available for SPM jobs.",
+      "For example, on a cluster, you might have a command like module load matlab/R2017b,",
+      "or module load octave/7.3.0."
+    ), sep = "\n")
+
+    gpa$parallel$compute_environment$spm <- get_lines(gpa$parallel$compute_environment$spm, "spm")
+    return(gpa)
+  }
+
   setup_r_compute <- function(gpa) {
     cat(c(
       "Please provide any commands needed to make R available for jobs that require this.",
@@ -542,11 +553,13 @@ setup_compute_environment <- function(gpa, preselect_action = NULL) {
       paste("  ", gpa$parallel$compute_environment$afni, collapse = "\n"),
       "\nFSL",
       paste("  ", gpa$parallel$compute_environment$fsl, collapse = "\n"),
+      "\nSPM (MATLAB/Octave)",
+      paste("  ", gpa$parallel$compute_environment$spm, collapse = "\n"),
       "\nR",
       paste("  ", gpa$parallel$compute_environment$r, collapse = "\n"), "\n"
     ), sep = "\n")
 
-    action <- menu(c("Modify global", "Modify AFNI", "Modify FSL", "Modify R", "Finish setup"), title = "What would you like to do?")
+    action <- menu(c("Modify global", "Modify AFNI", "Modify FSL", "Modify SPM (MATLAB/Octave)", "Modify R", "Finish setup"), title = "What would you like to do?")
     if (action == 1L) {
       gpa <- setup_global_compute(gpa)
     } else if (action == 2L) {
@@ -554,8 +567,10 @@ setup_compute_environment <- function(gpa, preselect_action = NULL) {
     } else if (action == 3L) {
       gpa <- setup_fsl_compute(gpa)
     } else if (action == 4L) {
-      gpa <- setup_r_compute(gpa)
+      gpa <- setup_spm_compute(gpa)
     } else if (action == 5L) {
+      gpa <- setup_r_compute(gpa)
+    } else if (action == 6L) {
       break
     }
   }
