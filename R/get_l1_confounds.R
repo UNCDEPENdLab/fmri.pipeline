@@ -411,6 +411,9 @@ test_exclude_run <- function(gpa, id, session, run_number, generate_run_exclusio
     paste0(paste(sample_cols, collapse = ", "), suffix)
   }
 
+  exclude_run <- FALSE
+  exclude_data <- data.frame()
+
   # calculate whether to retain or exclude this run
   if (isTRUE(generate_run_exclusion) && !is.null(gpa$confound_settings$exclude_run)) {
     if (!all(gpa$confound_settings$run_exclusion_columns %in% names(all_confounds))) {
