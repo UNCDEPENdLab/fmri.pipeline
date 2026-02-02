@@ -230,7 +230,7 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
     )
   }
 
-  if (any(what %in% c("all", "spm"))) {
+  if (any(what %in% c("all", "spm")) && "spm" %in% gpa$glm_software) {
     matlab_cmd <- gpa$glm_settings$spm$matlab_cmd
     if (is.null(matlab_cmd) || !nzchar(matlab_cmd)) matlab_cmd <- "matlab"
     prog_str <- c(
@@ -256,7 +256,7 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
 
   check_script <- tempfile(pattern="chk")
   writeLines(prog_str, check_script)
-  res <- suppressWarnings(system(paste("bash", check_script), intern = TRUE))
+  res <- suppressWarnings(system(paste("bash -lc", shQuote(paste("source", check_script))), intern = TRUE))
   cat(res, sep = "\n")
   exit_code <- attr(res, "status")
   if ("spm" %in% gpa$glm_software && isTRUE(gpa$glm_settings$spm$require_matlab)) {

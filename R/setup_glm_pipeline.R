@@ -364,6 +364,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
     # l3 analysis details
     l3_models = l3_models,
+    glm_software = glm_software,
     finalize_complete = FALSE,
     lgr_threshold = lgr_threshold
   )
