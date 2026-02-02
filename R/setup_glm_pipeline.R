@@ -387,6 +387,15 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   # populate $parallel
   gpa <- setup_parallel_settings(gpa, lg)
 
+  # ensure glm_settings is a list before any compute environment checks
+  if (is.null(gpa$glm_settings) || identical(gpa$glm_settings, "default")) {
+    gpa$glm_settings <- list(fsl = list(), afni = list(), spm = list())
+  } else if (is.list(gpa$glm_settings)) {
+    if (is.null(gpa$glm_settings$fsl)) gpa$glm_settings$fsl <- list()
+    if (is.null(gpa$glm_settings$afni)) gpa$glm_settings$afni <- list()
+    if (is.null(gpa$glm_settings$spm)) gpa$glm_settings$spm <- list()
+  }
+
   # initial checks on compute environment
   test_compute_environment(gpa, stop_on_fail=FALSE)
 

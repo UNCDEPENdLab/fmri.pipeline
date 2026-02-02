@@ -293,7 +293,7 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
     lg$info("Using default R compute environment for UNC Longleaf")
     gpa$parallel$compute_environment$r <- c(
       "module unload r",
-      "module load r/4.2.1"
+      "module load r/4.5.1"
     )
   }
 
@@ -329,7 +329,7 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
     lg$info("Using default FSL compute environment for UNC Longleaf")
     gpa$parallel$compute_environment$fsl <- c(
       "module unload fsl", # remove any current fsl module
-      "module load fsl/6.0.4" # load latest version (2021)
+      "module load fsl/6.0.7.18" # load latest version (2021)
     )
   }
 
@@ -337,7 +337,7 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
     lg$info("Using default AFNI compute environment for UNC Longleaf")
     gpa$parallel$compute_environment$afni <- c(
       "module unload afni", # remove any current afni module
-      "module load afni/23.0.07" # load latest version (2023)
+      "module load afni/26.0.00" # load latest version (2026)
     )
   }
 
