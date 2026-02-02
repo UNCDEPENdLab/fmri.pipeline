@@ -49,6 +49,18 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
     mobj$contrast_list <- list()
   }
 
+  # Allow YAML-style nesting under `contrasts:` and legacy include_diagonal alias.
+  if (!is.null(spec_list) && checkmate::test_list(spec_list)) {
+    if (!is.null(spec_list$contrasts) && checkmate::test_list(spec_list$contrasts)) {
+      spec_list <- utils::modifyList(spec_list, spec_list$contrasts)
+    }
+    if (!is.null(spec_list$include_diagonal) && is.null(spec_list$diagonal)) {
+      spec_list$diagonal <- spec_list$include_diagonal
+    }
+    spec_list$contrasts <- NULL
+    spec_list$include_diagonal <- NULL
+  }
+
   prompt_contrasts <- FALSE
   if (!is.null(spec_list)) {
     # If spec_list is malformed/empty, fall back to interactive prompts.
@@ -126,6 +138,22 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
 
     if (!is.null(spec_list$wi_contrasts)) {
       checkmate::assert_list(spec_list$wi_contrasts)
+      # Validate that wi_contrasts map to known signals with wi_factors.
+      if (is.null(signals)) {
+        stop("wi_contrasts were provided, but no signals list was passed to specify_contrasts.")
+      }
+      missing_signals <- setdiff(names(spec_list$wi_contrasts), names(signals))
+      if (length(missing_signals) > 0L) {
+        stop("wi_contrasts provided for unknown signals: ", paste(missing_signals, collapse = ", "))
+      }
+      no_wi_factors <- names(spec_list$wi_contrasts)[vapply(
+        names(spec_list$wi_contrasts),
+        function(sig) is.null(signals[[sig]]$wi_factors),
+        logical(1)
+      )]
+      if (length(no_wi_factors) > 0L) {
+        stop("wi_contrasts provided for signals without wi_factors: ", paste(no_wi_factors, collapse = ", "))
+      }
 
       for (ff in seq_along(spec_list$wi_contrasts)) {
         sig <- names(spec_list$wi_contrasts)[ff]
