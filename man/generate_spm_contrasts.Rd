@@ -10,7 +10,9 @@ generate_spm_contrasts(
   unit_contrasts = TRUE,
   effects_of_interest_F = TRUE,
   spm_path = "/gpfs/group/mnh5174/default/lab_resources/spm12",
-  execute = FALSE
+  execute = FALSE,
+  matlab_cmd = "matlab",
+  matlab_args = "-nodisplay -nosplash -r"
 )
 }
 \arguments{
@@ -25,6 +27,10 @@ generate_spm_contrasts(
 \item{spm_path}{see generate_spm_mat}
 
 \item{execute}{whether to run contrast setup. This depends on SPM.mat having been created already. Default: FALSE}
+
+\item{matlab_cmd}{see generate_spm_mat}
+
+\item{matlab_args}{see generate_spm_mat}
 }
 \description{
 This function reads an SPM.mat file and generate contrasts based on the design matrix specification

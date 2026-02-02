@@ -19,8 +19,6 @@ generate_spm_mat(
   spm_execute_glm = FALSE,
   spm_execute_contrasts = FALSE,
   concatenate_runs = FALSE,
-  generate_qsub = TRUE,
-  execute_qsub = FALSE,
   spm_path = "/gpfs/group/mnh5174/default/lab_resources/spm12",
   matlab_cmd = "matlab",
   matlab_args = "-nodisplay -nosplash -r",
@@ -68,10 +66,6 @@ in adjusting VOIs for nuisance regressors. Default: TRUE}
 \item{concatenate_runs}{Whether to convert multi-run data into a single concatenated session. This will execute spm_fmri_concatenate
 after the GLM setup is complete. This script computes run-specific whitening and high-pass filters while keeping
 a single concatenated time series. This is useful as a preamble to DCM, which often uses concatenated time series. Default: FALSE}
-
-\item{generate_qsub}{Whether to create a qsub PBS script for running MATLAB scripts for design matrix creation and estimation. Default: TRUE}
-
-\item{execute_qsub}{Whether to submit the PBS script create by \code{generate_qsub} to the cluster using the qsub command. Default: FALSE}
 
 \item{spm_path}{The path to an spm12 directory. This will be included in MATLAB scripts to ensure that spm is found.}
 
