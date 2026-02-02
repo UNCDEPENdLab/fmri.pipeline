@@ -49,16 +49,113 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
     mobj$contrast_list <- list()
   }
 
-  # Allow YAML-style nesting under `contrasts:` and legacy include_diagonal alias.
+  normalize_contrast_keys <- function(x, lg, allow_noncontrast = character(0)) {
+    if (is.null(x) || !checkmate::test_list(x)) return(x)
+    nm <- names(x)
+    if (is.null(nm)) return(x)
+
+    valid_keys <- c(
+      "diagonal", "cond_means", "pairwise_diffs", "cell_means",
+      "overall_response", "simple_slopes", "weights", "delete", "wi_contrasts"
+    )
+    alias_map <- c(
+      include_diagonal = "diagonal",
+      pairwise_diff = "pairwise_diffs",
+      cond_mean = "cond_means",
+      cell_mean = "cell_means",
+      overall_responses = "overall_response",
+      simple_slope = "simple_slopes",
+      wi_contrast = "wi_contrasts"
+    )
+
+    for (alias in names(alias_map)) {
+      if (alias %in% nm) {
+        target <- alias_map[[alias]]
+        if (target %in% nm) {
+          lg$warn("Contrast spec includes both '%s' and '%s'; using '%s'.", alias, target, target)
+          x[[alias]] <- NULL
+        } else {
+          lg$warn("Contrast spec uses legacy/alias '%s'; treating as '%s'.", alias, target)
+          x[[target]] <- x[[alias]]
+          x[[alias]] <- NULL
+        }
+      }
+    }
+
+    nm <- names(x)
+    unknown <- setdiff(nm, c(valid_keys, allow_noncontrast))
+    if (length(unknown) > 0L) {
+      stop(
+        "Unknown contrast field(s) in spec: ", paste(unknown, collapse = ", "),
+        ". Allowed: ", paste(valid_keys, collapse = ", "),
+        call. = FALSE
+      )
+    }
+
+    return(x)
+  }
+
+  # Allow YAML-style nesting under `contrasts:` and normalize legacy aliases.
   if (!is.null(spec_list) && checkmate::test_list(spec_list)) {
     if (!is.null(spec_list$contrasts) && checkmate::test_list(spec_list$contrasts)) {
+      spec_list$contrasts <- normalize_contrast_keys(spec_list$contrasts, lg)
       spec_list <- utils::modifyList(spec_list, spec_list$contrasts)
     }
-    if (!is.null(spec_list$include_diagonal) && is.null(spec_list$diagonal)) {
-      spec_list$diagonal <- spec_list$include_diagonal
-    }
+
+    spec_list <- normalize_contrast_keys(
+      spec_list,
+      lg,
+      allow_noncontrast = c(
+        "signals", "name", "level", "model_formula", "num2fac",
+        "covariate_transform", "reference_level", "contrasts"
+      )
+    )
+
     spec_list$contrasts <- NULL
-    spec_list$include_diagonal <- NULL
+  }
+
+  # Auto-add diagonal for intercept-only L2/L3 models to avoid interactive prompts.
+  if (is.null(mobj$contrast_spec) && mobj$level %in% c(2L, 3L) && !is.null(mobj$lmfit)) {
+    mm <- tryCatch(model.matrix(mobj$lmfit), error = function(e) NULL)
+    if (!is.null(mm) && ncol(mm) == 1L && colnames(mm)[1] == "(Intercept)") {
+      contrast_keys <- c(
+        "diagonal", "cond_means", "pairwise_diffs", "cell_means",
+        "overall_response", "simple_slopes", "weights", "delete", "wi_contrasts"
+      )
+      present_keys <- character(0)
+      if (!is.null(spec_list) && checkmate::test_list(spec_list)) {
+        present_keys <- intersect(names(spec_list), contrast_keys)
+      }
+      ignored_keys <- setdiff(present_keys, "diagonal")
+      if (length(ignored_keys) > 0L || isTRUE(isFALSE(spec_list$diagonal))) {
+        lg$warn(
+          "Intercept-only model detected; ignoring contrast fields (%s) and using diagonal contrast only.",
+          if (length(ignored_keys) > 0L) paste(ignored_keys, collapse = ", ") else "diagonal = FALSE"
+        )
+      }
+      lg$info("Intercept-only model detected at level %d; adding diagonal contrast automatically.", mobj$level)
+      mobj$regressors <- names(coef(mobj$lmfit))
+      mobj$contrast_spec <- list(
+        diagonal = TRUE,
+        cond_means = character(0),
+        pairwise_diffs = character(0),
+        cell_means = FALSE,
+        overall_response = FALSE,
+        simple_slopes = list(),
+        weights = "cells",
+        cat_vars = character(0),
+        regressors = mobj$regressors,
+        delete = character(0)
+      )
+      reg <- mobj$regressors
+      cmat <- diag(length(reg))
+      rownames(cmat) <- paste0("EV_", reg)
+      colnames(cmat) <- reg
+      rownames(cmat) <- gsub("(Intercept)", "Intercept", rownames(cmat), fixed = TRUE)
+      mobj$contrast_list <- list(diagonal = cmat)
+      mobj$contrasts <- cmat
+      return(mobj)
+    }
   }
 
   prompt_contrasts <- FALSE
