@@ -27,6 +27,9 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
 
   # final checks on compute environment now that we're running inside the compute environment
   test_compute_environment(gpa, stop_on_fail=TRUE)
+  if ("spm" %in% gpa$glm_software) {
+    test_spm_compute_environment(gpa, stop_on_fail = TRUE)
+  }
 
   # l1 models must be specified to get started (hard enforcement)
   if (!checkmate::test_class(gpa$l1_models, "l1_model_set")) {

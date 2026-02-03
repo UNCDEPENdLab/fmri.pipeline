@@ -399,6 +399,9 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   # initial checks on compute environment
   test_compute_environment(gpa, stop_on_fail=FALSE)
+  if ("spm" %in% gpa$glm_software) {
+    test_spm_compute_environment(gpa, stop_on_fail = FALSE)
+  }
 
   return(gpa)
 }

@@ -161,12 +161,47 @@ l3_model_names = "prompt", glm_software = NULL) {
     run_l1 <- FALSE
   }
 
+  # If L1 is skipped but later levels will run, split the shared cache for each backend.
+  if (isFALSE(run_l1) && is.null(split_cache_batch) && length(backend_names) > 0L &&
+      (!is.null(model_list$l2_model_names) || !is.null(model_list$l3_model_names))) {
+    split_cache_batch <- f_batch$copy(
+      job_name = "split_backend_caches", n_cpus = 1,
+      wall_time = "0:10:00",
+      r_code = c(
+        sprintf("shared_cache <- '%s'", gpa_cache),
+        "if (!file.exists(shared_cache)) {",
+        "  stop('Shared GPA cache not found: ', shared_cache, '. The finalize job may have failed.')",
+        "}",
+        sprintf(
+          "backend_cache_paths <- c(%s)",
+          paste(shQuote(unname(backend_cache_map)), collapse = ", ")
+        ),
+        "for (path in backend_cache_paths) {",
+        "  success <- file.copy(shared_cache, path, overwrite = TRUE)",
+        "  if (!isTRUE(success)) {",
+        "    stop('Failed to copy shared cache to backend cache: ', path)",
+        "  }",
+        "}"
+      )
+    )
+    split_cache_batch$depends_on_parents <- if (isTRUE(run_finalize)) "finalize_configuration" else NULL
+  }
+
 
   # todo
   # gpa <- verify_lv1_runs(gpa)
 
   # only run level 2 if this is a multi-run dataset, FSL backend is enabled, and user requests l2 model estimation
   requires_l2 <- isTRUE(gpa$multi_run) && isTRUE(use_fsl)
+  if (!is.null(model_list$l2_model_names) && isFALSE(requires_l2)) {
+    reasons <- c()
+    if (!isTRUE(gpa$multi_run)) reasons <- c(reasons, "dataset is not multi-run")
+    if (!isTRUE(use_fsl)) reasons <- c(reasons, "FSL backend is not enabled")
+    lg$warn(
+      "L2 models were requested but cannot be run: %s.",
+      if (length(reasons) > 0L) paste(reasons, collapse = "; ") else "unknown reason"
+    )
+  }
   if (isTRUE(requires_l2) && !is.null(model_list$l2_model_names)) {
     # setup of l2 models (should follow l1)
     l2_batch <- f_batch$copy(
@@ -178,7 +213,15 @@ l3_model_names = "prompt", glm_software = NULL) {
       )
     )
 
-    l2_batch$depends_on_parents <- "run_l1_fsl"
+    if (isTRUE(run_l1)) {
+      l2_batch$depends_on_parents <- "run_l1_fsl"
+    } else if (!is.null(split_cache_batch)) {
+      l2_batch$depends_on_parents <- "split_backend_caches"
+    } else if (isTRUE(run_finalize)) {
+      l2_batch$depends_on_parents <- "finalize_configuration"
+    } else {
+      l2_batch$depends_on_parents <- NULL
+    }
     l2_batch$wait_for_children <- TRUE # need to wait for l2 feat jobs to complete before moving to l3
     if (!is.null(backend_cache_map[["fsl"]])) {
       l2_batch$input_rdata_file <- backend_cache_map[["fsl"]]
@@ -207,8 +250,14 @@ l3_model_names = "prompt", glm_software = NULL) {
 
       l1_parent <- if (!is.null(l1_execute_batches[[backend_name]])) {
         paste0("run_l1_", backend_name)
-      } else {
+      } else if (!is.null(split_cache_batch)) {
+        "split_backend_caches"
+      } else if (!is.null(l1_setup_batch)) {
         "setup_l1"
+      } else if (isTRUE(run_finalize)) {
+        "finalize_configuration"
+      } else {
+        NULL
       }
 
       l3_exec <- f_batch$copy(
@@ -275,7 +324,7 @@ l3_model_names = "prompt", glm_software = NULL) {
   } else if (length(l1_execute_batches) > 0L) {
     cleanup_batch$depends_on_parents <- vapply(l1_execute_batches, function(x) x$job_name, character(1))
   } else {
-    cleanup_batch$depends_on_parents <- "setup_l1"
+    cleanup_batch$depends_on_parents <- if (isTRUE(run_finalize)) "finalize_configuration" else NULL
   }
   
   run_cleanup <- TRUE # always TRUE for now
@@ -305,6 +354,17 @@ l3_model_names = "prompt", glm_software = NULL) {
   }
   glm_batch$submit()
   
+  l1_exec_flags <- if (length(l1_execute_batches) > 0L) {
+    setNames(lapply(l1_execute_batches, function(x) !is.null(x)), paste0("l1_", names(l1_execute_batches)))
+  } else {
+    list()
+  }
+  l3_exec_flags <- if (length(l3_execute_batches) > 0L) {
+    setNames(lapply(l3_execute_batches, function(x) !is.null(x)), paste0("l3_", names(l3_execute_batches)))
+  } else {
+    list()
+  }
+
   job_sequence <- c(
     list(
       finalize = run_finalize,
@@ -314,8 +374,8 @@ l3_model_names = "prompt", glm_software = NULL) {
       l3 = run_l3,
       cleanup = run_cleanup
     ),
-    setNames(lapply(l1_execute_batches, function(x) !is.null(x)), paste0("l1_", names(l1_execute_batches))),
-    setNames(lapply(l3_execute_batches, function(x) !is.null(x)), paste0("l3_", names(l3_execute_batches)))
+    l1_exec_flags,
+    l3_exec_flags
   ) # logicals of which jobs were submitted
   update_project_config(gpa = gpa, job_sequence = job_sequence, 
                         sequence_id = batch_id, batch_directory) # update config file with this run's details

@@ -107,7 +107,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
       lg,
       allow_noncontrast = c(
         "signals", "name", "level", "model_formula", "num2fac",
-        "covariate_transform", "reference_level", "contrasts"
+        "covariate_transform", "reference_level", "contrasts", "fsl_outlier_deweighting"
       )
     )
 
@@ -177,6 +177,22 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
   }
 
   if (!is.null(spec_list)) {
+    if (is.null(mobj$lmfit)) {
+      emmeans_fields <- c("cond_means", "pairwise_diffs", "cell_means", "overall_response", "simple_slopes")
+      has_emmeans_fields <- any(emmeans_fields %in% names(spec_list))
+      if (isTRUE(has_emmeans_fields)) {
+        lg$warn(
+          "Contrast spec includes emmeans-based fields (%s), but no model is available. Dropping them. For L1, use wi_contrasts on within-subject signals.",
+          paste(intersect(emmeans_fields, names(spec_list)), collapse = ", ")
+        )
+        spec_list$cond_means <- NULL
+        spec_list$pairwise_diffs <- NULL
+        spec_list$cell_means <- NULL
+        spec_list$overall_response <- NULL
+        spec_list$simple_slopes <- NULL
+      }
+    }
+
     if (!is.null(spec_list$diagonal)) {
       checkmate::assert_logical(spec_list$diagonal, len = 1L)
       include_diagonal <- spec_list$diagonal
@@ -229,6 +245,15 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
       term_labels <- attr(terms(mobj$lmfit), "term.labels") # names of regressors
       dclass <- attr(mobj$lmfit$terms, "dataClasses")[term_labels] # omit response variable
       cat_vars <- names(dclass[which(dclass %in% c("factor", "character"))])
+    }
+
+    if (length(cat_vars) == 1L && isTRUE(spec_list$cell_means)) {
+      lg$info(
+        "cell_means requested with a single factor (%s); dropping because it duplicates cond_means.",
+        cat_vars
+      )
+      spec_list$cell_means <- FALSE
+      cell_means <- FALSE
     }
 
     # now handle population of within-subject contrasts (wi_models)

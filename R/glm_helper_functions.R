@@ -907,6 +907,19 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
 
   ### add condition means, if requested
   c_cond_means <- contrast_list$cond_means
+  if (is.null(lmfit) && (length(spec$cond_means) > 0L || length(spec$pairwise_diffs) > 0L ||
+    isTRUE(spec$cell_means) || isTRUE(spec$overall_response) || length(spec$simple_slopes) > 0L)) {
+    warning(
+      "emmeans-based contrasts requested, but no model is available. Dropping emmeans contrasts.",
+      call. = FALSE
+    )
+    spec$cond_means <- character(0)
+    spec$pairwise_diffs <- character(0)
+    spec$cell_means <- FALSE
+    spec$overall_response <- FALSE
+    spec$simple_slopes <- list()
+  }
+
   if (length(spec$cond_means) > 0L && is.null(c_cond_means)) {
     for (vv in spec$cond_means) {
       ee <- emmeans(lmfit, as.formula(paste("~", vv)), weights = spec$weights)
