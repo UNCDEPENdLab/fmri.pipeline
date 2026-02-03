@@ -919,6 +919,34 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   # for within-subject factors, always add the signal name as a prefix (cf. get_regressors_from_signal)
   c_colnames <- paste0(prefix, c_colnames)
 
+  # If no contrasts were specified in spec or contrast_list for L2/L3 models,
+  # default to diagonal contrasts and warn the user.
+  if (inherits(mobj, "hi_model_spec")) {
+    has_list_contrasts <- any(vapply(contrast_list, function(x) {
+      if (is.null(x)) return(FALSE)
+      if (is.matrix(x)) return(nrow(x) > 0L)
+      length(x) > 0L
+    }, logical(1)))
+
+    has_spec_contrasts <- any(c(
+      isTRUE(spec$diagonal),
+      length(spec$cond_means) > 0L,
+      length(spec$pairwise_diffs) > 0L,
+      isTRUE(spec$cell_means),
+      isTRUE(spec$overall_response),
+      length(spec$simple_slopes) > 0L
+    ))
+
+    if (!isTRUE(has_list_contrasts) && !isTRUE(has_spec_contrasts)) {
+      warning(
+        "No valid contrasts were specified; adding diagonal contrasts by default.",
+        call. = FALSE
+      )
+      spec$diagonal <- TRUE
+      mobj$contrast_spec$diagonal <- TRUE
+    }
+  }
+
   ### add diagonal contrasts
   c_diagonal <- contrast_list$diagonal
   if (isTRUE(spec$diagonal) && is.null(c_diagonal)) {
@@ -1084,6 +1112,16 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
 
   # handle contrasts from the full matrix that should be deleted
   # these are processed dynamically here so that the same set can be dropped if a contrast is respecified for a data subset or subject
+  if (!is.null(spec$delete)) {
+    if (!is.character(spec$delete)) {
+      warning("contrast_spec$delete must be a character vector; ignoring invalid values.", call. = FALSE)
+      spec$delete <- NULL
+    } else {
+      spec$delete <- spec$delete[!is.na(spec$delete) & nzchar(spec$delete)]
+      if (length(spec$delete) == 0L) spec$delete <- NULL
+    }
+  }
+
   if (!is.null(spec$delete)) {
     which_del <- match(spec$delete, rownames(cmat_full))
     if (!any(is.na(which_del))) {
