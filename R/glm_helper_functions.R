@@ -280,6 +280,7 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
 test_spm_compute_environment <- function(gpa, stop_on_fail = TRUE) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_logical(stop_on_fail, len = 1L)
+  lg <- lgr::get_logger("glm_pipeline/test_spm_compute_environment")
 
   matlab_cmd <- gpa$glm_settings$spm$matlab_cmd
   if (is.null(matlab_cmd) || !nzchar(matlab_cmd)) matlab_cmd <- "matlab"
@@ -287,6 +288,10 @@ test_spm_compute_environment <- function(gpa, stop_on_fail = TRUE) {
   if (is.null(matlab_args) || !nzchar(matlab_args)) matlab_args <- "-nodisplay -nosplash -r"
   matlab_exit <- gpa$glm_settings$spm$matlab_exit
   if (is.null(matlab_exit)) matlab_exit <- "exit;"
+  matlab_timeout <- gpa$glm_settings$spm$matlab_timeout
+  if (is.null(matlab_timeout) || !is.numeric(matlab_timeout) || length(matlab_timeout) != 1L || is.na(matlab_timeout)) {
+    matlab_timeout <- 120
+  }
 
   spm_path <- gpa$glm_settings$spm$spm_path
   if (is.null(spm_path) || !nzchar(spm_path)) {
@@ -305,8 +310,28 @@ test_spm_compute_environment <- function(gpa, stop_on_fail = TRUE) {
   } else {
     matlab_call
   }
+  # Use coreutils timeout if available since R.utils::withTimeout cannot reliably interrupt system().
+  timeout_bin <- Sys.which("timeout")
+  if (nzchar(timeout_bin)) {
+    cmd <- paste(timeout_bin, matlab_timeout, "bash -lc", shQuote(cmd))
+  } else {
+    cmd <- paste("bash -lc", shQuote(cmd))
+  }
 
-  res <- suppressWarnings(system(cmd, intern = TRUE))
+  lg$info("Starting SPM compute environment check (timeout: %ss)", matlab_timeout)
+  res <- tryCatch(
+    R.utils::withTimeout(
+      suppressWarnings(system(cmd, intern = TRUE)),
+      timeout = matlab_timeout,
+      onTimeout = "error"
+    ),
+    TimeoutException = function(e) {
+      msg <- sprintf("SPM compute environment check timed out after %ss. MATLAB may be hanging.", matlab_timeout)
+      if (stop_on_fail) stop(msg) else warning(msg)
+      return(structure(character(0), status = 124L))
+    }
+  )
+  lg$info("Finished SPM compute environment check")
   exit_code <- attr(res, "status")
   if (!is.null(exit_code) && exit_code != 0L) {
     msg <- paste("SPM compute environment check failed:", paste(res, collapse = "\n"))
@@ -1206,15 +1231,22 @@ respecify_l2_models_by_subject <- function(mobj, data) {
     lmfit <- lm(model_formula, data = dsplit[[vv, "dt"]])
 
     mm <- get_contrasts_from_spec(mobj, lmfit)
+    n_contrasts <- if (is.null(mm$contrasts)) 0L else nrow(mm$contrasts)
+    contrast_names <- if (n_contrasts > 0L) rownames(mm$contrasts) else character(0)
+    if (is.null(contrast_names)) {
+      contrast_names <- if (n_contrasts > 0L) paste0("contrast_", seq_len(n_contrasts)) else character(0)
+    }
     cope_df <- data.frame(
-      id = dsplit$id[vv], session = dsplit$session[vv],
-      l2_cope_number = seq_len(nrow(mm$contrasts)), l2_cope_name = rownames(mm$contrasts)
+      id = rep(dsplit$id[vv], n_contrasts),
+      session = rep(dsplit$session[vv], n_contrasts),
+      l2_cope_number = if (n_contrasts > 0L) seq_len(n_contrasts) else integer(0),
+      l2_cope_name = contrast_names
     )
 
     cope_list[[vv]] <- cope_df
     contrast_list[[vv]] <- mm$contrasts
     model_matrix_list[[vv]] <- model.matrix(lmfit)
-    n_l2_copes[vv] <- ncol(mm$contrasts)
+    n_l2_copes[vv] <- if (is.null(mm$contrasts)) 0L else ncol(mm$contrasts)
   }
 
   dsplit[, cope_list := cope_list]

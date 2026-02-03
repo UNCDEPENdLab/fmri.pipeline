@@ -182,6 +182,7 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
     matlab_cmd = "matlab",
     matlab_args = "-nodisplay -nosplash -r",
     matlab_exit = "exit;",
+    matlab_timeout = 120,
     concatenate_runs = NULL,
     generate_qsub = TRUE,
     execute_qsub = FALSE,
@@ -385,7 +386,8 @@ setup_output_locations <- function(gpa, lg = NULL) {
     feat_sub_directory = feat_sub_directory,
     feat_ses_directory = feat_sub_directory, # no difference in defaults
     feat_l1_directory = file.path(feat_sub_directory, "{l1_model}"),
-    feat_l2_directory = feat_l2_sub_directory,
+    # include l1_model in L2 output path to avoid collisions across L1 models
+    feat_l2_directory = file.path(feat_l2_sub_directory, "{l1_model}"),
     spm_sub_directory = spm_sub_directory,
     spm_l1_directory = file.path(spm_sub_directory, "{l1_model}"),
     spm_l3_directory = file.path("{gpa$output_directory}", "spm_l3", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}"),

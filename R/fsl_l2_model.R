@@ -133,6 +133,11 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
     gpa = gpa, glm_software = "fsl", what = "l2"
   )
 
+  if (!dir.exists(fsl_l2_output_dir)) {
+    lg$debug("Creating L2 output directory: %s", fsl_l2_output_dir)
+    dir.create(fsl_l2_output_dir, recursive = TRUE)
+  }
+
   l2_feat_dir <- file.path(fsl_l2_output_dir, paste0("FEAT_LVL2_", l2_model, ".gfeat"))
   l2_feat_fsf <- file.path(fsl_l2_output_dir, paste0("FEAT_LVL2_", l2_model, ".fsf"))
 

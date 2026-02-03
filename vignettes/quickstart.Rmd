@@ -676,15 +676,21 @@ The output directory structure is as follows:
   * feat_l1: First-level analysis outputs
     * sub-{id}: Subject-specific directory
       * ses-{session}: Session-specific directory (if applicable)
-        * {l1_model_name}: Directory for the specific Level 1 model
-          * FEAT_LV1_run{run_number}.feat: FSL Feat folders for each run being executed by the scheduler
-          * FEAT_LV1_run{run_number}.fsf: FSL Feat design file containing the model specification in FSL syntax
+        * {l1_model}: Directory for the specific Level 1 model
+          * FEAT_LVL1_run{run_number}.feat: FSL Feat folders for each run being executed by the scheduler
+          * FEAT_LVL1_run{run_number}.fsf: FSL Feat design file containing the model specification in FSL syntax
           * {model}_bdm_setup.RData: ??
-          * FEAT_LV2_{l2_model_name}.gfeat/fsf: Combine all runs into one subject level analysis. Directory for the specific Level 2 model (if applicable)
           * timing_files: folder ??
 
+  * feat_l2: Second-level analysis outputs
+    * sub-{id}: Subject-specific directory
+      * ses-{session}: Session-specific directory (if applicable)
+        * {l1_model}: Directory for the Level 1 model feeding into L2
+          * FEAT_LVL2_{l2_model_name}.gfeat: Subject-level FEAT directory for the L2 model
+          * FEAT_LVL2_{l2_model_name}.fsf: FSL Feat design file for the L2 model
+
   * feat_l3: Third-level analysis outputs
-    * {l1_model_name}: Directory for the specific Level 1 model
+    * {l1_model}: Directory for the specific Level 1 model
       * L2m-{l2_model_name}_l2c-{l2_contrast}: Directory for the specific Level 2 model
       * L2m-{l2_model_name}_l2c-overall: generated if in L2 building step you say "yes" to do you want to get the overall response (averaging over all the covariates in the level 2 model).
         * L3m-{l3_model_name}: Directory for the specific Level 3 model. If you want to look at a specific regressor for a level 1 model and look at a specific contrast, you will look into these directories.
@@ -701,7 +707,7 @@ The output directory structure is as follows:
 
   * .sqlite: SQLite database for tracking analysis progress and results
 
-`fmri.pipeline` also gives considerable flexibility in how you want to structure your outputs by changing the contents of `gpa$output_locations` object. The output location can be a dynamic expression (based on `glue` R package) that gets evaluated when the package is run. This is the default expresson for first-level FEAT directories: `"{gpa$output_directory}/feat_l1/sub-{id}/ses-{session}/{l1_model_name}"`. The contents inside the curly brackets are evaluated at runtime, so you can use any variable in the `gpa` object to specify the output location.
+`fmri.pipeline` also gives considerable flexibility in how you want to structure your outputs by changing the contents of `gpa$output_locations` object. The output location can be a dynamic expression (based on `glue` R package) that gets evaluated when the package is run. This is the default expresson for first-level FEAT directories: `"{gpa$output_directory}/feat_l1/sub-{id}/ses-{session}/{l1_model}"`. The contents inside the curly brackets are evaluated at runtime, so you can use any variable in the `gpa` object to specify the output location. The default for second-level FEAT directories is `"{gpa$output_directory}/feat_l2/sub-{id}/ses-{session}/{l1_model}"`.
 
 
 ---
