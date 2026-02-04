@@ -21,8 +21,7 @@ generate_spm_mat(
   concatenate_runs = FALSE,
   spm_path = "/gpfs/group/mnh5174/default/lab_resources/spm12",
   matlab_cmd = "matlab",
-  matlab_args = "-nodisplay -nosplash -r",
-  matlab_exit = "exit;",
+  matlab_args = "-batch",
   compute_env = NULL
 )
 }
@@ -71,9 +70,7 @@ a single concatenated time series. This is useful as a preamble to DCM, which of
 
 \item{matlab_cmd}{Command to launch MATLAB/Octave. Default: "matlab"}
 
-\item{matlab_args}{Arguments passed to MATLAB/Octave. Default: "-nodisplay -nosplash -r"}
-
-\item{matlab_exit}{Command appended after script execution. Default: "exit;"}
+\item{matlab_args}{Arguments passed to MATLAB/Octave. Default: "-batch"}
 
 \item{compute_env}{Optional character vector of shell commands to prepare the environment
 (e.g., module load statements). These are prepended to direct MATLAB execution.}

@@ -153,7 +153,6 @@ spm_l1_model <- function(
           spm_path = spm_settings$spm_path,
           matlab_cmd = spm_settings$matlab_cmd,
           matlab_args = spm_settings$matlab_args,
-          matlab_exit = spm_settings$matlab_exit,
           compute_env = spm_compute_env
         )
       },

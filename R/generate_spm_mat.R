@@ -30,8 +30,7 @@
 #'            a single concatenated time series. This is useful as a preamble to DCM, which often uses concatenated time series. Default: FALSE
 #' @param spm_path The path to an spm12 directory. This will be included in MATLAB scripts to ensure that spm is found.
 #' @param matlab_cmd Command to launch MATLAB/Octave. Default: "matlab"
-#' @param matlab_args Arguments passed to MATLAB/Octave. Default: "-nodisplay -nosplash -r"
-#' @param matlab_exit Command appended after script execution. Default: "exit;"
+#' @param matlab_args Arguments passed to MATLAB/Octave. Default: "-batch"
 #' @param compute_env Optional character vector of shell commands to prepare the environment
 #'   (e.g., module load statements). These are prepended to direct MATLAB execution.
 #'
@@ -58,8 +57,8 @@ generate_spm_mat <- function(bdm, ts_files=NULL, output_dir="spm_out",
                              spm_execute_setup=FALSE, spm_execute_glm=FALSE,
                              spm_execute_contrasts=FALSE, concatenate_runs=FALSE,
                              spm_path="/gpfs/group/mnh5174/default/lab_resources/spm12",
-                             matlab_cmd="matlab", matlab_args="-nodisplay -nosplash -r",
-                             matlab_exit="exit;", compute_env=NULL) {
+                             matlab_cmd="matlab", matlab_args="-batch",
+                             compute_env=NULL) {
 
   #for concatenate runs, need to setup a single SPM mat (one session), run GLM setup, then call spm_fmri_concatenate('SPM.mat', nscans)
   #where the latter is a vector run volumes ($run_volumes in BDM)
@@ -327,7 +326,10 @@ generate_spm_mat <- function(bdm, ts_files=NULL, output_dir="spm_out",
   spm_syntax[["exec_glm_setup"]] <- exec_string
 
   build_matlab_call <- function(script_path) {
-    cmd_str <- paste0("run('", script_path, "');", matlab_exit)
+    cmd_str <- paste0(
+      "try; run('", script_path, "'); ",
+      "catch ME; disp(getReport(ME,'extended')); exit(1); end; exit(0);"
+    )
     paste(matlab_cmd, matlab_args, shQuote(cmd_str))
   }
   build_shell_call <- function(script_path) {

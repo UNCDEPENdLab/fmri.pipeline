@@ -249,8 +249,7 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
   model_set <- expand.grid(l1_model = l1_model_names, l2_model = l2_model_names, stringsAsFactors = FALSE)
   all_l2_list <- foreach(
     model_info = iter(model_set, by = "row"), .inorder = FALSE,
-    .packages = c("fmri.pipeline", "dplyr", "data.table"),
-    .export = c("backend")
+    .packages = c("fmri.pipeline", "dplyr", "data.table")
   ) %dopar% {
     model_info <- model_info # avoid complaints about visible global binding in R CMD check
     this_l1_model <- model_info$l1_model

@@ -14,7 +14,7 @@
 #' @export
 generate_spm_contrasts <- function(output_dir, condition_contrasts=TRUE, unit_contrasts=TRUE, effects_of_interest_F=TRUE,
                                    spm_path="/gpfs/group/mnh5174/default/lab_resources/spm12", execute=FALSE,
-                                   matlab_cmd="matlab", matlab_args="-nodisplay -nosplash -r") {
+                                   matlab_cmd="matlab", matlab_args="-batch") {
 
   if (missing(output_dir)) { stop("No output_dir provided. This must be the folder containing the SPM.mat file") }
   if (execute && !file.exists(file.path(output_dir, "SPM.mat"))) { stop("No SPM.mat file found in: ", output_dir, ". This must be setup prior to estimating contrasts.") }

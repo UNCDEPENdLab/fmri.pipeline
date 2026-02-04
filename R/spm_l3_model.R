@@ -58,8 +58,7 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
     spm_execute_contrasts = FALSE,
     spm_path = "/gpfs/group/mnh5174/default/lab_resources/spm12",
     matlab_cmd = "matlab",
-    matlab_args = "-nodisplay -nosplash -r",
-    matlab_exit = "exit;",
+    matlab_args = "-batch",
     force_l3_creation = FALSE
   )
 
@@ -137,7 +136,10 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
       ""
     )
     build_matlab_call <- function(script_path) {
-      cmd_str <- paste0("run('", script_path, "');", spm_settings$matlab_exit)
+      cmd_str <- paste0(
+        "try; run('", script_path, "'); ",
+        "catch ME; disp(getReport(ME,'extended')); exit(1); end; exit(0);"
+      )
       paste(spm_settings$matlab_cmd, spm_settings$matlab_args, shQuote(cmd_str))
     }
     build_shell_call <- function(script_path) {

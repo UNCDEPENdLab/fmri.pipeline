@@ -12,7 +12,7 @@ generate_spm_contrasts(
   spm_path = "/gpfs/group/mnh5174/default/lab_resources/spm12",
   execute = FALSE,
   matlab_cmd = "matlab",
-  matlab_args = "-nodisplay -nosplash -r"
+  matlab_args = "-batch"
 )
 }
 \arguments{

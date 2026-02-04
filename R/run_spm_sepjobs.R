@@ -114,12 +114,13 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
   matlab_cmd <- gpa$glm_settings$spm$matlab_cmd
   if (is.null(matlab_cmd) || !nzchar(matlab_cmd)) matlab_cmd <- "matlab"
   matlab_args <- gpa$glm_settings$spm$matlab_args
-  if (is.null(matlab_args) || !nzchar(matlab_args)) matlab_args <- "-nodisplay -nosplash -r"
-  matlab_exit <- gpa$glm_settings$spm$matlab_exit
-  if (is.null(matlab_exit)) matlab_exit <- "exit;"
+  if (is.null(matlab_args) || !nzchar(matlab_args)) matlab_args <- "-batch"
 
   build_matlab_call <- function(script_path) {
-    cmd_str <- paste0("run('", script_path, "');", matlab_exit)
+    cmd_str <- paste0(
+      "try; run('", script_path, "'); ",
+      "catch ME; disp(getReport(ME,'extended')); exit(1); end; exit(0);"
+    )
     paste(matlab_cmd, matlab_args, shQuote(cmd_str))
   }
 
@@ -182,7 +183,6 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
       "job_failed=0",
       paste0("matlab_cmd=", shQuote(matlab_cmd)),
       paste0("matlab_args=", shQuote(matlab_args)),
-      paste0("matlab_exit=", shQuote(matlab_exit)),
       paste0("spm_setup_script=", shQuote(script_map[["setup"]])),
       paste0("spm_glm_script=", shQuote(script_map[["glm"]])),
       paste0("spm_contrast_script=", shQuote(script_map[["contrasts"]])),
@@ -198,7 +198,7 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
       "",
       "  run_matlab() {",
       "    script_path=\"$1\"",
-      "    cmd_str=\"run('${script_path}');${matlab_exit}\"",
+      "    cmd_str=\"try; run('${script_path}'); catch ME; disp(getReport(ME,'extended')); exit(1); end; exit(0);\"",
       "    ${matlab_cmd} ${matlab_args} \"${cmd_str}\"",
       "    cmd_exit=$?",
       "    if [ $cmd_exit -ne 0 ]; then",

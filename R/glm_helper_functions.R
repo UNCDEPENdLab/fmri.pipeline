@@ -285,9 +285,7 @@ test_spm_compute_environment <- function(gpa, stop_on_fail = TRUE) {
   matlab_cmd <- gpa$glm_settings$spm$matlab_cmd
   if (is.null(matlab_cmd) || !nzchar(matlab_cmd)) matlab_cmd <- "matlab"
   matlab_args <- gpa$glm_settings$spm$matlab_args
-  if (is.null(matlab_args) || !nzchar(matlab_args)) matlab_args <- "-nodisplay -nosplash -r"
-  matlab_exit <- gpa$glm_settings$spm$matlab_exit
-  if (is.null(matlab_exit)) matlab_exit <- "exit;"
+  if (is.null(matlab_args) || !nzchar(matlab_args)) matlab_args <- "-batch"
   matlab_timeout <- gpa$glm_settings$spm$matlab_timeout
   if (is.null(matlab_timeout) || !is.numeric(matlab_timeout) || length(matlab_timeout) != 1L || is.na(matlab_timeout)) {
     matlab_timeout <- 120
@@ -302,7 +300,12 @@ test_spm_compute_environment <- function(gpa, stop_on_fail = TRUE) {
 
   compute_env <- get_compute_environment(gpa, c("spm"))
   spm_cmd <- paste0(
-    "addpath('", spm_path, "'); spm('defaults','fmri'); spm_jobman('initcfg'); ", matlab_exit
+    "try; ",
+    "addpath('", spm_path, "'); ",
+    "spm('defaults','fmri'); ",
+    "spm_get_defaults('cmdline',1); ",
+    "spm_jobman('initcfg'); ",
+    "catch ME; disp(getReport(ME,'extended')); exit(1); end; exit(0);"
   )
   matlab_call <- paste(matlab_cmd, matlab_args, shQuote(spm_cmd))
   cmd <- if (!is.null(compute_env) && length(compute_env) > 0L) {
