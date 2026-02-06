@@ -141,6 +141,41 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       run_volumes, exclude_run, row.names = NULL
     )
 
+    # Precompute concatenated confounds for SPM/AFNI if requested
+    l1_confound_files_spm <- l1_confound_files
+    if ("spm" %in% gpa$glm_software && length(run_nifti) > 1L) {
+      spm_defaults <- list(concatenate_runs = NULL)
+      spm_settings <- populate_defaults(gpa$glm_settings$spm, spm_defaults)
+      if (is.null(spm_settings$concatenate_runs)) {
+        spm_settings$concatenate_runs <- length(run_nifti) > 1L
+      }
+
+      if (isTRUE(spm_settings$concatenate_runs)) {
+        confound_outdir <- NULL
+        if (length(l1_confound_files) > 0L && file.exists(l1_confound_files[1L])) {
+          confound_outdir <- dirname(l1_confound_files[1L])
+        } else {
+          confound_outdir <- get_output_directory(
+            id = subj_id, session = subj_session, gpa = gpa,
+            what = "sub", create_if_missing = TRUE
+          )
+        }
+        concat_file <- concat_l1_confounds(
+          gpa = gpa, id = subj_id, session = subj_session,
+          run_numbers = mr_run_nums, confound_files = l1_confound_files,
+          output_dir = confound_outdir, lg = lg
+        )
+        if (!is.null(concat_file)) {
+          l1_confound_files_spm <- concat_file
+          lg$info("Using concatenated confounds for SPM: %s", concat_file)
+        } else {
+          msg <- "Unable to generate concatenated confounds while concatenate_runs=TRUE."
+          lg$error(msg)
+          stop(msg)
+        }
+      }
+    }
+
     # Tracking list containing data.frames for each software, where we expect one row per run-level model (FSL)
     # or subject-level model (AFNI). The structure varies because FSL estimates per-run GLMs, while AFNI concatenates.
     l1_file_setup <- list(fsl = list(), spm = list(), afni = list(), metadata = mr_df)
@@ -284,12 +319,15 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
       }
 
       # TODO: finalize SPM approach
-      if (!is.null(backend_spm)) {
+      if (is.null(backend_spm)) {
+        lg$warn("SPM backend is not configured; skipping SPM L1 setup for subject %s session %s.", subj_id, subj_session)
+      } else {
+        lg$info("Setting up SPM L1 model %s for subject %s session %s.", this_model, subj_id, subj_session)
         # Setup spm run-level models for each combination of signals
         spm_l1_df <- tryCatch(
           {
             backend_spm$l1_setup(
-              id = subj_id, session = subj_session, l1_confound_files = l1_confound_files,
+              id = subj_id, session = subj_session, l1_confound_files = l1_confound_files_spm,
               d_obj = d_obj, gpa = gpa, model_name = this_model, run_nifti = run_nifti
             )
           },
@@ -302,6 +340,8 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
         if (!is.null(spm_l1_df)) {
           l1_file_setup$spm <- rbind(l1_file_setup$spm, spm_l1_df)
+        } else {
+          lg$warn("SPM L1 model setup returned NULL for model %s, subject %s, session %s.", this_model, subj_id, subj_session)
         }
       }
     }

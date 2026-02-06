@@ -30,6 +30,12 @@ spm_l1_model <- function(
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
   lg$set_threshold(gpa$lgr_threshold)
+  if (isTRUE(gpa$log_json) && !"setup_l1_log_json" %in% names(lg$appenders)) {
+    lg$add_appender(lgr::AppenderJson$new(gpa$output_locations$setup_l1_log_json), name = "setup_l1_log_json")
+  }
+  if (isTRUE(gpa$log_txt) && !"setup_l1_log_txt" %in% names(lg$appenders)) {
+    lg$add_appender(lgr::AppenderFile$new(gpa$output_locations$setup_l1_log_txt), name = "setup_l1_log_txt")
+  }
 
   if (!is.null(d_obj$run_nifti)) {
     lg$debug("Using internal NIfTI files (run_nifti) within d_obj for SPM level 1 setup")
@@ -45,22 +51,16 @@ spm_l1_model <- function(
     stop(msg)
   }
 
-  if (!is.null(l1_confound_files) && length(l1_confound_files) != length(run_nifti)) {
-    if (length(l1_confound_files) == 1L) {
-      lg$warn("Single l1_confound_file provided for multi-run data; replicating to match runs.")
-      l1_confound_files <- rep(l1_confound_files, length(run_nifti))
-    } else {
-      msg <- "Length of l1_confound_files must match length of run_nifti."
-      lg$error(msg)
-      stop(msg)
-    }
-  }
-
   stopifnot(length(run_nifti) == length(d_obj$run_volumes)) # need these to align
   checkmate::assert_character(run_nifti, null.ok = FALSE)
   checkmate::assert_file_exists(run_nifti) # all exist
 
   stopifnot(model_name %in% names(gpa$l1_models$models))
+
+  lg$debug(
+    "SPM L1 setup start: id=%s session=%s model=%s n_runs=%d",
+    id, session, model_name, length(run_nifti)
+  )
 
   spm_l1_output_dir <- get_output_directory(
     id = id, session = session, l1_model = model_name,
@@ -73,6 +73,11 @@ spm_l1_model <- function(
   spm_defaults <- list(
     hpf = 100,
     hrf_derivs = "none",
+    cvi = "AR(1)",
+    estimation_method = "Classical",
+    write_residuals = FALSE,
+    fmri_t = NULL,
+    fmri_t0 = NULL,
     condition_contrasts = TRUE,
     unit_contrasts = TRUE,
     effects_of_interest_F = TRUE,
@@ -80,7 +85,7 @@ spm_l1_model <- function(
     spm_execute_glm = FALSE,
     spm_execute_contrasts = FALSE,
     concatenate_runs = NULL,
-    cleanup_tmp = FALSE,
+    cleanup_tmp = TRUE,
     nifti_tmpdir = NULL,
     spm_path = NULL,
     force_l1_creation = FALSE
@@ -93,9 +98,42 @@ spm_l1_model <- function(
     spm_settings$concatenate_runs <- length(run_nifti) > 1L
   }
 
+  micro <- infer_spm_microtime(
+    run_nifti = run_nifti,
+    fmri_t = spm_settings$fmri_t,
+    fmri_t0 = spm_settings$fmri_t0,
+    lg = lg
+  )
+  spm_settings$fmri_t <- micro$fmri_t
+  spm_settings$fmri_t0 <- micro$fmri_t0
+
+  if (!is.null(l1_confound_files)) {
+    if (isTRUE(spm_settings$concatenate_runs)) {
+      if (length(l1_confound_files) != 1L) {
+        msg <- "For concatenated runs, l1_confound_files must have length 1 (a single concatenated file)."
+        lg$error(msg)
+        stop(msg)
+      }
+    } else {
+      if (length(l1_confound_files) != length(run_nifti)) {
+        msg <- "Length of l1_confound_files must match length of run_nifti."
+        lg$error(msg)
+        stop(msg)
+      }
+    }
+  }
+
   if (is.null(spm_settings$nifti_tmpdir)) {
     spm_settings$nifti_tmpdir <- file.path(spm_l1_output_dir, "nifti_tmp")
   }
+  tmpdir_marker <- file.path(spm_l1_output_dir, ".nifti_tmpdir")
+  tryCatch(
+    writeLines(spm_settings$nifti_tmpdir, tmpdir_marker),
+    error = function(e) {
+      lg$warn("Could not write nifti tmpdir marker to %s: %s", tmpdir_marker, as.character(e))
+      return(NULL)
+    }
+  )
 
   if (isTRUE(execute_spm)) {
     spm_settings$spm_execute_setup <- TRUE
@@ -103,25 +141,28 @@ spm_l1_model <- function(
     spm_settings$spm_execute_contrasts <- TRUE
   }
 
+  lg$debug(
+    "SPM L1 settings: spm_path=%s concatenate_runs=%s execute_setup=%s execute_glm=%s execute_contrasts=%s nifti_tmpdir=%s cvi=%s estimation_method=%s write_residuals=%s fmri_t=%s fmri_t0=%s",
+    spm_settings$spm_path,
+    spm_settings$concatenate_runs,
+    spm_settings$spm_execute_setup,
+    spm_settings$spm_execute_glm,
+    spm_settings$spm_execute_contrasts,
+    spm_settings$nifti_tmpdir,
+    spm_settings$cvi,
+    spm_settings$estimation_method,
+    spm_settings$write_residuals,
+    spm_settings$fmri_t,
+    spm_settings$fmri_t0
+  )
+
   # Determine confounds handling for SPM
   ts_files <- NULL
   if (!is.null(l1_confound_files)) {
     valid_confound <- !is.na(l1_confound_files) & nzchar(l1_confound_files) & file.exists(l1_confound_files)
 
     if (all(valid_confound)) {
-      if (isTRUE(spm_settings$concatenate_runs) && length(l1_confound_files) > 1L) {
-        lg$info("Concatenating confound files for SPM concatenated runs")
-        confounds_list <- lapply(l1_confound_files, function(ff) {
-          data.table::fread(ff, header = FALSE, data.table = FALSE)
-        })
-        confounds_concat <- do.call(rbind, confounds_list)
-        concat_file <- file.path(spm_l1_output_dir, "l1_confounds_concat.txt")
-        write.table(confounds_concat, file = concat_file, row.names = FALSE, col.names = FALSE)
-        # replicate to satisfy generate_spm_mat length check; only first element used when concatenated
-        ts_files <- rep(concat_file, length(run_nifti))
-      } else {
-        ts_files <- l1_confound_files
-      }
+      ts_files <- l1_confound_files
     } else {
       lg$warn("Some l1_confound_files are missing or invalid; disabling confounds for SPM setup.")
     }
@@ -141,7 +182,11 @@ spm_l1_model <- function(
       {
         generate_spm_mat(
           bdm = d_obj, ts_files = ts_files, output_dir = spm_l1_output_dir,
-          hpf = spm_settings$hpf, hrf_derivs = spm_settings$hrf_derivs,
+          hpf = spm_settings$hpf, hrf_derivs = spm_settings$hrf_derivs, cvi = spm_settings$cvi,
+          estimation_method = spm_settings$estimation_method,
+          write_residuals = spm_settings$write_residuals,
+          fmri_t = spm_settings$fmri_t,
+          fmri_t0 = spm_settings$fmri_t0,
           nifti_tmpdir = spm_settings$nifti_tmpdir, cleanup_tmp = spm_settings$cleanup_tmp,
           condition_contrasts = spm_settings$condition_contrasts,
           unit_contrasts = spm_settings$unit_contrasts,
@@ -162,6 +207,46 @@ spm_l1_model <- function(
       }
     )
   }
+
+  if (is.null(spm_syntax)) {
+    msg <- sprintf("SPM L1 setup failed to generate scripts for %s in %s.", model_name, spm_l1_output_dir)
+    lg$error(msg)
+    stop(msg)
+  }
+
+  # Always derive SPM contrasts from the L1 model object (mobj)
+  mobj <- gpa$l1_models$models[[model_name]]
+  if (is.null(mobj) || is.null(mobj$contrasts) || !inherits(mobj$contrasts, "matrix") || nrow(mobj$contrasts) == 0L) {
+    msg <- sprintf("L1 model contrasts are missing or empty for model %s. Cannot generate SPM contrasts.", model_name)
+    lg$error(msg)
+    stop(msg)
+  }
+
+  spm_contrast_cmds <- generate_spm_contrasts_from_model(
+    output_dir = spm_l1_output_dir,
+    mobj = mobj,
+    spm_path = spm_settings$spm_path,
+    execute = spm_settings$spm_execute_contrasts,
+    matlab_cmd = spm_settings$matlab_cmd,
+    matlab_args = spm_settings$matlab_args
+  )
+
+  if (!spm_settings$spm_execute_contrasts && !is.null(spm_contrast_cmds)) {
+    cat(
+      c("#!/bin/bash", spm_contrast_cmds$extract_cmd, spm_contrast_cmds$setup_cmd),
+      file = file.path(spm_l1_output_dir, "setup_spm_contrasts.sh"),
+      sep = "\n"
+    )
+  }
+  spm_syntax$contrast_cmds <- spm_contrast_cmds
+
+  spm_script_files <- list.files(spm_l1_output_dir, pattern = "\\.m$", full.names = FALSE)
+  lg$debug(
+    "SPM L1 scripts written in %s: %d files (%s)",
+    spm_l1_output_dir,
+    length(spm_script_files),
+    if (length(spm_script_files) > 0L) paste(head(spm_script_files, 5L), collapse = ", ") else "none"
+  )
 
   spm_status <- get_spm_status(spm_l1_output_dir, lg = lg)
 

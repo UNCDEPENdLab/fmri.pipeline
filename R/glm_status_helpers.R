@@ -109,7 +109,6 @@ get_spm_status <- function(spm_dir, lg = NULL, prefix = NULL) {
   if (is.null(lg)) lg <- lgr::get_logger()
 
   spm_checks <- list()
-  spm_checks$spm_dir <- spm_dir
   spm_checks$spm_dir_exists <- dir.exists(spm_dir)
   spm_checks$spm_execution_start <- as.POSIXct(NA)
   spm_checks$spm_execution_end <- as.POSIXct(NA)

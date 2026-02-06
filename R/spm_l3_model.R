@@ -56,6 +56,8 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
     spm_execute_setup = FALSE,
     spm_execute_glm = FALSE,
     spm_execute_contrasts = FALSE,
+    estimation_method = "Classical",
+    write_residuals = FALSE,
     spm_path = "/gpfs/group/mnh5174/default/lab_resources/spm12",
     matlab_cmd = "matlab",
     matlab_args = "-batch",
@@ -214,14 +216,17 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
     }
 
     # estimation
+    method_label <- normalize_spm_estimation_method(spm_settings$estimation_method)
+    write_residuals <- normalize_spm_write_residuals(spm_settings$write_residuals, method_label)
+
     baseobj_est <- paste0("matlabbatch{1}.spm.stats.fmri_est")
     m_est <- c(
       spm_preamble,
       "matlabbatch = []; %initialize empty structure",
       "% ESTIMATE MODEL",
       paste0(baseobj_est, ".spmmat = { [ '", spm_l3_output_dir, "' filesep 'SPM.mat']};"),
-      paste0(baseobj_est, ".write_residuals = 0;"),
-      paste0(baseobj_est, ".method.Classical = 1;"),
+      paste0(baseobj_est, ".write_residuals = ", ifelse(isTRUE(write_residuals), 1, 0), ";"),
+      paste0(baseobj_est, ".method.", method_label, " = 1;"),
       "spm_jobman('run',matlabbatch);"
     )
     cat(m_est, file = file.path(spm_l3_output_dir, "run_l3_glm.m"), sep = "\n")
