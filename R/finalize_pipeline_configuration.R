@@ -183,6 +183,7 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
     run_l3_setup = TRUE,
     run_l3_glm = TRUE,
     run_l3_contrasts = TRUE,
+    print_spm_run_instructions = FALSE,
     require_matlab = FALSE,
     matlab_cmd = "matlab",
     matlab_args = "-batch",
@@ -411,6 +412,8 @@ setup_output_locations <- function(gpa, lg = NULL) {
       "l2c-{l2_cope_name}_l3c-{l3_cope_name}",
       "l3c-{l3_cope_name}"
     ),
+    spm_l3_combined_filename = file.path("{gpa$output_directory}", "spm_l3_combined", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}_stats"),
+    spm_l3_combined_briknames = "l3c-{l3_cope_name}",
     scheduler_scripts = file.path(gpa$output_directory, "scheduler_scripts"),
     sqlite_db = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".sqlite")),
     project_config_json = file.path(gpa$output_directory, "project_config.json"),

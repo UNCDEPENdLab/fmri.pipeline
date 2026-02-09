@@ -352,7 +352,7 @@ setup_l3_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
     return(l3_file_setup)
   }
 
-  fsl_df <- data.table::rbindlist(lapply(all_l3_list, "[[", "fsl"), fill = TRUE)
+  fsl_df <- dplyr::bind_rows(lapply(all_l3_list, "[[", "fsl"))
   list(
     metadata = l3_cope_config,
     data = fsl_df,
@@ -420,7 +420,7 @@ setup_l3_backend_spm <- function(gpa, backend, lg, l1_model_names, l2_model_name
     return(l3_file_setup)
   }
 
-  spm_df <- data.table::rbindlist(lapply(all_spm_list, "[[", "spm"), fill = TRUE)
+  spm_df <- dplyr::bind_rows(lapply(all_spm_list, "[[", "spm"))
   list(
     metadata = spm_cope_config,
     data = spm_df,
@@ -443,7 +443,7 @@ get_l1_cope_df <- function(gpa, model_set, subj_df=NULL) {
       dplyr::select(id, session)
   }
   checkmate::assert_data_frame(model_set)
-  dt <- data.table::rbindlist(
+  dt <- dplyr::bind_rows(
     lapply(unique(model_set$l1_model), function(mm) {
       data.frame(
         l1_model = mm,
@@ -468,11 +468,11 @@ get_l2_cope_df <- function(gpa, model_set, subj_df=NULL) {
   }
   checkmate::assert_data_frame(model_set)
 
-  data.table::rbindlist(
+  dplyr::bind_rows(
     lapply(unique(model_set$l2_model), function(mm) {
       if (!is.null(gpa$l2_models$models[[mm]]$by_subject)) {
         # combine as single data frame from nested list columns
-        l2_df <- rbindlist(gpa$l2_models$models[[mm]]$by_subject$cope_list)
+        l2_df <- dplyr::bind_rows(gpa$l2_models$models[[mm]]$by_subject$cope_list)
         l2_df$l2_model <- mm #retain model name
       } else {
         cope_names <- rownames(gpa$l2_models$models[[mm]]$contrasts)
@@ -496,7 +496,7 @@ get_l3_cope_df <- function(gpa, model_set, subj_df=NULL) {
       dplyr::select(id, session)
   }
   checkmate::assert_data_frame(model_set)
-  dt <- data.table::rbindlist(
+  dt <- dplyr::bind_rows(
     lapply(unique(model_set$l3_model), function(mm) {
       cope_names <- rownames(gpa$l3_models$models[[mm]]$contrasts)
       data.frame(
@@ -651,6 +651,13 @@ get_spm_l3_inputs <- function(gpa, l3_cope_config, lg = NULL) {
   if (!"spm_dir" %in% names(spm_inputs)) {
     lg$warn("No spm_dir column in gpa$l1_model_setup$spm. Cannot setup SPM L3 models.")
     return(list())
+  }
+
+  if ("spm_complete" %in% names(spm_inputs)) {
+    spm_inputs <- spm_inputs %>%
+      dplyr::filter(spm_complete == TRUE)
+  } else {
+    lg$warn("No spm_complete column in gpa$l1_model_setup$spm. Proceeding without completion filter for L3 inputs.")
   }
 
   if ("spm_contrast_exists" %in% names(spm_inputs)) {

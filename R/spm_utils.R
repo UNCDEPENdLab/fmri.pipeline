@@ -345,6 +345,358 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
   return(joblist)
 }
 
+#' Combine SPM L3 outputs into AFNI BRIK+HEAD files for visualization
+#'
+#' @param gpa a glm_pipeline_arguments object having a populated l3_model_setup field.
+#' @param spm_l3_combined_filename a glue expression for the path and filename prefix.
+#' @param spm_l3_combined_briknames a glue expression for naming the subbriks in the AFNI output.
+#' @param template_brain an optional filename for the MNI template that should be used as an underlay in AFNI.
+#' @details This function mirrors the logic of combine_feat_l3_to_afni, but for SPM L3 outputs. It detects
+#'   contrast maps (con_*.nii) and statistic maps (spmT_*.nii / spmF_*.nii) and concatenates them into AFNI
+#'   BRIK/HEAD files with informative labels.
+#' @return A data.frame describing the images that were combined.
+#' @export
+#' @importFrom glue glue_data
+#' @importFrom tidyr unnest
+combine_spm_l3_to_afni <- function(gpa, spm_l3_combined_filename=NULL, spm_l3_combined_briknames=NULL, template_brain=NULL) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  if (!is.null(template_brain)) {
+    checkmate::assert_file_exists(template_brain)
+    template_ext <- sub(".*(\\.nii(\\.gz)*)", "\\1", template_brain, perl=TRUE)
+  }
+
+  if (is.null(spm_l3_combined_filename) && !is.null(gpa$output_locations$spm_l3_combined_filename)) {
+    spm_l3_combined_filename <- gpa$output_locations$spm_l3_combined_filename
+  }
+
+  if (is.null(spm_l3_combined_briknames) && !is.null(gpa$output_locations$spm_l3_combined_briknames)) {
+    spm_l3_combined_briknames <- gpa$output_locations$spm_l3_combined_briknames
+  }
+
+  if (is.null(spm_l3_combined_filename) || is.null(spm_l3_combined_briknames)) {
+    stop("spm_l3_combined_filename and spm_l3_combined_briknames must be provided (or present in gpa$output_locations).")
+  }
+
+  checkmate::assert_string(spm_l3_combined_filename)
+  checkmate::assert_string(spm_l3_combined_briknames)
+
+  if (is.null(gpa$l3_model_setup$spm) || nrow(gpa$l3_model_setup$spm) == 0L) {
+    stop("No SPM L3 model setup found in gpa$l3_model_setup$spm.")
+  }
+
+  lg <- lgr::get_logger("glm_pipeline/combine_spm_l3_to_afni")
+  lg$set_threshold(gpa$lgr_threshold)
+
+  meta_df <- gpa$l3_model_setup$spm %>%
+    dplyr::select(l1_model, l1_cope_name, l3_model, spm_dir)
+
+  meta_df$contrast_df <- lapply(meta_df$spm_dir, spm_l3_collect_contrasts, lg = lg)
+  meta_df <- meta_df %>% unnest(contrast_df, keep_empty = FALSE)
+
+  if (nrow(meta_df) == 0L) {
+    lg$warn("No SPM L3 contrasts found for AFNI combination.")
+    return(meta_df)
+  }
+
+  meta_df <- meta_df %>%
+    dplyr::mutate(
+      afni_out = glue_data(., !!spm_l3_combined_filename),
+      afni_briks = glue_data(., !!spm_l3_combined_briknames)
+    )
+
+  meta_split <- split(meta_df, meta_df$afni_out)
+
+  lapply(meta_split, function(ss) {
+    afni_out_base <- sub("(\\+tlrc|\\+orig)$", "", ss$afni_out[1]) # avoid forcing space; let AFNI decide
+    afni_dir <- dirname(afni_out_base)
+    if (!dir.exists(afni_dir)) {
+      dir.create(afni_dir, recursive = TRUE)
+      if (!is.null(template_brain)) file.symlink(template_brain, file.path(afni_dir, paste0("template_brain", template_ext)))
+    }
+
+    # build long-form list of images (contrast then statistic)
+    long_df <- rbind(
+      data.frame(
+        image_type = "con",
+        stat = ss$stat,
+        df1 = ss$df1,
+        df2 = ss$df2,
+        afni_briks = ss$afni_briks,
+        nii_file = ss$con_file,
+        stringsAsFactors = FALSE
+      ),
+      data.frame(
+        image_type = ifelse(ss$stat == "F", "spmF", "spmT"),
+        stat = ss$stat,
+        df1 = ss$df1,
+        df2 = ss$df2,
+        afni_briks = ss$afni_briks,
+        nii_file = ss$stat_file,
+        stringsAsFactors = FALSE
+      )
+    )
+
+    long_df <- long_df %>%
+      dplyr::filter(!is.na(nii_file) & file.exists(nii_file))
+
+    if (nrow(long_df) == 0L) {
+      lg$warn("No images found for AFNI combination in: %s", afni_out)
+      return(NULL)
+    }
+
+    tcatcall <- paste("3dTcat -overwrite -prefix", afni_out_base, paste(long_df$nii_file, collapse = " "))
+    run_afni_command(tcatcall)
+
+    # resolve actual AFNI output view
+    if (file.exists(paste0(afni_out_base, "+tlrc.HEAD"))) {
+      afni_out <- paste0(afni_out_base, "+tlrc")
+    } else {
+      afni_out <- paste0(afni_out_base, "+orig")
+    }
+
+    # tack on statistic type as suffix to sub-brik name (avoid ambiguity)
+    long_df$afni_briks <- paste(long_df$afni_briks, long_df$image_type, sep = "_")
+
+    refit_parts <- c("3drefit -fbuc")
+    stat_idx <- which(long_df$image_type %in% c("spmT", "spmF")) - 1
+    if (length(stat_idx) > 0L) {
+      for (ii in seq_along(stat_idx)) {
+        row <- long_df[stat_idx[ii] + 1, , drop = FALSE]
+        if (row$stat == "T" && is.finite(row$df1)) {
+          refit_parts <- c(refit_parts, paste("-substatpar", stat_idx[ii], "fitt", row$df1))
+        } else if (row$stat == "F" && is.finite(row$df1) && is.finite(row$df2)) {
+          refit_parts <- c(refit_parts, paste("-substatpar", stat_idx[ii], "fift", row$df1, row$df2))
+        }
+      }
+    }
+
+    refitcall <- paste0(
+      paste(refit_parts, collapse = " "),
+      " -relabel_all_str '", paste(long_df$afni_briks, collapse = " "), "' ", afni_out
+    )
+    run_afni_command(refitcall)
+  })
+
+  return(meta_df)
+}
+
+spm_l3_collect_contrasts <- function(spm_dir, lg = NULL) {
+  checkmate::assert_string(spm_dir)
+  if (is.null(lg)) lg <- lgr::get_logger()
+
+  xcon_df <- spm_l3_read_xcon(spm_dir, lg = lg)
+  if (is.null(xcon_df) || nrow(xcon_df) == 0L) {
+    xcon_df <- spm_l3_parse_contrast_script(spm_dir, lg = lg)
+  }
+  if (is.null(xcon_df) || nrow(xcon_df) == 0L) {
+    xcon_df <- spm_l3_contrasts_from_files(spm_dir, lg = lg)
+  }
+
+  if (is.null(xcon_df) || nrow(xcon_df) == 0L) {
+    return(data.frame())
+  }
+
+  # ensure files are set
+  xcon_df$con_file <- ifelse(
+    !is.na(xcon_df$con_file), xcon_df$con_file,
+    sapply(xcon_df$l3_cope_number, function(ii) spm_find_file(spm_dir, sprintf("con_%04d.nii", ii)))
+  )
+
+  xcon_df$stat_file <- ifelse(
+    !is.na(xcon_df$stat_file), xcon_df$stat_file,
+    sapply(seq_len(nrow(xcon_df)), function(i) {
+      stat <- xcon_df$stat[i]
+      base <- ifelse(stat == "F", sprintf("spmF_%04d.nii", xcon_df$l3_cope_number[i]),
+                     sprintf("spmT_%04d.nii", xcon_df$l3_cope_number[i]))
+      spm_find_file(spm_dir, base)
+    })
+  )
+
+  return(xcon_df)
+}
+
+spm_l3_read_xcon <- function(spm_dir, lg = NULL) {
+  spm_mat <- file.path(spm_dir, "SPM.mat")
+  if (!file.exists(spm_mat)) return(NULL)
+  if (is.null(lg)) lg <- lgr::get_logger()
+
+  res <- tryCatch({
+    mat <- R.matlab::readMat(spm_mat, fixNames = FALSE)
+    spm <- mat$SPM
+    if (is.null(spm) || is.null(spm$xCon)) return(NULL)
+    spm_xcon_to_df(spm$xCon, spm_dir)
+  }, error = function(e) {
+    lg$debug("Failed to read SPM.mat contrasts in %s: %s", spm_dir, as.character(e))
+    return(NULL)
+  })
+
+  return(res)
+}
+
+spm_xcon_to_df <- function(xcon, spm_dir) {
+  if (is.null(xcon)) return(NULL)
+
+  # case 1: struct fields are named lists
+  if (is.list(xcon) && !is.null(names(xcon)) && all(c("name", "STAT") %in% names(xcon))) {
+    n <- length(xcon$name)
+    out <- lapply(seq_len(n), function(i) {
+      name <- spm_matlab_to_string(spm_get_index(xcon$name, i))
+      stat <- spm_matlab_to_string(spm_get_index(xcon$STAT, i))
+      df <- spm_get_index(xcon$df, i)
+      vcon <- spm_get_struct_field(xcon$Vcon, i, "fname")
+      vspm <- spm_get_struct_field(xcon$Vspm, i, "fname")
+      data.frame(
+        l3_cope_number = i,
+        l3_cope_name = ifelse(is.na(name), paste0("contrast_", i), name),
+        stat = ifelse(is.na(stat) || stat == "", "T", stat),
+        df1 = ifelse(length(df) >= 1, as.numeric(df[1]), NA_real_),
+        df2 = ifelse(length(df) >= 2, as.numeric(df[2]), NA_real_),
+        con_file = ifelse(is.na(vcon), NA_character_, spm_find_file(spm_dir, vcon)),
+        stat_file = ifelse(is.na(vspm), NA_character_, spm_find_file(spm_dir, vspm)),
+        stringsAsFactors = FALSE
+      )
+    })
+    return(dplyr::bind_rows(out))
+  }
+
+  # case 2: list of structs
+  if (is.list(xcon) && length(xcon) > 0L && is.list(xcon[[1]])) {
+    out <- lapply(seq_along(xcon), function(i) {
+      xi <- xcon[[i]]
+      name <- spm_matlab_to_string(xi$name)
+      stat <- spm_matlab_to_string(xi$STAT)
+      df <- xi$df
+      vcon <- spm_matlab_to_string(spm_get_struct_field(xi$Vcon, 1, "fname"))
+      vspm <- spm_matlab_to_string(spm_get_struct_field(xi$Vspm, 1, "fname"))
+      data.frame(
+        l3_cope_number = i,
+        l3_cope_name = ifelse(is.na(name), paste0("contrast_", i), name),
+        stat = ifelse(is.na(stat) || stat == "", "T", stat),
+        df1 = ifelse(length(df) >= 1, as.numeric(df[1]), NA_real_),
+        df2 = ifelse(length(df) >= 2, as.numeric(df[2]), NA_real_),
+        con_file = ifelse(is.na(vcon), NA_character_, spm_find_file(spm_dir, vcon)),
+        stat_file = ifelse(is.na(vspm), NA_character_, spm_find_file(spm_dir, vspm)),
+        stringsAsFactors = FALSE
+      )
+    })
+    return(dplyr::bind_rows(out))
+  }
+
+  return(NULL)
+}
+
+spm_l3_parse_contrast_script <- function(spm_dir, lg = NULL) {
+  if (is.null(lg)) lg <- lgr::get_logger()
+  script <- file.path(spm_dir, "estimate_l3_contrasts.m")
+  if (!file.exists(script)) return(NULL)
+
+  lines <- readLines(script, warn = FALSE)
+  rx <- "consess\\{(\\d+)\\}\\.(tcon|fcon)\\.name\\s*=\\s*'([^']*)'"
+  m <- regmatches(lines, gregexpr(rx, lines, perl = TRUE))
+  hits <- unlist(m)
+  if (length(hits) == 0L) return(NULL)
+
+  parse_hit <- function(x) {
+    parts <- sub(rx, "\\1|\\2|\\3", x, perl = TRUE)
+    parts <- strsplit(parts, "\\|", fixed = FALSE)[[1]]
+    data.frame(
+      l3_cope_number = as.integer(parts[1]),
+      l3_cope_name = parts[3],
+      stat = ifelse(parts[2] == "fcon", "F", "T"),
+      df1 = NA_real_,
+      df2 = NA_real_,
+      con_file = NA_character_,
+      stat_file = NA_character_,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  out <- dplyr::bind_rows(lapply(hits, parse_hit))
+  out <- out[order(out$l3_cope_number), , drop = FALSE]
+  return(out)
+}
+
+spm_l3_contrasts_from_files <- function(spm_dir, lg = NULL) {
+  if (is.null(lg)) lg <- lgr::get_logger()
+  con_files <- list.files(spm_dir, pattern = "^con_\\d+\\.nii(\\.gz)?$", full.names = TRUE)
+  spmT_files <- list.files(spm_dir, pattern = "^spmT_\\d+\\.nii(\\.gz)?$", full.names = TRUE)
+  spmF_files <- list.files(spm_dir, pattern = "^spmF_\\d+\\.nii(\\.gz)?$", full.names = TRUE)
+
+  get_num <- function(x, prefix) as.integer(sub(paste0("^", prefix, "_(\\d+).*"), "\\1", basename(x)))
+  nums <- unique(c(get_num(con_files, "con"), get_num(spmT_files, "spmT"), get_num(spmF_files, "spmF")))
+  nums <- nums[!is.na(nums)]
+  if (length(nums) == 0L) return(NULL)
+  nums <- sort(nums)
+
+  out <- lapply(nums, function(ii) {
+    stat <- if (any(grepl(sprintf("^spmF_%04d", ii), basename(spmF_files)))) "F" else "T"
+    data.frame(
+      l3_cope_number = ii,
+      l3_cope_name = paste0("contrast_", ii),
+      stat = stat,
+      df1 = NA_real_,
+      df2 = NA_real_,
+      con_file = NA_character_,
+      stat_file = NA_character_,
+      stringsAsFactors = FALSE
+    )
+  })
+
+  dplyr::bind_rows(out)
+}
+
+spm_find_file <- function(spm_dir, fname) {
+  if (is.null(fname) || !nzchar(fname)) return(NA_character_)
+  cand <- file.path(spm_dir, fname)
+  if (file.exists(cand)) return(cand)
+  cand_gz <- paste0(cand, ".gz")
+  if (file.exists(cand_gz)) return(cand_gz)
+  cand_gz2 <- sub("\\.nii$", ".nii.gz", cand)
+  if (file.exists(cand_gz2)) return(cand_gz2)
+  return(cand)
+}
+
+spm_get_index <- function(x, i) {
+  if (is.null(x)) return(NULL)
+  if (is.list(x)) {
+    if (length(x) >= i) return(x[[i]])
+  }
+  if (is.matrix(x)) {
+    if (nrow(x) >= i) return(x[i, , drop = TRUE])
+  }
+  if (length(x) >= i) return(x[i])
+  return(NULL)
+}
+
+spm_get_struct_field <- function(x, i, field) {
+  if (is.null(x)) return(NULL)
+  if (is.list(x) && !is.null(names(x)) && field %in% names(x)) {
+    return(spm_get_index(x[[field]], i))
+  }
+  if (is.list(x) && length(x) >= i) {
+    xi <- x[[i]]
+    if (is.list(xi) && field %in% names(xi)) return(xi[[field]])
+  }
+  return(NULL)
+}
+
+spm_matlab_to_string <- function(x) {
+  if (is.null(x)) return(NA_character_)
+  if (is.character(x)) {
+    if (is.matrix(x)) return(paste(x, collapse = ""))
+    if (length(x) == 1L) return(x)
+    if (all(nchar(x) == 1)) return(paste(x, collapse = ""))
+    return(x[1])
+  }
+  if (is.numeric(x)) {
+    x <- x[!is.na(x) & x != 0]
+    if (length(x) == 0L) return(NA_character_)
+    return(paste(intToUtf8(x), collapse = ""))
+  }
+  if (is.list(x) && length(x) == 1L) return(spm_matlab_to_string(x[[1]]))
+  return(as.character(x[1]))
+}
+
 #' This is a wrapper around the spm_extract_anatomical_rois.m script in the inst directory
 #'
 #' @param l1spmdirs character vector of level 1 SPM directories containing SPM.mat files

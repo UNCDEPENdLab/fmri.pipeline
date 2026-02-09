@@ -296,7 +296,7 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
     return(l2_file_setup)
   }
 
-  fsl_df <- data.table::rbindlist(lapply(all_l2_list, "[[", "fsl"), fill = TRUE)
+  fsl_df <- dplyr::bind_rows(lapply(all_l2_list, "[[", "fsl"))
   list(
     data = fsl_df,
     id_cols = c("id", "session", "l1_model", "l2_model")

@@ -58,6 +58,7 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
     spm_execute_contrasts = FALSE,
     estimation_method = "Classical",
     write_residuals = FALSE,
+    print_spm_run_instructions = FALSE,
     spm_path = "/gpfs/group/mnh5174/default/lab_resources/spm12",
     matlab_cmd = "matlab",
     matlab_args = "-batch",
@@ -116,7 +117,8 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
   }
 
   spm_status <- get_spm_status(spm_l3_output_dir, lg = lg)
-  if (isTRUE(spm_status$spm_mat_exists) && isFALSE(spm_settings$force_l3_creation)) {
+  force_l3_creation <- isTRUE(spm_settings$force_l3_creation) || isTRUE(spm_status$spm_failed)
+  if (isTRUE(spm_status$spm_mat_exists) && isFALSE(force_l3_creation)) {
     lg$info("SPM.mat exists in %s. Skipping SPM L3 setup (force_l3_creation = FALSE).", spm_l3_output_dir)
   } else {
     # determine whether to use one-sample or multiple regression
@@ -161,17 +163,22 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
     )
 
     scan_block <- c("{", paste0("'", con_files, ",1'"), "};")
+    scan_block_first <- scan_block[1L]
+    scan_block_rest <- scan_block[-1L]
 
     if (model_type == "one_sample") {
       m_string <- c(
         m_string,
-        paste0(baseobj, ".des.t1.scans = "), scan_block,
-        paste0(baseobj, ".des.t1.gmsca = 0;"),
-        paste0(baseobj, ".des.t1.ancova = 0;")
+        paste0(baseobj, ".des.t1.scans = ", scan_block_first),
+        scan_block_rest
       )
     } else {
       # multiple regression: use model_matrix columns as covariates to preserve exact design
-      m_string <- c(m_string, paste0(baseobj, ".des.mreg.scans = "), scan_block)
+      m_string <- c(
+        m_string,
+        paste0(baseobj, ".des.mreg.scans = ", scan_block_first),
+        scan_block_rest
+      )
       for (cc in seq_along(regressors)) {
         cname <- make.names(regressors[cc])
         cvec <- mobj$model_matrix[, cc]
@@ -189,8 +196,8 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
     # common design settings
     m_string <- c(
       m_string,
-      paste0(baseobj, ".cov = struct('c', {}, 'cname', {}, 'iCFT', {}, 'iCC', {});"),
-      paste0(baseobj, ".multi_cov = {''};"),
+      paste0(baseobj, ".cov = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});"),
+      paste0(baseobj, ".multi_cov = struct('files', {}, 'iCFI', {}, 'iCC', {});"),
       paste0(baseobj, ".masking.tm.tm_none = 1;"),
       paste0(baseobj, ".masking.im = 1;"),
       paste0(baseobj, ".masking.em = {''};"),
@@ -212,7 +219,12 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
     if (isTRUE(spm_settings$spm_execute_l3_setup) || isTRUE(spm_settings$spm_execute_setup)) {
       system(build_shell_call(file.path(spm_l3_output_dir, "setup_l3_design.m")))
     } else {
-      message("To run SPM L3 design setup, execute: ", build_shell_call(file.path(spm_l3_output_dir, "setup_l3_design.m")))
+      cmd <- build_shell_call(file.path(spm_l3_output_dir, "setup_l3_design.m"))
+      if (isTRUE(spm_settings$print_spm_run_instructions)) {
+        message("To run SPM L3 design setup, execute: ", cmd)
+      } else {
+        lg$debug("To run SPM L3 design setup, execute: %s", cmd)
+      }
     }
 
     # estimation
@@ -234,7 +246,12 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
     if (isTRUE(spm_settings$spm_execute_l3_glm) || isTRUE(spm_settings$spm_execute_glm)) {
       system(build_shell_call(file.path(spm_l3_output_dir, "run_l3_glm.m")))
     } else {
-      message("To estimate SPM L3 GLM, execute: ", build_shell_call(file.path(spm_l3_output_dir, "run_l3_glm.m")))
+      cmd <- build_shell_call(file.path(spm_l3_output_dir, "run_l3_glm.m"))
+      if (isTRUE(spm_settings$print_spm_run_instructions)) {
+        message("To estimate SPM L3 GLM, execute: ", cmd)
+      } else {
+        lg$debug("To estimate SPM L3 GLM, execute: %s", cmd)
+      }
     }
 
     # contrasts
@@ -257,18 +274,28 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
         )
       }
 
-      m_con <- c(m_con, paste0(baseobj_con, ".delete = 0;"))
+      m_con <- c(
+        m_con,
+        paste0(baseobj_con, ".delete = 0;"),
+        "spm_jobman('run',matlabbatch);"
+      )
       cat(m_con, file = file.path(spm_l3_output_dir, "estimate_l3_contrasts.m"), sep = "\n")
 
       if (isTRUE(spm_settings$spm_execute_l3_contrasts) || isTRUE(spm_settings$spm_execute_contrasts)) {
         system(build_shell_call(file.path(spm_l3_output_dir, "estimate_l3_contrasts.m")))
       } else {
-        message("To estimate SPM L3 contrasts, execute: ", build_shell_call(file.path(spm_l3_output_dir, "estimate_l3_contrasts.m")))
+        cmd <- build_shell_call(file.path(spm_l3_output_dir, "estimate_l3_contrasts.m"))
+        if (isTRUE(spm_settings$print_spm_run_instructions)) {
+          message("To estimate SPM L3 contrasts, execute: ", cmd)
+        } else {
+          lg$debug("To estimate SPM L3 contrasts, execute: %s", cmd)
+        }
       }
     }
   }
 
   spm_status <- get_spm_status(spm_l3_output_dir, lg = lg)
+  spm_l3_df$spm_dir <- spm_l3_output_dir
   spm_l3_df <- cbind(spm_l3_df, spm_status)
   spm_l3_df$to_run <- !spm_l3_df$spm_complete
 

@@ -74,6 +74,10 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
 #'   and be located in a folder like: /proj/mnhallqlab/proc_data/sub-220256/func/
 #'   where 'func' is the \code{modality}, 'ridl' is the \code{task_name}, and
 #'   '_postprocessed' is the \code{suffix}.
+#'   If the expected \code{modality} folder is missing, the function will also
+#'   search session-level folders (e.g., \code{sub-<id>/ses-<id>/}) or the subject
+#'   root for NIfTI files, and fall back to any \code{.nii/.nii.gz} files found
+#'   directly in those directories.
 #' @importFrom dplyr bind_rows
 #' @export
 #' @examples 
@@ -89,6 +93,20 @@ generate_run_data_from_bids <- function(bids_dir, modality="func", task_name="ri
   checkmate::assert_string(suffix, na.ok = TRUE, null.ok = TRUE)
   checkmate::assert_string(space, na.ok=TRUE, null.ok=TRUE)
   sub_dirs <- grep("^.*/?sub-", list.dirs(bids_dir, recursive = FALSE), value = TRUE)
+
+  find_search_dirs <- function(ss, modality) {
+    ses_dirs <- list.dirs(ss, recursive = FALSE, full.names = TRUE)
+    ses_dirs <- ses_dirs[grepl("/ses-", ses_dirs)]
+    if (length(ses_dirs) > 0L) {
+      dirs <- vapply(ses_dirs, function(sd) {
+        mod_dir <- file.path(sd, modality)
+        if (dir.exists(mod_dir)) mod_dir else sd
+      }, character(1))
+      return(unique(dirs))
+    }
+    mod_dir <- file.path(ss, modality)
+    if (dir.exists(mod_dir)) mod_dir else ss
+  }
 
   slist <- lapply(sub_dirs, function(ss) {
     id <- sub("^sub-", "", basename(ss))
@@ -134,12 +152,6 @@ generate_run_data_from_bids <- function(bids_dir, modality="func", task_name="ri
       se_neg <- NA_character_
     }
 
-    expect_dir <- file.path(ss, modality)
-    if (!checkmate::test_directory_exists(expect_dir)) {
-      warning(glue("Cannot find expected modality directory: {expect_dir}"))
-      return(NULL)
-    }
-
     if (!is.null(desc) && !is.na(desc)) desc <- paste0("_desc-", desc) else desc <- ""
     if (!is.null(suffix) && !is.na(suffix)) {
       if (!substr(suffix, 1, 1) == "_") suffix <- paste0("_", suffix)
@@ -150,23 +162,39 @@ generate_run_data_from_bids <- function(bids_dir, modality="func", task_name="ri
     if (!is.null(space) && !is.na(space)) space <- paste0("_space-", space) else space <- ""
       
 
-    pattern <- glue("^sub-\\d+(_ses-\\d+)?_task-{task_name}(_run-\\d+)?.*{space}.*{desc}.*{suffix}\\.nii(\\.gz)?$")
-    # Recursively search for matching NIfTI files in the BIDS directory
-    nii_files <- list.files(path = expect_dir, pattern = pattern, recursive = TRUE, full.names = TRUE)
-
-    # I wonder if nii_files and confound_files could diverge in order, become mismatched
-    # nii_files <- Sys.glob(glue("{expect_dir}/sub*_task-{task_name}*{suffix}.nii.gz"))
-    if (length(nii_files) == 0L) {
-      warning(glue("No NIfTI file matches in: {expect_dir}"))
+    search_dirs <- find_search_dirs(ss, modality)
+    if (!checkmate::test_directory_exists(search_dirs[1L])) {
+      warning(glue("Cannot find expected modality/session directory under: {ss}"))
       return(NULL)
     }
+
+    all_rows <- list()
+    for (expect_dir in search_dirs) {
+      pattern <- glue("^sub-\\d+(_ses-\\d+)?_task-{task_name}(_run-\\d+)?.*{space}.*{desc}.*{suffix}\\.nii(\\.gz)?$")
+      # Recursively search for matching NIfTI files in the BIDS directory
+      nii_files <- list.files(path = expect_dir, pattern = pattern, recursive = TRUE, full.names = TRUE)
+      bids_found <- length(nii_files) > 0L
+
+      if (!bids_found) {
+        # fallback for non-BIDS layouts: look for .nii/.nii.gz in the directory itself
+        nii_files <- list.files(path = expect_dir, pattern = "\\.nii(\\.gz)?$", recursive = FALSE, full.names = TRUE)
+      }
+
+      if (length(nii_files) == 0L) {
+        warning(glue("No NIfTI file matches in: {expect_dir}"))
+        next
+      }
 
     # sbref_files <- Sys.glob(glue("{expect_dir}/sub*_task-{task_name}*sbref.nii.gz"))
     # sbref_files <- list.files(path = expect_dir, pattern = sub(pattern, recursive = TRUE, full.names = TRUE)
     #  (glue("{expect_dir}/sub*_task-{task_name}*sbref.nii.gz"))
 
-    sbref_files <- sub(suffix, "_sbref", nii_files)
-    sbref_files <- sapply(sbref_files, function(x) if (file.exists(x)) x else NA_character_, USE.NAMES=FALSE)
+      if (bids_found) {
+        sbref_files <- sub(suffix, "_sbref", nii_files)
+        sbref_files <- sapply(sbref_files, function(x) if (file.exists(x)) x else NA_character_, USE.NAMES=FALSE)
+      } else {
+        sbref_files <- rep(NA_character_, length(nii_files))
+      }
     
     # if (length(sbref_files) > 0L && length(nii_files) != length(sbref_files)) {
     #   warning(glue("Cannot align nifti and sbref files for {expect_dir}"))
@@ -175,34 +203,49 @@ generate_run_data_from_bids <- function(bids_dir, modality="func", task_name="ri
     #   sbref_files <- NA_character_
     # }
 
-    confound_files <- Sys.glob(glue("{expect_dir}/sub*_task-{task_name}*-confounds*.tsv"))
+      if (bids_found) {
+        confound_files <- list.files(path = expect_dir, pattern = glue("sub.*_task-{task_name}.*confounds.*\\.tsv$"), recursive = TRUE, full.names = TRUE)
+        if (length(confound_files) > 0L && length(nii_files) != length(confound_files)) {
+          warning(glue("Cannot align nifti and confound files for {expect_dir}"))
+          return(NULL)
+        } else if (length(confound_files) == 0L) {
+          confound_files <- rep(NA_character_, length(nii_files))
+        }
 
-    if (length(confound_files) > 0L && length(nii_files) != length(confound_files)) {
-      warning(glue("Cannot align nifti and confound files for {expect_dir}"))
-      return(NULL)
-    } else if (length(confound_files) == 0L) {
-      confound_files <- NA_character_
-    }
-
-    events_files <- Sys.glob(glue("{expect_dir}/sub*_task-{task_name}*_events*.tsv"))
-
-    if (length(events_files) > 0L && length(nii_files) != length(events_files)) {
-      warning(glue("Cannot align nifti and events files for {expect_dir}"))
-      return(NULL)
-    } else if (length(events_files) == 0L) {
-      events_files <- NA_character_
-    }
+        events_files <- list.files(path = expect_dir, pattern = glue("sub.*_task-{task_name}.*_events.*\\.tsv$"), recursive = TRUE, full.names = TRUE)
+        if (length(events_files) > 0L && length(nii_files) != length(events_files)) {
+          warning(glue("Cannot align nifti and events files for {expect_dir}"))
+          return(NULL)
+        } else if (length(events_files) == 0L) {
+          events_files <- rep(NA_character_, length(nii_files))
+        }
+      } else {
+        confound_files <- rep(NA_character_, length(nii_files))
+        events_files <- rep(NA_character_, length(nii_files))
+      }
 
     # if only one matching NIfTI is found, we likely have a single-run scenario and may not expect a run-<x> syntax
-    if (all(grepl(glue(".*sub-.*_task-{task_name}_run-\\d+.*"), nii_files, perl=TRUE))) {
-      run_number <- as.integer(sub(glue(".*sub-.*_task-{task_name}_run-(\\d+).*"), "\\1", nii_files, perl = TRUE))
-    } else if (length(nii_files) == 1L) {
-      run_number <- 1
-    } else {
-      warning(glue("Cannot parse run_number from these files: {paste(nii_files, collapse=' ')}"))
+      if (all(grepl(glue(".*sub-.*_task-{task_name}_run-\\d+.*"), nii_files, perl=TRUE))) {
+        run_number <- as.integer(sub(glue(".*sub-.*_task-{task_name}_run-(\\d+).*"), "\\1", nii_files, perl = TRUE))
+      } else if (length(nii_files) == 1L) {
+        run_number <- 1
+      } else {
+        run_number <- seq_along(nii_files)
+      }
+
+      all_rows[[length(all_rows) + 1L]] <- data.frame(
+        id, task_name, mr_dir, run_number,
+        run_nifti = nii_files,
+        sbref_nifti = sbref_files,
+        confound_input_file = confound_files,
+        events_file = events_files,
+        t1w, se_pos, se_neg,
+        stringsAsFactors = FALSE
+      )
     }
 
-    data.frame(id, task_name, mr_dir, run_number, run_nifti = nii_files, sbref_nifti = sbref_files, confound_input_file = confound_files, events_file=events_files, t1w, se_pos, se_neg)
+    if (length(all_rows) == 0L) return(NULL)
+    dplyr::bind_rows(all_rows)
   })
 
   dplyr::bind_rows(slist)

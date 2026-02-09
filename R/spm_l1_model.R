@@ -176,6 +176,7 @@ spm_l1_model <- function(
   spm_syntax <- NULL
   if (isTRUE(spm_status$spm_mat_exists) && isFALSE(spm_settings$force_l1_creation)) {
     lg$info("SPM.mat exists in %s. Skipping SPM design setup (force_l1_creation = FALSE).", spm_l1_output_dir)
+    spm_syntax <- list(gunzip_cmds = character(0), contrast_cmds = NULL)
   } else {
     lg$info("Generating SPM batch scripts for model: %s", model_name)
     spm_syntax <- tryCatch(

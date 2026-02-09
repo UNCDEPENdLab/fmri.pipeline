@@ -102,10 +102,8 @@ get_glm_backends <- function(gpa, must_exist = TRUE) {
   specs <- gpa$glm_backend_specs
   if (is.null(specs)) specs <- default_glm_backend_specs()
 
-  resolved <- gpa$glm_backends
-  if (is.null(resolved)) {
-    resolved <- resolve_glm_backends(specs)
-  }
+  # Always resolve lazily from specs to avoid persisting stale function handles
+  resolved <- resolve_glm_backends(specs)
 
   out <- list()
   for (name in glm_software) {
@@ -126,6 +124,7 @@ initialize_glm_backends <- function(gpa) {
   if (is.null(gpa$glm_backend_specs)) {
     gpa$glm_backend_specs <- default_glm_backend_specs()
   }
-  gpa$glm_backends <- resolve_glm_backends(gpa$glm_backend_specs)
+  # Do not persist function handles in the gpa object
+  gpa$glm_backends <- NULL
   gpa
 }

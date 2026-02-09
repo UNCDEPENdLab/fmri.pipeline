@@ -1918,6 +1918,7 @@ check_nums <- function(inp, lower = 0, upper = 1e10, as_string = TRUE) {
 #'   together using dplyr::bind_rows.
 #' @importFrom dplyr bind_rows across
 #' @importFrom tidyselect all_of
+#' @importFrom checkmate assert_character assert_data_frame assert_subset test_data_table
 #' @keywords internal
 update_df <- function(current = NULL, new = NULL, id_cols = NULL, sort = TRUE) {
   checkmate::assert_character(id_cols, any.missing = FALSE)
@@ -1933,6 +1934,10 @@ update_df <- function(current = NULL, new = NULL, id_cols = NULL, sort = TRUE) {
   }
 
   checkmate::assert_subset(id_cols, names(new)) # enforce all id columns in new
+
+  # data.table uses different subsetting semantics; normalize to data.frame
+  if (checkmate::test_data_table(current)) current <- as.data.frame(current)
+  if (checkmate::test_data_table(new)) new <- as.data.frame(new)
 
   id_list <- as.list(id_cols) # to make do.call happy
 
