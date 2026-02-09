@@ -49,8 +49,150 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
     mobj$contrast_list <- list()
   }
 
+  normalize_contrast_keys <- function(x, lg, allow_noncontrast = character(0)) {
+    if (is.null(x) || !checkmate::test_list(x)) return(x)
+    nm <- names(x)
+    if (is.null(nm)) return(x)
+
+    valid_keys <- c(
+      "diagonal", "cond_means", "pairwise_diffs", "cell_means",
+      "overall_response", "simple_slopes", "weights", "delete", "wi_contrasts"
+    )
+    alias_map <- c(
+      include_diagonal = "diagonal",
+      pairwise_diff = "pairwise_diffs",
+      cond_mean = "cond_means",
+      cell_mean = "cell_means",
+      overall_responses = "overall_response",
+      simple_slope = "simple_slopes",
+      wi_contrast = "wi_contrasts"
+    )
+
+    for (alias in names(alias_map)) {
+      if (alias %in% nm) {
+        target <- alias_map[[alias]]
+        if (target %in% nm) {
+          lg$warn("Contrast spec includes both '%s' and '%s'; using '%s'.", alias, target, target)
+          x[[alias]] <- NULL
+        } else {
+          lg$warn("Contrast spec uses legacy/alias '%s'; treating as '%s'.", alias, target)
+          x[[target]] <- x[[alias]]
+          x[[alias]] <- NULL
+        }
+      }
+    }
+
+    nm <- names(x)
+    unknown <- setdiff(nm, c(valid_keys, allow_noncontrast))
+    if (length(unknown) > 0L) {
+      stop(
+        "Unknown contrast field(s) in spec: ", paste(unknown, collapse = ", "),
+        ". Allowed: ", paste(valid_keys, collapse = ", "),
+        call. = FALSE
+      )
+    }
+
+    return(x)
+  }
+
+  # Allow YAML-style nesting under `contrasts:` and normalize legacy aliases.
+  if (!is.null(spec_list) && checkmate::test_list(spec_list)) {
+    if (!is.null(spec_list$contrasts) && checkmate::test_list(spec_list$contrasts)) {
+      spec_list$contrasts <- normalize_contrast_keys(spec_list$contrasts, lg)
+      spec_list <- utils::modifyList(spec_list, spec_list$contrasts)
+    }
+
+    spec_list <- normalize_contrast_keys(
+      spec_list,
+      lg,
+      allow_noncontrast = c(
+        "signals", "name", "level", "model_formula", "num2fac",
+        "covariate_transform", "reference_level", "contrasts", "fsl_outlier_deweighting"
+      )
+    )
+
+    spec_list$contrasts <- NULL
+  }
+
+  # Auto-add diagonal for intercept-only L2/L3 models to avoid interactive prompts.
+  if (is.null(mobj$contrast_spec) && mobj$level %in% c(2L, 3L) && !is.null(mobj$lmfit)) {
+    mm <- tryCatch(model.matrix(mobj$lmfit), error = function(e) NULL)
+    if (!is.null(mm) && ncol(mm) == 1L && colnames(mm)[1] == "(Intercept)") {
+      contrast_keys <- c(
+        "diagonal", "cond_means", "pairwise_diffs", "cell_means",
+        "overall_response", "simple_slopes", "weights", "delete", "wi_contrasts"
+      )
+      present_keys <- character(0)
+      if (!is.null(spec_list) && checkmate::test_list(spec_list)) {
+        present_keys <- intersect(names(spec_list), contrast_keys)
+      }
+      ignored_keys <- setdiff(present_keys, "diagonal")
+      if (length(ignored_keys) > 0L || isTRUE(isFALSE(spec_list$diagonal))) {
+        lg$warn(
+          "Intercept-only model detected; ignoring contrast fields (%s) and using diagonal contrast only.",
+          if (length(ignored_keys) > 0L) paste(ignored_keys, collapse = ", ") else "diagonal = FALSE"
+        )
+      }
+      lg$info("Intercept-only model detected at level %d; adding diagonal contrast automatically.", mobj$level)
+      mobj$regressors <- names(coef(mobj$lmfit))
+      mobj$contrast_spec <- list(
+        diagonal = TRUE,
+        cond_means = character(0),
+        pairwise_diffs = character(0),
+        cell_means = FALSE,
+        overall_response = FALSE,
+        simple_slopes = list(),
+        weights = "cells",
+        cat_vars = character(0),
+        regressors = mobj$regressors,
+        delete = character(0)
+      )
+      reg <- mobj$regressors
+      cmat <- diag(length(reg))
+      rownames(cmat) <- paste0("EV_", reg)
+      colnames(cmat) <- reg
+      rownames(cmat) <- gsub("(Intercept)", "Intercept", rownames(cmat), fixed = TRUE)
+      mobj$contrast_list <- list(diagonal = cmat)
+      mobj$contrasts <- cmat
+      return(mobj)
+    }
+  }
+
   prompt_contrasts <- FALSE
   if (!is.null(spec_list)) {
+    # If spec_list is malformed/empty, fall back to interactive prompts.
+    if (!checkmate::test_list(spec_list)) {
+      lg$warn("contrast spec_list is not a list; falling back to interactive contrast prompts.")
+      spec_list <- NULL
+    } else {
+      has_any_contrast_spec <- any(c(
+        "diagonal", "cond_means", "pairwise_diffs", "cell_means", "overall_response",
+        "simple_slopes", "weights", "delete", "wi_contrasts"
+      ) %in% names(spec_list))
+      if (!isTRUE(has_any_contrast_spec)) {
+        lg$warn("contrast spec_list is empty or missing contrast fields; falling back to interactive contrast prompts.")
+        spec_list <- NULL
+      }
+    }
+  }
+
+  if (!is.null(spec_list)) {
+    if (is.null(mobj$lmfit)) {
+      emmeans_fields <- c("cond_means", "pairwise_diffs", "cell_means", "overall_response", "simple_slopes")
+      has_emmeans_fields <- any(emmeans_fields %in% names(spec_list))
+      if (isTRUE(has_emmeans_fields)) {
+        lg$warn(
+          "Contrast spec includes emmeans-based fields (%s), but no model is available. Dropping them. For L1, use wi_contrasts on within-subject signals.",
+          paste(intersect(emmeans_fields, names(spec_list)), collapse = ", ")
+        )
+        spec_list$cond_means <- NULL
+        spec_list$pairwise_diffs <- NULL
+        spec_list$cell_means <- NULL
+        spec_list$overall_response <- NULL
+        spec_list$simple_slopes <- NULL
+      }
+    }
+
     if (!is.null(spec_list$diagonal)) {
       checkmate::assert_logical(spec_list$diagonal, len = 1L)
       include_diagonal <- spec_list$diagonal
@@ -105,10 +247,35 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
       cat_vars <- names(dclass[which(dclass %in% c("factor", "character"))])
     }
 
+    if (length(cat_vars) == 1L && isTRUE(spec_list$cell_means)) {
+      lg$info(
+        "cell_means requested with a single factor (%s); dropping because it duplicates cond_means.",
+        cat_vars
+      )
+      spec_list$cell_means <- FALSE
+      cell_means <- FALSE
+    }
+
     # now handle population of within-subject contrasts (wi_models)
 
     if (!is.null(spec_list$wi_contrasts)) {
       checkmate::assert_list(spec_list$wi_contrasts)
+      # Validate that wi_contrasts map to known signals with wi_factors.
+      if (is.null(signals)) {
+        stop("wi_contrasts were provided, but no signals list was passed to specify_contrasts.")
+      }
+      missing_signals <- setdiff(names(spec_list$wi_contrasts), names(signals))
+      if (length(missing_signals) > 0L) {
+        stop("wi_contrasts provided for unknown signals: ", paste(missing_signals, collapse = ", "))
+      }
+      no_wi_factors <- names(spec_list$wi_contrasts)[vapply(
+        names(spec_list$wi_contrasts),
+        function(sig) is.null(signals[[sig]]$wi_factors),
+        logical(1)
+      )]
+      if (length(no_wi_factors) > 0L) {
+        stop("wi_contrasts provided for signals without wi_factors: ", paste(no_wi_factors, collapse = ", "))
+      }
 
       for (ff in seq_along(spec_list$wi_contrasts)) {
         sig <- names(spec_list$wi_contrasts)[ff]

@@ -165,6 +165,37 @@ get_nifti_dim <- function(infile) {
     .Call(`_fmri_pipeline_get_nifti_dim`, infile)
 }
 
+#' Subset Timepoints from a 4D NIfTI Image
+#'
+#' This function keeps or removes specified timepoints (volumes) from a 4D NIfTI image
+#' and saves the resulting image to a new file. Timepoints are specified using 1-based
+#' indexing, consistent with R conventions.
+#'
+#' @name subset_nifti_volumes
+#' @param infile Character string. Path to the input 4D NIfTI file.
+#' @param tpts Integer vector. Timepoints (1-based) to remove or keep.
+#' @param mode Character string. Either "remove" or "keep".
+#' @param outfile Character string. Path to save the output NIfTI file with selected volumes.
+#'
+#' @return None. The function writes a new NIfTI file to \code{outfile}.
+#'
+#' @details This function uses the \code{volumes} argument in RNifti to efficiently read
+#' only the retained timepoints from disk. If all volumes are removed, an error is thrown.
+#' The input image must be 4-dimensional (i.e., include a time dimension).
+#'
+#' @examples
+#' \dontrun{
+#' subset_nifti_volumes("input_bold.nii.gz", tpts = c(1, 2, 100),
+#'   mode = "remove", outfile = "trimmed_bold.nii.gz")
+#' }
+#'
+#' @export
+NULL
+
+subset_nifti_volumes <- function(infile, tpts, mode, outfile) {
+    invisible(.Call(`_fmri_pipeline_subset_nifti_volumes`, infile, tpts, mode, outfile))
+}
+
 #' Sigmoid transform
 #'
 #' @name sigmoid

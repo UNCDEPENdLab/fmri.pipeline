@@ -37,6 +37,10 @@ The files should generally have a name like
   and be located in a folder like: /proj/mnhallqlab/proc_data/sub-220256/func/
   where 'func' is the \code{modality}, 'ridl' is the \code{task_name}, and
   '_postprocessed' is the \code{suffix}.
+  If the expected \code{modality} folder is missing, the function will also
+  search session-level folders (e.g., \code{sub-<id>/ses-<id>/}) or the subject
+  root for NIfTI files, and fall back to any \code{.nii/.nii.gz} files found
+  directly in those directories.
 }
 \examples{
 \dontrun{

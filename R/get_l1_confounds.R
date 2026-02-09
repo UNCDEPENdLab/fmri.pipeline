@@ -186,6 +186,22 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   spikes <- compute_spike_regressors(motion_df, gpa$confound_settings$spike_volumes, lg = lg)
   if (!is.null(spikes)) all_confounds <- cbind(all_confounds, spikes)
 
+  # persist confound column metadata for downstream concatenation
+  if (is.null(names(all_confounds)) || any(!nzchar(names(all_confounds)))) {
+    names(all_confounds) <- paste0("V", seq_len(ncol(all_confounds)))
+  }
+  names(all_confounds) <- make.unique(names(all_confounds))
+  confound_cols <- data.frame(
+    col_index = seq_along(names(all_confounds)),
+    col_name = names(all_confounds),
+    is_spike = grepl("_spike_", names(all_confounds)),
+    stringsAsFactors = FALSE
+  )
+  insert_df_sqlite(gpa,
+    id = id, session = session, run_number = run_number,
+    data = confound_cols, table = "l1_confound_columns", immediate = TRUE
+  )
+
   lg$debug("Writing l1 confounds to file: %s", expected_l1_confound_file)
   write.table(all_confounds, file = expected_l1_confound_file, row.names = FALSE, col.names = FALSE)
   run_df$l1_confound_file <- expected_l1_confound_file
@@ -410,6 +426,9 @@ test_exclude_run <- function(gpa, id, session, run_number, generate_run_exclusio
     suffix <- if (extra > 0L) paste0(" ... +", extra, " more") else ""
     paste0(paste(sample_cols, collapse = ", "), suffix)
   }
+
+  exclude_run <- FALSE
+  exclude_data <- data.frame()
 
   # calculate whether to retain or exclude this run
   if (isTRUE(generate_run_exclusion) && !is.null(gpa$confound_settings$exclude_run)) {

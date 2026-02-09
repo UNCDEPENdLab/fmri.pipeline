@@ -5,7 +5,12 @@
 \title{This function generates the inputs for an FSL level 2 analysis, where multiple runs for a subject are combined using
 fixed effects estimation.}
 \usage{
-setup_l2_models(gpa, l1_model_names = NULL, l2_model_names = NULL)
+setup_l2_models(
+  gpa,
+  l1_model_names = NULL,
+  l2_model_names = NULL,
+  backend = NULL
+)
 }
 \arguments{
 \item{gpa}{a \code{glm_pipeline_arguments} object containing analysis speecification}
@@ -15,6 +20,9 @@ specified, all models in gpa$l1_models will be included}
 
 \item{l2_model_names}{a subset of L2 models to be setup by this function. If not specified,
 all models in gpa$l2_models will be included}
+
+\item{backend}{optional backend filter (e.g., "fsl"). If supplied, only those backends
+will be processed.}
 }
 \description{
 This function generates the inputs for an FSL level 2 analysis, where multiple runs for a subject are combined using

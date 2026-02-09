@@ -13,7 +13,8 @@
 update_project_config <- function(gpa, job_sequence, sequence_id, batch_directory = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_list(job_sequence)
-  checkmate::assert_set_equal(length(job_sequence), 5)
+  required_names <- c("finalize", "l1", "l2", "l3", "cleanup")
+  checkmate::assert_subset(required_names, names(job_sequence))
   sequence_id <- as.character(sequence_id)
   checkmate::assert_string(sequence_id)
   
@@ -70,6 +71,7 @@ update_project_config <- function(gpa, job_sequence, sequence_id, batch_director
 #' @param sequence_id unique identifier of sequence
 #' 
 #' @keywords internal
+#' @noRd
 get_sequence_info <- function(config_file = NULL, sequence_id = NULL) {
   if (is.null(config_file) || is.null(sequence_id)) return(invisible(NULL))
   sequence_id <- as.character(sequence_id)

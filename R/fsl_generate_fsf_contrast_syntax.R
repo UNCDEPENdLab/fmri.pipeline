@@ -29,12 +29,13 @@ fsl_generate_fsf_contrast_syntax <- function(cmat, ftests=NULL, include_overall=
   #cmat is a contrast matrix containing the contrast names in rownames() and coefficients for the EV contrast vector
 
   nftests <- ifelse(is.null(ftests), 0, length(ftests))
+  n_contrasts <- if (is.null(cmat)) 0L else nrow(cmat)
 
   #don't support separation between original (one per column) and 'real' (one per basis element) EVs
   fsf_syntax <- c(
     "# Number of contrasts",
     paste0("set fmri(ncon_orig) ", 0), #nrow(cmat)),
-    paste0("set fmri(ncon_real) ", nrow(cmat)),
+    paste0("set fmri(ncon_real) ", n_contrasts),
     "",
     "# Number of F-tests",
     paste0("set fmri(nftests_orig) ", 0), #nftests),
@@ -53,7 +54,11 @@ fsl_generate_fsf_contrast_syntax <- function(cmat, ftests=NULL, include_overall=
     )
   }
 
-  for (i in 1:nrow(cmat)) {
+  if (n_contrasts == 0L) {
+    return(fsf_syntax)
+  }
+
+  for (i in seq_len(n_contrasts)) {
     #whether to display images for contrast (only support yes)
     fsf_syntax <- c(fsf_syntax,
       paste("# Display images for contrast_real", i),
@@ -65,7 +70,7 @@ fsl_generate_fsf_contrast_syntax <- function(cmat, ftests=NULL, include_overall=
       paste0("set fmri(conname_real.", i, ") \"", rownames(cmat)[i], "\""), "")
 
     #columns of contrast
-    for (j in 1:ncol(cmat)) {
+    for (j in seq_len(ncol(cmat))) {
       #contrast value in each row and column
       fsf_syntax <- c(fsf_syntax,
         paste("# Real contrast_real vector", i, "element", j),
@@ -76,7 +81,7 @@ fsl_generate_fsf_contrast_syntax <- function(cmat, ftests=NULL, include_overall=
     #note: re-defining j in terms of number of contrasts, not EVs as in previous loop
     #we are basically looking at contrast x contrast masking (intersection/conjunction)
 
-    for (j in 1:nrow(cmat)) {
+    for (j in seq_len(n_contrasts)) {
       if (i != j) { #can't mask contrast with itself
         fsf_syntax <- c(fsf_syntax,
           paste0("# Mask real contrast/F-test ", i, " with real contrast/F-test ", j, "?"),

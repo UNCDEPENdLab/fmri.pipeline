@@ -27,6 +27,9 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
 
   # final checks on compute environment now that we're running inside the compute environment
   test_compute_environment(gpa, stop_on_fail=TRUE)
+  if ("spm" %in% gpa$glm_software) {
+    test_spm_compute_environment(gpa, stop_on_fail = TRUE)
+  }
 
   # l1 models must be specified to get started (hard enforcement)
   if (!checkmate::test_class(gpa$l1_models, "l1_model_set")) {
@@ -155,6 +158,51 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
 
   gpa$glm_settings$fsl <- populate_defaults(gpa$glm_settings$fsl, fsl_defaults)
 
+  spm_defaults <- list(
+    hpf = 100,
+    hrf_derivs = "none",
+    cvi = "AR(1)",
+    estimation_method = "Classical",
+    write_residuals = FALSE,
+    fmri_t = NULL,
+    fmri_t0 = NULL,
+    condition_contrasts = TRUE,
+    unit_contrasts = TRUE,
+    effects_of_interest_F = TRUE,
+    l3_model_type = "flexible_factorial",
+    l3_use_one_sample_when_intercept_only = TRUE,
+    spm_execute_setup = FALSE,
+    spm_execute_glm = FALSE,
+    spm_execute_contrasts = FALSE,
+    spm_execute_l3_setup = FALSE,
+    spm_execute_l3_glm = FALSE,
+    spm_execute_l3_contrasts = FALSE,
+    run_l1_setup = TRUE,
+    run_l1_glm = TRUE,
+    run_l1_contrasts = TRUE,
+    run_l3_setup = TRUE,
+    run_l3_glm = TRUE,
+    run_l3_contrasts = TRUE,
+    print_spm_run_instructions = FALSE,
+    require_matlab = FALSE,
+    matlab_cmd = "matlab",
+    matlab_args = "-batch",
+    matlab_timeout = 120,
+    concatenate_runs = NULL,
+    generate_qsub = TRUE,
+    execute_qsub = FALSE,
+    cleanup_tmp = TRUE,
+    nifti_tmpdir = NULL,
+    spm_path = "/proj/mnhallqlab/lab_resources/spm12",
+    force_l1_creation = FALSE,
+    force_l3_creation = FALSE
+  )
+
+  gpa$glm_settings$spm <- populate_defaults(gpa$glm_settings$spm, spm_defaults)
+
+  # initialize GLM backend specs and resolved functions
+  gpa <- initialize_glm_backends(gpa)
+
   # process confound settings
   gpa <- finalize_confound_settings(gpa, lg)
 
@@ -254,7 +302,7 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
     lg$info("Using default R compute environment for UNC Longleaf")
     gpa$parallel$compute_environment$r <- c(
       "module unload r",
-      "module load r/4.2.1"
+      "module load r/4.5.1"
     )
   }
 
@@ -274,11 +322,23 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   if (is.null(gpa$parallel$fsl$l3_feat_memgb)) gpa$parallel$fsl$l3_feat_memgb <- "32" # 32 GB by default
   if (is.null(gpa$parallel$fsl$l3_feat_cpusperjob)) gpa$parallel$fsl$l3_feat_cpusperjob <- 16 # cpus used to process all slices
 
+  if (is.null(gpa$parallel$spm)) gpa$parallel$spm <- list()
+  if (is.null(gpa$parallel$spm$l1_spm_alljobs_time)) gpa$parallel$spm$l1_spm_alljobs_time <- "24:00:00"
+  if (is.null(gpa$parallel$spm$l1_spm_time)) gpa$parallel$spm$l1_spm_time <- "8:00:00"
+  if (is.null(gpa$parallel$spm$l1_spm_memgb)) gpa$parallel$spm$l1_spm_memgb <- "12"
+  if (is.null(gpa$parallel$spm$l1_spm_cpus_per_job)) gpa$parallel$spm$l1_spm_cpus_per_job <- 4
+  if (is.null(gpa$parallel$spm$l1_spm_runs_per_cpu)) gpa$parallel$spm$l1_spm_runs_per_cpu <- 1
+  if (is.null(gpa$parallel$spm$l3_spm_alljobs_time)) gpa$parallel$spm$l3_spm_alljobs_time <- "24:00:00"
+  if (is.null(gpa$parallel$spm$l3_spm_time)) gpa$parallel$spm$l3_spm_time <- "8:00:00"
+  if (is.null(gpa$parallel$spm$l3_spm_memgb)) gpa$parallel$spm$l3_spm_memgb <- "16"
+  if (is.null(gpa$parallel$spm$l3_spm_cpus_per_job)) gpa$parallel$spm$l3_spm_cpus_per_job <- 4
+  if (is.null(gpa$parallel$spm$l3_spm_runs_per_cpu)) gpa$parallel$spm$l3_spm_runs_per_cpu <- 1
+
   if (is.null(gpa$parallel$compute_environment$fsl) && isTRUE(grepl("(longleaf|ll\\.unc\\.edu)", gpa$nodename))) {
     lg$info("Using default FSL compute environment for UNC Longleaf")
     gpa$parallel$compute_environment$fsl <- c(
       "module unload fsl", # remove any current fsl module
-      "module load fsl/6.0.4" # load latest version (2021)
+      "module load fsl/6.0.7.18" # load latest version (2021)
     )
   }
 
@@ -286,7 +346,7 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
     lg$info("Using default AFNI compute environment for UNC Longleaf")
     gpa$parallel$compute_environment$afni <- c(
       "module unload afni", # remove any current afni module
-      "module load afni/23.0.07" # load latest version (2023)
+      "module load afni/26.0.00" # load latest version (2026)
     )
   }
 
@@ -316,9 +376,13 @@ setup_output_locations <- function(gpa, lg = NULL) {
   if (length(unique(gpa$run_data$session)) == 1L) {
     feat_sub_directory <- file.path("{gpa$output_directory}", "feat_l1", "sub-{id}")
     feat_l2_sub_directory <- file.path("{gpa$output_directory}", "feat_l2", "sub-{id}")
+    spm_sub_directory <- file.path("{gpa$output_directory}", "spm_l1", "sub-{id}")
+    afni_sub_directory <- file.path("{gpa$output_directory}", "afni_l1", "sub-{id}")
   } else {
     feat_sub_directory <- file.path("{gpa$output_directory}", "feat_l1", "sub-{id}", "ses-{session}")
     feat_l2_sub_directory <- file.path("{gpa$output_directory}", "feat_l2", "sub-{id}", "ses-{session}")
+    spm_sub_directory <- file.path("{gpa$output_directory}", "spm_l1", "sub-{id}", "ses-{session}")
+    afni_sub_directory <- file.path("{gpa$output_directory}", "afni_l1", "sub-{id}", "ses-{session}")
   }
 
   output_defaults <- list(
@@ -327,7 +391,13 @@ setup_output_locations <- function(gpa, lg = NULL) {
     feat_sub_directory = feat_sub_directory,
     feat_ses_directory = feat_sub_directory, # no difference in defaults
     feat_l1_directory = file.path(feat_sub_directory, "{l1_model}"),
-    feat_l2_directory = feat_l2_sub_directory,
+    # include l1_model in L2 output path to avoid collisions across L1 models
+    feat_l2_directory = file.path(feat_l2_sub_directory, "{l1_model}"),
+    spm_sub_directory = spm_sub_directory,
+    spm_l1_directory = file.path(spm_sub_directory, "{l1_model}"),
+    spm_l3_directory = file.path("{gpa$output_directory}", "spm_l3", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}"),
+    afni_sub_directory = afni_sub_directory,
+    afni_l1_directory = file.path(afni_sub_directory, "{l1_model}"),
     # default structure is like: L1m-abspexrew/L2m-modl2_l2c-EV_overall/L3m-int_only/FEAT_l1c-{l1_cope_name}.fsf
     feat_l3_directory = ifelse(isTRUE(gpa$multi_run),
       file.path("{gpa$output_directory}", "feat_l3", "L1m-{l1_model}", "L2m-{l2_model}_l2c-{l2_contrast}", "L3m-{l3_model}"),
@@ -342,6 +412,8 @@ setup_output_locations <- function(gpa, lg = NULL) {
       "l2c-{l2_cope_name}_l3c-{l3_cope_name}",
       "l3c-{l3_cope_name}"
     ),
+    spm_l3_combined_filename = file.path("{gpa$output_directory}", "spm_l3_combined", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}_stats"),
+    spm_l3_combined_briknames = "l3c-{l3_cope_name}",
     scheduler_scripts = file.path(gpa$output_directory, "scheduler_scripts"),
     sqlite_db = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".sqlite")),
     project_config_json = file.path(gpa$output_directory, "project_config.json"),
@@ -380,21 +452,23 @@ finalize_confound_settings <- function(gpa, lg) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
 
   # validate confound settings
+  default_exclude_run <- "mean(framewise_displacement) > 0.5 | max(framewise_displacement) > 6"
   confound_defaults <- list(
     motion_params_file = NULL,
     motion_params_colnames = NULL,
     confound_input_file = "confounds.tsv",
     l1_confound_regressors = NULL, # column names in motion_params_file and/or confound_input_file ("all" to include all columns)
-    exclude_run = "mean(framewise_displacement) > 0.5 | max(framewise_displacement) > 6",
+    exclude_run = NULL,
     truncate_run = NULL, # example: framewise_displacement > 1 & time > last_onset
     spike_volumes = "framewise_displacement > 0.9",
     na_strings = getOption("datatable.na.strings", "NA") # default na.strings argument for data.table::fread calls
   )
 
+  user_specified_exclude_run <- !is.null(gpa$confound_settings) && "exclude_run" %in% names(gpa$confound_settings)
   if (is.null(gpa$confound_settings)) {
     lg$info("Using default settings for confounds and exclusions")
     lg$info("Look for confounds in confounds.tsv")
-    lg$info("Exclude run if mean(framewise_displacement) > 0.5 or max(framewise_displacement) > 6")
+    lg$info("Default exclude_run will be applied only if framewise_displacement is available")
   } else {
     checkmate::assert_string(gpa$confound_settings$exclude_run, null.ok = TRUE)
     checkmate::assert_string(gpa$confound_settings$exclude_subject, null.ok = TRUE)
@@ -429,6 +503,50 @@ finalize_confound_settings <- function(gpa, lg) {
     gpa$run_data$confound_input_file <- gpa$run_data$confound_input_file_present <- NA_character_
   } else {
     gpa$run_data$confound_input_file_present <- file.exists(get_mr_abspath(gpa$run_data, "confound_input_file"))
+  }
+
+  if (isTRUE(user_specified_exclude_run) &&
+      is.character(gpa$confound_settings$exclude_run) &&
+      length(gpa$confound_settings$exclude_run) == 1L &&
+      tolower(gpa$confound_settings$exclude_run) == "default") {
+    has_fd <- FALSE
+
+    if ("motion_params_file" %in% names(gpa$run_data)) {
+      has_fd <- any(isTRUE(gpa$run_data$motion_params_present), na.rm = TRUE)
+    }
+
+    if (!has_fd && !is.null(gpa$confound_settings$confound_input_colnames)) {
+      has_fd <- "framewise_displacement" %in% gpa$confound_settings$confound_input_colnames
+    }
+
+    if (!has_fd && !is.null(gpa$confound_settings$motion_params_colnames)) {
+      has_fd <- "framewise_displacement" %in% gpa$confound_settings$motion_params_colnames
+    }
+
+    if (!has_fd && "confound_input_file" %in% names(gpa$run_data)) {
+      confound_files <- get_mr_abspath(gpa$run_data, "confound_input_file")
+      confound_files <- confound_files[!is.na(confound_files) & nzchar(confound_files)]
+      confound_files <- confound_files[file.exists(confound_files)]
+      if (length(confound_files) > 0L) {
+        confound_header <- tryCatch(
+          data.table::fread(confound_files[1L], nrows = 0, data.table = FALSE),
+          error = function(e) NULL
+        )
+        if (!is.null(confound_header)) {
+          has_fd <- "framewise_displacement" %in% names(confound_header)
+        }
+      }
+    }
+
+    if (isTRUE(has_fd)) {
+      gpa$confound_settings$exclude_run <- default_exclude_run
+      lg$info("Using default exclude_run: %s", default_exclude_run)
+    } else {
+      gpa$confound_settings$exclude_run <- NULL
+      lg$warn("exclude_run was set to 'default' but framewise_displacement was not found; no runs will be excluded by default")
+    }
+  } else if (is.null(gpa$confound_settings$exclude_run)) {
+    lg$info("exclude_run is unset; no runs will be excluded by default")
   }
 
   rhs_to_vars <- function(str) {

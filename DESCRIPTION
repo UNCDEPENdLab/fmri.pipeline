@@ -1,8 +1,8 @@
 Package: fmri.pipeline
 Type: Package
 Title: Analysis of fMRI Data on HPC clusters
-Version: 0.3
-Date: 2025-08-26
+Version: 0.3-1
+Date: 2026-02-02
 Authors@R: c(person("Michael", "Hallquist", role = c("aut", "cre"),
     email = "michael.hallquist@gmail.com"))
 Maintainer: Michael Hallquist <michael.hallquist@gmail.com>
@@ -60,6 +60,7 @@ Imports:
     yaml
 Suggests:
     brms,
+    pkgload,
     testthat (>= 3.0.0)
 LinkingTo:
     Rcpp,

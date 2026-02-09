@@ -85,7 +85,7 @@ l3_models:
     cell_means: no
     overall_response: yes
     weights: cells
-    delete: EV_(Intercept)
+    delete: EV_Intercept
     fsl_outlier_deweighting: yes
   l3int:
     level: 3
@@ -105,6 +105,6 @@ l3_models:
     weights: cells
     delete:
     - EV_age
-    - EV_(Intercept)
+    - EV_Intercept
     fsl_outlier_deweighting: yes
 

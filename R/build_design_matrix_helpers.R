@@ -22,6 +22,7 @@ NULL
 #'   "convolved", "fsl", "afni", "spm"
 #' @return normalized write_timing_files (lowercase), or NULL
 #' @keywords internal
+#' @noRd
 validate_write_timing_files <- function(write_timing_files) {
   checkmate::assert_character(write_timing_files, null.ok = TRUE)
   if (!is.null(write_timing_files)) {
@@ -45,6 +46,7 @@ validate_write_timing_files <- function(write_timing_files) {
 #' @return validated and augmented run_data data.frame with guaranteed
 #'   run_number and drop_volumes columns
 #' @keywords internal
+#' @noRd
 validate_run_data <- function(run_data, drop_volumes = 0L, lg = NULL) {
   if (is.null(lg)) lg <- lgr::get_logger()
   
@@ -94,6 +96,7 @@ validate_run_data <- function(run_data, drop_volumes = 0L, lg = NULL) {
 #' @param lg logger object (from lgr package), or NULL to use default logger
 #' @return validated events data.frame with guaranteed run_number column
 #' @keywords internal
+#' @noRd
 validate_events <- function(events, lg = NULL) {
   if (is.null(lg)) lg <- lgr::get_logger()
   
@@ -173,6 +176,7 @@ validate_signals <- function(signals) {
 #' @param tr repetition time in seconds
 #' @return tr (unchanged if valid)
 #' @keywords internal
+#' @noRd
 validate_tr <- function(tr) {
   if (is.null(tr)) {
     stop("You must pass in the tr (repetition time) in seconds. See ?build_design_matrix for details.")
@@ -241,6 +245,7 @@ prepare_signals_for_expansion <- function(signals) {
 #' @param signals list of signal specifications
 #' @return named list of expanded signals
 #' @keywords internal
+#' @noRd
 expand_signals_list <- function(signals) {
   signals_expanded <- purrr::list_flatten(unname(lapply(signals, expand_signal)))
   
@@ -267,6 +272,7 @@ expand_signals_list <- function(signals) {
 #' @param lg logger object for error/info messages
 #' @return list of data.tables, one per run, with trial, onset, duration, value columns
 #' @keywords internal
+#' @noRd
 align_signal_with_events <- function(s, events, lg = NULL) {
   if (is.null(lg)) lg <- lgr::get_logger()
   
@@ -361,6 +367,7 @@ align_signal_with_events <- function(s, events, lg = NULL) {
 #' @param s_aligned data.frame of aligned signal/events
 #' @param signal_name character name of signal for error messages
 #' @keywords internal
+#' @noRd
 validate_aligned_columns <- function(s_aligned, signal_name = "<unnamed>") {
   required_cols <- c("run_number", "trial", "onset", "duration", "value")
   missing_cols <- setdiff(required_cols, names(s_aligned))
@@ -383,6 +390,7 @@ validate_aligned_columns <- function(s_aligned, signal_name = "<unnamed>") {
 #' @param signal_name character name of signal for error messages
 #' @return s_aligned with duration column set appropriately
 #' @keywords internal
+#' @noRd
 apply_signal_duration <- function(s_aligned, duration_spec, signal_name = "<unnamed>") {
   if (length(duration_spec) > 1L) {
     stop("Signal '", signal_name, "': Don't know how to interpret multi-element duration argument: ", 
@@ -429,6 +437,7 @@ apply_signal_duration <- function(s_aligned, duration_spec, signal_name = "<unna
 #' @param physio_only logical, whether this is a physio-only regressor
 #' @return named list of data.tables by run
 #' @keywords internal
+#' @noRd
 split_signal_by_run <- function(s_aligned, event_runs, event_name, physio_only = FALSE) {
   retdf <- s_aligned %>%
     dplyr::select("run_number", "trial", "onset", "duration", "value") %>%
@@ -458,6 +467,7 @@ split_signal_by_run <- function(s_aligned, event_runs, event_name, physio_only =
 #' @param lg logger object
 #' @return named list of aligned signals (each is a list of runs)
 #' @keywords internal
+#' @noRd
 align_all_signals <- function(signals_expanded, events, lg = NULL) {
   lapply(signals_expanded, function(s) {
     align_signal_with_events(s, events, lg)
@@ -479,6 +489,7 @@ align_all_signals <- function(signals_expanded, events, lg = NULL) {
 #'     \item \code{add_derivs}: whether to add temporal derivatives
 #'   }
 #' @keywords internal
+#' @noRd
 extract_signal_config <- function(signals_expanded) {
   config <- list()
   
@@ -549,6 +560,7 @@ extract_signal_config <- function(signals_expanded) {
 #'     \item \code{signal_config}: list of configuration vectors for bdm_args
 #'   }
 #' @keywords internal
+#' @noRd
 expand_and_align_signals <- function(signals, events, lg = NULL) {
   if (is.null(lg)) lg <- lgr::get_logger()
   
@@ -595,6 +607,7 @@ expand_and_align_signals <- function(signals, events, lg = NULL) {
 #'     \item \code{tf_afni}: AFNI dmBLOCK file paths (currently not tracked)
 #'   }
 #' @keywords internal
+#' @noRd
 write_timing_files_to_disk <- function(write_timing_files, dmat, dmat_convolved,
                                        output_directory, runs_to_output, 
                                        center_values = TRUE) {
@@ -652,6 +665,7 @@ write_timing_files_to_disk <- function(write_timing_files, dmat, dmat_convolved,
 #'     \item \code{tf_convolved_concat}: named vector of concatenated file paths
 #'   }
 #' @keywords internal
+#' @noRd
 write_convolved_timing_files <- function(dmat, dmat_convolved, output_directory) {
   tf_convolved <- matrix(
     NA_character_,
@@ -700,6 +714,7 @@ write_convolved_timing_files <- function(dmat, dmat_convolved, output_directory)
 #' @param output_directory path to output directory
 #' @return named character vector of file paths
 #' @keywords internal
+#' @noRd
 write_convolved_concat_files <- function(conv_concat, output_directory) {
   if (length(conv_concat) == 0) {
     return(character(0))
@@ -775,6 +790,7 @@ write_fsl_timing_files <- function(dmat, output_directory, runs_to_output,
 #' @param center_values logical, whether to apply centering
 #' @return data.frame with potentially centered values
 #' @keywords internal
+#' @noRd
 center_fsl_regressor <- function(regout, center_values = TRUE) {
   if (!center_values) {
     return(regout)
@@ -806,6 +822,7 @@ center_fsl_regressor <- function(regout, center_values = TRUE) {
 #' @param output_directory path to output directory
 #' @return NULL (files are written as side effect)
 #' @keywords internal
+#' @noRd
 write_afni_timing_files <- function(dmat, output_directory) {
   # Extract onsets and durations across all runs for each regressor
   regonsets <- apply(dmat, 2, function(reg) {
@@ -844,6 +861,7 @@ write_afni_timing_files <- function(dmat, output_directory) {
 #' @param output_directory path to output directory
 #' @return NULL (file written as side effect)
 #' @keywords internal
+#' @noRd
 write_afni_dmblock_file <- function(dmat, comb, output_directory) {
   combmat <- dmat[, comb, drop = FALSE]
   
@@ -888,6 +906,7 @@ write_afni_dmblock_file <- function(dmat, comb, output_directory) {
 #'   or 0-column matrix if no parametric modulation
 #' @return character string in AFNI dmBLOCK format
 #' @keywords internal
+#' @noRd
 format_afni_run_string <- function(onsets, durations, values) {
   if (ncol(values) == 0L) {
     # No parametric modulation: TIME:DURATION format
@@ -921,6 +940,7 @@ format_afni_run_string <- function(onsets, durations, values) {
 #'     \item \code{vif}: variance inflation factors
 #'   }
 #' @keywords internal
+#' @noRd
 compute_collinearity_convolved <- function(dmat_convolved) {
   lapply(dmat_convolved, function(run) {
     corvals <- stats::cor(run, use = "pairwise.complete.obs")
@@ -946,6 +966,7 @@ compute_collinearity_convolved <- function(dmat_convolved) {
 #' @param additional_regressors data.frame of additional regressors with run_number column
 #' @return list with updated \code{dmat_convolved} and \code{dmat_unconvolved}
 #' @keywords internal
+#' @noRd
 merge_additional_regressors_to_dmat <- function(dmat_convolved, dmat_unconvolved, 
                                                 additional_regressors) {
   if (is.null(additional_regressors)) {
@@ -988,6 +1009,7 @@ merge_additional_regressors_to_dmat <- function(dmat_convolved, dmat_unconvolved
 #' @param run_timing numeric vector of cumulative run timing in seconds
 #' @return list of concatenated design matrices, one per signal
 #' @keywords internal
+#' @noRd
 build_design_concat <- function(dmat, run_timing) {
   design_concat <- lapply(seq_len(dim(dmat)[2L]), function(reg) {
     this_reg <- dmat[, reg]
@@ -1019,6 +1041,7 @@ build_design_concat <- function(dmat, run_timing) {
 #'     \item \code{add_derivs}: whether to add temporal derivatives
 #'   }
 #' @keywords internal
+#' @noRd
 extract_signal_config <- function(signals_expanded) {
   bdm_args <- list()
   
