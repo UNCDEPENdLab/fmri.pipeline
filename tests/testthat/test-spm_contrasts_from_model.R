@@ -73,3 +73,61 @@ test_that("generate_spm_contrasts_from_model errors on missing contrasts", {
     "missing or empty"
   )
 })
+
+test_that("generate_spm_contrasts_from_model matches compact SPM pmod labels", {
+  skip_if_not_installed("R.matlab")
+
+  tmp_dir <- tempfile("spm_contrast_pmod_")
+  dir.create(tmp_dir, recursive = TRUE)
+
+  # Compact pmod form from SPM (no spaces around x)
+  mnames <- c(
+    "Sn(1) choice*bf(1)",
+    "Sn(1) choicexchoice_trial-pmod^1*bf(1)",
+    "Sn(1) feedback*bf(1)",
+    "Sn(1) constant"
+  )
+  cpos <- 1:3
+  bpos <- 4
+  npos <- integer(0)
+
+  matfile <- file.path(tmp_dir, "design_columns.mat")
+  R.matlab::writeMat(matfile, mnames = mnames, cpos = cpos, bpos = bpos, npos = npos)
+
+  cmat <- matrix(
+    c(0, 0, 1),
+    nrow = 1,
+    dimnames = list("EV_choice_trial", c("choice", "feedback", "choice_trial"))
+  )
+  mobj <- list(contrasts = cmat)
+  class(mobj) <- c("list", "l1_model_spec")
+
+  fmri.pipeline:::generate_spm_contrasts_from_model(
+    output_dir = tmp_dir,
+    mobj = mobj,
+    spm_path = tmp_dir,
+    execute = FALSE,
+    average_across_runs = TRUE
+  )
+
+  spec_path <- file.path(tmp_dir, "spm_contrast_spec.rds")
+  setup_script <- system.file("Rscript", "setup_spm_contrasts_from_model.R", package = "fmri.pipeline")
+  cmd <- paste(
+    "Rscript --no-save --no-restore",
+    shQuote(setup_script),
+    "-mat_file", shQuote(matfile),
+    "-contrast_rds", shQuote(spec_path),
+    "-average_across_runs TRUE",
+    "-spm_path", shQuote(tmp_dir)
+  )
+  system(cmd)
+
+  mfile <- file.path(tmp_dir, "estimate_glm_contrasts.m")
+  expect_true(file.exists(mfile))
+  lines <- readLines(mfile)
+  expect_true(any(grepl("EV_choice_trial", lines, fixed = TRUE)))
+
+  convec_line <- lines[grepl("tcon.convec", lines)][1]
+  weights <- as.numeric(strsplit(gsub(".*\\[|\\].*", "", convec_line), ",")[[1]])
+  expect_equal(weights, c(0, 1, 0, 0), tolerance = 1e-8)
+})

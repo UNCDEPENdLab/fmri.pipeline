@@ -75,10 +75,32 @@ col_clean <- sub("Sn\\(\\d+\\)\\s+", "", col_names, perl = TRUE)
 col_has_bf <- grepl("\\*bf\\(\\d+\\)$", col_clean)
 col_base <- sub("\\*bf\\(\\d+\\)$", "", col_clean, perl = TRUE)
 
-# Parse possible pmod names
-pmod_name <- ifelse(grepl("\\sx\\s", col_base), sub(".*\\sx\\s", "", col_base, perl = TRUE), NA_character_)
-pmod_name <- sub("\\^\\d+$", "", pmod_name, perl = TRUE)
-cond_name <- ifelse(grepl("\\sx\\s", col_base), sub("\\sx\\s.*", "", col_base, perl = TRUE), col_base)
+# Parse condition and pmod names from SPM labels.
+# SPM can encode pmods as either:
+# 1) "cond x pmod-pmod^1" (with spaces), or
+# 2) "condxpmod-pmod^1" (no spaces).
+parse_cond_pmod <- function(x) {
+  out <- list(cond = x, pmod = NA_character_)
+
+  if (grepl("\\sx\\s", x, perl = TRUE)) {
+    out$cond <- trimws(sub("\\sx\\s.*", "", x, perl = TRUE))
+    out$pmod <- trimws(sub(".*\\sx\\s", "", x, perl = TRUE))
+  } else {
+    parsed <- regexec("^(.*)x(.*-pmod(?:\\^\\d+)?)$", x, perl = TRUE)
+    parts <- regmatches(x, parsed)[[1]]
+    if (length(parts) == 3L) {
+      out$cond <- trimws(parts[2])
+      out$pmod <- trimws(parts[3])
+    }
+  }
+
+  out$pmod <- sub("\\^\\d+$", "", out$pmod, perl = TRUE)
+  out
+}
+
+parsed_labels <- lapply(col_base, parse_cond_pmod)
+cond_name <- vapply(parsed_labels, function(x) x$cond, character(1))
+pmod_name <- vapply(parsed_labels, function(x) x$pmod, character(1))
 
 match_columns <- function(reg) {
   idx <- which(
