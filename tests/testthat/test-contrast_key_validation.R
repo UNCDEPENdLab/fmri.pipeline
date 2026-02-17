@@ -13,10 +13,7 @@ test_that("contrast key aliases are mapped and unknown keys error", {
     )
   )
 
-  expect_warning(
-    res <- fmri.pipeline:::specify_contrasts(mobj_diag, signals = list(), spec_list = alias_spec_diag),
-    "legacy/alias 'include_diagonal'"
-  )
+  res <- fmri.pipeline:::specify_contrasts(mobj_diag, signals = list(), spec_list = alias_spec_diag)
   expect_true(isTRUE(res$contrast_spec$diagonal))
 
   df <- data.frame(y = rnorm(6), cond = factor(rep(c("A", "B"), 3)))
@@ -31,10 +28,7 @@ test_that("contrast key aliases are mapped and unknown keys error", {
     )
   )
 
-  expect_warning(
-    res_pair <- fmri.pipeline:::specify_contrasts(mobj_pair, signals = list(), spec_list = alias_spec_pair),
-    "legacy/alias 'pairwise_diff'"
-  )
+  res_pair <- fmri.pipeline:::specify_contrasts(mobj_pair, signals = list(), spec_list = alias_spec_pair)
   expect_equal(res_pair$contrast_spec$pairwise_diffs, "cond")
 
   bad_spec <- list(

@@ -185,6 +185,78 @@ validate_tr <- function(tr) {
   return(tr)
 }
 
+#' Validate ts_multipliers structure and numeric content
+#'
+#' @param ts_multipliers NULL, data.frame, list of data.frames, or character vector of files
+#' @param run_data validated run_data data.frame
+#' @return ts_multipliers unchanged if valid
+#' @keywords internal
+#' @noRd
+validate_ts_multipliers <- function(ts_multipliers, run_data) {
+  if (is.null(ts_multipliers)) return(NULL)
+
+  checkmate::assert_data_frame(run_data)
+  n_runs <- nrow(run_data)
+  exempt_cols <- c("id", "session", "run_number", "volume")
+
+  validate_numeric_cols <- function(df, label) {
+    checkmate::assert_data_frame(df)
+    candidate_cols <- setdiff(names(df), exempt_cols)
+
+    if (length(candidate_cols) == 0L) {
+      stop("ts_multipliers ", label, " must include at least one multiplier column.", call. = FALSE)
+    }
+
+    non_numeric <- candidate_cols[!vapply(df[, candidate_cols, drop = FALSE], is.numeric, logical(1L))]
+    if (length(non_numeric) > 0L) {
+      stop(
+        "ts_multipliers ", label, " has non-numeric multiplier columns: ",
+        paste(non_numeric, collapse = ", "),
+        call. = FALSE
+      )
+    }
+  }
+
+  if (is.data.frame(ts_multipliers)) {
+    if (!"run_number" %in% names(ts_multipliers)) {
+      stop("If ts_multipliers is a data.frame, it must contain run_number", call. = FALSE)
+    }
+    validate_numeric_cols(ts_multipliers, "(data.frame)")
+    return(ts_multipliers)
+  }
+
+  if (is.list(ts_multipliers)) {
+    if (length(ts_multipliers) != n_runs) {
+      stop(
+        "Number of elements in ts_multipliers: ", length(ts_multipliers),
+        " does not match number of runs: ", n_runs,
+        call. = FALSE
+      )
+    }
+    for (i in seq_along(ts_multipliers)) {
+      validate_numeric_cols(ts_multipliers[[i]], paste0("(run ", i, ")"))
+    }
+    return(ts_multipliers)
+  }
+
+  if (is.character(ts_multipliers)) {
+    if (length(ts_multipliers) != n_runs) {
+      stop(
+        "Number of ts_multipliers files: ", length(ts_multipliers),
+        " does not match number of runs: ", n_runs,
+        call. = FALSE
+      )
+    }
+    checkmate::assert_file_exists(ts_multipliers)
+    for (i in seq_along(ts_multipliers)) {
+      validate_numeric_cols(as.data.frame(utils::read.table(ts_multipliers[i])), paste0("(file run ", i, ")"))
+    }
+    return(ts_multipliers)
+  }
+
+  stop("Don't know how to handle ts_multipliers input", call. = FALSE)
+}
+
 #' Get internal processing flags for drop_volumes handling
 #'
 #' Returns a list of internal flags that control how drop_volumes is applied

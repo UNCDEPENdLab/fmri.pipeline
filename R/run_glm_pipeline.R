@@ -423,6 +423,13 @@ choose_glm_set <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, l3_mod
   }
 
   m_string <- function(str) { if (is.null(str)) "none" else str }
+  is_prompt <- function(x) {
+    !is.null(x) && length(x) > 0L && identical(x[1L], "prompt")
+  }
+
+  prompt_selection_requested <- is_prompt(l1_model_names) ||
+    is_prompt(l3_model_names) ||
+    (isTRUE(gpa$multi_run) && is_prompt(l2_model_names))
 
   models_specified <- FALSE
   while (isFALSE(models_specified)) {
@@ -446,6 +453,18 @@ choose_glm_set <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, l3_mod
         "Yes (run)", "No, respecify level 1 models",
         "No, respecify level 3 models", "Cancel"
       )
+    }
+
+    if (!interactive()) {
+      lg$info("Non-interactive session detected. Proceeding with selected models without prompt.")
+      models_specified <- TRUE
+      next
+    }
+
+    if (isFALSE(prompt_selection_requested)) {
+      lg$info("Model names were provided as input arguments. Proceeding without confirmation prompt.")
+      models_specified <- TRUE
+      next
     }
 
     cat("\n")

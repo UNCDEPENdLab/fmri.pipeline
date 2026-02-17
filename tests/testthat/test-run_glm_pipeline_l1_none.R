@@ -12,7 +12,7 @@ test_that("run_glm_pipeline tolerates l1 none selection", {
     fsl = list(l1_feat_alljobs_time = "0:10:00")
   ))
   gpa$glm_backend_specs <- list(
-    fsl = list(l1_run = "fake_l1", l3_run = "fake_l3")
+    fsl = list(l1_run = "run_feat_sepjobs", l3_run = "run_feat_sepjobs")
   )
 
   mock_job <- function(...) {
@@ -30,30 +30,16 @@ test_that("run_glm_pipeline tolerates l1 none selection", {
     list(submit = function(...) NULL)
   }
 
-  choose <- function(...) {
-    list(
-      l1_model_names = NULL,
-      l2_model_names = "l2int",
-      l3_model_names = "l3int",
-      l1_model_name = NULL,
-      l2_model_name = "l2int",
-      l3_model_name = "l3int"
-    )
-  }
-
-  get_backends <- function(...) {
-    list(fsl = list(l1_run = function() {}, l3_run = function() {}))
-  }
-
-  default_specs <- function() gpa$glm_backend_specs
-
   result <- testthat::with_mocked_bindings(
-    run_glm_pipeline(gpa, l1_model_names = "none", l2_model_names = "l2int", l3_model_names = "l3int"),
-    choose_glm_set = choose,
-    get_glm_backends = get_backends,
-    default_glm_backend_specs = default_specs,
+    fmri.pipeline:::run_glm_pipeline(
+      gpa,
+      l1_model_names = "none",
+      l2_model_names = "l2_model1",
+      l3_model_names = "l3_model1"
+    ),
     R_batch_job = list(new = mock_job),
-    R_batch_sequence = list(new = mock_sequence)
+    R_batch_sequence = list(new = mock_sequence),
+    .package = "fmri.pipeline"
   )
   expect_null(result)
 })

@@ -360,6 +360,7 @@ build_design_matrix <- function(
   events <- validate_events(events, lg)
   signals <- validate_signals(signals)
   tr <- validate_tr(tr)
+  ts_multipliers <- validate_ts_multipliers(ts_multipliers, run_data)
 
   # Take a snapshot of arguments to build_design_matrix that we pass to subsidiary functions
   bdm_args <- as.list(environment(), all.names = TRUE)
@@ -773,7 +774,7 @@ get_ts_multipliers <- function(ts_multipliers = NULL, run_data, shorten_ts) {
 
     # mean center
     tocenter <- setdiff(names(ts_current), c("id", "session", "run_number", "volume"))
-    if (length(tocenter) > 0L) ts_current[, tocenter] <- lapply(ts_current[, tocenter], function(x) x - mean(x, na.rm = TRUE))
+    if (length(tocenter) > 0L) ts_current[, tocenter] <- lapply(ts_current[, tocenter, drop = FALSE], function(x) x - mean(x, na.rm = TRUE))
     if ("run_number" %in% names(ts_current) && ts_current$run_number[1L] != i) {
       warning("run_number present in ts_current, but it doesn't match iterator i in the loop over runs")
     }
@@ -859,5 +860,3 @@ get_ts_multipliers <- function(ts_multipliers = NULL, run_data, shorten_ts) {
 # dnuisrun1 <- dnuis$design_convolved$run1
 # dnuisrun1$time <- 1:nrow(dnuisrun1)
 # ggplot(dnuisrun1, aes(x = time, y = wm)) + geom_line(size = 0.8)
-
-

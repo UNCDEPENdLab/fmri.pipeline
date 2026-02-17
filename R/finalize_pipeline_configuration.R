@@ -153,6 +153,7 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
     force_l3_creation = FALSE, # whether to overwrite existing level 3 setup files (e.g., .fsf)
     failed_l3_folder_action = "delete", # whether to 'delete', 'archive', or 'skip' failed folders before running feat l1 fsf jobs
     incomplete_l3_folder_action = "archive", # whether to 'delete', 'archive', or 'skip' incomplete folders before running feat l1 fsf jobs
+    auto_retry_l3_excessive_outliers = TRUE, # whether to retry L3 FLAME failures with robust_yn=0 when excessive outliers are detected
     replace_l1_nifti_symlink = TRUE # whether to replace filtered_func_data with symlink to the (same) input data
   )
 

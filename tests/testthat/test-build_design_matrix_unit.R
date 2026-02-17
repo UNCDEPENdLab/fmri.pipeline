@@ -1337,10 +1337,12 @@ test_that("get_ts_multipliers processes list of data.frames", {
     data.frame(roi1 = rnorm(40), roi2 = rnorm(40))
   )
   
-  result <- fmri.pipeline:::get_ts_multipliers(
-    ts_multipliers = ts,
-    run_data = run_data,
-    shorten_ts = FALSE
+  result <- expect_no_warning(
+    fmri.pipeline:::get_ts_multipliers(
+      ts_multipliers = ts,
+      run_data = run_data,
+      shorten_ts = FALSE
+    )
   )
   
   expect_equal(nrow(result), 90)
@@ -1353,13 +1355,16 @@ test_that("get_ts_multipliers respects drop_volumes with shorten_ts=TRUE", {
   run_data <- data.frame(run_number = 1, run_volumes = 45, drop_volumes = 5)
   ts <- list(data.frame(roi1 = 1:55))  # Need enough rows: drop_volumes + run_volumes = 50
   
-  result <- fmri.pipeline:::get_ts_multipliers(
-    ts_multipliers = ts,
-    run_data = run_data,
-    shorten_ts = TRUE
+  result <- expect_no_warning(
+    fmri.pipeline:::get_ts_multipliers(
+      ts_multipliers = ts,
+      run_data = run_data,
+      shorten_ts = TRUE
+    )
   )
   
   expect_equal(nrow(result), 45)
+  expect_equal(result$roi1, seq(-22, 22))
 })
 
 test_that("get_ts_multipliers handles data.frame input with run_number column", {
@@ -1370,13 +1375,33 @@ test_that("get_ts_multipliers handles data.frame input with run_number column", 
     roi1 = rnorm(60)
   )
   
-  result <- fmri.pipeline:::get_ts_multipliers(
-    ts_multipliers = ts,
-    run_data = run_data,
-    shorten_ts = FALSE
+  result <- expect_no_warning(
+    fmri.pipeline:::get_ts_multipliers(
+      ts_multipliers = ts,
+      run_data = run_data,
+      shorten_ts = FALSE
+    )
   )
   
   expect_equal(nrow(result), 60)
+  expect_lt(abs(mean(result$roi1[result$run_number == 1])), 1e-10)
+  expect_lt(abs(mean(result$roi1[result$run_number == 2])), 1e-10)
+})
+
+test_that("get_ts_multipliers does not collapse single-column values to zero", {
+  run_data <- data.frame(run_number = 1, run_volumes = 5, drop_volumes = 0)
+  ts <- list(data.frame(roi1 = c(1, 2, 3, 4, 5)))
+
+  result <- expect_no_warning(
+    fmri.pipeline:::get_ts_multipliers(
+      ts_multipliers = ts,
+      run_data = run_data,
+      shorten_ts = FALSE
+    )
+  )
+
+  expect_equal(result$roi1, c(-2, -1, 0, 1, 2))
+  expect_gt(stats::sd(result$roi1), 0)
 })
 
 test_that("get_ts_multipliers errors when data.frame lacks run_number", {
@@ -1390,6 +1415,39 @@ test_that("get_ts_multipliers errors when data.frame lacks run_number", {
       shorten_ts = FALSE
     ),
     "run_number"
+  )
+})
+
+test_that("validate_ts_multipliers rejects non-numeric data.frame columns", {
+  run_data <- data.frame(run_number = 1, run_volumes = 10, drop_volumes = 0)
+  ts <- data.frame(run_number = 1:10, roi1 = as.character(1:10))
+
+  expect_error(
+    fmri.pipeline:::validate_ts_multipliers(ts, run_data),
+    "non-numeric"
+  )
+})
+
+test_that("validate_ts_multipliers rejects non-numeric list columns", {
+  run_data <- data.frame(run_number = 1:2, run_volumes = c(5, 5), drop_volumes = c(0, 0))
+  ts <- list(
+    data.frame(roi1 = 1:5),
+    data.frame(roi1 = letters[1:5])
+  )
+
+  expect_error(
+    fmri.pipeline:::validate_ts_multipliers(ts, run_data),
+    "non-numeric"
+  )
+})
+
+test_that("validate_ts_multipliers rejects mismatched run counts", {
+  run_data <- data.frame(run_number = 1:2, run_volumes = c(5, 5), drop_volumes = c(0, 0))
+  ts <- list(data.frame(roi1 = 1:5))
+
+  expect_error(
+    fmri.pipeline:::validate_ts_multipliers(ts, run_data),
+    "does not match number of runs"
   )
 })
 

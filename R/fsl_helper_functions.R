@@ -132,6 +132,19 @@ get_feat_status <- function(feat_dir, feat_fsf=NULL, lg=NULL, prefix=NULL) {
          }
        }
     }
+
+    # Detect whether the retry wrapper re-ran this model with robust_yn=0
+    retry_warning_file <- file.path(feat_dir, ".feat_auto_retry_warning")
+    if (file.exists(retry_warning_file)) {
+      feat_checks$feat_auto_retried <- TRUE
+      lg$warn("FEAT model was auto-retried with robust outlier deweighting disabled: %s", feat_dir)
+      retry_info <- readLines(retry_warning_file, warn = FALSE)
+      for (line in retry_info) lg$warn("  %s", line)
+    } else {
+      feat_checks$feat_auto_retried <- FALSE
+    }
+  } else {
+    feat_checks$feat_auto_retried <- FALSE
   }
 
   df <- as.data.frame(feat_checks)

@@ -9,6 +9,7 @@ test_that("spm_l1_model enforces per-run vs concatenated confound expectations",
   gpa <- create_mock_gpa(n_subjects = 1, n_runs = 2, include_l1_models = TRUE, output_directory = tmp_dir)
   gpa$glm_software <- "spm"
   gpa$glm_settings <- list(spm = list(concatenate_runs = TRUE))
+  gpa$output_locations$spm_l1_directory <- file.path(tmp_dir, "{id}", "ses-{session}", "{l1_model}")
   gpa$parallel$compute_environment <- list(global = character(0), fsl = character(0), afni = character(0), spm = character(0), r = character(0))
   gpa$l1_models$models <- list(model1 = list(name = "model1", signals = character(0)))
 
@@ -31,7 +32,7 @@ test_that("spm_l1_model enforces per-run vs concatenated confound expectations",
       list(gunzip_cmds = character(0), contrast_cmds = character(0))
     },
     get_spm_status = dummy_status,
-    get_output_directory = function(...) tmp_dir
+    .env = asNamespace("fmri.pipeline")
   )
 
   expect_error(

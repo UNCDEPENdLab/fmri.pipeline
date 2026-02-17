@@ -407,8 +407,9 @@ combine_spm_l3_to_afni <- function(gpa, spm_l3_combined_filename=NULL, spm_l3_co
   meta_split <- split(meta_df, meta_df$afni_out)
 
   lapply(meta_split, function(ss) {
-    afni_out_base <- sub("(\\+tlrc|\\+orig)$", "", ss$afni_out[1]) # avoid forcing space; let AFNI decide
-    afni_dir <- dirname(afni_out_base)
+    # Mirror FEAT behavior by forcing +tlrc outputs for group-level maps.
+    afni_out <- sub("(\\+tlrc|\\+orig)*$", "+tlrc", ss$afni_out[1])
+    afni_dir <- dirname(afni_out)
     if (!dir.exists(afni_dir)) {
       dir.create(afni_dir, recursive = TRUE)
       if (!is.null(template_brain)) file.symlink(template_brain, file.path(afni_dir, paste0("template_brain", template_ext)))
@@ -444,14 +445,13 @@ combine_spm_l3_to_afni <- function(gpa, spm_l3_combined_filename=NULL, spm_l3_co
       return(NULL)
     }
 
-    tcatcall <- paste("3dTcat -overwrite -prefix", afni_out_base, paste(long_df$nii_file, collapse = " "))
-    run_afni_command(tcatcall)
-
-    # resolve actual AFNI output view
-    if (file.exists(paste0(afni_out_base, "+tlrc.HEAD"))) {
-      afni_out <- paste0(afni_out_base, "+tlrc")
-    } else {
-      afni_out <- paste0(afni_out_base, "+orig")
+    tcatcall <- paste("3dTcat -overwrite -prefix", afni_out, paste(long_df$nii_file, collapse = " "))
+    tcat_ret <- run_afni_command(tcatcall)
+    tcat_status <- suppressWarnings(as.integer(tcat_ret[1]))
+    if (is.na(tcat_status) || tcat_status != 0L) {
+      msg <- sprintf("AFNI command failed with exit status %s: %s", as.character(tcat_ret[1]), tcatcall)
+      lg$error(msg)
+      stop(msg)
     }
 
     # tack on statistic type as suffix to sub-brik name (avoid ambiguity)
@@ -474,7 +474,13 @@ combine_spm_l3_to_afni <- function(gpa, spm_l3_combined_filename=NULL, spm_l3_co
       paste(refit_parts, collapse = " "),
       " -relabel_all_str '", paste(long_df$afni_briks, collapse = " "), "' ", afni_out
     )
-    run_afni_command(refitcall)
+    refit_ret <- run_afni_command(refitcall)
+    refit_status <- suppressWarnings(as.integer(refit_ret[1]))
+    if (is.na(refit_status) || refit_status != 0L) {
+      msg <- sprintf("AFNI command failed with exit status %s: %s", as.character(refit_ret[1]), refitcall)
+      lg$error(msg)
+      stop(msg)
+    }
   })
 
   return(meta_df)

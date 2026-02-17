@@ -195,14 +195,26 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     dir.create(feat_output_directory, recursive = TRUE)
   }
 
+  auto_retry_l3_excessive_outliers <- isTRUE(gpa$glm_settings$fsl$auto_retry_l3_excessive_outliers) ||
+    is.null(gpa$glm_settings$fsl$auto_retry_l3_excessive_outliers)
+
   if (level == 3) {
     njobs <- length(to_run) # parallel across slices, one job per model
     feat_binary <- system.file("bin/feat_parallel", package = "fmri.pipeline")
     stopifnot(file.exists(feat_binary))
+    if (isTRUE(auto_retry_l3_excessive_outliers)) {
+      feat_retry_binary <- system.file("bash/run_feat_with_outlier_retry.sh", package = "fmri.pipeline")
+      stopifnot(file.exists(feat_retry_binary))
+      lg$info("L3 auto-retry for excessive outlier failures is enabled.")
+    } else {
+      feat_retry_binary <- NA_character_
+      lg$info("L3 auto-retry for excessive outlier failures is disabled.")
+    }
     df <- data.frame(fsf = to_run, job = 1:njobs, stringsAsFactors = FALSE)
   } else {
     njobs <- ceiling(length(to_run) / (feat_cpus * runsperproc))
     feat_binary <- "feat"
+    feat_retry_binary <- NA_character_
     # use length.out on rep to ensure that the vectors align even if chunks are uneven wrt files to run
     df <- data.frame(
       fsf = to_run,
@@ -212,21 +224,40 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
 
   df <- df[order(df$job), ]
 
+  if (level == 3L && isTRUE(auto_retry_l3_excessive_outliers)) {
+    feat_call_with_jobs <- paste0("    \"", feat_retry_binary, "\" \"", feat_binary, "\" \"$1\" \"$2\"")
+    feat_call_no_jobs <- paste0("    \"", feat_retry_binary, "\" \"", feat_binary, "\" \"$1\"")
+  } else {
+    feat_call_with_jobs <- paste0("    \"", feat_binary, "\" \"$1\" -P \"$2\"")
+    feat_call_no_jobs <- paste0("    \"", feat_binary, "\" \"$1\"")
+  }
+
   submission_id <- basename(tempfile(pattern = "job"))
   joblist <- rep(NA_character_, njobs)
   for (j in seq_len(njobs)) {
     outfile <- paste0(feat_output_directory, "/featsep_l", level, "_", j, "_", submission_id, file_suffix)
     cat(preamble, file=outfile, sep="\n")
     thisrun <- with(df, fsf[job==j])
+    # Compute expected output directories in the parent scope so the SIGTERM trap
+    # can mark them all as failed. Each feat_runner call is backgrounded into its own
+    # subshell, so the odir variable set inside feat_runner is invisible to the parent.
+    # L1/L2 scripts batch multiple FSFs per job (e.g., 8 runs), all of which need
+    # a .feat_fail marker when the job is killed.
+    odir_ext <- ifelse(level == 1L, ".feat", ".gfeat")
+    odir_values <- sub("\\.fsf$", odir_ext, thisrun)
+
     cat(
+      paste0("all_odirs=(", paste0("\"", odir_values, "\"", collapse = " "), ")"),
+      "",
       "function feat_runner() {",
       ifelse(level == 1L, "  odir=\"${1/.fsf/.feat}\"", "  odir=\"${1/.fsf/.gfeat}\""),
       "  [ -f \"${odir}/.feat_fail\" ] && rm -f \"${odir}/.feat_fail\"",
+      "  [ -f \"${odir}/.feat_complete\" ] && rm -f \"${odir}/.feat_complete\"",
       "  start_time=$( date )",
       "  if [ $# -eq 2 ]; then",
-      paste0("    ", feat_binary, " $1 -P $2"),
+      feat_call_with_jobs,
       "  else",
-      paste0("    ", feat_binary, " $1"),
+      feat_call_no_jobs,
       "  fi",
       "  exit_code=$?",
       "  end_time=$( date )",
@@ -237,10 +268,14 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "  fi",
       "  echo $start_time > \"${status_file}\"",
       "  echo $end_time >> \"${status_file}\"",
+      "  return $exit_code",
       "}",
       "function feat_killed() {",
       "  kill_time=$( date )",
-      "  echo $kill_time > \"${odir}/.feat_fail\"",
+      "  for _odir in \"${all_odirs[@]}\"; do",
+      "    [ -f \"${_odir}/.feat_complete\" ] && continue",
+      "    echo \"$kill_time\" > \"${_odir}/.feat_fail\"",
+      "  done",
       paste("  Rscript", upd_job_status_path, "--job_id" , "'$job_id'", "--sqlite_db", tracking_sqlite_db, "--status", "FAILED"),
       "  exit 1",
       "}",

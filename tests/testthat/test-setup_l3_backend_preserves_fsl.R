@@ -6,6 +6,7 @@ test_that("setup_l3_models(backend='spm') preserves existing FSL l3 tables", {
   file.create(file.path(spm_dir, "SPM.mat"))
   file.create(file.path(spm_dir, "beta_0001.nii"))
   file.create(file.path(spm_dir, "con_0001.nii"))
+  subj_ids <- paste0("sub", 1:4)
 
   l1_models <- list(models = list(model1 = list()))
   class(l1_models) <- c("l1_model_set", "list")
@@ -21,8 +22,9 @@ test_that("setup_l3_models(backend='spm') preserves existing FSL l3 tables", {
 
   l1_setup <- list(
     spm = data.frame(
-      id = "sub1", session = 1L, l1_model = "model1",
-      spm_dir = spm_dir, spm_complete = TRUE, spm_contrast_exists = TRUE,
+      id = subj_ids, session = 1L, l1_model = "model1",
+      spm_dir = rep(spm_dir, length(subj_ids)),
+      spm_complete = TRUE, spm_contrast_exists = TRUE,
       stringsAsFactors = FALSE
     )
   )
@@ -59,17 +61,20 @@ test_that("setup_l3_models(backend='spm') preserves existing FSL l3 tables", {
       setup_l3_log_txt = file.path(tempdir(), "setup_l3_models.txt"),
       setup_l3_log_json = file.path(tempdir(), "setup_l3_models.json")
     ),
-    subject_data = data.frame(id = "sub1", session = 1L, exclude_subject = FALSE),
-    run_data = data.frame(id = "sub1", session = 1L, run_number = 1L, exclude_run = FALSE, exclude_subject = FALSE),
+    subject_data = data.frame(id = subj_ids, session = 1L, exclude_subject = FALSE),
+    run_data = data.frame(id = subj_ids, session = 1L, run_number = 1L, exclude_run = FALSE, exclude_subject = FALSE),
     l1_models = l1_models,
     l1_cope_names = list(model1 = c("cope1")),
     l3_models = l3_models,
     l1_model_setup = l1_setup,
     l3_model_setup = l3_setup,
-    glm_backends = list(
+    glm_backend_specs = list(
       spm = list(
+        name = "spm",
         l1_status = fake_spm_status,
+        l3_status = fake_spm_status,
         l1_status_inputs = c("spm_dir"),
+        l3_status_inputs = c("spm_dir"),
         l3_setup = fake_spm_l3_setup
       )
     )

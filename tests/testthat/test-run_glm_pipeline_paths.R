@@ -59,6 +59,7 @@ make_model_list <- function(l1 = NULL, l2 = NULL, l3 = NULL) {
 
 test_that("L1 none + L3 requested waits for split_backend_caches", {
   gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
+  gpa$glm_software <- "fsl"
   gpa$multi_run <- FALSE
   gpa$output_locations$sqlite_db <- NULL
   gpa$parallel <- modifyList(gpa$parallel, list(
@@ -71,20 +72,19 @@ test_that("L1 none + L3 requested waits for split_backend_caches", {
     fsl = list(l1_feat_alljobs_time = "0:10:00")
   ))
   gpa$glm_backend_specs <- list(
-    fsl = list(l1_run = "fake_l1", l3_run = "fake_l3")
+    fsl = list(l1_run = "run_feat_sepjobs", l3_run = "run_feat_sepjobs")
   )
 
   store <- new.env(parent = emptyenv())
   result <- testthat::with_mocked_bindings(
-    run_glm_pipeline(gpa, l1_model_names = "none", l2_model_names = NULL, l3_model_names = "l3int"),
-    choose_glm_set = function(...) make_model_list(l1 = NULL, l2 = NULL, l3 = "l3int"),
-    get_glm_backends = function(...) list(fsl = list(l1_run = function() {}, l3_run = function() {})),
-    default_glm_backend_specs = function() gpa$glm_backend_specs,
+    fmri.pipeline:::run_glm_pipeline(gpa, l1_model_names = "none", l2_model_names = NULL, l3_model_names = "l3_model1"),
     R_batch_job = list(new = make_mock_job_new()),
-    R_batch_sequence = list(new = make_mock_sequence_new(store))
+    R_batch_sequence = list(new = make_mock_sequence_new(store)),
+    .package = "fmri.pipeline"
   )
 
   jobs <- flatten_jobs(store$joblist)
+  expect_true(length(jobs) > 0L, info = "No jobs were captured; check backend resolution and mock binding setup.")
   split_job <- jobs[vapply(jobs, function(j) j$job_name == "split_backend_caches", logical(1))]
   l3_job <- jobs[vapply(jobs, function(j) j$job_name == "setup_run_l3_fsl", logical(1))]
 
@@ -97,6 +97,7 @@ test_that("L1 none + L3 requested waits for split_backend_caches", {
 
 test_that("L1 none + L2 requested waits for split_backend_caches", {
   gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
+  gpa$glm_software <- "fsl"
   gpa$multi_run <- TRUE
   gpa$output_locations$sqlite_db <- NULL
   gpa$parallel <- modifyList(gpa$parallel, list(
@@ -109,20 +110,19 @@ test_that("L1 none + L2 requested waits for split_backend_caches", {
     fsl = list(l1_feat_alljobs_time = "0:10:00")
   ))
   gpa$glm_backend_specs <- list(
-    fsl = list(l1_run = "fake_l1", l3_run = "fake_l3")
+    fsl = list(l1_run = "run_feat_sepjobs", l3_run = "run_feat_sepjobs")
   )
 
   store <- new.env(parent = emptyenv())
   result <- testthat::with_mocked_bindings(
-    run_glm_pipeline(gpa, l1_model_names = "none", l2_model_names = "l2int", l3_model_names = NULL),
-    choose_glm_set = function(...) make_model_list(l1 = NULL, l2 = "l2int", l3 = NULL),
-    get_glm_backends = function(...) list(fsl = list(l1_run = function() {}, l3_run = function() {})),
-    default_glm_backend_specs = function() gpa$glm_backend_specs,
+    fmri.pipeline:::run_glm_pipeline(gpa, l1_model_names = "none", l2_model_names = "l2_model1", l3_model_names = "none"),
     R_batch_job = list(new = make_mock_job_new()),
-    R_batch_sequence = list(new = make_mock_sequence_new(store))
+    R_batch_sequence = list(new = make_mock_sequence_new(store)),
+    .package = "fmri.pipeline"
   )
 
   jobs <- flatten_jobs(store$joblist)
+  expect_true(length(jobs) > 0L, info = "No jobs were captured; check backend resolution and mock binding setup.")
   split_job <- jobs[vapply(jobs, function(j) j$job_name == "split_backend_caches", logical(1))]
   l2_job <- jobs[vapply(jobs, function(j) j$job_name == "setup_run_l2", logical(1))]
 
@@ -134,6 +134,7 @@ test_that("L1 none + L2 requested waits for split_backend_caches", {
 
 test_that("L2 requested but cannot run completes without L2 job", {
   gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
+  gpa$glm_software <- "fsl"
   gpa$multi_run <- FALSE
   gpa$output_locations$sqlite_db <- NULL
   gpa$parallel <- modifyList(gpa$parallel, list(
@@ -146,17 +147,15 @@ test_that("L2 requested but cannot run completes without L2 job", {
     fsl = list(l1_feat_alljobs_time = "0:10:00")
   ))
   gpa$glm_backend_specs <- list(
-    fsl = list(l1_run = "fake_l1", l3_run = "fake_l3")
+    fsl = list(l1_run = "run_feat_sepjobs", l3_run = "run_feat_sepjobs")
   )
 
   store <- new.env(parent = emptyenv())
   result <- testthat::with_mocked_bindings(
-    run_glm_pipeline(gpa, l1_model_names = "none", l2_model_names = "l2int", l3_model_names = NULL),
-    choose_glm_set = function(...) make_model_list(l1 = NULL, l2 = "l2int", l3 = NULL),
-    get_glm_backends = function(...) list(fsl = list(l1_run = function() {}, l3_run = function() {})),
-    default_glm_backend_specs = function() gpa$glm_backend_specs,
+    fmri.pipeline:::run_glm_pipeline(gpa, l1_model_names = "none", l2_model_names = "l2_model1", l3_model_names = "none"),
     R_batch_job = list(new = make_mock_job_new()),
-    R_batch_sequence = list(new = make_mock_sequence_new(store))
+    R_batch_sequence = list(new = make_mock_sequence_new(store)),
+    .package = "fmri.pipeline"
   )
 
   jobs <- flatten_jobs(store$joblist)
@@ -168,6 +167,7 @@ test_that("L2 requested but cannot run completes without L2 job", {
 
 test_that("No L3 requested completes without L3 job", {
   gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
+  gpa$glm_software <- "fsl"
   gpa$multi_run <- TRUE
   gpa$output_locations$sqlite_db <- NULL
   gpa$parallel <- modifyList(gpa$parallel, list(
@@ -180,17 +180,15 @@ test_that("No L3 requested completes without L3 job", {
     fsl = list(l1_feat_alljobs_time = "0:10:00")
   ))
   gpa$glm_backend_specs <- list(
-    fsl = list(l1_run = "fake_l1", l3_run = "fake_l3")
+    fsl = list(l1_run = "run_feat_sepjobs", l3_run = "run_feat_sepjobs")
   )
 
   store <- new.env(parent = emptyenv())
   result <- testthat::with_mocked_bindings(
-    run_glm_pipeline(gpa, l1_model_names = "none", l2_model_names = "l2int", l3_model_names = NULL),
-    choose_glm_set = function(...) make_model_list(l1 = NULL, l2 = "l2int", l3 = NULL),
-    get_glm_backends = function(...) list(fsl = list(l1_run = function() {}, l3_run = function() {})),
-    default_glm_backend_specs = function() gpa$glm_backend_specs,
+    fmri.pipeline:::run_glm_pipeline(gpa, l1_model_names = "none", l2_model_names = "l2_model1", l3_model_names = "none"),
     R_batch_job = list(new = make_mock_job_new()),
-    R_batch_sequence = list(new = make_mock_sequence_new(store))
+    R_batch_sequence = list(new = make_mock_sequence_new(store)),
+    .package = "fmri.pipeline"
   )
 
   jobs <- flatten_jobs(store$joblist)
