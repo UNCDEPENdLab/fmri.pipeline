@@ -76,10 +76,8 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
     }
   }
 
-  # setup l1 copes, cope names, and contrasts.
-  gpa$l1_cope_names <- lapply(gpa$l1_models$models, function(mm) {
-    rownames(mm$contrasts)
-  }) # names of level 1 copes for each model
+  # setup l1 cope names cache from current L1 model contrasts
+  gpa <- refresh_l1_cope_names(gpa, lg = lg)
 
 
   if (is.null(gpa$center_l3_predictors)) gpa$center_l3_predictors <- TRUE
@@ -170,6 +168,11 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
     condition_contrasts = TRUE,
     unit_contrasts = TRUE,
     effects_of_interest_F = TRUE,
+    l2_projection_model = NULL,
+    l2_projection_interactions = NULL,
+    l2_projection_interaction_unit_contrasts = TRUE,
+    l2_projection_interaction_contrast_modes = NULL,
+    l1_session_mode = "separate",
     l3_model_type = "flexible_factorial",
     l3_use_one_sample_when_intercept_only = TRUE,
     spm_execute_setup = FALSE,
@@ -189,7 +192,7 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
     matlab_cmd = "matlab",
     matlab_args = "-batch",
     matlab_timeout = 120,
-    concatenate_runs = NULL,
+    concatenate_runs = FALSE,
     generate_qsub = TRUE,
     execute_qsub = FALSE,
     cleanup_tmp = TRUE,
@@ -203,6 +206,9 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
 
   # initialize GLM backend specs and resolved functions
   gpa <- initialize_glm_backends(gpa)
+
+  # normalize and validate L2/L3 model signature fields now that model objects are finalized
+  gpa <- normalize_longitudinal_model_signatures(gpa, lg)
 
   # process confound settings
   gpa <- finalize_confound_settings(gpa, lg)
@@ -238,6 +244,46 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   checkmate::assert_class(lg, "Logger")
 
   # ---- PARALLELISM SETUP
+  parse_mem_to_gb <- function(x) {
+    if (is.null(x) || length(x) == 0L) return(NA_real_)
+    x <- trimws(tolower(as.character(x[1L])))
+    if (!nzchar(x)) return(NA_real_)
+    rr <- regexec("^([0-9]+(?:\\.[0-9]+)?)\\s*([a-z]*)$", x)
+    mm <- regmatches(x, rr)[[1]]
+    if (length(mm) != 3L) return(NA_real_)
+    val <- suppressWarnings(as.numeric(mm[2L]))
+    if (is.na(val)) return(NA_real_)
+    unit <- mm[3L]
+    if (unit %in% c("", "g", "gb")) {
+      mult <- 1
+    } else if (unit %in% c("m", "mb")) {
+      mult <- 1 / 1024
+    } else if (unit %in% c("k", "kb")) {
+      mult <- 1 / (1024 * 1024)
+    } else if (unit %in% c("t", "tb")) {
+      mult <- 1024
+    } else {
+      mult <- NA_real_
+    }
+    if (is.na(mult)) return(NA_real_)
+    val * mult
+  }
+
+  enforce_min_mem <- function(value, min_gb, style = c("plain_gb", "suffix_g"), label = "memory") {
+    style <- match.arg(style)
+    gb <- parse_mem_to_gb(value)
+    if (is.na(gb)) {
+      lg$warn("Could not parse %s value '%s'. Using %d GB.", label, as.character(value), as.integer(min_gb))
+      gb <- min_gb
+    }
+    if (gb < min_gb) {
+      lg$info("Increasing %s from %.2f GB to %d GB minimum.", label, gb, as.integer(min_gb))
+      gb <- min_gb
+    }
+    rounded <- as.integer(ceiling(gb))
+    if (style == "suffix_g") paste0(rounded, "G") else as.character(rounded)
+  }
+
   specify_cores <- function(gpa, field_name, default=1L) {
     # l1_setup_cores defines how many cores to use when looping over subjects within setup_l1_models
     if (is.null(gpa$parallel[[field_name]]) || gpa$parallel[[field_name]] == "default") {
@@ -332,6 +378,45 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   if (is.null(gpa$parallel$spm$l3_spm_alljobs_time)) gpa$parallel$spm$l3_spm_alljobs_time <- "24:00:00"
   if (is.null(gpa$parallel$spm$l3_spm_time)) gpa$parallel$spm$l3_spm_time <- "8:00:00"
   if (is.null(gpa$parallel$spm$l3_spm_memgb)) gpa$parallel$spm$l3_spm_memgb <- "16"
+
+  gpa$parallel$l1_setup_memgb <- enforce_min_mem(
+    gpa$parallel$l1_setup_memgb,
+    min_gb = 16,
+    style = "suffix_g",
+    label = "parallel$l1_setup_memgb"
+  )
+
+  gpa$parallel$fsl$l1_feat_memgb <- enforce_min_mem(
+    gpa$parallel$fsl$l1_feat_memgb,
+    min_gb = 16,
+    style = "plain_gb",
+    label = "parallel$fsl$l1_feat_memgb"
+  )
+  gpa$parallel$fsl$l2_feat_memgb <- enforce_min_mem(
+    gpa$parallel$fsl$l2_feat_memgb,
+    min_gb = 16,
+    style = "plain_gb",
+    label = "parallel$fsl$l2_feat_memgb"
+  )
+  gpa$parallel$fsl$l3_feat_memgb <- enforce_min_mem(
+    gpa$parallel$fsl$l3_feat_memgb,
+    min_gb = 16,
+    style = "plain_gb",
+    label = "parallel$fsl$l3_feat_memgb"
+  )
+
+  gpa$parallel$spm$l1_spm_memgb <- enforce_min_mem(
+    gpa$parallel$spm$l1_spm_memgb,
+    min_gb = 32,
+    style = "plain_gb",
+    label = "parallel$spm$l1_spm_memgb"
+  )
+  gpa$parallel$spm$l3_spm_memgb <- enforce_min_mem(
+    gpa$parallel$spm$l3_spm_memgb,
+    min_gb = 32,
+    style = "plain_gb",
+    label = "parallel$spm$l3_spm_memgb"
+  )
   if (is.null(gpa$parallel$spm$l3_spm_cpus_per_job)) gpa$parallel$spm$l3_spm_cpus_per_job <- 4
   if (is.null(gpa$parallel$spm$l3_spm_runs_per_cpu)) gpa$parallel$spm$l3_spm_runs_per_cpu <- 1
 
@@ -394,8 +479,12 @@ setup_output_locations <- function(gpa, lg = NULL) {
     feat_l1_directory = file.path(feat_sub_directory, "{l1_model}"),
     # include l1_model in L2 output path to avoid collisions across L1 models
     feat_l2_directory = file.path(feat_l2_sub_directory, "{l1_model}"),
+    # for pooled L2 models (l2_scope='id'), avoid synthetic ses-0 folders
+    feat_l2_id_scope_directory = file.path("{gpa$output_directory}", "feat_l2", "sub-{id}", "{l1_model}"),
     spm_sub_directory = spm_sub_directory,
     spm_l1_directory = file.path(spm_sub_directory, "{l1_model}"),
+    # for pooled SPM L1 models (l1_session_mode='pooled'), avoid synthetic ses-0 folders
+    spm_l1_id_scope_directory = file.path("{gpa$output_directory}", "spm_l1", "sub-{id}", "{l1_model}"),
     spm_l3_directory = file.path("{gpa$output_directory}", "spm_l3", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}"),
     afni_sub_directory = afni_sub_directory,
     afni_l1_directory = file.path(afni_sub_directory, "{l1_model}"),

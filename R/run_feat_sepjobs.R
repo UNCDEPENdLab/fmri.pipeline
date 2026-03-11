@@ -276,11 +276,11 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "    [ -f \"${_odir}/.feat_complete\" ] && continue",
       "    echo \"$kill_time\" > \"${_odir}/.feat_fail\"",
       "  done",
-      paste("  Rscript", upd_job_status_path, "--job_id" , "'$job_id'", "--sqlite_db", tracking_sqlite_db, "--status", "FAILED"),
+      paste("  Rscript", upd_job_status_path, "--job_id" , "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "FAILED"),
       "  exit 1",
       "}",
       "trap feat_killed SIGTERM",
-      paste("Rscript", upd_job_status_path, "--job_id" , "'$job_id'", "--sqlite_db", tracking_sqlite_db, "--status", "STARTED"),
+      paste("Rscript", upd_job_status_path, "--job_id" , "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "STARTED"),
       sep = "\n", file = outfile, append = TRUE
     )
     if (level == 3L) {
@@ -289,7 +289,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       cat(paste("feat_runner", thisrun, "&"), file=outfile, sep="\n", append=TRUE)
     }
     cat("wait",
-        paste("Rscript", upd_job_status_path, "--job_id" , "'$job_id'", "--sqlite_db", tracking_sqlite_db, "--status", "COMPLETED"),
+        paste("Rscript", upd_job_status_path, "--job_id" , "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "COMPLETED"),
         "\n\n",
         sep="\n", file=outfile, append=TRUE)
     if (level != 3L) {

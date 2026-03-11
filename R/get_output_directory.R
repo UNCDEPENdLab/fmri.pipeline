@@ -60,6 +60,22 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
     l1_directory <- gpa$output_locations$feat_l1_directory
     if (glm_software == "spm" && "spm_l1_directory" %in% names(gpa$output_locations)) {
       l1_directory <- gpa$output_locations$spm_l1_directory
+      spm_mode <- "separate"
+      if (!is.null(gpa$glm_settings) &&
+          !is.null(gpa$glm_settings$spm) &&
+          "l1_session_mode" %in% names(gpa$glm_settings$spm) &&
+          !is.null(gpa$glm_settings$spm$l1_session_mode)) {
+        spm_mode <- tolower(as.character(gpa$glm_settings$spm$l1_session_mode)[1L])
+      }
+      if (spm_mode %in% c("pooled", "id", "across_sessions", "subject")) {
+        if ("spm_l1_id_scope_directory" %in% names(gpa$output_locations) &&
+            checkmate::test_string(gpa$output_locations$spm_l1_id_scope_directory)) {
+          l1_directory <- gpa$output_locations$spm_l1_id_scope_directory
+        } else if (checkmate::test_string(l1_directory)) {
+          # back-compat fallback for older objects lacking spm_l1_id_scope_directory
+          l1_directory <- gsub("([/\\\\])ses-\\{session\\}([/\\\\]|$)", "\\1", l1_directory, perl = TRUE)
+        }
+      }
     } else if (glm_software == "afni" && "afni_l1_directory" %in% names(gpa$output_locations)) {
       l1_directory <- gpa$output_locations$afni_l1_directory
     }
@@ -99,7 +115,26 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
       out_dir <- glue::glue(l1_directory) # evaluate glue expression
     }
   } else if (what == "l2") {
-    out_dir <- glue::glue(gpa$output_locations$feat_l2_directory) # evaluate glue expression
+    l2_directory <- gpa$output_locations$feat_l2_directory
+    if (!is.null(l2_model)) {
+      l2_scope <- gpa$l2_models$models[[l2_model]]$l2_scope
+      if (is.null(l2_scope) || !is.character(l2_scope) || length(l2_scope) != 1L || !nzchar(l2_scope)) {
+        l2_scope <- "id_session"
+      }
+
+      # pooled L2 models are subject-level and should not write to synthetic ses-0 folders
+      if (identical(l2_scope, "id")) {
+        if ("feat_l2_id_scope_directory" %in% names(gpa$output_locations) &&
+            checkmate::test_string(gpa$output_locations$feat_l2_id_scope_directory)) {
+          l2_directory <- gpa$output_locations$feat_l2_id_scope_directory
+        } else if (checkmate::test_string(l2_directory)) {
+          # back-compat fallback for older objects lacking feat_l2_id_scope_directory
+          l2_directory <- gsub("([/\\\\])ses-\\{session\\}([/\\\\]|$)", "\\1", l2_directory, perl = TRUE)
+        }
+      }
+    }
+
+    out_dir <- glue::glue(l2_directory) # evaluate glue expression
   } else if (what == "l3") {
     l3_directory <- gpa$output_locations$feat_l3_directory
     if (glm_software == "spm" && "spm_l3_directory" %in% names(gpa$output_locations)) {

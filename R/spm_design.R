@@ -651,6 +651,97 @@ generate_spm_mat <- function(bdm, ts_files=NULL, output_dir="spm_out",
   run_headers <- lapply(run_niftis, function(x) { RNifti::niftiHeader(x) })
   run_lengths <- sapply(run_headers, function(x) { x$dim[5] }) #first element is just 3 versus 4 dimensions
 
+  run_numbers <- if (!is.null(bdm$runs_to_output)) as.integer(bdm$runs_to_output) else seq_along(run_niftis)
+  if (length(run_numbers) != length(run_niftis)) {
+    stop("Length of bdm$runs_to_output must match run_niftis for SPM setup.")
+  }
+
+  spm_l2_projection <- NULL
+  spm_l2_projection_cols <- character(0)
+  spm_l2_projection_interactions <- character(0)
+  projection_interaction_terms <- character(0)
+  if (!is.null(bdm$spm_l2_projection)) {
+    if (!is.data.frame(bdm$spm_l2_projection)) {
+      stop("bdm$spm_l2_projection must be a data.frame with run_number and regressor columns.")
+    }
+    if (!"run_number" %in% names(bdm$spm_l2_projection)) {
+      stop("bdm$spm_l2_projection must contain a run_number column.")
+    }
+
+    spm_l2_projection <- bdm$spm_l2_projection
+    if (anyDuplicated(spm_l2_projection$run_number) > 0L) {
+      stop("bdm$spm_l2_projection contains duplicated run_number rows.")
+    }
+
+    projection_idx <- match(run_numbers, spm_l2_projection$run_number)
+    if (anyNA(projection_idx)) {
+      missing_runs <- run_numbers[is.na(projection_idx)]
+      stop(
+        "bdm$spm_l2_projection is missing run_number row(s): ",
+        paste(missing_runs, collapse = ", ")
+      )
+    }
+    spm_l2_projection <- spm_l2_projection[projection_idx, , drop = FALSE]
+    spm_l2_projection_cols <- setdiff(names(spm_l2_projection), "run_number")
+
+    if (length(spm_l2_projection_cols) > 0L) {
+      spm_l2_projection[spm_l2_projection_cols] <- lapply(spm_l2_projection[spm_l2_projection_cols], as.numeric)
+      bad_cols <- spm_l2_projection_cols[vapply(
+        spm_l2_projection[spm_l2_projection_cols],
+        function(x) any(!is.finite(x)),
+        logical(1)
+      )]
+      if (length(bad_cols) > 0L) {
+        stop(
+          "bdm$spm_l2_projection contains non-finite values in: ",
+          paste(bad_cols, collapse = ", ")
+        )
+      }
+    } else {
+      spm_l2_projection <- NULL
+    }
+  }
+
+  if (!is.null(spm_l2_projection) && !is.null(bdm$spm_l2_projection_interactions)) {
+    if (is.logical(bdm$spm_l2_projection_interactions)) {
+      if (length(bdm$spm_l2_projection_interactions) != 1L || is.na(bdm$spm_l2_projection_interactions)) {
+        stop("bdm$spm_l2_projection_interactions must be scalar logical or character.")
+      }
+      if (isTRUE(bdm$spm_l2_projection_interactions)) {
+        spm_l2_projection_interactions <- spm_l2_projection_cols
+      }
+    } else if (is.character(bdm$spm_l2_projection_interactions)) {
+      vals <- unique(bdm$spm_l2_projection_interactions[!is.na(bdm$spm_l2_projection_interactions) & nzchar(bdm$spm_l2_projection_interactions)])
+      if (length(vals) > 0L) {
+        bad <- setdiff(vals, spm_l2_projection_cols)
+        if (length(bad) > 0L) {
+          stop(
+            "Unknown requested interaction term(s) in bdm$spm_l2_projection_interactions: ",
+            paste(bad, collapse = ", "),
+            ". Available: ",
+            paste(spm_l2_projection_cols, collapse = ", ")
+          )
+        }
+        spm_l2_projection_interactions <- vals
+      }
+    } else {
+      stop("bdm$spm_l2_projection_interactions must be scalar logical or character.")
+    }
+  }
+
+  skip_projection_main_effects <- FALSE
+  if (!is.null(spm_l2_projection) && length(spm_l2_projection_cols) > 0L && !isTRUE(concatenate_runs)) {
+    # In non-concatenated SPM, per-run projected covariates are constant within
+    # each Sn() block and therefore aliased with session constants.
+    skip_projection_main_effects <- TRUE
+    warning(
+      "Skipping projected L2 main-effect regressors in non-concatenated SPM design because they are aliased with session constants.",
+      call. = FALSE
+    )
+  }
+
+  dropped_constant_interactions <- character(0)
+
   # spm only works with .nii files, not .nii.gz
   gzipped <- grepl(".nii.gz$", run_niftis)
   gunzip_cmds <- character(0)
@@ -690,6 +781,16 @@ generate_spm_mat <- function(bdm, ts_files=NULL, output_dir="spm_out",
   )
 
   baseobj <- paste0("matlabbatch{1}.spm.stats.fmri_spec")
+  escape_spm_string <- function(x) gsub("'", "''", as.character(x), fixed = TRUE)
+  format_spm_values <- function(x) {
+    paste(format(as.numeric(x), trim = TRUE, scientific = FALSE, digits = 15), collapse = " ")
+  }
+  sanitize_term_name <- function(x) {
+    nm <- make.names(x)
+    nm <- gsub("\\.+", ".", nm)
+    nm <- gsub("^\\.|\\.$", "", nm)
+    nm
+  }
 
   if (hrf_derivs == "none") {
     hrf_string <- paste0(baseobj, ".bases.hrf = struct('derivs', [0 0]);")
@@ -764,6 +865,34 @@ generate_spm_mat <- function(bdm, ts_files=NULL, output_dir="spm_out",
         m_string <- c(m_string, paste0(baseobj, ".sess(", rr, ").multi_reg = { '' };"))
       }
 
+    if (!isTRUE(skip_projection_main_effects) && !is.null(spm_l2_projection) && length(spm_l2_projection_cols) > 0L) {
+      if (isTRUE(concatenate_runs)) {
+        projection_values <- lapply(spm_l2_projection_cols, function(cc) {
+          unlist(lapply(seq_along(run_lengths), function(run_idx) {
+            rep(spm_l2_projection[[cc]][run_idx], run_lengths[run_idx])
+          }), use.names = FALSE)
+        })
+      } else {
+        projection_values <- lapply(spm_l2_projection_cols, function(cc) {
+          rep(spm_l2_projection[[cc]][rr], run_lengths[rr])
+        })
+      }
+
+      for (kk in seq_along(spm_l2_projection_cols)) {
+        m_string <- c(
+          m_string,
+          paste0(
+            baseobj, ".sess(", rr, ").regress(", kk, ").name = '",
+            escape_spm_string(spm_l2_projection_cols[kk]), "';"
+          ),
+          paste0(
+            baseobj, ".sess(", rr, ").regress(", kk, ").val = [ ",
+            format_spm_values(projection_values[[kk]]), " ]';"
+          )
+        )
+      }
+    }
+
     #collect regressors that are aligned to the same event
     rmat <- design[rr,]
 
@@ -834,6 +963,46 @@ generate_spm_mat <- function(bdm, ts_files=NULL, output_dir="spm_out",
       
     }
 
+    if (length(spm_l2_projection_interactions) > 0L) {
+      run_start_times <- if (isTRUE(concatenate_runs)) {
+        c(0, head(cumsum(run_lengths) * tr, -1))
+      } else {
+        NULL
+      }
+
+      for (cc in seq_along(ulist)) {
+        cond_name <- names(ulist)[cc]
+        event_df <- ulist[[cc]][["event"]]
+        if (is.null(event_df) || nrow(event_df) == 0L) next
+
+        if (isTRUE(concatenate_runs)) {
+          run_idx <- findInterval(event_df[, "onset"], run_start_times)
+          if (any(run_idx < 1L | run_idx > length(run_lengths))) {
+            warning("Some concatenated event onsets were outside run boundaries; clamping projected interaction run indices.")
+            run_idx <- pmin(pmax(run_idx, 1L), length(run_lengths))
+          }
+        } else {
+          run_idx <- rep(rr, nrow(event_df))
+        }
+
+        for (covar in spm_l2_projection_interactions) {
+          int_name <- sanitize_term_name(paste0(cond_name, "_x_l2_", covar))
+          int_vals <- spm_l2_projection[[covar]][run_idx]
+          if (any(!is.finite(int_vals))) {
+            stop("Non-finite projected interaction values for term: ", int_name)
+          }
+          if (length(int_vals) > 0L && all(abs(int_vals - int_vals[1L]) < 1e-8)) {
+            dropped_constant_interactions <- unique(c(dropped_constant_interactions, int_name))
+            next
+          }
+          int_df <- event_df
+          int_df[, "value"] <- as.numeric(int_vals)
+          ulist[[cc]][[int_name]] <- int_df
+          projection_interaction_terms <- unique(c(projection_interaction_terms, int_name))
+        }
+      }
+    }
+
     for (cc in 1:length(ulist)) {
       #event-only lists have length 1
       if (length(ulist[[cc]]) > 1L) {
@@ -858,6 +1027,16 @@ generate_spm_mat <- function(bdm, ts_files=NULL, output_dir="spm_out",
       )
 
     }
+  }
+
+  if (length(dropped_constant_interactions) > 0L) {
+    message(
+      paste0(
+        "Skipping projected interaction term(s) with no within-condition variation: ",
+        paste(dropped_constant_interactions, collapse = ", "),
+        "."
+      )
+    )
   }
 
   #Generate syntax for executing SPM GLM setup
@@ -937,6 +1116,7 @@ generate_spm_mat <- function(bdm, ts_files=NULL, output_dir="spm_out",
   
   spm_syntax[["gunzip_cmds"]] <- gunzip_cmds
   spm_syntax[["contrast_cmds"]] <- spm_contrast_cmds
+  spm_syntax[["projection_interaction_terms"]] <- projection_interaction_terms
   
   if (cleanup_tmp && (spm_execute_glm || spm_execute_setup)) {
     if (any(gzipped)) {

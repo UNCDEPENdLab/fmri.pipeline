@@ -23,8 +23,14 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
     stop(msg)
   }
 
-  if (length(unique(l1_df$session)) > 1L) {
-    msg <- "fsl_l2_model is designed for execution on a single session data.frame"
+  l2_scope <- gpa$l2_models$models[[l2_model]]$l2_scope
+  if (is.null(l2_scope) || !is.character(l2_scope) || length(l2_scope) != 1L || !nzchar(l2_scope)) {
+    l2_scope <- "id_session"
+  }
+  checkmate::assert_subset(l2_scope, longitudinal_l2_scopes())
+
+  if (identical(l2_scope, "id_session") && length(unique(l1_df$session)) > 1L) {
+    msg <- "fsl_l2_model with l2_scope='id_session' requires a single-session input data.frame"
     lg$error(msg)
     stop(msg)
   }
@@ -37,7 +43,7 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
 
   # elements of metadata for l2
   id <- l1_df$id[1L]
-  session <- l1_df$session[1L]
+  session <- if (identical(l2_scope, "id")) 0L else l1_df$session[1L]
   l1_model <- l1_df$l1_model[1L]
   l1_feat_dirs <- l1_df$feat_dir
   n_l1_copes <- gpa$l1_models$n_contrasts[l1_model] # number of lvl1 copes to combine for this model
@@ -48,8 +54,13 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
     lg$info("Using per-subject l2 model specification for model: %s", l2_model)
 
     # get subject-specific model and contrast matrices
-    ss_df <- gpa$l2_models$models[[l2_model]]$by_subject %>%
-      dplyr::filter(id == !!id & session == !!session)
+    if (identical(l2_scope, "id")) {
+      ss_df <- gpa$l2_models$models[[l2_model]]$by_subject %>%
+        dplyr::filter(id == !!id)
+    } else {
+      ss_df <- gpa$l2_models$models[[l2_model]]$by_subject %>%
+        dplyr::filter(id == !!id & session == !!session)
+    }
 
     n_l2_copes <- ss_df$n_l2_copes
 
@@ -67,12 +78,20 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
   } else {
     n_l2_copes <- gpa$l2_models$n_contrasts[l2_model] # number of lvl1 copes to combine for this model
 
-    #find rows in run_data that match this subject
-    dmat_rows <- gpa$run_data %>%
-      dplyr::mutate(rownum = 1:n()) %>%
-      dplyr::filter(id == !!id & session == !!session) %>%
-      dplyr::filter(exclude_run == FALSE) %>%
-      dplyr::pull(rownum)
+    #find rows in run_data that match this subject (and session for id_session scope)
+    if (identical(l2_scope, "id")) {
+      dmat_rows <- gpa$run_data %>%
+        dplyr::mutate(rownum = 1:n()) %>%
+        dplyr::filter(id == !!id) %>%
+        dplyr::filter(exclude_run == FALSE) %>%
+        dplyr::pull(rownum)
+    } else {
+      dmat_rows <- gpa$run_data %>%
+        dplyr::mutate(rownum = 1:n()) %>%
+        dplyr::filter(id == !!id & session == !!session) %>%
+        dplyr::filter(exclude_run == FALSE) %>%
+        dplyr::pull(rownum)
+    }
 
     if (length(dmat_rows) != nrow(l1_df)) {
       msg <- "Number of rows in gpa$run_data does not match l1_df in fsl_l2_model"
@@ -93,7 +112,7 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
   # tracking data frame for this model
   feat_l2_df <- data.frame(
     id = id, session = session,
-    l1_model = l1_model, l2_model = l2_model, n_l2_copes = n_l2_copes
+    l1_model = l1_model, l2_model = l2_model, l2_scope = l2_scope, n_l2_copes = n_l2_copes
   )
 
   # generate FSL EV syntax for these regressors

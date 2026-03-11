@@ -140,7 +140,8 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
       "",
       get_compute_environment(gpa, c("spm", "r")),
       "",
-      "cd $SLURM_SUBMIT_DIR"
+      "cd $SLURM_SUBMIT_DIR",
+      "job_id=$SLURM_JOB_ID"
     )
   } else if (gpa$scheduler == "torque") {
     file_suffix <- ".pbs"
@@ -154,13 +155,15 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
       "",
       get_compute_environment(gpa, c("spm", "r")),
       "",
-      "cd $PBS_O_WORKDIR"
+      "cd $PBS_O_WORKDIR",
+      "job_id=$PBS_JOBID"
     )
   } else {
     file_suffix <- ".sh"
     preamble <- c(
       "#!/bin/bash",
-      get_compute_environment(gpa, c("spm", "r"))
+      get_compute_environment(gpa, c("spm", "r")),
+      "job_id=$$"
     )
   }
 
@@ -212,7 +215,8 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
       "  gunzip_script=\"${odir}/gunzip_commands.sh\"",
       "  if [ -f \"${gunzip_script}\" ]; then",
       "    bash \"${gunzip_script}\"",
-      "    if [ $? -ne 0 ]; then exit_code=$?; fi",
+      "    cmd_exit=$?",
+      "    if [ $cmd_exit -ne 0 ]; then exit_code=$cmd_exit; fi",
       "  fi",
       "",
       if (isTRUE(run_setup)) {
@@ -239,7 +243,8 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
       "  contrast_setup_script=\"${odir}/setup_spm_contrasts.sh\"",
       "  if [ -f \"${contrast_setup_script}\" ]; then",
       "    bash \"${contrast_setup_script}\"",
-      "    if [ $? -ne 0 ]; then exit_code=$?; fi",
+      "    cmd_exit=$?",
+      "    if [ $cmd_exit -ne 0 ]; then exit_code=$cmd_exit; fi",
       "  fi",
       "",
       if (isTRUE(run_contrasts)) {
@@ -282,11 +287,11 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
       "  if [ -n \"${odir}\" ]; then",
       "    echo $kill_time > \"${odir}/.spm_fail\"",
       "  fi",
-      paste("  Rscript", upd_job_status_path, "--job_id", "'$job_id'", "--sqlite_db", tracking_sqlite_db, "--status", "FAILED"),
+      paste("  Rscript", upd_job_status_path, "--job_id", "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "FAILED"),
       "  exit 1",
       "}",
       "trap spm_killed SIGTERM",
-      paste("Rscript", upd_job_status_path, "--job_id", "'$job_id'", "--sqlite_db", tracking_sqlite_db, "--status", "STARTED"),
+      paste("Rscript", upd_job_status_path, "--job_id", "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "STARTED"),
       "",
       sep = "\n",
       file = outfile,
@@ -310,10 +315,10 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
 
     cat(
       "if [ $job_failed -ne 0 ]; then",
-      paste("  Rscript", upd_job_status_path, "--job_id", "'$job_id'", "--sqlite_db", tracking_sqlite_db, "--status", "FAILED"),
+      paste("  Rscript", upd_job_status_path, "--job_id", "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "FAILED"),
       "  exit 1",
       "fi",
-      paste("Rscript", upd_job_status_path, "--job_id", "'$job_id'", "--sqlite_db", tracking_sqlite_db, "--status", "COMPLETED"),
+      paste("Rscript", upd_job_status_path, "--job_id", "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "COMPLETED"),
       "",
       sep = "\n",
       file = outfile,

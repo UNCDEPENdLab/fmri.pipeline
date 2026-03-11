@@ -1,6 +1,7 @@
 # register bg_ custom classes so that DBI writeTable works with this as a formal (S4?) class
 setOldClass(c("bg_subject_data", "data.frame"))
 setOldClass(c("bg_run_data", "data.frame"))
+setOldClass(c("bg_session_data", "data.frame"))
 setOldClass(c("bg_block_data", "data.frame"))
 setOldClass(c("bg_trial_data", "data.frame"))
 setOldClass(c("bg_subtrial_data", "data.frame"))
@@ -298,6 +299,9 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   if ("run_nifti" %in% names(run_data)) run_data$run_nifti <- as.character(run_data$run_nifti)
   if ("confound_input_file" %in% names(run_data)) run_data$confound_input_file <- as.character(run_data$confound_input_file)
 
+  # distill a session-level dataset so that session predictors can be exposed explicitly in pooled L2 models
+  session_data <- derive_session_data(run_data = run_data, subject_data = subject_data, lg = lg)
+
   if (!is.null(l1_models)) {
     if (checkmate::test_string(l1_models)) {
       if (l1_models == "prompt") l1_models <- build_l1_models(trial_data = trial_data)
@@ -340,6 +344,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     output_directory = output_directory,
     subject_data = subject_data,
     run_data = run_data,
+    session_data = session_data,
     trial_data = trial_data,
     ppi_data = ppi_data,
     vm = vm,
@@ -397,6 +402,9 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     if (is.null(gpa$glm_settings$spm)) gpa$glm_settings$spm <- list()
   }
 
+  # normalize longitudinal model signatures early for downstream compatibility checks
+  gpa <- normalize_longitudinal_model_signatures(gpa, lg)
+
   # initial checks on compute environment
   test_compute_environment(gpa, stop_on_fail=FALSE)
   if ("spm" %in% gpa$glm_software) {
@@ -404,6 +412,104 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   }
 
   return(gpa)
+}
+
+#' Derive a session-level data.frame from run- and subject-level inputs
+#'
+#' @param run_data A run-level data.frame with id/session/run_number columns.
+#' @param subject_data A subject-level data.frame with unique id/session rows.
+#' @param lg Logger used for diagnostics.
+#' @return A data.frame with one row per id/session.
+#' @keywords internal
+derive_session_data <- function(run_data, subject_data, lg) {
+  checkmate::assert_data_frame(run_data)
+  checkmate::assert_data_frame(subject_data)
+  checkmate::assert_subset(c("id", "session", "run_number"), names(run_data))
+  checkmate::assert_subset(c("id", "session"), names(subject_data))
+
+  run_cols <- setdiff(names(run_data), c("id", "session", "run_number"))
+  session_key <- interaction(run_data$id, run_data$session, drop = TRUE, lex.order = TRUE)
+  constant_cols <- run_cols[vapply(run_cols, function(cc) {
+    split_vals <- split(run_data[[cc]], session_key)
+    all(vapply(split_vals, function(xx) {
+      uu <- unique(xx[!is.na(xx)])
+      length(uu) <= 1L
+    }, logical(1)))
+  }, logical(1))]
+
+  if (length(constant_cols) > 0L) {
+    run_session_data <- run_data %>%
+      dplyr::group_by(id, session) %>%
+      dplyr::summarise(
+        dplyr::across(dplyr::all_of(constant_cols), function(xx) {
+          non_missing <- xx[!is.na(xx)]
+          if (length(non_missing) > 0L) non_missing[[1L]] else xx[[1L]]
+        }),
+        .groups = "drop"
+      )
+  } else {
+    run_session_data <- run_data %>% dplyr::distinct(id, session)
+  }
+
+  subject_session_data <- subject_data %>% dplyr::distinct(id, session, .keep_all = TRUE)
+  shared_cols <- intersect(
+    setdiff(names(run_session_data), c("id", "session")),
+    setdiff(names(subject_session_data), c("id", "session"))
+  )
+
+  if (length(shared_cols) > 0L) {
+    cmp <- dplyr::left_join(
+      run_session_data %>% dplyr::select(id, session, dplyr::all_of(shared_cols)),
+      subject_session_data %>% dplyr::select(id, session, dplyr::all_of(shared_cols)),
+      by = c("id", "session"), suffix = c(".run", ".subject")
+    )
+
+    conflicting <- character(0)
+    for (cc in shared_cols) {
+      run_col <- cmp[[paste0(cc, ".run")]]
+      subj_col <- cmp[[paste0(cc, ".subject")]]
+      mismatch <- !is.na(run_col) & !is.na(subj_col) & run_col != subj_col
+      if (any(mismatch)) conflicting <- c(conflicting, cc)
+    }
+
+    if (length(conflicting) > 0L) {
+      lg$warn(
+        "Session-level variables conflict between run_data and subject_data for %s. Preferring subject_data values.",
+        paste(conflicting, collapse = ", ")
+      )
+    }
+  }
+
+  session_data <- dplyr::full_join(
+    run_session_data, subject_session_data,
+    by = c("id", "session"), suffix = c(".run", ".subject")
+  )
+
+  if (length(shared_cols) > 0L) {
+    for (cc in shared_cols) {
+      run_col <- paste0(cc, ".run")
+      subj_col <- paste0(cc, ".subject")
+      session_data[[cc]] <- dplyr::coalesce(session_data[[subj_col]], session_data[[run_col]])
+    }
+
+    drop_cols <- c(paste0(shared_cols, ".run"), paste0(shared_cols, ".subject"))
+    session_data <- session_data %>% dplyr::select(-dplyr::all_of(drop_cols))
+  }
+
+  session_data <- session_data %>% dplyr::arrange(id, session)
+  class(session_data) <- c("bg_session_data", class(session_data))
+
+  if (length(constant_cols) > 0L) {
+    lg$info(
+      "Derived session_data from run_data using %d columns constant within id/session.",
+      length(constant_cols)
+    )
+  } else {
+    lg$info("No run-level columns were constant within id/session while deriving session_data.")
+  }
+
+  lg$info("Session data contains %d rows and %d columns.", nrow(session_data), ncol(session_data))
+  return(session_data)
 }
 
 #' Helper function for setting up and modifying the compute environment for scripts generated by the pipeline

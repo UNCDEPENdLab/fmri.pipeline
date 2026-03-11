@@ -114,9 +114,28 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
     run_df$l1_confound_file <- expected_l1_confound_file
 
     if (is.null(l1_cached_df)) {
-      msg <- "Not re-generating confound information, but l1_cached_df is NULL. Cannot proceed."
-      lg$error(msg)
-      stop(msg)
+      lg$info(
+        "No cached l1_run_calculations record found for id: %s, session: %s, run_number: %s. Initializing defaults.",
+        id, session, run_number
+      )
+
+      run_df <- truncate_runs(
+        mr_df = run_df,
+        gpa = gpa,
+        subj_outdir = analysis_outdir,
+        truncation_data = truncation_data,
+        lg = lg
+      )
+
+      insert_df_sqlite(
+        gpa,
+        id = id, session = session, run_number = run_number,
+        data = run_df[, calculation_columns, drop = FALSE],
+        table = "l1_run_calculations",
+        immediate = TRUE
+      )
+
+      l1_cached_df <- run_df[, calculation_columns, drop = FALSE]
     } else {
       # SQLite cannot support logical/boolean types, need to convert 0/1 outcome
       l1_cached_df$exclude_run <- as.logical(l1_cached_df$exclude_run)
@@ -272,7 +291,11 @@ test_generate_run_exclusion <- function(gpa, id, session, run_number, l1_cached_
     }
   }
 
-  return(list(generate_run_exclusion = generate_run_exclusion, exclude_data = exclude_data))
+  return(list(
+    generate_run_exclusion = generate_run_exclusion,
+    exclude_data = exclude_data,
+    exclude_run = exclude_run
+  ))
 }
 
 #' helper function to generate run truncation

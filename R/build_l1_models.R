@@ -201,6 +201,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, ppi_data = NULL, l1_model
 
   if (isTRUE(use_gpa)) {
     gpa$l1_models <- l1_model_set
+    gpa <- refresh_l1_cope_names(gpa, lg = lg)
     return(gpa)
   } else {
     return(l1_model_set)

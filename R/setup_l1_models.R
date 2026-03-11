@@ -43,11 +43,36 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
     lg$add_appender(lgr::AppenderFile$new(gpa$output_locations$setup_l1_log_txt), name = "setup_l1_log_txt")
   }
 
+  gpa <- refresh_l1_cope_names(gpa, lg = lg)
+
   # TODO: This is a mess if use the l1_model_names since we will always be overwriting what's in the l1_model_setup
   # data.frame. We need more of an append/update approach, perhaps like the sqlite setup for the overall pipeline.
 
   # refresh status of feat inputs and outputs at level 1 before continuing
   gpa <- refresh_glm_status(gpa, level=1L, lg=lg)
+
+  spm_l1_session_mode <- "separate"
+  spm_anchor_by_id <- NULL
+  if ("spm" %in% gpa$glm_software) {
+    spm_mode_raw <- NULL
+    if (!is.null(gpa$glm_settings) && !is.null(gpa$glm_settings$spm) &&
+        "l1_session_mode" %in% names(gpa$glm_settings$spm)) {
+      spm_mode_raw <- gpa$glm_settings$spm$l1_session_mode
+    }
+    spm_l1_session_mode <- resolve_spm_l1_session_mode(spm_mode_raw, lg = lg)
+    if (identical(spm_l1_session_mode, "pooled")) {
+      subj_ids <- unique(as.character(gpa$subject_data$id))
+      spm_anchor_by_id <- setNames(
+        vapply(subj_ids, function(sid) {
+          min(as.integer(gpa$subject_data$session[gpa$subject_data$id == sid]), na.rm = TRUE)
+        }, integer(1)),
+        subj_ids
+      )
+      lg$info("SPM L1 session mode is 'pooled'; SPM L1 models will be created once per id across all sessions.")
+    } else {
+      lg$info("SPM L1 session mode is 'separate'; SPM L1 models will be created per id/session.")
+    }
+  }
 
   #setup parallel worker pool, if requested
   if (!is.null(gpa$parallel$l1_setup_cores) && gpa$parallel$l1_setup_cores[1L] > 1L) {
@@ -78,6 +103,10 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
     glm_backends <- get_glm_backends(gpa)
     backend_fsl <- glm_backends[["fsl"]]
     backend_spm <- glm_backends[["spm"]]
+    is_spm_anchor <- !identical(spm_l1_session_mode, "pooled") ||
+      (!is.null(spm_anchor_by_id) &&
+       as.character(subj_id) %in% names(spm_anchor_by_id) &&
+       as.integer(subj_session) == as.integer(spm_anchor_by_id[[as.character(subj_id)]]))
 
     # find the run data for analysis
     rdata <- gpa$run_data %>% dplyr::filter(id == !!subj_id & session == !!subj_session & run_nifti_present == TRUE)
@@ -144,34 +173,57 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
     # Precompute concatenated confounds for SPM/AFNI if requested
     l1_confound_files_spm <- l1_confound_files
     if ("spm" %in% gpa$glm_software && length(run_nifti) > 1L) {
-      spm_defaults <- list(concatenate_runs = NULL)
+      spm_defaults <- list(concatenate_runs = FALSE)
       spm_settings <- populate_defaults(gpa$glm_settings$spm, spm_defaults)
       if (is.null(spm_settings$concatenate_runs)) {
-        spm_settings$concatenate_runs <- length(run_nifti) > 1L
+        spm_settings$concatenate_runs <- FALSE
       }
 
       if (isTRUE(spm_settings$concatenate_runs)) {
-        confound_outdir <- NULL
-        if (length(l1_confound_files) > 0L && file.exists(l1_confound_files[1L])) {
-          confound_outdir <- dirname(l1_confound_files[1L])
-        } else {
-          confound_outdir <- get_output_directory(
-            id = subj_id, session = subj_session, gpa = gpa,
-            what = "sub", create_if_missing = TRUE
+        has_nonempty_confounds <- length(l1_confound_files) > 0L &&
+          any(!is.na(l1_confound_files) & nzchar(l1_confound_files))
+        valid_confounds <- has_nonempty_confounds &&
+          all(!is.na(l1_confound_files) & nzchar(l1_confound_files) & file.exists(l1_confound_files))
+
+        if (isTRUE(valid_confounds)) {
+          confound_outdir <- NULL
+          if (length(l1_confound_files) > 0L && file.exists(l1_confound_files[1L])) {
+            confound_outdir <- dirname(l1_confound_files[1L])
+          } else {
+            confound_outdir <- get_output_directory(
+              id = subj_id, session = subj_session, gpa = gpa,
+              what = "sub", create_if_missing = TRUE
+            )
+          }
+          concat_file <- concat_l1_confounds(
+            gpa = gpa, id = subj_id, session = subj_session,
+            run_numbers = mr_run_nums, confound_files = l1_confound_files,
+            output_dir = confound_outdir, lg = lg
           )
-        }
-        concat_file <- concat_l1_confounds(
-          gpa = gpa, id = subj_id, session = subj_session,
-          run_numbers = mr_run_nums, confound_files = l1_confound_files,
-          output_dir = confound_outdir, lg = lg
-        )
-        if (!is.null(concat_file)) {
-          l1_confound_files_spm <- concat_file
-          lg$info("Using concatenated confounds for SPM: %s", concat_file)
+          if (!is.null(concat_file)) {
+            l1_confound_files_spm <- concat_file
+            lg$info("Using concatenated confounds for SPM: %s", concat_file)
+          } else {
+            l1_confound_files_spm <- NULL
+            lg$warn(
+              "Unable to concatenate confounds for SPM (id=%s session=%s); proceeding without confounds.",
+              subj_id, subj_session
+            )
+          }
+        } else if (!isTRUE(has_nonempty_confounds)) {
+          l1_confound_files_spm <- NULL
+          lg$info(
+            "SPM concatenate_runs=TRUE with no confounds configured for id=%s session=%s; proceeding without confounds.",
+            subj_id, subj_session
+          )
         } else {
-          msg <- "Unable to generate concatenated confounds while concatenate_runs=TRUE."
-          lg$error(msg)
-          stop(msg)
+          l1_confound_files_spm <- NULL
+          invalid <- l1_confound_files[is.na(l1_confound_files) | !nzchar(l1_confound_files) | !file.exists(l1_confound_files)]
+          invalid_fmt <- if (length(invalid) == 0L) "<none>" else paste(ifelse(is.na(invalid), "NA", invalid), collapse = ", ")
+          lg$warn(
+            "SPM concatenate_runs=TRUE but confounds are missing/invalid for id=%s session=%s; proceeding without confounds. Missing/invalid: %s",
+            subj_id, subj_session, invalid_fmt
+          )
         }
       }
     }
@@ -318,17 +370,22 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
         }
       }
 
-      # TODO: finalize SPM approach
       if (is.null(backend_spm)) {
         lg$warn("SPM backend is not configured; skipping SPM L1 setup for subject %s session %s.", subj_id, subj_session)
-      } else {
+      } else if (identical(spm_l1_session_mode, "pooled") && !isTRUE(is_spm_anchor)) {
+        lg$debug(
+          "Skipping SPM pooled L1 setup for non-anchor row id=%s session=%s model=%s (anchor session=%s).",
+          subj_id, subj_session, this_model, spm_anchor_by_id[[as.character(subj_id)]]
+        )
+      } else if (!identical(spm_l1_session_mode, "pooled")) {
         lg$info("Setting up SPM L1 model %s for subject %s session %s.", this_model, subj_id, subj_session)
-        # Setup spm run-level models for each combination of signals
         spm_l1_df <- tryCatch(
           {
             backend_spm$l1_setup(
               id = subj_id, session = subj_session, l1_confound_files = l1_confound_files_spm,
-              d_obj = d_obj, gpa = gpa, model_name = this_model, run_nifti = run_nifti
+              d_obj = d_obj, gpa = gpa, model_name = this_model, run_nifti = run_nifti,
+              run_numbers = mr_run_nums, run_sessions = rep.int(as.integer(subj_session), length(mr_run_nums)),
+              source_run_numbers = mr_run_nums, l1_session_mode = "separate"
             )
           },
           error = function(e) {
@@ -342,6 +399,187 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
           l1_file_setup$spm <- rbind(l1_file_setup$spm, spm_l1_df)
         } else {
           lg$warn("SPM L1 model setup returned NULL for model %s, subject %s, session %s.", this_model, subj_id, subj_session)
+        }
+      } else {
+        lg$info("Setting up pooled-session SPM L1 model %s for subject %s.", this_model, subj_id)
+
+        pooled_rdata <- gpa$run_data %>% dplyr::filter(id == !!subj_id)
+        if ("run_nifti_present" %in% names(pooled_rdata)) {
+          pooled_rdata <- pooled_rdata %>% dplyr::filter(run_nifti_present == TRUE)
+        }
+        pooled_rdata <- pooled_rdata[order(pooled_rdata$session, pooled_rdata$run_number), , drop = FALSE]
+
+        if (nrow(pooled_rdata) == 0L) {
+          lg$warn("No run data found for pooled SPM L1 setup: id=%s model=%s", subj_id, this_model)
+          next
+        }
+        if (!"tr" %in% names(pooled_rdata) || length(unique(pooled_rdata$tr)) > 1L) {
+          lg$error("SPM pooled L1 requires one TR per subject across sessions. id=%s model=%s", subj_id, this_model)
+          next
+        }
+
+        pooled_run_nifti <- get_mr_abspath(pooled_rdata, "run_nifti")
+        pooled_run_sessions <- as.integer(pooled_rdata$session)
+        pooled_source_runs <- as.integer(pooled_rdata$run_number)
+        pooled_run_numbers <- seq_along(pooled_source_runs)
+        pooled_run_volumes <- pooled_rdata$run_volumes
+        pooled_exclude_run <- pooled_rdata$exclude_run
+        pooled_l1_confound_files <- if ("l1_confound_file" %in% names(pooled_rdata)) pooled_rdata$l1_confound_file else rep("", length(pooled_run_numbers))
+
+        run_key <- paste(pooled_run_sessions, pooled_source_runs, sep = "::")
+        remap_run_numbers <- function(df, what = "data") {
+          if (!is.data.frame(df) || nrow(df) == 0L) return(df)
+          if (!all(c("session", "run_number") %in% names(df))) return(df)
+          idx <- match(paste(df$session, df$run_number, sep = "::"), run_key)
+          if (anyNA(idx)) {
+            lg$warn(
+              "Dropping %d row(s) with unmatched session/run_number while remapping pooled SPM %s for id=%s model=%s.",
+              sum(is.na(idx)), what, subj_id, this_model
+            )
+            df <- df[!is.na(idx), , drop = FALSE]
+            idx <- idx[!is.na(idx)]
+          }
+          df$run_number <- pooled_run_numbers[idx]
+          df
+        }
+
+        m_events_spm <- data.table::rbindlist(
+          lapply(gpa$l1_models$events, function(this_event) {
+            this_event$data %>% dplyr::filter(id == !!subj_id)
+          })
+        )
+        m_events_spm <- remap_run_numbers(as.data.frame(m_events_spm), what = "events")
+
+        m_signals_spm <- lapply(gpa$l1_models$signals[gpa$l1_models$models[[this_model]]$signals], function(this_signal) {
+          if (inherits(this_signal$value, "data.frame")) {
+            this_signal$value <- this_signal$value %>% dplyr::filter(id == !!subj_id)
+            this_signal$value <- remap_run_numbers(this_signal$value, what = paste0("signal ", this_signal$name))
+            if (!is.null(this_signal$wi_model) && nrow(this_signal$value) > 0L) {
+              this_signal <- fit_wi_model(this_signal)
+            }
+          } else {
+            msg <- "Unable to sort out how to refit wi_model with signal that doesn't have a data.frame in the $value slot"
+            lg$error(msg)
+            stop(msg)
+          }
+          this_signal
+        })
+
+        ts_multiplier_data_spm <- if (!is.null(ts_multiplier_cols)) {
+          gpa$ppi_data %>% dplyr::filter(id == !!subj_id)
+        } else {
+          NULL
+        }
+        if (is.data.frame(ts_multiplier_data_spm) && nrow(ts_multiplier_data_spm) > 0L) {
+          ts_multiplier_data_spm <- remap_run_numbers(ts_multiplier_data_spm, what = "ts_multipliers")
+        }
+
+        mr_df_spm <- data.frame(
+          id = subj_id,
+          session = pooled_run_sessions,
+          run_number = pooled_run_numbers,
+          run_nifti = pooled_run_nifti,
+          l1_confound_file = pooled_l1_confound_files,
+          run_volumes = pooled_run_volumes,
+          exclude_run = pooled_exclude_run,
+          row.names = NULL
+        )
+
+        spm_outdir <- get_output_directory(
+          id = subj_id, session = 0L, l1_model = this_model,
+          gpa = gpa, glm_software = "spm", what = "l1", create_if_missing = TRUE
+        )
+        bdm_args_spm <- gpa$additional$bdm_args
+        t_out_spm <- "spm"
+        if (isTRUE(gpa$use_preconvolve)) t_out_spm <- c("convolved", t_out_spm)
+        bdm_args_spm$events <- m_events_spm
+        bdm_args_spm$signals <- m_signals_spm
+        bdm_args_spm$tr <- pooled_rdata$tr[1L]
+        bdm_args_spm$write_timing_files <- t_out_spm
+        bdm_args_spm$drop_volumes <- gpa$drop_volumes
+        bdm_args_spm$run_data <- mr_df_spm
+        bdm_args_spm$runs_to_output <- pooled_run_numbers
+        bdm_args_spm$output_directory <- file.path(spm_outdir, "timing_files")
+        bdm_args_spm$lg <- lg
+        bdm_args_spm$ts_multipliers <- ts_multiplier_data_spm
+
+        d_obj_spm <- tryCatch(do.call(build_design_matrix, bdm_args_spm), error = function(e) {
+          lg$error("Failed pooled SPM build_design_matrix for id: %s, model: %s", subj_id, this_model)
+          lg$error("Error message: %s", as.character(e))
+          return(NULL)
+        })
+        if (is.null(d_obj_spm)) next
+
+        spm_settings <- populate_defaults(gpa$glm_settings$spm, list(concatenate_runs = FALSE))
+        l1_confound_files_spm_use <- pooled_l1_confound_files
+        if (isTRUE(spm_settings$concatenate_runs)) {
+          has_nonempty_confounds <- length(pooled_l1_confound_files) > 0L &&
+            any(!is.na(pooled_l1_confound_files) & nzchar(pooled_l1_confound_files))
+          valid_confounds <- has_nonempty_confounds &&
+            all(!is.na(pooled_l1_confound_files) & nzchar(pooled_l1_confound_files) & file.exists(pooled_l1_confound_files))
+
+          if (isTRUE(valid_confounds)) {
+            concat_file <- concat_l1_confounds(
+              gpa = gpa,
+              id = subj_id,
+              session = 0L,
+              run_numbers = pooled_source_runs,
+              run_sessions = pooled_run_sessions,
+              confound_files = pooled_l1_confound_files,
+              output_dir = spm_outdir,
+              file_name = paste0("l1_confounds_concat_id", subj_id, ".txt"),
+              lg = lg
+            )
+            if (is.null(concat_file)) {
+              l1_confound_files_spm_use <- NULL
+              lg$warn(
+                "Unable to concatenate confounds for pooled SPM setup (id=%s model=%s); proceeding without confounds.",
+                subj_id, this_model
+              )
+            } else {
+              l1_confound_files_spm_use <- concat_file
+            }
+          } else if (!isTRUE(has_nonempty_confounds)) {
+            l1_confound_files_spm_use <- NULL
+            lg$info(
+              "SPM concatenate_runs=TRUE with no pooled confounds configured for id=%s model=%s; proceeding without confounds.",
+              subj_id, this_model
+            )
+          } else {
+            l1_confound_files_spm_use <- NULL
+            invalid <- pooled_l1_confound_files[
+              is.na(pooled_l1_confound_files) |
+                !nzchar(pooled_l1_confound_files) |
+                !file.exists(pooled_l1_confound_files)
+            ]
+            invalid_fmt <- if (length(invalid) == 0L) "<none>" else paste(ifelse(is.na(invalid), "NA", invalid), collapse = ", ")
+            lg$warn(
+              "SPM concatenate_runs=TRUE but pooled confounds are missing/invalid for id=%s model=%s; proceeding without confounds. Missing/invalid: %s",
+              subj_id, this_model, invalid_fmt
+            )
+          }
+        }
+
+        spm_l1_df <- tryCatch(
+          {
+            backend_spm$l1_setup(
+              id = subj_id, session = 0L, l1_confound_files = l1_confound_files_spm_use,
+              d_obj = d_obj_spm, gpa = gpa, model_name = this_model, run_nifti = pooled_run_nifti,
+              run_numbers = pooled_run_numbers, run_sessions = pooled_run_sessions,
+              source_run_numbers = pooled_source_runs, l1_session_mode = "pooled"
+            )
+          },
+          error = function(e) {
+            lg$error("Problem running pooled spm_l1_model. Model: %s, Subject: %s", this_model, subj_id)
+            lg$error("Error message: %s", as.character(e))
+            return(NULL)
+          }
+        )
+
+        if (!is.null(spm_l1_df)) {
+          l1_file_setup$spm <- rbind(l1_file_setup$spm, spm_l1_df)
+        } else {
+          lg$warn("SPM pooled L1 model setup returned NULL for model %s, subject %s.", this_model, subj_id)
         }
       }
     }

@@ -20,13 +20,11 @@ build_l2_models <- function(gpa, from_spec_file = NULL, regressor_cols = NULL) {
   fname <- match.call()[[1]]
   if (fname == "build_l2_models") {
     menu_desc <- "second-level (subject)"
-    data <- gpa$run_data # L2
     model_set <- gpa$l2_models
     level <- 2L # model level inside model object
     out_field <- "l2_models" # where to put results in gpa
   } else {
     menu_desc <- "third-level (sample)"
-    data <- gpa$subject_data # L3
     model_set <- gpa$l3_models
     level <- 3L
     out_field <- "l3_models" # where to put results in gpa
@@ -34,6 +32,12 @@ build_l2_models <- function(gpa, from_spec_file = NULL, regressor_cols = NULL) {
 
   lg <- lgr::get_logger(paste0("glm_pipeline/l", level, "_setup"))
   lg$set_threshold(gpa$lgr_threshold)
+
+  if (level == 2L) {
+    data <- compose_l2_model_data(gpa, lg = lg) # L2 pooled modeling frame: run + session predictors
+  } else {
+    data <- gpa$subject_data # L3
+  }
 
   # allow deferred model specification upstream
   if (!is.null(model_set) && model_set[1L] == "prompt") model_set <- NULL
@@ -237,6 +241,64 @@ build_l2_models <- function(gpa, from_spec_file = NULL, regressor_cols = NULL) {
     gpa$l3_models <- model_set
   }
 
+  has_l2_models <- checkmate::test_class(gpa$l2_models, "hi_model_set") &&
+    !is.null(gpa$l2_models$models) &&
+    length(gpa$l2_models$models) > 0L
+  has_l3_models <- checkmate::test_class(gpa$l3_models, "hi_model_set") &&
+    !is.null(gpa$l3_models$models) &&
+    length(gpa$l3_models$models) > 0L
+
+  if (fname == "build_l3_models" && !isTRUE(has_l2_models)) {
+    msg <- paste0(
+      "L3 models were built before any L2 models were defined. ",
+      "L2/L3 signature compatibility cannot be fully validated yet; ",
+      "run build_l2_models() and compatibility checks will be applied automatically."
+    )
+    backend_notes <- character(0)
+    if ("spm" %in% gpa$glm_software) {
+      backend_notes <- c(
+        backend_notes,
+        "For SPM, L1 setup also skips projected L2 run/session regressors until L2 models are defined."
+      )
+    }
+    if ("fsl" %in% gpa$glm_software) {
+      backend_notes <- c(
+        backend_notes,
+        "For FSL, L2/L3 pairing will be enforced once L2 models are defined."
+      )
+    }
+    if (length(backend_notes) > 0L) {
+      msg <- paste(msg, paste(backend_notes, collapse = " "))
+    }
+    lg$warn(msg)
+    warning(msg)
+  }
+
+  if (isTRUE(has_l2_models) && isTRUE(has_l3_models)) {
+    pair_df <- enumerate_l2_l3_signature_pairs(gpa, lg = lg)
+    incompatible <- pair_df[!pair_df$compatible, , drop = FALSE]
+    compatible <- pair_df[pair_df$compatible, , drop = FALSE]
+
+    if (nrow(incompatible) > 0L) {
+      detail <- format_l2_l3_incompatibilities(incompatible, max_items = 8L)
+      if (nrow(compatible) == 0L) {
+        msg <- paste0(
+          "All L2/L3 model combinations are currently incompatible by signature. ",
+          detail
+        )
+        lg$warn(msg)
+        warning(msg)
+      } else {
+        msg <- paste0(
+          "Some L2/L3 model combinations are incompatible by signature and will be skipped during L3 setup. ",
+          detail
+        )
+        lg$info(msg)
+        message(msg)
+      }
+    }
+  }
+
   return(gpa)
 }
 
@@ -282,6 +344,47 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       id_cols <- c("id", "session", "run_number")
     } else {
       id_cols <- c("id", "session")
+    }
+
+    choose_l2_scope <- function(default_scope = "id_session") {
+      allowed <- longitudinal_l2_scopes()
+      checkmate::assert_subset(default_scope, allowed)
+      if (!"session" %in% names(data) || length(unique(data$session)) <= 1L) {
+        return(default_scope)
+      }
+      opts <- c(
+        "Within-session inputs (id + session)",
+        "Across-session inputs (id only)"
+      )
+      which_scope <- menu(
+        opts,
+        title = "How should this L2 model combine sessions?"
+      )
+      if (which_scope == 2L) "id" else "id_session"
+    }
+
+    choose_l3_input_mode <- function(default_mode = "separate_sessions") {
+      allowed <- longitudinal_l3_input_modes()
+      checkmate::assert_subset(default_mode, allowed)
+      if (!"session" %in% names(data) || length(unique(data$session)) <= 1L) {
+        return(default_mode)
+      }
+      opts <- c(
+        "Separate L3 model by session (requires L2 scope id_session)",
+        "Pooled sessions with subject EVs (requires L2 scope id_session)",
+        "One row per subject input (requires L2 scope id)"
+      )
+      which_mode <- menu(
+        opts,
+        title = "How should this L3 model use sessions?"
+      )
+      if (which_mode == 2L) {
+        "pooled_sessions_subject_ev"
+      } else if (which_mode == 3L) {
+        "subject_rows"
+      } else {
+        "separate_sessions"
+      }
     }
 
     ### ------ model name ------
@@ -471,6 +574,56 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
           mobj$reference_level[cc] <- levs[which_lev]
         }
 
+      }
+    }
+
+    # populate longitudinal signature fields used to derive L2/L3 compatibility
+    if (level == 2L) {
+      if (!is.null(spec_list$l2_scope)) {
+        checkmate::assert_string(spec_list$l2_scope)
+        checkmate::assert_subset(spec_list$l2_scope, longitudinal_l2_scopes())
+        mobj$l2_scope <- spec_list$l2_scope
+      } else if (is.null(mobj$l2_scope)) {
+        if (is.null(spec_list)) {
+          mobj$l2_scope <- choose_l2_scope(default_scope = "id_session")
+        } else {
+          mobj$l2_scope <- "id_session"
+        }
+      } else {
+        checkmate::assert_subset(mobj$l2_scope, longitudinal_l2_scopes())
+      }
+    } else if (level == 3L) {
+      if (!is.null(spec_list$l3_input_mode)) {
+        checkmate::assert_string(spec_list$l3_input_mode)
+        checkmate::assert_subset(spec_list$l3_input_mode, longitudinal_l3_input_modes())
+        mobj$l3_input_mode <- spec_list$l3_input_mode
+      } else if (is.null(mobj$l3_input_mode)) {
+        if (is.null(spec_list)) {
+          mobj$l3_input_mode <- choose_l3_input_mode(default_mode = "separate_sessions")
+        } else {
+          mobj$l3_input_mode <- "separate_sessions"
+        }
+      } else {
+        checkmate::assert_subset(mobj$l3_input_mode, longitudinal_l3_input_modes())
+      }
+    }
+
+    if (level == 2L) {
+      var_origin <- attr(data, "l2_var_origin")
+      if (!is.null(var_origin)) {
+        session_vars <- names(var_origin)[var_origin == "session"]
+        used_session_vars <- intersect(mobj$model_variables, session_vars)
+        if (length(used_session_vars) > 0L && identical(mobj$l2_scope, "id")) {
+          lg$info(
+            "L2 model '%s' includes session-level predictors in pooled id scope. These effects are run-weighted across sessions: %s",
+            mobj$name, paste(used_session_vars, collapse = ", ")
+          )
+        } else if (length(used_session_vars) > 0L && identical(mobj$l2_scope, "id_session")) {
+          lg$warn(
+            "L2 model '%s' includes session-level predictors with l2_scope='id_session'. These terms are typically aliased within-session and may be dropped: %s",
+            mobj$name, paste(used_session_vars, collapse = ", ")
+          )
+        }
       }
     }
 

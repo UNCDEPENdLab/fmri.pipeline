@@ -45,8 +45,8 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, backe
     backend_names <- intersect(backend_names, backend)
   }
 
-  # Filter to backends that support L2 (currently only FSL)
-  # SPM concatenates runs at L1, AFNI is not implemented
+  # Filter to backends that support standalone L2 estimation (currently only FSL)
+  # SPM uses L2 model specs during L1 setup for run/session projection
  l2_supported_backends <- c("fsl")
   backends_without_l2 <- setdiff(backend_names, l2_supported_backends)
   if (length(backends_without_l2) > 0L) {
@@ -64,6 +64,10 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, backe
 
   lg <- lgr::get_logger("glm_pipeline/l2_setup")
   lg$set_threshold(gpa$lgr_threshold)
+
+  # normalize model signatures so l2_scope is always available and validated
+  gpa <- normalize_longitudinal_model_signatures(gpa, lg)
+  gpa <- refresh_l1_cope_names(gpa, lg = lg)
 
   add_log_suffix <- function(path, suffix) {
     if (is.null(path) || is.null(suffix) || !nzchar(suffix)) return(path)
@@ -92,7 +96,9 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, backe
   lg$debug("L1 model: %s", l1_model_names)
 
   if (length(backend_names) == 0L) {
-    lg$info("No L2-capable backends requested. Only FSL supports L2 (SPM concatenates runs at L1).")
+    lg$info(
+      "No backend with standalone L2 estimation requested. FSL estimates L2 directly; SPM consumes L2 model specs during L1 setup."
+    )
     gpa$l2_setup_status <- list(
       success = TRUE,
       reason = "no_l2_backends",
@@ -125,8 +131,11 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, backe
     )
   }
 
+  # compose L2 modeling data once so builder/respecification use the same columns
+  l2_data <- compose_l2_model_data(gpa, lg = lg)
+
   # only retain good runs and subjects
-  run_data <- gpa$run_data %>%
+  run_data <- l2_data %>%
     dplyr::filter(exclude_run == FALSE & exclude_subject == FALSE)
 
   # subset basic metadata to merge against a given l1 model to enforce run/subject exclusions
@@ -155,8 +164,19 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, backe
 
   # respecify L2 models for each subject based on available runs
   for (mname in l2_model_names) {
-    lg$info("Recalculating per-subject L2 models based on available runs for model: %s", mname)
-    gpa$l2_models$models[[mname]] <- respecify_l2_models_by_subject(gpa$l2_models$models[[mname]], run_data)
+    this_scope <- gpa$l2_models$models[[mname]]$l2_scope
+    if (is.null(this_scope) || !nzchar(this_scope)) this_scope <- "id_session"
+    split_on <- if (identical(this_scope, "id")) "id" else c("id", "session")
+    lg$info(
+      "Recalculating per-subject L2 models based on available runs for model: %s (l2_scope=%s)",
+      mname, this_scope
+    )
+    gpa$l2_models$models[[mname]] <- respecify_l2_models_by_subject(
+      gpa$l2_models$models[[mname]],
+      run_data,
+      split_on = split_on,
+      aggregated_session = 0L
+    )
   }
 
   # refresh l1 model status in $l1_model_setup
@@ -254,6 +274,9 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
     model_info <- model_info # avoid complaints about visible global binding in R CMD check
     this_l1_model <- model_info$l1_model
     this_l2_model <- model_info$l2_model
+    this_scope <- gpa$l2_models$models[[this_l2_model]]$l2_scope
+    if (is.null(this_scope) || !nzchar(this_scope)) this_scope <- "id_session"
+    split_cols <- if (identical(this_scope, "id")) "id" else c("id", "session")
 
     l2_file_setup <- list(fsl = list(), spm = list(), afni = list())
 
@@ -266,12 +289,12 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
     to_run <- dplyr::inner_join(good_runs, to_run, by = c("id", "session", "run_number"))
     data.table::setDT(to_run) # convert to data.table for split
 
-    by_subj_session <- split(to_run, by = c("id", "session"))
+    by_subj_session <- split(to_run, by = split_cols)
 
     # setup Feat L2 files for each id and session
     for (l1_df in by_subj_session) {
       subj_id <- l1_df$id[1L]
-      subj_session <- l1_df$session[1L]
+      subj_session <- if (length(unique(l1_df$session)) == 1L) l1_df$session[1L] else 0L
       feat_l2_df <- tryCatch({
         backend$l2_setup(
           l1_df = l1_df,
@@ -279,8 +302,8 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
         )},
         error = function(e) {
           lg$error(
-            "Problem with fsl_l2_model. L1 Model: %s, L2 Model: %s, Subject: %s, Session: %s",
-            this_l1_model, this_l2_model, subj_id, subj_session
+            "Problem with fsl_l2_model. L1 Model: %s, L2 Model: %s, Subject: %s, Session: %s, Scope: %s",
+            this_l1_model, this_l2_model, subj_id, subj_session, this_scope
           )
           lg$error("Error message: %s", as.character(e))
           return(NULL)
@@ -304,7 +327,7 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
 }
 
 setup_l2_backend_spm <- function(gpa, backend, lg, l1_model_names, l2_model_names, good_runs) {
-  lg$warn("spm not supported in setup_l2_models")
+  lg$info("SPM has no standalone L2 setup step; L2 model specs are applied during SPM L1 setup.")
   list(data = NULL, id_cols = NULL)
 }
 

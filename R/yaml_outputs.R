@@ -300,6 +300,8 @@ get_l2_config <- function(gpa) {
     # convert named vectors for covariate transformation and reference levels to lists for YAML to capture the key:value pairs
     if (!is.null(mm$covariate_transform)) mobj$covariate_transform <- as.list(mm$covariate_transform) # settings for covariate transformation
     if (!is.null(mm$reference_level)) mobj$reference_level <- as.list(mm$reference_level) # settings for covariate transformation
+    if (level == 2L && !is.null(mm$l2_scope)) mobj$l2_scope <- mm$l2_scope
+    if (level == 3L && !is.null(mm$l3_input_mode)) mobj$l3_input_mode <- mm$l3_input_mode
 
     mobj$contrasts <- list(
       diagonal = mm$contrast_spec$diagonal,

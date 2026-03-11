@@ -56,6 +56,54 @@ if (is.null(regressors) || length(regressors) != ncol(cmat)) {
   stop("contrast_matrix must have column names matching regressor names.")
 }
 
+projection_interaction_terms <- spec$projection_interaction_terms
+if (is.null(projection_interaction_terms)) projection_interaction_terms <- character(0)
+projection_interaction_terms <- unique(projection_interaction_terms[!is.na(projection_interaction_terms) & nzchar(projection_interaction_terms)])
+
+normalize_projection_modes <- function(x) {
+  if (is.null(x)) return(character(0))
+  x <- as.character(x)
+  x <- x[!is.na(x) & nzchar(x)]
+  if (length(x) == 0L) return(character(0))
+  lower <- tolower(x)
+  if (length(lower) == 1L && lower %in% c("none", "off", "false", "no", "0")) return(character(0))
+  if (any(lower %in% c("all", "true", "yes", "1"))) {
+    return(c("pooled", "session_specific", "session_differences"))
+  }
+  out <- vapply(lower, function(val) {
+    if (val %in% c("pooled", "condition_means", "condition-means", "main_effect")) return("pooled")
+    if (val %in% c("session_specific", "session-specific", "cell_means", "cell-means", "by_session")) return("session_specific")
+    if (val %in% c("session_difference", "session-difference", "session_differences", "session-differences", "pairwise_diff", "pairwise_differences")) return("session_differences")
+    val
+  }, character(1))
+  bad <- setdiff(out, c("pooled", "session_specific", "session_differences"))
+  if (length(bad) > 0L) stop("Unknown projection_interaction_contrast_modes: ", paste(bad, collapse = ", "))
+  unique(out)
+}
+
+projection_interaction_contrast_modes <- normalize_projection_modes(spec$projection_interaction_contrast_modes)
+projection_interaction_run_labels <- spec$projection_interaction_run_labels
+if (is.null(projection_interaction_run_labels)) projection_interaction_run_labels <- numeric(0)
+
+projection_main_effect_terms <- spec$projection_main_effect_terms
+if (is.null(projection_main_effect_terms)) projection_main_effect_terms <- character(0)
+projection_main_effect_terms <- unique(projection_main_effect_terms[!is.na(projection_main_effect_terms) & nzchar(projection_main_effect_terms)])
+
+projection_main_effect_weights <- spec$projection_main_effect_weights
+if (!is.null(projection_main_effect_weights)) {
+  if (is.matrix(projection_main_effect_weights)) {
+    projection_main_effect_weights <- as.data.frame(
+      projection_main_effect_weights,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+  }
+  if (!is.data.frame(projection_main_effect_weights)) {
+    stop("projection_main_effect_weights must be a data.frame or matrix when provided.")
+  }
+  projection_main_effect_weights[] <- lapply(projection_main_effect_weights, as.numeric)
+}
+
 spm_info <- readMat(matfile)
 mnames <- unlist(spm_info$mnames)
 cpos <- as.vector(spm_info$cpos)
@@ -74,6 +122,12 @@ col_names <- mnames[cpos]
 col_clean <- sub("Sn\\(\\d+\\)\\s+", "", col_names, perl = TRUE)
 col_has_bf <- grepl("\\*bf\\(\\d+\\)$", col_clean)
 col_base <- sub("\\*bf\\(\\d+\\)$", "", col_clean, perl = TRUE)
+session_tokens <- regmatches(col_names, regexec("^Sn\\((\\d+)\\)\\s+", col_names, perl = TRUE))
+session_index <- vapply(session_tokens, function(x) {
+  if (length(x) >= 2L) as.integer(x[2]) else 1L
+}, integer(1))
+session_index_full <- rep(NA_integer_, length(mnames))
+session_index_full[cpos] <- session_index
 
 # Parse condition and pmod names from SPM labels.
 # SPM can encode pmods as either:
@@ -121,6 +175,7 @@ match_columns <- function(reg) {
 full_cmat <- matrix(0, nrow = nrow(cmat), ncol = length(mnames))
 rownames(full_cmat) <- rownames(cmat)
 colnames(full_cmat) <- mnames
+full_cmat_raw <- full_cmat
 
 missing_regs <- character(0)
 for (ii in seq_len(nrow(cmat))) {
@@ -133,6 +188,7 @@ for (ii in seq_len(nrow(cmat))) {
       missing_regs <- union(missing_regs, reg)
       next
     }
+    full_cmat_raw[ii, cpos[idx]] <- full_cmat_raw[ii, cpos[idx]] + w
     if (isTRUE(average_across_runs)) {
       w <- w / length(idx)
     }
@@ -142,6 +198,125 @@ for (ii in seq_len(nrow(cmat))) {
 
 if (length(missing_regs) > 0L) {
   warning("No SPM columns matched these regressors: ", paste(missing_regs, collapse = ", "))
+}
+
+extra_rows <- list()
+extra_names <- character(0)
+
+clean_label <- function(x) {
+  gsub("[^A-Za-z0-9_]+", "_", x, perl = TRUE)
+}
+
+add_extra_row <- function(name, vec) {
+  if (!any(abs(vec) > 1e-12)) return(NULL)
+  name <- clean_label(name)
+  if (name %in% c(rownames(full_cmat), extra_names)) {
+    suffix <- 2L
+    while (paste0(name, "_", suffix) %in% c(rownames(full_cmat), extra_names)) {
+      suffix <- suffix + 1L
+    }
+    name <- paste0(name, "_", suffix)
+  }
+  extra_rows[[length(extra_rows) + 1L]] <<- vec
+  extra_names <<- c(extra_names, name)
+}
+
+if (length(projection_interaction_terms) > 0L &&
+    any(c("session_specific", "session_differences") %in% projection_interaction_contrast_modes)) {
+  all_sessions <- sort(unique(session_index))
+  if (length(projection_interaction_run_labels) == length(all_sessions)) {
+    label_map <- as.character(projection_interaction_run_labels)
+  } else {
+    label_map <- as.character(all_sessions)
+  }
+  names(label_map) <- as.character(all_sessions)
+
+  for (term in projection_interaction_terms) {
+    idx_all <- match_columns(term)
+    if (length(idx_all) == 0L) next
+    term_sessions <- sort(unique(session_index[idx_all]))
+    if (length(term_sessions) <= 1L) next
+
+    if ("session_specific" %in% projection_interaction_contrast_modes) {
+      for (ss in term_sessions) {
+        idx_ss <- idx_all[session_index[idx_all] == ss]
+        if (length(idx_ss) == 0L) next
+        vec <- rep(0, length(mnames))
+        vec[cpos[idx_ss]] <- 1 / length(idx_ss)
+        run_label <- label_map[[as.character(ss)]]
+        add_extra_row(paste0("proj_int_", term, "_run", run_label), vec)
+      }
+    }
+
+    if ("session_differences" %in% projection_interaction_contrast_modes && length(term_sessions) >= 2L) {
+      for (jj in 2:length(term_sessions)) {
+        for (ii in 1:(jj - 1L)) {
+          ss_lo <- term_sessions[ii]
+          ss_hi <- term_sessions[jj]
+          idx_lo <- idx_all[session_index[idx_all] == ss_lo]
+          idx_hi <- idx_all[session_index[idx_all] == ss_hi]
+          if (length(idx_lo) == 0L || length(idx_hi) == 0L) next
+          vec <- rep(0, length(mnames))
+          vec[cpos[idx_hi]] <- 1 / length(idx_hi)
+          vec[cpos[idx_lo]] <- -1 / length(idx_lo)
+          lo_label <- label_map[[as.character(ss_lo)]]
+          hi_label <- label_map[[as.character(ss_hi)]]
+          add_extra_row(paste0("proj_int_", term, "_run", hi_label, "_minus_run", lo_label), vec)
+        }
+      }
+    }
+  }
+}
+
+if (length(projection_main_effect_terms) > 0L &&
+    !is.null(projection_main_effect_weights) &&
+    is.data.frame(projection_main_effect_weights)) {
+  if (nrow(projection_main_effect_weights) > 0L) {
+    all_sessions <- sort(unique(session_index))
+    max_session <- max(all_sessions)
+
+    for (term in projection_main_effect_terms) {
+      if (!term %in% names(projection_main_effect_weights)) next
+
+      term_vals <- as.numeric(projection_main_effect_weights[[term]])
+      if (length(term_vals) < max_session) next
+      term_vals <- term_vals[all_sessions]
+
+      for (ii in seq_len(nrow(full_cmat_raw))) {
+        base_row <- full_cmat_raw[ii, ]
+        base_name <- rownames(cmat)[ii]
+        if (is.na(base_name) || !nzchar(base_name)) base_name <- paste0("contrast_", ii)
+        active_sessions <- all_sessions[vapply(
+          all_sessions,
+          function(ss) any(abs(base_row[session_index_full == ss]) > 1e-12, na.rm = TRUE),
+          logical(1)
+        )]
+        if (length(active_sessions) <= 1L) next
+
+        centered_vals <- term_vals
+        centered_vals[active_sessions] <- centered_vals[active_sessions] - mean(centered_vals[active_sessions])
+        if (all(abs(centered_vals[active_sessions]) <= 1e-12)) next
+
+        vec <- base_row
+        for (ss in active_sessions) {
+          idx_ss <- which(session_index_full == ss)
+          vec[idx_ss] <- vec[idx_ss] * centered_vals[which(all_sessions == ss)]
+        }
+
+        add_extra_row(
+          paste0("proj_", term, "_x_", base_name),
+          vec
+        )
+      }
+    }
+  }
+}
+
+if (length(extra_rows) > 0L) {
+  extra_mat <- do.call(rbind, extra_rows)
+  colnames(extra_mat) <- colnames(full_cmat)
+  rownames(extra_mat) <- extra_names
+  full_cmat <- rbind(full_cmat, extra_mat)
 }
 
 # Drop contrasts with all zero weights

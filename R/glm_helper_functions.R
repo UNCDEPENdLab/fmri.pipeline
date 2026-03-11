@@ -1138,16 +1138,48 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     cmat <- cmat_full
   }
 
-  # check for contrasts that are duplicated and ask user what to do about it. This should only happen once because we then update the $delete field
+  # check for duplicated contrast rows and resolve naming collisions.
+  # In non-interactive contexts (e.g., scripts/tests), retain the first row
+  # deterministically and drop the rest.
   dupe_list <- get_dupe_rows(cmat)
   drop_rows <- c()
-  if (length(dupe_list) > 0L) {    
-    message("Duplicate contrasts found in your matrix. This can occur for many benign reasons, but we need you to say what you want
+  if (length(dupe_list) > 0L) {
+    is_interactive <- interactive()
+    if (is.null(rownames(cmat))) {
+      rownames(cmat) <- paste0("contrast_", seq_len(nrow(cmat)))
+    }
+    if (isTRUE(is_interactive)) {
+      message("Duplicate contrasts found in your matrix. This can occur for many benign reasons, but we need you to say what you want
       to call these contrasts in the output so that it is clear to you.\n")
+    } else {
+      warning(
+        "Duplicate contrasts found in non-interactive mode; keeping the first name from each duplicate set.",
+        call. = FALSE
+      )
+    }
     
     for (dd in dupe_list) {
       message("These contrasts are the same: ", paste(rownames(cmat)[dd], collapse=", "))
-      whichkeep <- menu(rownames(cmat)[dd], title = "Which name should we use?")
+      if (isTRUE(is_interactive)) {
+        whichkeep <- menu(rownames(cmat)[dd], title = "Which name should we use?")
+        if (!is.numeric(whichkeep) || length(whichkeep) != 1L || is.na(whichkeep) ||
+            whichkeep < 1L || whichkeep > length(dd)) {
+          whichkeep <- 1L
+          warning(
+            "Invalid duplicate-contrast selection; defaulting to first contrast name: ",
+            rownames(cmat)[dd][whichkeep],
+            call. = FALSE
+          )
+        }
+      } else {
+        whichkeep <- 1L
+        message(
+          "Non-interactive session detected while resolving duplicate contrasts; keeping '",
+          rownames(cmat)[dd][whichkeep],
+          "' and dropping: ",
+          paste(rownames(cmat)[dd][-whichkeep], collapse = ", ")
+        )
+      }
       drop_rows <- c(drop_rows, dd[-whichkeep])
     }
 
@@ -1234,32 +1266,124 @@ get_wi_contrast_matrix <- function(mobj, c_colnames) {
 
 # }
 
-#' Helper function to run the requested GLM model for each subject+session separately
+#' Build run-level L2 model data augmented with session-level predictors
+#'
+#' @param gpa A \code{glm_pipeline_arguments} object.
+#' @param lg Optional logger.
+#' @return A data.frame suitable for L2 model fitting/respecification.
+#' @keywords internal
+compose_l2_model_data <- function(gpa, lg = NULL) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_data_frame(gpa$run_data)
+
+  if (is.null(lg)) {
+    lg <- lgr::get_logger("glm_pipeline/l2_setup")
+  }
+
+  l2_data <- gpa$run_data
+  origin <- setNames(rep("run", ncol(l2_data)), names(l2_data))
+
+  if (is.null(gpa$session_data)) {
+    attr(l2_data, "l2_var_origin") <- origin
+    return(l2_data)
+  }
+
+  checkmate::assert_data_frame(gpa$session_data)
+  checkmate::assert_subset(c("id", "session"), names(gpa$session_data))
+
+  session_dupes <- gpa$session_data %>%
+    dplyr::count(id, session, name = "n") %>%
+    dplyr::filter(n > 1L)
+  if (nrow(session_dupes) > 0L) {
+    stop("session_data must have unique id/session rows", call. = FALSE)
+  }
+
+  sdat <- gpa$session_data
+  session_cols <- setdiff(names(sdat), c("id", "session"))
+  if (length(session_cols) == 0L) {
+    attr(l2_data, "l2_var_origin") <- origin
+    return(l2_data)
+  }
+
+  conflicts <- intersect(session_cols, names(l2_data))
+  rename_map <- character(0)
+  if (length(conflicts) > 0L) {
+    existing <- names(l2_data)
+    for (cc in conflicts) {
+      base_name <- paste0("session_", cc)
+      candidate <- base_name
+      idx <- 1L
+      while (candidate %in% c(existing, session_cols, unname(rename_map))) {
+        candidate <- paste0(base_name, "_", idx)
+        idx <- idx + 1L
+      }
+      rename_map[cc] <- candidate
+      existing <- c(existing, candidate)
+    }
+
+    for (cc in names(rename_map)) {
+      names(sdat)[names(sdat) == cc] <- rename_map[[cc]]
+    }
+
+    lg$warn(
+      "Renaming session-level columns to avoid collisions with run-level columns: %s",
+      paste(sprintf("%s->%s", names(rename_map), unname(rename_map)), collapse = ", ")
+    )
+  }
+
+  l2_data <- dplyr::left_join(l2_data, sdat, by = c("id", "session"))
+  new_cols <- setdiff(names(l2_data), names(origin))
+  if (length(new_cols) > 0L) {
+    origin[new_cols] <- "session"
+  }
+
+  attr(l2_data, "l2_var_origin") <- origin
+  if (length(rename_map) > 0L) attr(l2_data, "session_rename_map") <- rename_map
+  l2_data
+}
+
+#' Recalculate an L2 model by grouping units derived from available run data
 #'
 #' @param mobj an \code{l1_model_spec} or \code{hi_model_spec} object containing the GLM model to run
-#' @param data The run-level data frame containing data for all ids and sessions. This will be split into individual chunks
+#' @param data The run-level data frame containing data for all ids and sessions. This is split into chunks by \code{split_on}.
+#' @param split_on Character vector defining grouping columns used to respecify the model. Must include \code{"id"} and may include
+#'   \code{"session"} (default: \code{c("id", "session")}).
+#' @param aggregated_session Integer session value assigned when grouping across sessions (i.e., when \code{split_on = "id"}). This keeps
+#'   output schemas consistent for downstream joins and cope metadata. Default is \code{0L}.
 #'
-#' @return a modified copy of \code{mobj} where the $by_subject field has been added
+#' @return a modified copy of \code{mobj} where the \code{$by_subject} field has been added
 #'
-#' @details The function adds the $by_subject field, which contains the design matrices and contrasts
-#'   for each subject and session in \code{data} based on the available data for that session. For example, if
-#'   a subject is missing a few runs (or these are dropped from analysis), then some contrasts may change or drop out of the model.
+#' @details The function adds the \code{$by_subject} field, which contains the design matrices and contrasts
+#'   for each grouping unit in \code{data}, based on the runs that remain available for that unit. For example, if
+#'   a subject is missing runs (or they are dropped from analysis), some contrasts may change or drop out of the model.
 #'
-#' The $by_subject field is a keyed data.table object containing list elements for the cope_list (mapping cope numbers to contrast names),
-#'   the contrasts, and the design matrix for each session.
+#' The \code{$by_subject} field is a keyed data.table containing list elements for \code{cope_list}
+#'   (mapping cope numbers to contrast names), \code{contrasts}, and the design matrix for each unit.
+#'   It also includes \code{grouping_scope} (\code{"id_session"} or \code{"id"}).
 #'
 #' @keywords internal
 #' @importFrom checkmate assert_data_frame assert_multi_class assert_subset
 #' @importFrom data.table data.table
-respecify_l2_models_by_subject <- function(mobj, data) {
+respecify_l2_models_by_subject <- function(mobj, data, split_on = c("id", "session"), aggregated_session = 0L) {
   checkmate::assert_multi_class(mobj, c("l1_model_spec", "hi_model_spec")) # verify that we have an object of known structure
   checkmate::assert_data_frame(data)
   checkmate::assert_subset(c("id", "session"), names(data))
+  checkmate::assert_character(split_on, min.len = 1L, any.missing = FALSE)
+  checkmate::assert_subset(split_on, c("id", "session"))
+  if (!"id" %in% split_on) {
+    stop("split_on must include 'id' for respecify_l2_models_by_subject", call. = FALSE)
+  }
+  checkmate::assert_integerish(aggregated_session, len = 1L)
+  split_on <- unique(split_on)
 
-  # create a nested data.table object for fitting each id + session separately
-  data <- data.table(data, key = c("id", "session"))
+  # create a nested data.table object for fitting each grouping unit
+  data <- data.table(data, key = split_on)
   data$dummy <- seq_len(nrow(data))
-  dsplit <- data[, .(dt = list(.SD)), by = c("id", "session")]
+  dsplit <- data[, .(dt = list(.SD)), by = split_on]
+
+  if (!"session" %in% names(dsplit)) {
+    dsplit$session <- as.integer(aggregated_session)
+  }
 
   # use model formula from parent object
   model_formula <- terms(mobj$lmfit)
@@ -1294,6 +1418,7 @@ respecify_l2_models_by_subject <- function(mobj, data) {
   dsplit[, contrasts := contrast_list]
   dsplit[, model_matrix := model_matrix_list]
   dsplit[, n_l2_copes := n_l2_copes]
+  dsplit[, grouping_scope := ifelse("session" %in% split_on, "id_session", "id")]
   dsplit[, dt := NULL] # no longer need original split data
 
   mobj$by_subject <- dsplit

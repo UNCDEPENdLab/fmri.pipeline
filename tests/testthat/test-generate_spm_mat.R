@@ -65,6 +65,215 @@ test_that("generate_spm_mat handles concatenated ts_files and non-concat mismatc
   )
 })
 
+test_that("generate_spm_mat writes projected L2 regressors for concatenated runs", {
+  skip_if_not_installed("RNifti")
+
+  tmp_dir <- tempfile("spm_mat_proj_")
+  dir.create(tmp_dir, recursive = TRUE)
+
+  make_nifti <- function(path, nvol = 5L) {
+    dims <- c(2L, 2L, 2L, nvol)
+    img <- RNifti::asNifti(array(0, dim = dims))
+    RNifti::writeNifti(img, path)
+  }
+
+  nifti1 <- file.path(tmp_dir, "run1.nii")
+  nifti2 <- file.path(tmp_dir, "run2.nii")
+  make_nifti(nifti1, 5L)
+  make_nifti(nifti2, 6L)
+
+  mk_reg <- function(onsets, durations, values, event_name) {
+    m <- cbind(
+      trial = seq_along(onsets),
+      onset = onsets,
+      duration = durations,
+      value = values
+    )
+    colnames(m) <- c("trial", "onset", "duration", "value")
+    attr(m, "event") <- event_name
+    m
+  }
+
+  reg1 <- mk_reg(c(1, 3), c(1, 1), c(1, 1), "feedback")
+  design <- array(list(reg1, reg1), dim = c(2L, 1L), dimnames = list(c("run1", "run2"), "reg1"))
+  design_concat <- list(reg1)
+  names(design_concat) <- "reg1"
+
+  bdm <- list(
+    design = design,
+    design_concat = design_concat,
+    run_niftis = c(nifti1, nifti2),
+    runs_to_output = c(1L, 2L),
+    tr = 1.0,
+    spm_l2_projection = data.frame(
+      run_number = c(1L, 2L),
+      drug = c(1, 0),
+      stringsAsFactors = FALSE
+    )
+  )
+  class(bdm) <- c("bdm", "list")
+
+  out_dir <- file.path(tmp_dir, "concat_proj")
+  expect_no_error(
+    generate_spm_mat(
+      bdm = bdm,
+      output_dir = out_dir,
+      concatenate_runs = TRUE,
+      spm_path = tmp_dir
+    )
+  )
+
+  mfile <- file.path(out_dir, "glm_design_batch.m")
+  expect_true(file.exists(mfile))
+  lines <- readLines(mfile)
+  expect_true(any(grepl("sess\\(1\\)\\.regress\\(1\\)\\.name = 'drug'", lines)))
+  expect_true(any(grepl("1 1 1 1 1 0 0 0 0 0 0", lines, fixed = TRUE)))
+})
+
+test_that("generate_spm_mat writes selected L2-by-L1 interaction modulators", {
+  skip_if_not_installed("RNifti")
+
+  tmp_dir <- tempfile("spm_mat_projint_")
+  dir.create(tmp_dir, recursive = TRUE)
+
+  make_nifti <- function(path, nvol = 5L) {
+    dims <- c(2L, 2L, 2L, nvol)
+    img <- RNifti::asNifti(array(0, dim = dims))
+    RNifti::writeNifti(img, path)
+  }
+
+  nifti1 <- file.path(tmp_dir, "run1.nii")
+  nifti2 <- file.path(tmp_dir, "run2.nii")
+  make_nifti(nifti1, 5L)
+  make_nifti(nifti2, 5L)
+
+  mk_reg <- function(onsets, durations, values, event_name) {
+    m <- cbind(
+      trial = seq_along(onsets),
+      onset = onsets,
+      duration = durations,
+      value = values
+    )
+    colnames(m) <- c("trial", "onset", "duration", "value")
+    attr(m, "event") <- event_name
+    m
+  }
+
+  reg_run1 <- mk_reg(c(1, 3), c(1, 1), c(1, 1), "face_onset")
+  reg_run2 <- mk_reg(c(1, 3), c(1, 1), c(1, 1), "face_onset")
+  reg_concat <- mk_reg(c(1, 3, 6, 8), c(1, 1, 1, 1), c(1, 1, 1, 1), "face_onset")
+
+  design <- array(
+    list(reg_run1, reg_run2),
+    dim = c(2L, 1L),
+    dimnames = list(c("run1", "run2"), "face_reg")
+  )
+  design_concat <- list(reg_concat)
+  names(design_concat) <- "face_reg"
+
+  bdm <- list(
+    design = design,
+    design_concat = design_concat,
+    run_niftis = c(nifti1, nifti2),
+    runs_to_output = c(1L, 2L),
+    run_volumes = c(5L, 5L),
+    tr = 1.0,
+    spm_l2_projection = data.frame(
+      run_number = c(1L, 2L),
+      face_emotion = c(1, -1),
+      stringsAsFactors = FALSE
+    ),
+    spm_l2_projection_interactions = "face_emotion"
+  )
+  class(bdm) <- c("bdm", "list")
+
+  out_dir <- file.path(tmp_dir, "concat_proj_interactions")
+  syntax <- generate_spm_mat(
+    bdm = bdm,
+    output_dir = out_dir,
+    concatenate_runs = TRUE,
+    spm_path = tmp_dir
+  )
+
+  expect_true("face_onset_x_l2_face_emotion" %in% syntax$projection_interaction_terms)
+  mfile <- file.path(out_dir, "glm_design_batch.m")
+  expect_true(file.exists(mfile))
+  lines <- readLines(mfile)
+  expect_true(any(grepl("face_onset_x_l2_face_emotion-pmod", lines)))
+  expect_true(any(grepl("1, 1, -1, -1", lines, fixed = TRUE)))
+})
+
+test_that("generate_spm_mat drops projected L2 terms without within-run variation in non-concatenated mode", {
+  skip_if_not_installed("RNifti")
+
+  tmp_dir <- tempfile("spm_mat_projint_nonconcat_")
+  dir.create(tmp_dir, recursive = TRUE)
+
+  make_nifti <- function(path, nvol = 5L) {
+    dims <- c(2L, 2L, 2L, nvol)
+    img <- RNifti::asNifti(array(0, dim = dims))
+    RNifti::writeNifti(img, path)
+  }
+
+  nifti1 <- file.path(tmp_dir, "run1.nii")
+  nifti2 <- file.path(tmp_dir, "run2.nii")
+  make_nifti(nifti1, 5L)
+  make_nifti(nifti2, 5L)
+
+  mk_reg <- function(onsets, durations, values, event_name) {
+    m <- cbind(
+      trial = seq_along(onsets),
+      onset = onsets,
+      duration = durations,
+      value = values
+    )
+    colnames(m) <- c("trial", "onset", "duration", "value")
+    attr(m, "event") <- event_name
+    m
+  }
+
+  reg_run1 <- mk_reg(c(1, 3), c(1, 1), c(1, 1), "face_onset")
+  reg_run2 <- mk_reg(c(1, 3), c(1, 1), c(1, 1), "face_onset")
+
+  bdm <- list(
+    design = array(
+      list(reg_run1, reg_run2),
+      dim = c(2L, 1L),
+      dimnames = list(c("run1", "run2"), "face_reg")
+    ),
+    run_niftis = c(nifti1, nifti2),
+    runs_to_output = c(1L, 2L),
+    run_volumes = c(5L, 5L),
+    tr = 1.0,
+    spm_l2_projection = data.frame(
+      run_number = c(1L, 2L),
+      face_emotion = c(1, -1),
+      stringsAsFactors = FALSE
+    ),
+    spm_l2_projection_interactions = "face_emotion"
+  )
+  class(bdm) <- c("bdm", "list")
+
+  out_dir <- file.path(tmp_dir, "nonconcat_proj_interactions")
+  syntax <- NULL
+  expect_warning(
+    syntax <- generate_spm_mat(
+      bdm = bdm,
+      output_dir = out_dir,
+      concatenate_runs = FALSE,
+      spm_path = tmp_dir
+    ),
+    "Skipping projected L2 main-effect regressors in non-concatenated SPM design"
+  )
+
+  expect_equal(length(syntax$projection_interaction_terms), 0L)
+  mfile <- file.path(out_dir, "glm_design_batch.m")
+  expect_true(file.exists(mfile))
+  lines <- readLines(mfile)
+  expect_false(any(grepl("face_onset_x_l2_face_emotion-pmod", lines, fixed = TRUE)))
+  expect_false(any(grepl("\\.regress\\(1\\)\\.name = 'face_emotion'", lines)))
+})
+
 test_that("generate_spm_mat handles multiple unit-height regressors and empty levels", {
   skip_if_not_installed("RNifti")
 

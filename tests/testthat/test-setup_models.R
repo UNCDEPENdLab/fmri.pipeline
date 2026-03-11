@@ -283,6 +283,127 @@ test_that("setup_l2_models requires l1_model_setup", {
   )
 })
 
+test_that("setup_l2_models uses l2_scope to group L2 inputs", {
+  gpa <- create_mock_gpa_for_l2_setup(n_subjects = 2, n_runs = 2)
+
+  run_data_s2 <- gpa$run_data
+  run_data_s2$session <- 2L
+  gpa$run_data <- dplyr::bind_rows(gpa$run_data, run_data_s2) %>%
+    dplyr::arrange(id, session, run_number)
+
+  subject_data_s2 <- gpa$subject_data
+  subject_data_s2$session <- 2L
+  gpa$subject_data <- dplyr::bind_rows(gpa$subject_data, subject_data_s2) %>%
+    dplyr::arrange(id, session)
+
+  l1_setup_s2 <- gpa$l1_model_setup$fsl
+  l1_setup_s2$session <- 2L
+  gpa$l1_model_setup$fsl <- dplyr::bind_rows(gpa$l1_model_setup$fsl, l1_setup_s2) %>%
+    dplyr::arrange(id, session, run_number)
+
+  gpa$run_data$predictor <- seq_len(nrow(gpa$run_data)) / 10
+
+  l2_session <- fmri.pipeline:::create_new_hi_model(
+    data = gpa$run_data,
+    level = 2L,
+    cur_model_names = NULL,
+    spec_list = list(
+      name = "l2_session",
+      model_formula = "~ predictor",
+      diagonal = TRUE,
+      num2fac = character(0),
+      covariate_transform = c(),
+      reference_level = c(),
+      l2_scope = "id_session"
+    ),
+    lg = lgr::get_logger("test")
+  )
+
+  l2_id <- fmri.pipeline:::create_new_hi_model(
+    data = gpa$run_data,
+    level = 2L,
+    cur_model_names = NULL,
+    spec_list = list(
+      name = "l2_id",
+      model_formula = "~ predictor",
+      diagonal = TRUE,
+      num2fac = character(0),
+      covariate_transform = c(),
+      reference_level = c(),
+      l2_scope = "id"
+    ),
+    lg = lgr::get_logger("test")
+  )
+
+  gpa$l2_models$models <- list(
+    l2_session = l2_session,
+    l2_id = l2_id
+  )
+  class(gpa$l2_models) <- c("hi_model_set", "list")
+
+  fake_status <- function(feat_dir, feat_fsf, lg = NULL) {
+    data.frame(
+      feat_complete = TRUE,
+      feat_failed = FALSE,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  fake_l2_setup <- function(l1_df, l2_model, gpa) {
+    data.frame(
+      id = l1_df$id[1L],
+      session = if (dplyr::n_distinct(l1_df$session) == 1L) l1_df$session[1L] else 0L,
+      l1_model = l1_df$l1_model[1L],
+      l2_model = l2_model,
+      feat_fsf = tempfile(fileext = ".fsf"),
+      feat_dir = tempfile(pattern = "feat_l2_"),
+      feat_complete = TRUE,
+      n_input_rows = nrow(l1_df),
+      n_sessions_in_call = dplyr::n_distinct(l1_df$session),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  gpa$glm_software <- "fsl"
+  gpa$glm_backend_specs <- list(
+    fsl = list(
+      name = "fsl",
+      l1_setup = NULL,
+      l2_setup = fake_l2_setup,
+      l3_setup = NULL,
+      l1_status = fake_status,
+      l2_status = fake_status,
+      l3_status = NULL,
+      l1_status_inputs = c("feat_dir", "feat_fsf"),
+      l2_status_inputs = c("feat_dir", "feat_fsf"),
+      l3_status_inputs = character(0),
+      output_dir = NULL,
+      l1_run = NULL,
+      l2_run = NULL,
+      l3_run = NULL
+    )
+  )
+
+  result <- setup_l2_models(
+    gpa,
+    l1_model_names = "model1",
+    l2_model_names = c("l2_session", "l2_id"),
+    backend = "fsl"
+  )
+
+  expect_s3_class(result$l2_model_setup, "l2_setup")
+  expect_true(is.data.frame(result$l2_model_setup$fsl))
+
+  by_model <- split(result$l2_model_setup$fsl, result$l2_model_setup$fsl$l2_model)
+
+  expect_equal(nrow(by_model$l2_session), 4L)
+  expect_true(all(by_model$l2_session$n_sessions_in_call == 1L))
+
+  expect_equal(nrow(by_model$l2_id), 2L)
+  expect_true(all(by_model$l2_id$n_sessions_in_call == 2L))
+  expect_true(all(by_model$l2_id$session == 0L))
+})
+
 # ==============================================================================
 # Tests for setup_l3_models input validation
 # ==============================================================================
@@ -338,6 +459,118 @@ test_that("setup_l3_models requires l2_models for multi_run", {
     setup_l3_models(gpa),
     "hi_model_set"
   )
+})
+
+test_that("setup_l3_models reports signature mismatch details when no pairs remain", {
+  gpa <- create_mock_gpa_for_l3_setup(multi_run = TRUE)
+  gpa$l2_models$models$l2_model1$l2_scope <- "id"
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "separate_sessions"
+
+  expect_warning(
+    result <- setup_l3_models(gpa),
+    "No L2\\+L3 model combinations remain"
+  )
+
+  expect_false(result$l3_setup_status$success)
+  expect_match(result$l3_setup_status$reason, "requires l2_scope='id_session'")
+})
+
+test_that("get_feat_l3_inputs splits by session only for separate_sessions mode", {
+  root <- tempfile("l3_split_mode_")
+  dir.create(root, recursive = TRUE)
+
+  l2_setup <- data.frame(
+    id = rep(c("sub1", "sub2"), each = 2),
+    session = rep(c(1L, 2L), times = 2),
+    l1_model = "model1",
+    l2_model = "l2_model1",
+    feat_dir = file.path(root, paste0("feat_l2_", seq_len(4))),
+    feat_complete = TRUE,
+    stringsAsFactors = FALSE
+  )
+
+  for (ii in seq_len(nrow(l2_setup))) {
+    cope_stats <- file.path(l2_setup$feat_dir[ii], "cope1.feat", "stats")
+    dir.create(cope_stats, recursive = TRUE, showWarnings = FALSE)
+    file.create(file.path(cope_stats, "cope1.nii.gz"))
+  }
+
+  gpa <- list(
+    multi_run = TRUE,
+    l2_model_setup = structure(list(fsl = l2_setup), class = c("l2_setup", "list"))
+  )
+  class(gpa) <- c("glm_pipeline_arguments", "list")
+
+  cfg_base <- data.frame(
+    id = rep(c("sub1", "sub2"), each = 2),
+    session = rep(c(1L, 2L), times = 2),
+    l1_model = "model1",
+    l2_model = "l2_model1",
+    l3_model = "l3_model1",
+    l1_cope_number = 1L,
+    l2_cope_number = 1L,
+    l1_cope_name = "cope1",
+    l2_cope_name = "cope1",
+    stringsAsFactors = FALSE
+  )
+
+  cfg_sep <- cfg_base
+  cfg_sep$l3_input_mode <- "separate_sessions"
+  sep_inputs <- fmri.pipeline:::get_feat_l3_inputs(gpa, cfg_sep, lg = lgr::get_logger("test"))
+  expect_equal(length(sep_inputs), 2L)
+  expect_true(all(vapply(sep_inputs, function(df) length(unique(df$session)), integer(1)) == 1L))
+
+  cfg_pool <- cfg_base
+  cfg_pool$l3_input_mode <- "pooled_sessions_subject_ev"
+  pooled_inputs <- fmri.pipeline:::get_feat_l3_inputs(gpa, cfg_pool, lg = lgr::get_logger("test"))
+  expect_equal(length(pooled_inputs), 1L)
+  expect_equal(nrow(pooled_inputs[[1L]]), nrow(cfg_pool))
+})
+
+test_that("get_spm_l3_inputs splits by session only for separate_sessions mode", {
+  root <- tempfile("spm_l3_split_mode_")
+  dir.create(root, recursive = TRUE)
+
+  spm_setup <- data.frame(
+    id = rep(c("sub1", "sub2"), each = 2),
+    session = rep(c(1L, 2L), times = 2),
+    l1_model = "model1",
+    spm_dir = file.path(root, paste0("spm_l1_", seq_len(4))),
+    spm_complete = TRUE,
+    spm_contrast_exists = TRUE,
+    stringsAsFactors = FALSE
+  )
+  for (ii in seq_len(nrow(spm_setup))) {
+    dir.create(spm_setup$spm_dir[ii], recursive = TRUE, showWarnings = FALSE)
+    file.create(file.path(spm_setup$spm_dir[ii], "con_0001.nii"))
+  }
+
+  gpa <- list(
+    l1_model_setup = structure(list(spm = spm_setup), class = c("l1_setup", "list"))
+  )
+  class(gpa) <- c("glm_pipeline_arguments", "list")
+
+  cfg_base <- data.frame(
+    id = rep(c("sub1", "sub2"), each = 2),
+    session = rep(c(1L, 2L), times = 2),
+    l1_model = "model1",
+    l3_model = "l3_model1",
+    l1_cope_number = 1L,
+    l1_cope_name = "cope1",
+    stringsAsFactors = FALSE
+  )
+
+  cfg_sep <- cfg_base
+  cfg_sep$l3_input_mode <- "separate_sessions"
+  sep_inputs <- fmri.pipeline:::get_spm_l3_inputs(gpa, cfg_sep, lg = lgr::get_logger("test"))
+  expect_equal(length(sep_inputs), 2L)
+  expect_true(all(vapply(sep_inputs, function(df) length(unique(df$session)), integer(1)) == 1L))
+
+  cfg_pool <- cfg_base
+  cfg_pool$l3_input_mode <- "pooled_sessions_subject_ev"
+  pooled_inputs <- fmri.pipeline:::get_spm_l3_inputs(gpa, cfg_pool, lg = lgr::get_logger("test"))
+  expect_equal(length(pooled_inputs), 1L)
+  expect_equal(nrow(pooled_inputs[[1L]]), nrow(cfg_pool))
 })
 
 # ==============================================================================
@@ -425,6 +658,49 @@ test_that("respecify_l2_models_by_subject rejects invalid model object", {
     fmri.pipeline:::respecify_l2_models_by_subject(list(), data),
     "l1_model_spec|hi_model_spec"
   )
+})
+
+test_that("respecify_l2_models_by_subject supports id and id_session grouping", {
+  data <- data.frame(
+    id = rep(c("s1", "s2"), each = 4),
+    session = rep(rep(1:2, each = 2), times = 2),
+    run_number = rep(1:2, times = 4),
+    predictor = seq(0.1, 0.8, by = 0.1)
+  )
+
+  mobj <- fmri.pipeline:::create_new_hi_model(
+    data = data,
+    level = 2L,
+    cur_model_names = NULL,
+    spec_list = list(
+      name = "respecify_scope_test",
+      model_formula = "~ predictor",
+      diagonal = TRUE,
+      num2fac = character(0),
+      covariate_transform = c(),
+      reference_level = c(),
+      l2_scope = "id_session"
+    ),
+    lg = lgr::get_logger("test")
+  )
+
+  by_id_session <- fmri.pipeline:::respecify_l2_models_by_subject(
+    mobj,
+    data,
+    split_on = c("id", "session")
+  )
+  expect_equal(nrow(by_id_session$by_subject), 4L)
+  expect_true(all(by_id_session$by_subject$grouping_scope == "id_session"))
+
+  by_id <- fmri.pipeline:::respecify_l2_models_by_subject(
+    mobj,
+    data,
+    split_on = "id",
+    aggregated_session = 0L
+  )
+  expect_equal(nrow(by_id$by_subject), 2L)
+  expect_true(all(by_id$by_subject$session == 0L))
+  expect_true(all(by_id$by_subject$grouping_scope == "id"))
 })
 
 test_that("respecify_l2_models_by_subject requires id and session columns", {

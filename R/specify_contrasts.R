@@ -107,7 +107,8 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
       lg,
       allow_noncontrast = c(
         "signals", "name", "level", "model_formula", "num2fac",
-        "covariate_transform", "reference_level", "contrasts", "fsl_outlier_deweighting"
+        "covariate_transform", "reference_level", "contrasts", "fsl_outlier_deweighting",
+        "l2_scope", "l3_input_mode"
       )
     )
 

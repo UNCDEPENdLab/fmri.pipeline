@@ -96,6 +96,10 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   lg <- lgr::get_logger("glm_pipeline/l3_setup")
   lg$set_threshold(gpa$lgr_threshold)
 
+  # normalize model signatures now in case this function is called before full finalization
+  gpa <- normalize_longitudinal_model_signatures(gpa, lg)
+  gpa <- refresh_l1_cope_names(gpa, lg = lg)
+
   add_log_suffix <- function(path, suffix) {
     if (is.null(path) || is.null(suffix) || !nzchar(suffix)) return(path)
     ext <- tools::file_ext(path)
@@ -125,6 +129,35 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   }
   lg$debug("In setup_l3_models, passing the following L1 models to L3:")
   lg$debug("L1 model: %s", l1_model_names)
+
+  l2_l3_pairs <- NULL
+  if (isTRUE(requires_l2)) {
+    l2_l3_pairs <- resolve_l2_l3_compatible_pairs(
+      gpa,
+      l2_model_names = l2_model_names,
+      l3_model_names = l3_model_names,
+      lg = lg
+    )
+    if (nrow(l2_l3_pairs) == 0L) {
+      pair_df <- enumerate_l2_l3_signature_pairs(
+        gpa,
+        l2_model_names = l2_model_names,
+        l3_model_names = l3_model_names,
+        lg = lg
+      )
+      detail <- format_l2_l3_incompatibilities(pair_df, max_items = 8L)
+      msg <- "No L2+L3 model combinations remain after applying L2/L3 signature compatibility rules."
+      if (nzchar(detail)) msg <- paste(msg, detail)
+      lg$warn(msg)
+      warning(msg)
+      gpa$l3_setup_status <- list(
+        success = FALSE,
+        reason = msg,
+        timestamp = Sys.time()
+      )
+      return(gpa)
+    }
+  }
 
   if (!isTRUE(use_fsl) && !isTRUE(use_spm) && !isTRUE(use_afni)) {
     lg$info("No supported L3 backends requested in setup_l3_models. Skipping.")
@@ -205,6 +238,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
       l1_model_names = l1_model_names,
       l2_model_names = l2_model_names,
       l3_model_names = l3_model_names,
+      l2_l3_pairs = l2_l3_pairs,
       subj_df = subj_df,
       requires_l2 = requires_l2
     )
@@ -294,18 +328,36 @@ get_l3_backend_helper <- function(backend_name) {
   )
 }
 
-setup_l3_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_names, l3_model_names, subj_df, requires_l2) {
+setup_l3_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_names, l3_model_names, l2_l3_pairs, subj_df, requires_l2) {
   if (is.null(backend)) {
     return(list(metadata = NULL, data = NULL, id_cols = NULL))
   }
 
   if (isTRUE(requires_l2)) {
-    model_set <- expand.grid(
-      l1_model = l1_model_names, l2_model = l2_model_names,
-      l3_model = l3_model_names, stringsAsFactors = FALSE
-    )
+    if (is.null(l2_l3_pairs)) {
+      model_set <- expand.grid(
+        l1_model = l1_model_names, l2_model = l2_model_names,
+        l3_model = l3_model_names, stringsAsFactors = FALSE
+      )
+    } else {
+      checkmate::assert_data_frame(l2_l3_pairs)
+      checkmate::assert_subset(c("l2_model", "l3_model"), names(l2_l3_pairs))
+      pair_cols <- c("l2_model", "l3_model")
+      if ("l2_scope" %in% names(l2_l3_pairs)) pair_cols <- c(pair_cols, "l2_scope")
+      if ("l3_input_mode" %in% names(l2_l3_pairs)) pair_cols <- c(pair_cols, "l3_input_mode")
+      model_set <- merge(
+        data.frame(l1_model = l1_model_names, stringsAsFactors = FALSE),
+        l2_l3_pairs[, pair_cols, drop = FALSE],
+        by = NULL
+      )
+    }
   } else {
     model_set <- expand.grid(l1_model = l1_model_names, l3_model = l3_model_names, stringsAsFactors = FALSE)
+  }
+
+  if (nrow(model_set) == 0L) {
+    lg$warn("No model combinations were generated for FSL L3 setup.")
+    return(list(metadata = NULL, data = NULL, id_cols = c("l1_model", "l1_cope_name", "l2_model", "l2_cope_name", "l3_model")))
   }
 
   l3_cope_config <- get_fsl_l3_model_df(gpa, model_set, subj_df)
@@ -360,13 +412,15 @@ setup_l3_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
   )
 }
 
-setup_l3_backend_spm <- function(gpa, backend, lg, l1_model_names, l2_model_names, l3_model_names, subj_df, requires_l2) {
+setup_l3_backend_spm <- function(gpa, backend, lg, l1_model_names, l2_model_names, l3_model_names, l2_l3_pairs, subj_df, requires_l2) {
   if (is.null(backend)) {
     return(list(metadata = NULL, data = NULL, id_cols = NULL))
   }
 
   if (isTRUE(gpa$multi_run)) {
-    lg$info("In setup_l3_models, using SPM L1->L3 setup with concatenated runs (skipping L2)")
+    lg$info(
+      "In setup_l3_models, using SPM L1->L3 setup (no standalone L2 step; L2 specs are projected during SPM L1 setup)."
+    )
   }
 
   spm_model_set <- expand.grid(
@@ -428,7 +482,7 @@ setup_l3_backend_spm <- function(gpa, backend, lg, l1_model_names, l2_model_name
   )
 }
 
-setup_l3_backend_afni <- function(gpa, backend, lg, l1_model_names, l2_model_names, l3_model_names, subj_df, requires_l2) {
+setup_l3_backend_afni <- function(gpa, backend, lg, l1_model_names, l2_model_names, l3_model_names, l2_l3_pairs, subj_df, requires_l2) {
   lg$warn("AFNI L3 setup is not implemented.")
   list(metadata = NULL, data = NULL, id_cols = NULL)
 }
@@ -442,13 +496,33 @@ get_l1_cope_df <- function(gpa, model_set, subj_df=NULL) {
       dplyr::filter(exclude_subject == FALSE) %>%
       dplyr::select(id, session)
   }
+  if (is.null(gpa$l1_cope_names) || !checkmate::test_list(gpa$l1_cope_names)) {
+    gpa <- refresh_l1_cope_names(gpa)
+  }
   checkmate::assert_data_frame(model_set)
   dt <- dplyr::bind_rows(
     lapply(unique(model_set$l1_model), function(mm) {
+      cope_names <- gpa$l1_cope_names[[mm]]
+      if (is.null(cope_names)) {
+        this_model <- gpa$l1_models$models[[mm]]
+        cope_names <- extract_contrast_names(
+          this_model$contrasts,
+          model_name = mm,
+          level_label = "L1",
+          allow_empty = TRUE
+        )
+      }
+      if (length(cope_names) == 0L) {
+        stop(
+          "No L1 contrasts available for model '", mm,
+          "'. Ensure contrasts are defined before setup_l3_models().",
+          call. = FALSE
+        )
+      }
       data.frame(
         l1_model = mm,
-        l1_cope_number = seq_along(gpa$l1_cope_names[[mm]]),
-        l1_cope_name = gpa$l1_cope_names[[mm]]
+        l1_cope_number = seq_along(cope_names),
+        l1_cope_name = cope_names
       )
     })
   )
@@ -475,7 +549,19 @@ get_l2_cope_df <- function(gpa, model_set, subj_df=NULL) {
         l2_df <- dplyr::bind_rows(gpa$l2_models$models[[mm]]$by_subject$cope_list)
         l2_df$l2_model <- mm #retain model name
       } else {
-        cope_names <- rownames(gpa$l2_models$models[[mm]]$contrasts)
+        cope_names <- extract_contrast_names(
+          gpa$l2_models$models[[mm]]$contrasts,
+          model_name = mm,
+          level_label = "L2",
+          allow_empty = TRUE
+        )
+        if (length(cope_names) == 0L) {
+          stop(
+            "No L2 contrasts available for model '", mm,
+            "'. Ensure contrasts are defined before setup_l3_models().",
+            call. = FALSE
+          )
+        }
         l2_df <- data.frame(
           l2_model = mm, l2_cope_number = seq_along(cope_names),
           l2_cope_name = cope_names
@@ -498,7 +584,19 @@ get_l3_cope_df <- function(gpa, model_set, subj_df=NULL) {
   checkmate::assert_data_frame(model_set)
   dt <- dplyr::bind_rows(
     lapply(unique(model_set$l3_model), function(mm) {
-      cope_names <- rownames(gpa$l3_models$models[[mm]]$contrasts)
+      cope_names <- extract_contrast_names(
+        gpa$l3_models$models[[mm]]$contrasts,
+        model_name = mm,
+        level_label = "L3",
+        allow_empty = TRUE
+      )
+      if (length(cope_names) == 0L) {
+        stop(
+          "No L3 contrasts available for model '", mm,
+          "'. Ensure contrasts are defined before setup_l3_models().",
+          call. = FALSE
+        )
+      }
       data.frame(
         l3_model = mm,
         l3_cope_number = seq_along(cope_names),
@@ -525,6 +623,19 @@ get_fsl_l3_model_df <- function(gpa, model_df, subj_df=NULL) {
     subj_df <- gpa$subject_data %>%
       dplyr::filter(exclude_subject == FALSE) %>%
       dplyr::select(id, session)
+  }
+  if (!"l3_input_mode" %in% names(model_df)) {
+    model_df$l3_input_mode <- vapply(
+      model_df$l3_model,
+      function(mm) {
+        mode <- gpa$l3_models$models[[mm]]$l3_input_mode
+        if (is.null(mode) || !is.character(mode) || length(mode) != 1L || !nzchar(mode)) {
+          mode <- "separate_sessions"
+        }
+        mode
+      },
+      character(1)
+    )
   }
   model_df$model_id <- seq_len(nrow(model_df))
 
@@ -574,7 +685,7 @@ get_feat_l3_inputs <- function(gpa, l3_cope_config, lg=NULL) {
         paste0("cope", l2_cope_number, ".nii.gz")
       )) %>%
       dplyr::select(
-        id, session, l1_model, l2_model, l3_model, l1_cope_name, l2_cope_name, feat_dir, cope_file
+        id, session, l1_model, l2_model, l3_model, l3_input_mode, l1_cope_name, l2_cope_name, feat_dir, cope_file
       )
 
     split_on <- c("l1_cope_name", "l2_cope_name", "l1_model", "l2_model", "l3_model")
@@ -593,12 +704,27 @@ get_feat_l3_inputs <- function(gpa, l3_cope_config, lg=NULL) {
         paste0("cope", l1_cope_number, ".nii.gz")
       )) %>%
       dplyr::select(
-        id, session, l1_model, l3_model, l1_cope_name, feat_dir, cope_file
+        id, session, l1_model, l3_model, l3_input_mode, l1_cope_name, feat_dir, cope_file
       )
 
     split_on <- c("l1_cope_name", "l1_model", "l3_model")
 
   }
+
+  if (!"l3_input_mode" %in% names(feat_inputs)) {
+    feat_inputs$l3_input_mode <- "separate_sessions"
+  }
+  feat_inputs$l3_input_mode <- ifelse(
+    is.na(feat_inputs$l3_input_mode) | !nzchar(feat_inputs$l3_input_mode),
+    "separate_sessions",
+    feat_inputs$l3_input_mode
+  )
+  feat_inputs$l3_session_partition <- ifelse(
+    feat_inputs$l3_input_mode == "separate_sessions",
+    as.character(feat_inputs$session),
+    "all"
+  )
+  split_on <- c(split_on, "l3_session_partition")
 
   if (!is.data.table(feat_inputs)) data.table::setDT(feat_inputs)
   feat_inputs <- split(feat_inputs, by = split_on)
@@ -622,6 +748,19 @@ get_spm_l3_model_df <- function(gpa, model_df, subj_df = NULL) {
     subj_df <- gpa$subject_data %>%
       dplyr::filter(exclude_subject == FALSE) %>%
       dplyr::select(id, session)
+  }
+  if (!"l3_input_mode" %in% names(model_df)) {
+    model_df$l3_input_mode <- vapply(
+      model_df$l3_model,
+      function(mm) {
+        mode <- gpa$l3_models$models[[mm]]$l3_input_mode
+        if (is.null(mode) || !is.character(mode) || length(mode) != 1L || !nzchar(mode)) {
+          mode <- "separate_sessions"
+        }
+        mode
+      },
+      character(1)
+    )
   }
   model_df$model_id <- seq_len(nrow(model_df))
 
@@ -668,15 +807,44 @@ get_spm_l3_inputs <- function(gpa, l3_cope_config, lg = NULL) {
   spm_inputs <- spm_inputs %>%
     dplyr::inner_join(l3_cope_config, by = c("id", "session", "l1_model"))
 
+  if (nrow(spm_inputs) == 0L) {
+    return(list())
+  }
+
   spm_inputs <- spm_inputs %>%
     dplyr::mutate(con_file = mapply(get_spm_contrast_file, spm_dir, l1_cope_number, USE.NAMES = FALSE)) %>%
-    dplyr::select(id, session, l1_model, l3_model, l1_cope_name, spm_dir, con_file)
+    dplyr::select(id, session, l1_model, l3_model, l3_input_mode, l1_cope_name, spm_dir, con_file)
+
+  if (!is.character(spm_inputs$con_file)) {
+    spm_inputs$con_file <- as.character(spm_inputs$con_file)
+  }
+
+  spm_inputs <- spm_inputs %>%
+    dplyr::filter(!is.na(con_file) & nzchar(con_file))
+
+  if (nrow(spm_inputs) == 0L) {
+    return(list())
+  }
 
   spm_inputs <- spm_inputs %>%
     dplyr::filter(file.exists(con_file))
 
+  if (!"l3_input_mode" %in% names(spm_inputs)) {
+    spm_inputs$l3_input_mode <- "separate_sessions"
+  }
+  spm_inputs$l3_input_mode <- ifelse(
+    is.na(spm_inputs$l3_input_mode) | !nzchar(spm_inputs$l3_input_mode),
+    "separate_sessions",
+    spm_inputs$l3_input_mode
+  )
+  spm_inputs$l3_session_partition <- ifelse(
+    spm_inputs$l3_input_mode == "separate_sessions",
+    as.character(spm_inputs$session),
+    "all"
+  )
+
   if (!is.data.table(spm_inputs)) data.table::setDT(spm_inputs)
-  spm_inputs <- split(spm_inputs, by = c("l1_cope_name", "l1_model", "l3_model"))
+  spm_inputs <- split(spm_inputs, by = c("l1_cope_name", "l1_model", "l3_model", "l3_session_partition"))
 
   return(spm_inputs)
 }

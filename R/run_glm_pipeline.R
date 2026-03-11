@@ -197,9 +197,15 @@ l3_model_names = "prompt", glm_software = NULL) {
     reasons <- c()
     if (!isTRUE(gpa$multi_run)) reasons <- c(reasons, "dataset is not multi-run")
     if (!isTRUE(use_fsl)) reasons <- c(reasons, "FSL backend is not enabled")
+    spm_note <- if ("spm" %in% backend_names) {
+      "SPM does not run standalone L2 jobs; its L2 model spec is projected during SPM L1 setup."
+    } else {
+      NULL
+    }
     lg$warn(
-      "L2 models were requested but cannot be run: %s.",
-      if (length(reasons) > 0L) paste(reasons, collapse = "; ") else "unknown reason"
+      "L2 models were requested but cannot be run as standalone jobs: %s%s",
+      if (length(reasons) > 0L) paste(reasons, collapse = "; ") else "unknown reason",
+      if (!is.null(spm_note)) paste0(". ", spm_note) else "."
     )
   }
   if (isTRUE(requires_l2) && !is.null(model_list$l2_model_names)) {
