@@ -498,7 +498,7 @@ confound_manipulations <- function(gpa, all_confounds, expected_l1_confound_file
     }
 
     # trim l1 confounds to only those requested
-    all_confounds <- all_confounds[, intersect(requested, names(all_confounds))]
+    all_confounds <- all_confounds[, intersect(requested, names(all_confounds)), drop = FALSE]
   }
   num_cols <- sapply(all_confounds, class) %in% c("integer", "numeric")
   if (any(!num_cols)) {
@@ -510,9 +510,11 @@ confound_manipulations <- function(gpa, all_confounds, expected_l1_confound_file
   if (isTRUE(demean)) {
     lg$debug("Demeaning columns of l1 confounds matrix: %s", expected_l1_confound_file)
 
-    all_confounds[, num_cols] <- as.data.frame(apply(all_confounds[, num_cols], 2, function(x) {
-      x - mean(x, na.rm = TRUE)
-    }))
+    if (any(num_cols)) {
+      all_confounds[, num_cols] <- lapply(all_confounds[, num_cols, drop = FALSE], function(x) {
+        x - mean(x, na.rm = TRUE)
+      })
+    }
   }
 
   return(all_confounds)
