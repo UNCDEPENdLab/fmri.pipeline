@@ -647,11 +647,43 @@ get_fsl_l3_model_df <- function(gpa, model_df, subj_df=NULL) {
     # model_df has l1_model, l2_model, l3_model
     l2_df <- get_l2_cope_df(gpa, model_df)
 
-    combined <- model_df %>%
+    # Identify L2 models with l2_scope="id" (session=0L sentinel) vs real sessions
+    l2_id_scope_models <- character(0)
+    for (mm in unique(model_df$l2_model)) {
+      if (identical(gpa$l2_models$models[[mm]]$l2_scope, "id")) {
+        l2_id_scope_models <- c(l2_id_scope_models, mm)
+      }
+    }
+
+    base <- model_df %>%
       tidyr::crossing(subj_df) %>%
-      left_join(l1_df, by = c("id", "session", "l1_model")) %>%
-      left_join(l2_df, by = c("id", "session", "l2_model")) %>%
-      left_join(l3_df, by = c("id", "session", "l3_model"))
+      left_join(l1_df, by = c("id", "session", "l1_model"))
+
+    if (length(l2_id_scope_models) > 0L) {
+      # For l2_scope="id", l2_df uses session=0L; join without session key
+      l2_df_id <- l2_df %>%
+        dplyr::filter(l2_model %in% l2_id_scope_models) %>%
+        dplyr::select(-session)
+      l2_df_session <- l2_df %>%
+        dplyr::filter(!l2_model %in% l2_id_scope_models)
+
+      base_id <- base %>%
+        dplyr::filter(l2_model %in% l2_id_scope_models) %>%
+        left_join(l2_df_id, by = c("id", "l2_model"))
+      base_session <- base %>%
+        dplyr::filter(!l2_model %in% l2_id_scope_models)
+
+      if (nrow(base_session) > 0L) {
+        base_session <- base_session %>%
+          left_join(l2_df_session, by = c("id", "session", "l2_model"))
+      }
+      combined <- dplyr::bind_rows(base_id, base_session) %>%
+        left_join(l3_df, by = c("id", "session", "l3_model"))
+    } else {
+      combined <- base %>%
+        left_join(l2_df, by = c("id", "session", "l2_model")) %>%
+        left_join(l3_df, by = c("id", "session", "l3_model"))
+    }
   } else {
     combined <- model_df %>%
       tidyr::crossing(subj_df) %>%
@@ -672,9 +704,42 @@ get_feat_l3_inputs <- function(gpa, l3_cope_config, lg=NULL) {
     feat_inputs <- gpa$l2_model_setup$fsl %>%
       dplyr::filter(feat_complete == TRUE)
 
-    #join up combination of all models with cope directories
-    feat_inputs <- feat_inputs %>%
-      dplyr::inner_join(l3_cope_config, by=c("id", "session", "l1_model", "l2_model"))
+    # For l2_scope="id", l2_model_setup uses session=0L as sentinel because L2
+    # stacks all sessions per subject. Join without session for those models,
+    # then deduplicate to one row per subject (all sessions share the same FEAT).
+    id_scope_models <- character(0)
+    if ("l2_scope" %in% names(feat_inputs)) {
+      id_scope_models <- unique(feat_inputs$l2_model[feat_inputs$l2_scope == "id"])
+    }
+
+    if (length(id_scope_models) > 0L) {
+      feat_id <- feat_inputs %>%
+        dplyr::filter(l2_model %in% id_scope_models) %>%
+        dplyr::select(-session) %>%
+        dplyr::inner_join(
+          l3_cope_config %>% dplyr::filter(l2_model %in% id_scope_models),
+          by = c("id", "l1_model", "l2_model")
+        ) %>%
+        dplyr::distinct(id, l1_model, l2_model, l3_model, l3_input_mode,
+          l1_cope_name, l2_cope_name, feat_dir, .keep_all = TRUE)
+
+      feat_non_id <- feat_inputs %>%
+        dplyr::filter(!l2_model %in% id_scope_models)
+
+      if (nrow(feat_non_id) > 0L) {
+        feat_non_id <- feat_non_id %>%
+          dplyr::inner_join(
+            l3_cope_config %>% dplyr::filter(!l2_model %in% id_scope_models),
+            by = c("id", "session", "l1_model", "l2_model")
+          )
+      }
+
+      feat_inputs <- dplyr::bind_rows(feat_id, feat_non_id)
+    } else {
+      #join up combination of all models with cope directories
+      feat_inputs <- feat_inputs %>%
+        dplyr::inner_join(l3_cope_config, by = c("id", "session", "l1_model", "l2_model"))
+    }
 
     # sort out expected cope files for each model combination
     feat_inputs <- feat_inputs %>%

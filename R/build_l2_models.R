@@ -131,6 +131,17 @@ build_l2_models <- function(gpa, from_spec_file = NULL, regressor_cols = NULL) {
     done_regressors <- FALSE
     while (isFALSE(done_regressors)) {
       cat("Current regressors for this model:\n\n  ", paste(regressor_cols, collapse = ", "), "\n\n")
+
+      # display session-level column annotations when available
+      var_origin <- attr(data, "l2_var_origin")
+      if (!is.null(var_origin)) {
+        session_vars <- names(var_origin)[var_origin == "session"]
+        if (length(session_vars) > 0L) {
+          cat("  Session-level columns (for between-session effects): ",
+            paste(session_vars, collapse = ", "), "\n\n", sep = "")
+        }
+      }
+
       action <- menu(c("Add/modify regressors", "Delete regressors", "Done with regressor selection"),
         title = "Would you like to modify the model regressors?"
       )
@@ -233,7 +244,7 @@ build_l2_models <- function(gpa, from_spec_file = NULL, regressor_cols = NULL) {
   }
 
   model_set$models <- model_list
-  model_set$n_contrasts <- sapply(model_list, function(mobj) { ncol(mobj$contrasts) })
+  model_set$n_contrasts <- sapply(model_list, function(mobj) { nrow(mobj$contrasts) })
 
   if (fname == "build_l2_models") {
     gpa$l2_models <- model_set
@@ -352,15 +363,29 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       if (!"session" %in% names(data) || length(unique(data$session)) <= 1L) {
         return(default_scope)
       }
+      n_sessions <- length(unique(data$session))
+      cat(
+        "\nYour data contain ", n_sessions, " sessions per subject.\n",
+        "This choice determines whether between-session contrasts are available at L2.\n\n",
+        sep = ""
+      )
       opts <- c(
-        "Within-session inputs (id + session)",
-        "Across-session inputs (id only)"
+        "Within-session: combine runs within each session separately (between-session contrasts deferred to L3)",
+        "Across-session: stack all runs and sessions together (between-session contrasts available at L2)"
       )
       which_scope <- menu(
         opts,
         title = "How should this L2 model combine sessions?"
       )
-      if (which_scope == 2L) "id" else "id_session"
+      chosen <- if (which_scope == 2L) "id" else "id_session"
+      if (identical(chosen, "id_session")) {
+        cat(
+          "\nNote: With within-session scope, between-session differences cannot be tested at L2.\n",
+          "If you need between-session contrasts at L2, re-run model setup and choose across-session scope.\n\n",
+          sep = ""
+        )
+      }
+      chosen
     }
 
     choose_l3_input_mode <- function(default_mode = "separate_sessions") {
@@ -443,10 +468,26 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
           "Use variable names in the dataset provided to this function.",
           "Note that this syntax follows standard R model syntax. See ?lm for details.",
           "Example: ~ emotion * wmload + run_number\n",
-          "For an intercept-only model, specify: ~1\n",
-          "Available column names: \n"
+          "For an intercept-only model, specify: ~1\n"
         ), sep = "\n")
-        cat(strwrap(paste(names(data), collapse = ", "), 70, exdent = 5), sep = "\n")
+
+        # annotate columns by origin (run-level vs session-level)
+        var_origin <- attr(data, "l2_var_origin")
+        if (!is.null(var_origin) && level == 2L) {
+          run_vars <- setdiff(names(var_origin)[var_origin == "run"], id_cols)
+          session_vars <- names(var_origin)[var_origin == "session"]
+          if (length(run_vars) > 0L) {
+            cat("Run-level columns:\n")
+            cat(strwrap(paste(run_vars, collapse = ", "), 70, exdent = 5), sep = "\n")
+          }
+          if (length(session_vars) > 0L) {
+            cat("Session-level columns (useful for between-session contrasts):\n")
+            cat(strwrap(paste(session_vars, collapse = ", "), 70, exdent = 5), sep = "\n")
+          }
+        } else {
+          cat("Available column names:\n")
+          cat(strwrap(paste(names(data), collapse = ", "), 70, exdent = 5), sep = "\n")
+        }
 
         res <- trimws(readline("Enter the model formula: "))
         # always trim any LHS specification
@@ -629,6 +670,39 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
 
     # fit linear model and populate model object
     mobj <- mobj_fit_lm(mobj, as.character(model_formula), data, id_cols, lg = lg)
+
+    # Guided longitudinal prompt: offer between-session pairwise contrasts when applicable
+    has_multi_session <- "session" %in% names(data) && length(unique(data$session)) > 1L
+    if (level == 2L && has_multi_session && identical(mobj$l2_scope, "id") && is.null(spec_list)) {
+      var_origin <- attr(data, "l2_var_origin")
+      session_vars <- if (!is.null(var_origin)) names(var_origin)[var_origin == "session"] else character(0)
+      # identify session-level factor or integer variables in the model that could yield between-session contrasts
+      session_contrast_candidates <- intersect(mobj$model_variables, session_vars)
+      # also check for session-related factor columns in the fitted model
+      if (length(session_contrast_candidates) > 0L) {
+        cat(
+          "\n--- Between-session contrasts ---\n",
+          "Your L2 model includes session-level variables: ",
+          paste(session_contrast_candidates, collapse = ", "), "\n",
+          "Between-session pairwise differences are commonly desired in longitudinal designs.\n\n",
+          sep = ""
+        )
+        for (sc in session_contrast_candidates) {
+          if (is.factor(data[[sc]]) || (is.integer(data[[sc]]) && length(unique(data[[sc]])) < 20L)) {
+            add_pw <- menu(
+              c("Yes", "No"),
+              title = paste0("Add pairwise between-session contrasts for '", sc, "'?")
+            )
+            if (add_pw == 1L) {
+              if (is.null(spec_list)) spec_list <- list()
+              existing_pw <- spec_list$pairwise_diffs
+              spec_list$pairwise_diffs <- unique(c(existing_pw, sc))
+              cat("  Added pairwise differences for '", sc, "'.\n", sep = "")
+            }
+          }
+        }
+      }
+    }
 
     # walk through contrast generation for this model
     mobj <- specify_contrasts(mobj, spec_list = spec_list)
