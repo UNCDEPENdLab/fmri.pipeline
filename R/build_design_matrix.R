@@ -470,6 +470,7 @@ build_design_matrix <- function(
   
   # if volumes are being dropped (and shift-timing is TRUE), subtract the dropped volumes from the onset times.
   dmat <- shift_dmat_timing(dmat, tr, drop_volumes, shift_timing)
+  validate_shifted_dmat_onsets(dmat, tr = tr, drop_volumes = drop_volumes, lg = lg)
 
   # concatenate regressors across runs by adding timing from MR files.
   run_timing <- cumsum(run_volumes) * tr # timing in seconds of the start of successive runs
@@ -619,6 +620,59 @@ shift_dmat_timing <- function(dmat, tr, drop_volumes = 0, shift_timing = TRUE) {
   }
 
   return(dmat)
+}
+
+# helper to stop early when shifting event timing for dropped volumes makes an onset invalid
+validate_shifted_dmat_onsets <- function(dmat, tr, drop_volumes = 0, lg = NULL) {
+  if (is.null(lg)) lg <- lgr::get_logger()
+  if (all(drop_volumes == 0L)) return(invisible(dmat))
+
+  offenders <- character(0)
+  max_examples <- 5L
+  run_labels <- dimnames(dmat)[[1L]]
+  reg_labels <- dimnames(dmat)[[2L]]
+
+  for (i in seq_len(dim(dmat)[1L])) {
+    for (j in seq_len(dim(dmat)[2L])) {
+      df <- dmat[[i, j]]
+      if (nrow(df) == 0L) next
+
+      neg_idx <- which(df[, "onset"] < 0)
+      if (length(neg_idx) == 0L) next
+
+      original_onsets <- df[neg_idx, "onset"] + (tr * drop_volumes[i])
+      offenders <- c(
+        offenders,
+        sprintf(
+          "%s/%s: %d event(s), min shifted onset=%.3fs, earliest original onset=%.3fs",
+          run_labels[i], reg_labels[j], length(neg_idx), min(df[neg_idx, "onset"]), min(original_onsets)
+        )
+      )
+    }
+  }
+
+  if (length(offenders) == 0L) {
+    return(invisible(dmat))
+  }
+
+  if (length(unique(drop_volumes)) == 1L) {
+    offset_desc <- sprintf("%.3fs", tr * drop_volumes[1L])
+  } else {
+    offset_desc <- sprintf("run-specific offsets (%s)", paste(sprintf("%.3f", tr * drop_volumes), collapse = ", "))
+  }
+
+  shown <- utils::head(offenders, max_examples)
+  remaining <- length(offenders) - length(shown)
+  suffix <- if (remaining > 0L) sprintf(" (%d additional run/regressor combinations omitted)", remaining) else ""
+  msg <- paste0(
+    "Negative post-drop onsets detected after subtracting ", offset_desc,
+    " from event timings. This usually means `drop_volumes` is too large for these event timings ",
+    "or the event onsets already reflect a truncated NIfTI. Offending run/regressor combinations: ",
+    paste(shown, collapse = "; "), suffix, "."
+  )
+
+  lg$error(msg)
+  stop(msg, call. = FALSE)
 }
 
 # helper to lookup number of volumes in each run based on whether NIfTIs are passed in versus run_volumes vector

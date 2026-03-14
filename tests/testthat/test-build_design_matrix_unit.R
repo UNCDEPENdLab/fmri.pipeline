@@ -331,6 +331,34 @@ test_that("validate_tr rejects TR that is too large", {
   expect_error(fmri.pipeline:::validate_tr(200))
 })
 
+test_that("build_design_matrix errors directly on negative post-drop onsets", {
+  events <- data.frame(
+    event = "cue",
+    run_number = 1L,
+    trial = 1L,
+    onset = 0.25,
+    duration = 1,
+    stringsAsFactors = FALSE
+  )
+  signals <- list(
+    cue_evt = list(name = "cue_evt", event = "cue", value = 1, normalization = "none")
+  )
+  run_data <- create_test_run_data(nruns = 1, run_volumes = 50, drop_volumes = 2)
+
+  expect_error(
+    fmri.pipeline::build_design_matrix(
+      events = events,
+      signals = signals,
+      tr = 0.6,
+      run_data = run_data,
+      plot = FALSE,
+      output_directory = tempdir(),
+      keep_empty_regressors = TRUE
+    ),
+    "Negative post-drop onsets detected"
+  )
+})
+
 # --- get_drop_volumes_flags ---
 
 test_that("get_drop_volumes_flags returns expected structure", {
