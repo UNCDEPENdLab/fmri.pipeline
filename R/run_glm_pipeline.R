@@ -55,16 +55,41 @@ l3_model_names = "prompt", glm_software = NULL) {
 
   # initialize batch sequence elements as NULL so that they are ignored in R_batch_sequence if not used
   l1_setup_batch <- split_cache_batch <- l2_batch <- NULL
+  sync_l2_backend_caches_batch <- NULL
   l1_execute_batches <- list()
   l3_execute_batches <- list()
-  glm_backends <- get_glm_backends(gpa, must_exist = FALSE)
   backend_specs <- gpa$glm_backend_specs
   if (is.null(backend_specs)) backend_specs <- default_glm_backend_specs()
+  requested_backend_names <- unique(gpa$glm_software)
+  resolved_backends <- resolve_glm_backends(backend_specs)
+  glm_backends <- resolved_backends[intersect(requested_backend_names, names(resolved_backends))]
   backend_names <- names(glm_backends)
-  use_fsl <- "fsl" %in% backend_names
+  l3_dependency_backends <- if (!is.null(model_list$l3_model_names) && isTRUE(gpa$multi_run)) {
+    get_l3_dependency_backends(glm_backends)
+  } else {
+    character(0)
+  }
+  execution_backend_names <- unique(c(backend_names, l3_dependency_backends))
+  missing_execution_backends <- setdiff(execution_backend_names, names(resolved_backends))
+  if (length(missing_execution_backends) > 0L) {
+    stop(
+      sprintf(
+        "Missing backend specs for required execution backends: %s",
+        paste(missing_execution_backends, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  execution_glm_backends <- resolved_backends[execution_backend_names]
+  if (!identical(sort(unique(gpa$glm_software)), sort(execution_backend_names))) {
+    gpa$glm_software <- execution_backend_names
+  }
+  use_fsl <- "fsl" %in% execution_backend_names
+  l3_requires_l2 <- isTRUE(gpa$multi_run) && !is.null(model_list$l3_model_names) &&
+    any_l3_backend_requires_l2(glm_backends)
   backend_cache_map <- setNames(
-    file.path(batch_directory, paste0("run_pipeline_cache_", backend_names, ".RData")),
-    backend_names
+    file.path(batch_directory, paste0("run_pipeline_cache_", execution_backend_names, ".RData")),
+    execution_backend_names
   )
 
   # Note: one tricky job dependency problem occurs when a job spawns multiple child jobs.
@@ -86,7 +111,7 @@ l3_model_names = "prompt", glm_software = NULL) {
 
     l1_setup_batch$depends_on_parents <- "finalize_configuration"
 
-    if (length(backend_names) > 0L) {
+    if (length(execution_backend_names) > 0L) {
       split_cache_batch <- f_batch$copy(
         job_name = "split_backend_caches", n_cpus = 1,
         wall_time = "0:10:00",
@@ -122,7 +147,7 @@ l3_model_names = "prompt", glm_software = NULL) {
       stop(sprintf("No L1 execution time configured for backend '%s'.", backend_name))
     }
 
-    for (backend_name in backend_names) {
+    for (backend_name in execution_backend_names) {
       spec <- backend_specs[[backend_name]]
       run_fn_name <- if (is.null(spec)) NULL else spec$l1_run
       if (is.null(run_fn_name) || identical(run_fn_name, "__not_implemented__")) next
@@ -130,8 +155,8 @@ l3_model_names = "prompt", glm_software = NULL) {
         lg$warn("Skipping backend '%s' L1 runner because l1_run is not a character function name.", backend_name)
         next
       }
-      if (!is.null(glm_backends[[backend_name]]$l1_run) &&
-        isTRUE(attr(glm_backends[[backend_name]]$l1_run, "glm_backend_not_implemented"))) {
+      if (!is.null(execution_glm_backends[[backend_name]]$l1_run) &&
+        isTRUE(attr(execution_glm_backends[[backend_name]]$l1_run, "glm_backend_not_implemented"))) {
         next
       }
 
@@ -162,7 +187,7 @@ l3_model_names = "prompt", glm_software = NULL) {
   }
 
   # If L1 is skipped but later levels will run, split the shared cache for each backend.
-  if (isFALSE(run_l1) && is.null(split_cache_batch) && length(backend_names) > 0L &&
+  if (isFALSE(run_l1) && is.null(split_cache_batch) && length(execution_backend_names) > 0L &&
       (!is.null(model_list$l2_model_names) || !is.null(model_list$l3_model_names))) {
     split_cache_batch <- f_batch$copy(
       job_name = "split_backend_caches", n_cpus = 1,
@@ -191,9 +216,10 @@ l3_model_names = "prompt", glm_software = NULL) {
   # todo
   # gpa <- verify_lv1_runs(gpa)
 
-  # only run level 2 if this is a multi-run dataset, FSL backend is enabled, and user requests l2 model estimation
-  requires_l2 <- isTRUE(gpa$multi_run) && isTRUE(use_fsl)
-  if (!is.null(model_list$l2_model_names) && isFALSE(requires_l2)) {
+  # L2 is a prerequisite for any multi-run L3 backend that declares a dependency on it.
+  # AFNI 3dLMEr consumes FSL-produced L2 COPEs even when AFNI is the only requested L3 backend.
+  can_run_l2 <- isTRUE(gpa$multi_run) && isTRUE(use_fsl)
+  if (!is.null(model_list$l2_model_names) && isFALSE(can_run_l2)) {
     reasons <- c()
     if (!isTRUE(gpa$multi_run)) reasons <- c(reasons, "dataset is not multi-run")
     if (!isTRUE(use_fsl)) reasons <- c(reasons, "FSL backend is not enabled")
@@ -208,7 +234,7 @@ l3_model_names = "prompt", glm_software = NULL) {
       if (!is.null(spm_note)) paste0(". ", spm_note) else "."
     )
   }
-  if (isTRUE(requires_l2) && !is.null(model_list$l2_model_names)) {
+  if (isTRUE(can_run_l2) && (!is.null(model_list$l2_model_names) || isTRUE(l3_requires_l2))) {
     # setup of l2 models (should follow l1)
     l2_batch <- f_batch$copy(
       job_name = "setup_run_l2", n_cpus = gpa$parallel$l2_setup_cores,
@@ -237,6 +263,40 @@ l3_model_names = "prompt", glm_software = NULL) {
     run_l2 <- TRUE
   } else {
     run_l2 <- FALSE
+  }
+
+  dependent_l3_backends <- if (!is.null(model_list$l3_model_names)) {
+    backend_names[vapply(backend_names, function(backend_name) {
+      source_backend <- backend_l3_l2_source_backend(glm_backends[[backend_name]])
+      isTRUE(gpa$multi_run) &&
+        backend_l3_requires_l2(glm_backends[[backend_name]]) &&
+        !is.null(source_backend) &&
+        !identical(source_backend, backend_name)
+    }, logical(1))]
+  } else {
+    character(0)
+  }
+
+  if (isTRUE(run_l2) && length(dependent_l3_backends) > 0L) {
+    sync_lines <- c()
+    for (backend_name in dependent_l3_backends) {
+      source_backend <- backend_l3_l2_source_backend(glm_backends[[backend_name]])
+      sync_lines <- c(
+        sync_lines,
+        sprintf("src <- %s", shQuote(backend_cache_map[[source_backend]])),
+        sprintf("dest <- %s", shQuote(backend_cache_map[[backend_name]])),
+        "if (!file.exists(src)) stop('Required backend cache not found: ', src)",
+        "success <- file.copy(src, dest, overwrite = TRUE)",
+        "if (!isTRUE(success)) stop('Failed to sync backend cache from ', src, ' to ', dest)"
+      )
+    }
+    sync_l2_backend_caches_batch <- f_batch$copy(
+      job_name = "sync_l2_backend_caches",
+      n_cpus = 1,
+      wall_time = "0:10:00",
+      r_code = sync_lines
+    )
+    sync_l2_backend_caches_batch$depends_on_parents <- "setup_run_l2"
   }
 
   
@@ -282,8 +342,13 @@ l3_model_names = "prompt", glm_software = NULL) {
         )
       )
 
-      if (backend_name == "fsl" && isTRUE(requires_l2)) {
-        l3_exec$depends_on_parents <- "setup_run_l2"
+      if (isTRUE(gpa$multi_run) && backend_l3_requires_l2(glm_backends[[backend_name]]) && isTRUE(run_l2)) {
+        source_backend <- backend_l3_l2_source_backend(glm_backends[[backend_name]])
+        if (!is.null(sync_l2_backend_caches_batch) && !identical(source_backend, backend_name)) {
+          l3_exec$depends_on_parents <- "sync_l2_backend_caches"
+        } else {
+          l3_exec$depends_on_parents <- "setup_run_l2"
+        }
       } else {
         l3_exec$depends_on_parents <- l1_parent
       }
@@ -341,6 +406,7 @@ l3_model_names = "prompt", glm_software = NULL) {
         list(f_batch, l1_setup_batch, split_cache_batch),
         l1_execute_batches,
         list(l2_batch),
+        list(sync_l2_backend_caches_batch),
         l3_execute_batches,
         list(cleanup_batch)
       ),
@@ -352,6 +418,7 @@ l3_model_names = "prompt", glm_software = NULL) {
         list(l1_setup_batch, split_cache_batch),
         l1_execute_batches,
         list(l2_batch),
+        list(sync_l2_backend_caches_batch),
         l3_execute_batches,
         list(cleanup_batch)
       ),

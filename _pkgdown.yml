@@ -1,0 +1,4 @@
+url: https://uncdependlab.github.io/fmri.pipeline/
+template:
+  bootstrap: 5
+  bootswatch: spacelab

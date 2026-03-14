@@ -70,7 +70,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   use_fsl <- "fsl" %in% backend_names
   use_spm <- "spm" %in% backend_names
   use_afni <- "afni" %in% backend_names
-  requires_l2 <- isTRUE(gpa$multi_run) && isTRUE(use_fsl)
+  requires_l2 <- isTRUE(gpa$multi_run) && any_l3_backend_requires_l2(glm_backends[backend_names])
 
   # Validate model name subsets
   checkmate::assert_subset(l3_model_names, names(gpa$l3_models$models))
@@ -323,7 +323,7 @@ get_l3_backend_helper <- function(backend_name) {
     backend_name,
     fsl = setup_l3_backend_fsl,
     spm = setup_l3_backend_spm,
-    afni = setup_l3_backend_afni,
+    afni = afni_3dlmer_setup,
     NULL
   )
 }
@@ -482,9 +482,115 @@ setup_l3_backend_spm <- function(gpa, backend, lg, l1_model_names, l2_model_name
   )
 }
 
-setup_l3_backend_afni <- function(gpa, backend, lg, l1_model_names, l2_model_names, l3_model_names, l2_l3_pairs, subj_df, requires_l2) {
-  lg$warn("AFNI L3 setup is not implemented.")
-  list(metadata = NULL, data = NULL, id_cols = NULL)
+#' Internal function to setup AFNI 3dLMEr longitudinal models
+#'
+#' @param gpa a glm_pipeline_arguments object
+#' @param backend the afni backend specification
+#' @param lg the current logger
+#' @param l1_model_names L1 models to process
+#' @param l2_model_names L2 models to process
+#' @param l3_model_names L3 models to process
+#' @param l2_l3_pairs data.frame of compatible L2/L3 model pairs
+#' @param subj_df filtered subject data.frame
+#' @param requires_l2 whether L2 is required (always TRUE for 3dLMEr longitudinal)
+#'
+#' @return a setup list with metadata and status data.frame
+#' @keywords internal
+afni_3dlmer_setup <- function(gpa, backend, lg, l1_model_names, l2_model_names, l3_model_names, l2_l3_pairs, subj_df, requires_l2) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_class(lg, "Logger")
+
+  # harvest inputs
+  harvested <- harvest_fsl_copes(gpa, l3_model_names = l3_model_names)
+  
+  if (is.null(harvested) || length(harvested) == 0) {
+    lg$warn("No harvested inputs for AFNI 3dLMEr setup.")
+    return(list(metadata = NULL, data = NULL, id_cols = NULL))
+  }
+
+  afni_setup_df <- list()
+
+  for (l3_name in names(harvested)) {
+    l3_obj <- gpa$l3_models$models[[l3_name]]
+    if (!identical(l3_obj$l3_input_mode, "3dlmer")) next
+    
+    # harvested[[l3_name]] is a list of data.frames split by contrast
+    for (con_name in names(harvested[[l3_name]])) {
+      dt <- harvested[[l3_name]][[con_name]]
+
+      analysis_ids <- dt %>%
+        dplyr::select(id, session) %>%
+        dplyr::distinct()
+      l3_fit <- respecify_l3_model(l3_obj, analysis_ids)
+
+      model_vars <- setdiff(l3_fit$model_variables, c("id", "session"))
+      fit_model_data <- l3_fit$model_data
+      overlap_cols <- intersect(names(l3_fit$metadata), names(fit_model_data))
+      if (length(overlap_cols) > 0L) {
+        fit_model_data <- fit_model_data %>%
+          dplyr::select(-dplyr::all_of(overlap_cols))
+      }
+      fit_model_data <- fit_model_data %>%
+        dplyr::select(-dplyr::any_of("dummy"))
+      subject_data <- cbind(l3_fit$metadata, fit_model_data)
+
+      datatable <- build_3dlmer_datatable(
+        subject_data = subject_data,
+        input_files = dt %>% dplyr::select(id, session, InputFile),
+        model_variables = model_vars
+      )
+
+      # Auto-detect qVars from the refit model data used to generate the AFNI table.
+      qVars <- model_vars[vapply(datatable[, model_vars, drop = FALSE], is.numeric, logical(1))]
+      glt_codes <- emmeans_to_3dlmer_glt(l3_fit, datatable)
+
+      l1_model <- dt$l1_model[1]
+      l2_model <- dt$l2_model[1]
+      l3_model <- l3_name
+      l1_cope_name <- dt$l1_cope_name[1]
+      l2_cope_name <- dt$l2_cope_name[1]
+
+      target_dir <- as.character(glue::glue(gpa$output_locations$afni_3dlmer_directory))
+      
+      prefix <- file.path(target_dir, paste0(l3_name, "_LMEr"))
+      
+      cmd <- build_3dlmer_command(
+        prefix = prefix,
+        model_formula = l3_obj$lmer_formula,
+        qVars = qVars,
+        glt_codes = glt_codes,
+        data_table_file = "dataTable.txt", # Relative to script
+        mask = l3_obj$lmer_mask %||% gpa$mask_file,
+        njobs = l3_obj$lmer_njobs %||% gpa$parallel$afni$l3_lmer_njobs %||% 1,
+        ss_type = 3
+      )
+      
+      files <- write_3dlmer_files(target_dir, datatable, cmd)
+      
+      afni_setup_df[[length(afni_setup_df) + 1]] <- data.frame(
+        l1_model = l1_model,
+        l2_model = l2_model,
+        l3_model = l3_model,
+        l1_cope_name = l1_cope_name,
+        l2_cope_name = l2_cope_name,
+        afni_script = files$script,
+        output_file = prefix,
+        feat_complete = FALSE, # Reusing this field for status
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+
+  if (length(afni_setup_df) == 0L) {
+    return(list(metadata = NULL, data = NULL, id_cols = NULL))
+  }
+
+  afni_df <- do.call(rbind, afni_setup_df)
+
+  list(
+    data = afni_df,
+    id_cols = c("l1_model", "l2_model", "l3_model", "l1_cope_name", "l2_cope_name")
+  )
 }
 
 

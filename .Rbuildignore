@@ -2,3 +2,7 @@
 ^\.Rproj\.user$
 ^\.lintr$
 ^local
+^\.github$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

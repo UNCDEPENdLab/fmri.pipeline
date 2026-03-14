@@ -337,6 +337,8 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       data <- as.data.frame(data) # make subsetting syntax in this function consistent with standard data.frame conventions
     }
 
+    checkmate::assert_class(lg, "Logger", null.ok = TRUE)
+    if (is.null(lg)) lg <- lgr::get_logger("fmri.pipeline/hi_model")
     checkmate::assert_class(to_modify, "hi_model_spec", null.ok = TRUE)
     if (is.null(to_modify)) {
       mobj <- list(level = level)
@@ -397,7 +399,8 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       opts <- c(
         "Separate L3 model by session (requires L2 scope id_session)",
         "Pooled sessions with subject EVs (requires L2 scope id_session)",
-        "One row per subject input (requires L2 scope id)"
+        "One row per subject input (requires L2 scope id)",
+        "3dLMEr (mixed-effects longitudinal model via AFNI; requires L2 scope id_session)"
       )
       which_mode <- menu(
         opts,
@@ -407,6 +410,8 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
         "pooled_sessions_subject_ev"
       } else if (which_mode == 3L) {
         "subject_rows"
+      } else if (which_mode == 4L) {
+        "3dlmer"
       } else {
         "separate_sessions"
       }
@@ -647,6 +652,14 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       } else {
         checkmate::assert_subset(mobj$l3_input_mode, longitudinal_l3_input_modes())
       }
+
+      # Inform user about auto-injection of subject indicator EVs
+      if (identical(mobj$l3_input_mode, "pooled_sessions_subject_ev")) {
+        lg$info(
+          "L3 model '%s' uses pooled_sessions_subject_ev. Per-subject indicator EVs will be auto-injected at setup time if 'id' is not in the model formula.",
+          mobj$name
+        )
+      }
     }
 
     if (level == 2L) {
@@ -669,7 +682,32 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
     }
 
     # fit linear model and populate model object
+    # For 3dLMEr, we still fit a standard lm to allow emmeans to work for gltCode generation
     mobj <- mobj_fit_lm(mobj, as.character(model_formula), data, id_cols, lg = lg)
+
+    # 3dLMEr-specific: collect lme4-style random-effects specification
+    if (level == 3L && identical(mobj$l3_input_mode, "3dlmer")) {
+      if (!is.null(spec_list$random_effects)) {
+        mobj$random_effects <- spec_list$random_effects
+      } else {
+        cat(
+          "\n--- 3dLMEr Random Effects ---\n",
+          "Specify the random-effects part of the lme4 formula.\n",
+          "Example: (1 | Subj) for random intercepts per subject\n",
+          "Example: (1 + Session | Subj) for random intercepts and random slopes\n",
+          "Note: Using 'Subj' as the grouping factor is recommended for 3dLMEr compatibility.\n\n",
+          sep = ""
+        )
+        res <- trimws(readline("Enter the random-effects specification: "))
+        if (res == "") res <- "(1 | Subj)" # sensible default
+        mobj$random_effects <- res
+      }
+      
+      # Combine fixed and random effects into full lmer formula for AFNI
+      # model_formula here is the RHS of the fixed-effects formula as a string
+      mobj$lmer_formula <- paste(as.character(model_formula)[2], "+", mobj$random_effects)
+      cat("Full 3dLMEr formula: ", mobj$lmer_formula, "\n")
+    }
 
     # Guided longitudinal prompt: offer between-session pairwise contrasts when applicable
     has_multi_session <- "session" %in% names(data) && length(unique(data$session)) > 1L

@@ -318,6 +318,14 @@ get_l2_config <- function(gpa) {
 
     if (level == 3L) {
       mobj$fsl_outlier_deweighting <- mm$fsl_outlier_deweighting
+      
+      # 3dLMEr-specific fields
+      if (identical(mm$l3_input_mode, "3dlmer")) {
+        mobj$random_effects <- mm$random_effects
+        mobj$lmer_formula <- mm$lmer_formula
+        mobj$lmer_mask <- mm$lmer_mask
+        mobj$lmer_njobs <- mm$lmer_njobs
+      }
     }
 
     str_out[[mm$name]] <- mobj

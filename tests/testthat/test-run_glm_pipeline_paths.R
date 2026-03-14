@@ -165,6 +165,56 @@ test_that("L2 requested but cannot run completes without L2 job", {
   expect_length(l2_jobs, 0L)
 })
 
+test_that("AFNI L3 multi-run path schedules FSL prerequisites and cache sync", {
+  gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
+  gpa$glm_software <- "afni"
+  gpa$multi_run <- TRUE
+  gpa$output_locations$sqlite_db <- NULL
+  gpa$parallel <- modifyList(gpa$parallel, list(
+    finalize_time = "0:10:00",
+    l1_setup_time = "0:10:00",
+    l1_setup_memgb = "1G",
+    l2_setup_cores = 1L,
+    l2_setup_run_time = "0:10:00",
+    l3_setup_run_time = "0:10:00",
+    fsl = list(l1_feat_alljobs_time = "0:10:00")
+  ))
+
+  l1_name <- names(gpa$l1_models$models)[1L]
+  l2_name <- names(gpa$l2_models$models)[1L]
+  l3_name <- names(gpa$l3_models$models)[1L]
+
+  store <- new.env(parent = emptyenv())
+  result <- testthat::with_mocked_bindings(
+    fmri.pipeline:::run_glm_pipeline(
+      gpa,
+      l1_model_names = l1_name,
+      l2_model_names = l2_name,
+      l3_model_names = l3_name
+    ),
+    R_batch_job = list(new = make_mock_job_new()),
+    R_batch_sequence = list(new = make_mock_sequence_new(store)),
+    .package = "fmri.pipeline"
+  )
+
+  jobs <- flatten_jobs(store$joblist)
+  run_l1_fsl <- jobs[vapply(jobs, function(j) j$job_name == "run_l1_fsl", logical(1))]
+  l2_job <- jobs[vapply(jobs, function(j) j$job_name == "setup_run_l2", logical(1))]
+  sync_job <- jobs[vapply(jobs, function(j) j$job_name == "sync_l2_backend_caches", logical(1))]
+  l3_afni <- jobs[vapply(jobs, function(j) j$job_name == "setup_run_l3_afni", logical(1))]
+
+  expect_null(result)
+  expect_length(run_l1_fsl, 1L)
+  expect_length(l2_job, 1L)
+  expect_length(sync_job, 1L)
+  expect_length(l3_afni, 1L)
+  expect_equal(l2_job[[1]]$depends_on_parents, "run_l1_fsl")
+  expect_equal(sync_job[[1]]$depends_on_parents, "setup_run_l2")
+  expect_equal(l3_afni[[1]]$depends_on_parents, "sync_l2_backend_caches")
+  expect_match(l2_job[[1]]$input_rdata_file, "run_pipeline_cache_fsl\\.RData$")
+  expect_match(l3_afni[[1]]$input_rdata_file, "run_pipeline_cache_afni\\.RData$")
+})
+
 test_that("No L3 requested completes without L3 job", {
   gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
   gpa$glm_software <- "fsl"

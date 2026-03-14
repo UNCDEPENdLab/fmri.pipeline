@@ -1,14 +1,15 @@
 Package: fmri.pipeline
 Type: Package
 Title: Analysis of fMRI Data on HPC clusters
-Version: 0.3-1
-Date: 2026-02-02
+Version: 0.4
+Date: 2026-03-14
 Authors@R: c(person("Michael", "Hallquist", role = c("aut", "cre"),
     email = "michael.hallquist@gmail.com"))
 Maintainer: Michael Hallquist <michael.hallquist@gmail.com>
 Description: Setup of GLM and deconvolution analyses for large-scale fMRI analyses
   of fMRI data.
 License: GPL-3
+BugReports: https://github.com/UNCDEPENdLab/fmri.pipeline/issues
 Encoding: UTF-8
 LazyLoad: yes
 LazyData: yes
@@ -60,10 +61,14 @@ Imports:
     yaml
 Suggests:
     brms,
+    knitr,
     pkgload,
+    rmarkdown,
     testthat (>= 3.0.0)
 LinkingTo:
     Rcpp,
     RcppArmadillo,
     RNifti
 Config/testthat/edition: 3
+URL: https://uncdependlab.github.io/fmri.pipeline/
+VignetteBuilder: knitr

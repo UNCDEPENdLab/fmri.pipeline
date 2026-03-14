@@ -379,6 +379,11 @@ setup_parallel_settings <- function(gpa, lg = NULL) {
   if (is.null(gpa$parallel$spm$l3_spm_time)) gpa$parallel$spm$l3_spm_time <- "8:00:00"
   if (is.null(gpa$parallel$spm$l3_spm_memgb)) gpa$parallel$spm$l3_spm_memgb <- "16"
 
+  if (is.null(gpa$parallel$afni)) gpa$parallel$afni <- list()
+  if (is.null(gpa$parallel$afni$l3_lmer_time)) gpa$parallel$afni$l3_lmer_time <- "48:00:00"
+  if (is.null(gpa$parallel$afni$l3_lmer_memgb)) gpa$parallel$afni$l3_lmer_memgb <- "32"
+  if (is.null(gpa$parallel$afni$l3_lmer_njobs)) gpa$parallel$afni$l3_lmer_njobs <- 8
+
   gpa$parallel$l1_setup_memgb <- enforce_min_mem(
     gpa$parallel$l1_setup_memgb,
     min_gb = 16,
@@ -504,6 +509,12 @@ setup_output_locations <- function(gpa, lg = NULL) {
     ),
     spm_l3_combined_filename = file.path("{gpa$output_directory}", "spm_l3_combined", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}_stats"),
     spm_l3_combined_briknames = "l3c-{l3_cope_name}",
+    afni_3dlmer_directory = file.path(
+      "{gpa$output_directory}", "afni_3dlmer",
+      "L1m-{l1_model}", "l1c-{l1_cope_name}",
+      "L2m-{l2_model}_l2c-{l2_cope_name}",
+      "L3m-{l3_model}"
+    ),
     scheduler_scripts = file.path(gpa$output_directory, "scheduler_scripts"),
     sqlite_db = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".sqlite")),
     project_config_json = file.path(gpa$output_directory, "project_config.json"),

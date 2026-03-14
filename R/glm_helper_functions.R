@@ -1625,10 +1625,58 @@ respecify_l3_model <- function(mobj, new_data) {
   checkmate::assert_subset(c("id", "session"), names(new_data))
 
   # use id and session in new_data to subset the full data from initial model specification
-  full_data <- cbind(mobj$metadata, mobj$model_data)
+  # ensure we combine metadata and model data without creating duplicate columns (e.g., session might be in both)
+  model_data_subset <- mobj$model_data
+  overlap_cols <- intersect(names(mobj$metadata), names(model_data_subset))
+  if (length(overlap_cols) > 0L) {
+    model_data_subset <- model_data_subset %>% dplyr::select(-dplyr::all_of(overlap_cols))
+  }
+  full_data <- cbind(mobj$metadata, model_data_subset)
+
   new_data <- new_data %>% dplyr::select(id, session) #just metadata of interest
   new_data <- new_data %>%
     dplyr::left_join(full_data, by=c("id", "session"))
+
+  # Auto-inject per-subject indicator EVs for pooled_sessions_subject_ev mode.
+  # FSL's repeated-measures approach requires one EV per subject to model out
+  # the subject-specific intercept (mean). If the user's L3 formula does not
+  # include 'id', we automatically add it as a factor to ensure correct
+  # repeated-measures modeling.
+  l3_input_mode <- mobj$l3_input_mode
+  if (identical(l3_input_mode, "pooled_sessions_subject_ev")) {
+    model_vars <- mobj$model_variables
+    formula_str <- mobj$model_formula
+    id_in_formula <- "id" %in% model_vars ||
+      (!is.null(formula_str) && grepl("\\bid\\b", formula_str, perl = TRUE))
+
+    if (!isTRUE(id_in_formula)) {
+      lgr::get_logger("glm_pipeline/l3_setup")$info(
+        "l3_input_mode='pooled_sessions_subject_ev': auto-injecting 'id' as a factor EV for subject-mean modeling."
+      )
+
+      # ensure id is a factor in the data
+      new_data$id <- as.factor(new_data$id)
+
+      # prepend id to the existing model formula
+      if (!is.null(formula_str) && nzchar(formula_str)) {
+        # strip any leading "~ " or "~" prefix, then rebuild
+        rhs <- sub("^~\\s*", "", formula_str)
+        if (rhs == "1" || rhs == "") {
+          # intercept-only model: replace with id (id already provides intercept per subject)
+          augmented_formula <- "~ 0 + id"
+        } else {
+          augmented_formula <- paste("~ 0 + id +", rhs)
+        }
+      } else {
+        augmented_formula <- "~ 0 + id"
+      }
+
+      lg_l3 <- lgr::get_logger("glm_pipeline/l3_setup")
+      lg_l3$info("Augmented L3 formula: %s", augmented_formula)
+      mobj$model_formula <- augmented_formula
+      mobj$model_variables <- unique(c("id", model_vars))
+    }
+  }
 
   mobj <- mobj_fit_lm(mobj=mobj, data=new_data)
 

@@ -24,6 +24,8 @@ default_glm_backend_specs <- function() {
   list(
     fsl = list(
       name = "fsl",
+      l3_requires_l2 = TRUE,
+      l3_l2_source_backend = "fsl",
       l1_setup = "fsl_l1_model",
       l2_setup = "fsl_l2_model",
       l3_setup = "fsl_l3_model",
@@ -40,6 +42,8 @@ default_glm_backend_specs <- function() {
     ),
     spm = list(
       name = "spm",
+      l3_requires_l2 = FALSE,
+      l3_l2_source_backend = NULL,
       l1_setup = "spm_l1_model",
       l2_setup = NULL,
       l3_setup = "spm_l3_model",
@@ -56,21 +60,54 @@ default_glm_backend_specs <- function() {
     ),
     afni = list(
       name = "afni",
+      l3_requires_l2 = TRUE,
+      l3_l2_source_backend = "fsl",
       l1_setup = "__not_implemented__",
       l2_setup = "__not_implemented__",
-      l3_setup = "__not_implemented__",
+      l3_setup = "afni_3dlmer_setup",
       l1_status = "__not_implemented__",
       l2_status = "__not_implemented__",
-      l3_status = "__not_implemented__",
+      l3_status = "get_3dlmer_status",
       l1_status_inputs = character(0),
       l2_status_inputs = character(0),
-      l3_status_inputs = character(0),
+      l3_status_inputs = c("output_file"),
       output_dir = "get_output_directory",
       l1_run = "__not_implemented__",
       l2_run = "__not_implemented__",
-      l3_run = "__not_implemented__"
+      l3_run = "run_3dlmer_sepjobs"
     )
   )
+}
+
+backend_l3_requires_l2 <- function(backend) {
+  if (!is.list(backend)) return(FALSE)
+  if (!is.null(backend$l3_requires_l2)) return(isTRUE(backend$l3_requires_l2))
+  bname <- if (!is.null(backend$name) && is.character(backend$name) && length(backend$name) == 1L) tolower(backend$name) else ""
+  identical(bname, "fsl") || identical(bname, "afni")
+}
+
+backend_l3_l2_source_backend <- function(backend) {
+  if (!is.list(backend)) return(NULL)
+  val <- backend$l3_l2_source_backend
+  if (!is.null(val) && is.character(val) && length(val) == 1L && nzchar(val)) return(tolower(val))
+  bname <- if (!is.null(backend$name) && is.character(backend$name) && length(backend$name) == 1L) tolower(backend$name) else ""
+  if (bname %in% c("fsl", "afni")) return("fsl")
+  NULL
+}
+
+any_l3_backend_requires_l2 <- function(backends) {
+  checkmate::assert_list(backends)
+  if (length(backends) == 0L) return(FALSE)
+  any(vapply(backends, backend_l3_requires_l2, logical(1)))
+}
+
+get_l3_dependency_backends <- function(backends) {
+  checkmate::assert_list(backends)
+  deps <- unique(unlist(lapply(backends, function(backend) {
+    if (!backend_l3_requires_l2(backend)) return(NULL)
+    backend_l3_l2_source_backend(backend)
+  })))
+  deps[!is.na(deps) & nzchar(deps)]
 }
 
 resolve_glm_backends <- function(specs, pkg = "fmri.pipeline") {
