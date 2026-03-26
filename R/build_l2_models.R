@@ -703,9 +703,12 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
         mobj$random_effects <- res
       }
       
-      # Combine fixed and random effects into full lmer formula for AFNI
-      # model_formula here is the RHS of the fixed-effects formula as a string
-      mobj$lmer_formula <- paste(as.character(model_formula)[2], "+", mobj$random_effects)
+      # Combine fixed and random effects into full lmer formula for AFNI.
+      # One-sided formulas can deparse to c("~", "rhs"), while two-sided formulas
+      # use c("~", "lhs", "rhs"), so take the last non-empty element.
+      fixed_rhs <- tail(as.character(model_formula), 1L)
+      fixed_rhs <- sub("^~\\s*", "", fixed_rhs, perl = TRUE)
+      mobj$lmer_formula <- paste(fixed_rhs, "+", mobj$random_effects)
       cat("Full 3dLMEr formula: ", mobj$lmer_formula, "\n")
     }
 

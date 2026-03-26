@@ -80,6 +80,34 @@ proc defaultIfUnset { keyName defaultValue } {
 	return $key
 }
 
+proc feat5:run_featregapply_locked { feat_dir args } {
+    global FSLDIR logout
+
+    set featregapply_cmd "${FSLDIR}/bin/featregapply $feat_dir"
+    if { [ llength $args ] > 0 } {
+	append featregapply_cmd " [ join $args \" \" ]"
+    }
+
+    set flock_binary [ auto_execok flock ]
+    if { $flock_binary == "" } {
+	fsl:echo $logout "WARNING: flock not found on PATH; running featregapply without locking for $feat_dir"
+	return [ fsl:exec $featregapply_cmd ]
+    }
+
+    set lock_timeout 7200
+    if { [ info exists ::env(FMRI_PIPELINE_FEATREGAPPLY_LOCK_TIMEOUT) ] } {
+	if { ! [ catch { expr { int($::env(FMRI_PIPELINE_FEATREGAPPLY_LOCK_TIMEOUT)) } } requested_timeout ] && $requested_timeout > 0 } {
+	    set lock_timeout $requested_timeout
+	}
+    }
+
+    # Lock per lower-level FEAT directory so parallel higher-level jobs do not
+    # race while refreshing the shared reg_standard tree.
+    set lock_file "${feat_dir}/.featregapply.lock"
+    fsl:echo $logout "Acquiring featregapply lock for $feat_dir via $lock_file"
+    return [ fsl:exec "$flock_binary -w $lock_timeout $lock_file $featregapply_cmd" ]
+}
+
 # feat5:write
 
 proc feat5:write { w feat_model write_image_filenames exitoncheckfail filename } {
@@ -6154,7 +6182,7 @@ for { set session 1 } { $session <= $fmri(multiple) } { incr session 1 } {
 	set copes($session) $feat_files($session)
 	set feat_files($session) [ file dirname [ file dirname $feat_files($session) ] ]
     }
-    fsl:exec "${FSLDIR}/bin/featregapply $feat_files($session)"
+    feat5:run_featregapply_locked $feat_files($session)
 }
 
 #
@@ -6452,7 +6480,7 @@ if { $tdof_list != "" } {
 
 if { $fmri(sscleanup_yn) } {
     for { set session 1 } { $session <= $fmri(multiple) } { incr session 1 } {
-	fsl:exec "${FSLDIR}/bin/featregapply $feat_files($session) -c"
+	feat5:run_featregapply_locked $feat_files($session) -c
     }
 }
 
@@ -6725,7 +6753,7 @@ fsl:echo $logout "</pre><hr>Higher-level MELODIC<br><pre>"
     # fix feat_files and run featregapply
 
 for { set session 1 } { $session <= $fmri(multiple) } { incr session 1 } {
-    fsl:exec "${FSLDIR}/bin/featregapply $feat_files($session)"
+    feat5:run_featregapply_locked $feat_files($session)
     fsl:echo report_firstlevel.html "${session} <A HREF=\"$feat_files($session)/report_prestats.html\">$feat_files($session)</A><br>"
 }
 fsl:echo report_firstlevel.html "</BODY></HTML>"
