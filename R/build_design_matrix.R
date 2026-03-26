@@ -238,7 +238,6 @@
 #' @importFrom data.table as.data.table
 #' @importFrom dplyr filter select slice bind_rows arrange "%>%"
 #' @importFrom orthopolynom legendre.polynomials polynomial.values
-#' @importFrom oro.nifti readNIfTI
 #' @importFrom ggplot2 ggplot
 #' @importFrom car vif
 #' @importFrom stats as.formula cor lm residuals rnorm
@@ -683,7 +682,8 @@ determine_run_volumes <- function(run_data = NULL, nruns = NULL, run_nifti_drop_
   if (!is.null(run_data$run_nifti)) {
     lg$info("Using NIfTI images to determine run lengths.")
     run_volumes_detected <- sapply(run_data$run_nifti, function(xx) {
-      oro.nifti::readNIfTI(xx, read_data = FALSE)@dim_[5L]
+      hdr <- RNifti::niftiHeader(xx)
+      hdr$dim[5L]
     }, USE.NAMES=FALSE)
 
     # if user specified the number of volumes, check that this matches detected volumes
