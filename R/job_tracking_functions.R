@@ -266,7 +266,7 @@ get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, retur
 }
 
 
-# Internal helper function to update tracker_args object
+#' Internal helper function to update tracker_args object
 #'
 #' @param list_to_populate The list whose argument will be populated/updated
 #' @param arg_name The named list element to update
@@ -286,4 +286,72 @@ populate_list_arg = function(list_to_populate, arg_name, new_value = NULL, appen
     list_to_populate[[arg_name]] <- paste(list_to_populate[[arg_name]], new_value, sep = "\n")  
   }
   return(list_to_populate)
+}
+
+
+#' Helper to trace back to highest level parent from a given reference id
+#' 
+#' @param tracking_df a data.frame object extracted from the job tracking SQLite database
+#' @param ref_id the id of the job from which to trace back
+#' 
+#' @keywords internal
+get_top_parent <- function(tracking_df, ref_id) {
+  repeat {
+    parent <- with(tracking_df, parent_id[id == ref_id])
+    if(isTRUE(is.na(parent))) break
+    ref_id <- parent
+  }
+  return(ref_id)
+}
+
+
+#' Helper to convert a tracking dataframe into a data.tree object
+#'
+#' @param tracking_df a data.frame object extracted from the job tracking SQLite databse
+#' 
+#' @importFrom data.tree as.Node
+#' @importFrom dplyr arrange
+#' @importFrom magrittr %>%
+#' @keywords internal
+tracking_df_to_tree <- function(tracking_df) {
+  
+  tree_list <- list()
+  
+  seq_ids <- unique(tracking_df$sequence_id)
+  
+  for (this_seq_id in seq_ids) {
+    
+    if (is.na(this_seq_id)) {
+      # define "general" sequence for jobs with no sequence id
+      df <- subset(tracking_df, is.na(sequence_id))
+      this_seq_id <- this_seq_str <- "general"
+    } else {
+      df <- subset(tracking_df, sequence_id == this_seq_id)
+      this_seq_str <- paste0("seq_", this_seq_id)
+    }
+    
+    # jobs that have no parent 
+    heads <- with(df, id[child_level == 0])
+    
+    # get highest level parent for each job (for grouping)
+    df$head <- sapply(df$id, function(x) get_top_parent(df, x))
+    
+    # define path string field based on child level
+    df$pathString <- sprintf("%s/chain%s/%s", this_seq_str,
+                             sapply(df$head, function(x) which(heads == x)),
+                             ifelse(df$child_level == 2, 
+                                    paste0(sapply(df$parent_id, function (x) with(df, job_name[id == x])),
+                                           "/", df$job_name), 
+                                    df$job_name)
+                            )
+    
+    # sort data.frame by time
+    df <- df %>% arrange(child_level, time_started)
+    
+    # save dataframe as data.tree object, one element per sequence
+    tree_list[[this_seq_id]] <- as.Node(df)
+  }
+  
+  return(tree_list)
+  
 }

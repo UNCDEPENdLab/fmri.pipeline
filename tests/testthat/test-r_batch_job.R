@@ -135,24 +135,51 @@ dbClearResult(res)
 
 # test batch sequence
 
+wd <- "/Users/ZACHMAC/Library/CloudStorage/OneDrive-UniversityofNorthCarolinaatChapelHill/GRAD/PROJ/fmri.pipeline/local/tracking/"
+out_dir <- paste0(wd, "output")
+sqlite_db <- paste0(wd, "job_tracking.sqlite")
+bash_scr <- paste0(wd, "test.sh")
 
 # library(glue)
 # library(fmri.pipeline)
 d_batch <- R_batch_job$new(
+  batch_directory = out_dir,
   job_name = glue("test1"), n_cpus = 1, mem_per_cpu = "4g",
   wall_time = "10:00:00", scheduler = "local",
+  input_objects = fmri.pipeline:::named_list(test_df),
   # pass relevant vars to the batch
   r_packages = "fmri.pipeline",
   r_code = c(
     "Sys.sleep(10)"
+  ),
+  sqlite_db = sqlite_db,
+  repolling_interval = 30
+)
+
+
+d_batch2 <- d_batch$copy(
+  job_name = "test2",
+  r_code = c(
+    "Sys.getenv('JOBID')",
+    "Sys.sleep(1)",
+    "child_job_ids <- c()",
+    "for (j in 1:100) {",
+    "  tracking_args <- list()",
+    "  tracking_args$job_name = paste0('job', j)",
+    glue::glue("  child_job_ids[j] <- cluster_job_submit('{bash_scr}', scheduler = 'local', tracking_sqlite_db = '{sqlite_db}', tracking_args = tracking_args)"),
+    "}"
   )
 )
 
-d_batch2 <- d_batch$copy(job_name = "test2")
-d_batch3 <- d_batch$copy(job_name = "test2")
+d_batch2$depends_on_parents <- "test1"
+d_batch2$wait_for_children <- TRUE
+
+d_batch3 <- d_batch$copy(job_name = "test3")
+
+d_batch3$depends_on_parents <- "test2"
 
 d_seq <- R_batch_sequence$new(
-  d_batch, d_batch2, d_batch3
+  d_batch, d_batch2, d_batch3, sequence_id = uuid::UUIDgenerate()
 )
 
 d_seq$submit()

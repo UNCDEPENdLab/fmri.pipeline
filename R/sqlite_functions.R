@@ -199,7 +199,7 @@ read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, 
 #' @param return_result Logical. If TRUE submits DBI::dbGetQuery instead of DBI::dbExecute;
 #'                        Only use if expecting something in return for your query
 #' 
-#' @importFrom DBI dbConnect dbExecute dbDisconnect
+#' @importFrom DBI dbConnect dbGetQuery dbExecute dbDisconnect
 #' @importFrom RSQLite sqliteSetBusyHandler
 #' 
 #' @keywords internal

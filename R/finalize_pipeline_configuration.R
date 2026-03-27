@@ -344,12 +344,13 @@ setup_output_locations <- function(gpa, lg = NULL) {
     sqlite_db = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".sqlite")),
     project_config_json = file.path(gpa$output_directory, "project_config.json"),
     object_cache = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".rds")),
-    setup_l1_log_txt = file.path(gpa$output_directory, "setup_l1_models.txt"),
-    setup_l1_log_json = file.path(gpa$output_directory, "setup_l1_models.json"),
-    setup_l2_log_txt = file.path(gpa$output_directory, "setup_l2_models.txt"),
-    setup_l2_log_json = file.path(gpa$output_directory, "setup_l2_models.json"),
-    setup_l3_log_txt = file.path(gpa$output_directory, "setup_l3_models.txt"),
-    setup_l3_log_json = file.path(gpa$output_directory, "setup_l3_models.json")
+    log_directory = filte.path(gpa$output_director, "logs"),
+    setup_l1_log_txt = file.path(gpa$output_directory, "logs", "setup_l1_models.txt"),
+    setup_l1_log_json = file.path(gpa$output_directory, "logs", "setup_l1_models.json"),
+    setup_l2_log_txt = file.path(gpa$output_directory, "logs", "setup_l2_models.txt"),
+    setup_l2_log_json = file.path(gpa$output_directory, "logs", "setup_l2_models.json"),
+    setup_l3_log_txt = file.path(gpa$output_directory, "logs", "setup_l3_models.txt"),
+    setup_l3_log_json = file.path(gpa$output_directory, "logs", "setup_l3_models.json")
   )
 
   if (checkmate::test_string(gpa$output_locations) && gpa$output_locations[1L] == "default") {
