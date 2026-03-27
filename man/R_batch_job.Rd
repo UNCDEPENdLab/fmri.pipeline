@@ -237,7 +237,8 @@ Function to create a deep copy of a batch job
   n_cpus = NULL,
   wall_time = NULL,
   mem_total = NULL,
-  r_code = NULL
+  r_code = NULL,
+  post_children_r_code = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -255,6 +256,8 @@ Function to create a deep copy of a batch job
 \item{\code{mem_total}}{The total amount of memory (RAM) requested by the job}
 
 \item{\code{r_code}}{A character vector or expression containing R code to be executed}
+
+\item{\code{post_children_r_code}}{The R code to be executed after child jobs have completed}
 }
 \if{html}{\out{</div>}}
 }

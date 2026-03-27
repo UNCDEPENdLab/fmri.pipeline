@@ -2,22 +2,17 @@
 % Please edit documentation in R/glm_helper_functions.R
 \name{lookup_dim}
 \alias{lookup_dim}
-\title{Helper function to obtain the dimensions of a 4D file}
+\title{Helper function to obtain the dimensions of a NIfTI file}
 \usage{
 lookup_dim(nifti)
 }
 \arguments{
-\item{nifti}{a 4D nifti file}
+\item{nifti}{a nifti file}
 }
 \value{
-a named vector of dimensions for the input (dim_x, dim_y, dim_z)
+a named vector of dimensions for the input (dim_x, dim_y, dim_z, dim_t)
 }
 \description{
-Helper function to obtain the dimensions of a 4D file
-}
-\details{
-This function prefers to use fslval instead of an internal R library
-  because both oro.nifti and RNifti are rather slow to obtain a single value from
-  the NIfTI header
+Helper function to obtain the dimensions of a NIfTI file
 }
 \keyword{internal}

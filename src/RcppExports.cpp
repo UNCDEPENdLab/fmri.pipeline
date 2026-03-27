@@ -119,6 +119,17 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// get_nifti_dim
+NumericVector get_nifti_dim(std::string infile);
+RcppExport SEXP _fmri_pipeline_get_nifti_dim(SEXP infileSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::string >::type infile(infileSEXP);
+    rcpp_result_gen = Rcpp::wrap(get_nifti_dim(infile));
+    return rcpp_result_gen;
+END_RCPP
+}
 // sigmoid
 arma::vec sigmoid(const arma::vec& x, double beta);
 RcppExport SEXP _fmri_pipeline_sigmoid(SEXP xSEXP, SEXP betaSEXP) {
@@ -141,6 +152,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_fmri_pipeline_gammapdf", (DL_FUNC) &_fmri_pipeline_gammapdf, 3},
     {"_fmri_pipeline_generate_feature", (DL_FUNC) &_fmri_pipeline_generate_feature, 2},
     {"_fmri_pipeline_generate_feature_armadillo", (DL_FUNC) &_fmri_pipeline_generate_feature_armadillo, 2},
+    {"_fmri_pipeline_get_nifti_dim", (DL_FUNC) &_fmri_pipeline_get_nifti_dim, 1},
     {"_fmri_pipeline_sigmoid", (DL_FUNC) &_fmri_pipeline_sigmoid, 2},
     {NULL, NULL, 0}
 };

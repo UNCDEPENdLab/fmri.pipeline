@@ -38,7 +38,15 @@ get_trial_subset_stats <- function(signal, trial_data, trial_set=NULL) {
 # the signal has within-subject factors, is a beta series signal, and/or includes a temporal derivative
 get_regressors_from_signal <- function(sig) {
   # in terms of design, always add derivative columns en bloc after the corresponding non-derivative columns
-  if (!is.null(sig$wi_factors)) {
+  # handle expansion of PPI signals slightly differently -- expand w/i factors within psych and PPI parts if needed
+  if (checkmate::test_string(sig$ts_multiplier)) {
+    if (!is.null(sig$wi_factors)) {
+      cols <- paste(sig$name, names(coef(sig$wi_model)), sep = ".")
+      cols <- c(cols, sig$ts_multiplier, sub(paste0("^", sig$name), paste(sig$name, "ppi", sep = "."), cols))
+    } else {
+      cols <- c(sig$name, sig$ts_multiplier, paste(sig$name, "ppi", sep = "."))
+    }
+  } else if (!is.null(sig$wi_factors)) {
     # use the lmfit object in the signal to determine the columns that will be included
     # for within-subject factor modulation, always include the signal as the prefix on the column names
     cols <- paste(sig$name, names(coef(sig$wi_model)), sep = ".")
@@ -66,7 +74,26 @@ get_regressors_from_signal <- function(sig) {
 # cf. get_regressors_from_signal -- these have to align!
 # vv <- expand_signal(gpa$l1_models$signals$pe)
 expand_signal <- function(sig) {
-  if (is.null(sig$wi_factors) && isFALSE(sig$beta_series)) {
+  if (checkmate::test_string(sig$ts_multiplier) && is.null(sig$ts_expanded)) {
+    # need to have two copies of sig and expand each of those -- one with the ts_multiplier and one without
+    sig$ts_expanded <- TRUE # used to indicate that it shouldn't be recursively expanded below
+    sig_psych <- sig
+    sig_psych$ts_multiplier <- NULL # remove this to prevent multiplication by ppi data
+    sig_psych <- expand_signal(sig_psych) # handle expansion due to wi_factors etc.
+
+    sig_physio <- sig
+    sig_physio$name <- sig_physio$ts_multiplier # name signal after physio column
+    sig_physio$physio_only <- TRUE # physio only marker
+    sig_physio <- list(sig_physio)
+    names(sig_physio) <- sig_physio[[1]]$name
+
+    # interaction signal should be expanded, too, but with physio multiplication
+    sig_ppi <- sig
+    sig_ppi$name <- paste(sig_ppi$name, "ppi", sep = ".")
+    sig_ppi <- expand_signal(sig_ppi)
+
+    s_list <- c(sig_psych, sig_physio, sig_ppi)
+  } else if (is.null(sig$wi_factors) && isFALSE(sig$beta_series)) {
     # nothing to expand
     s_list <- list(sig) # wrap as list to ensure we always get a list return
     names(s_list) <- sig$name

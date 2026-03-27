@@ -509,8 +509,12 @@ build_design_matrix <- function(
     # use data.table split method to keep all levels and drop by column. sorted=TRUE also keeps things in run order
     retsplit <- split(retdf, by="run_number", keep.by=FALSE, sorted=TRUE)
     names(retsplit) <- paste0("run_number", names(retsplit))
-    #tag the aligned signal with the event element so that we can identify which regressors are aligned to the same event later
-    retsplit <- lapply(retsplit, function(rr) { attr(rr, "event") <- s$event; return(rr) })
+    # tag the aligned signal with the event element so that we can identify which regressors are aligned to the same event later
+    retsplit <- lapply(retsplit, function(rr) {
+      attr(rr, "event") <- s$event
+      if (isTRUE(s$physio_only)) attr(rr, "physio_only") <- TRUE # propagate into dmat for correct convolution
+      return(rr)
+    })
 
     return(retsplit)
   })
@@ -580,15 +584,16 @@ build_design_matrix <- function(
   # read and process additional regressors (e.g., confounds) -- if not NULL, this should return a data.frame indexed by run
   additional_regressors <- get_additional_regressors(additional_regressors, run_data$run_volumes, run_data$drop_volumes, shorten_additional, lg)
 
+  # get a data.frame of any PPI ts multipliers, indexed by run_number
   ts_multipliers_df <- get_ts_multipliers(ts_multipliers, run_data, shorten_ts)
 
-  #Add ts_multipliers to signals as needed. Will generate a list in which each element is a run
-  #NB. This doesn't handle runs_to_output appropriately!!
+  # Add ts_multipliers to signals as needed. Will generate a list in which each element is a run
+  # NB. This doesn't handle runs_to_output appropriately!!
   bdm_args$ts_multiplier <- lapply(signals_expanded, function(s) {
     if (is.null(s$ts_multiplier) || isFALSE(s$ts_multiplier)) {
       return(NULL)
     } else {
-      #split the relevant column of the ts_multipliers_df for this signal at run boundaries
+      # split the relevant column of the ts_multipliers_df for this signal at run boundaries
       ss <- split(ts_multipliers_df[[s$ts_multiplier]], ts_multipliers_df$run_number)
       return(ss)
     }
@@ -601,6 +606,7 @@ build_design_matrix <- function(
     lapply(signals_aligned[[signal]], function(run) {
       mm <- as.matrix(run)
       attr(mm, "event") <- attr(run, "event") # propagate event tag
+      attr(mm, "physio_only") <- attr(run, "physio_only") # propagate physio indicator
       return(mm)
     })
   }))
@@ -831,13 +837,13 @@ build_design_matrix <- function(
   #Example: run 1 is 300 volumes with a TR of 2.0
   #  Thus, run 1 has timing 0s .. 298s, and the first volume of run 2 would be 300s
   design_concat <- lapply(seq_len(dim(dmat)[2L]), function(reg) {
-    thisreg <- dmat[, reg]
-    concat_reg <- do.call(rbind, lapply(seq_along(thisreg), function(run) {
-      timing <- thisreg[[run]]
+    this_reg <- dmat[, reg]
+    concat_reg <- do.call(rbind, lapply(seq_along(this_reg), function(run) {
+      timing <- this_reg[[run]]
       timing[, "onset"] <- timing[, "onset"] + ifelse(run > 1, run_timing[run-1], 0)
       return(timing)
     }))
-    attr(concat_reg, "event") <- attr(thisreg[[1]], "event") #propagate event alignment
+    attr(concat_reg, "event") <- attr(this_reg[[1]], "event") #propagate event alignment
 
     concat_reg
   })
@@ -1030,44 +1036,53 @@ get_additional_regressors <- function(additional_regressors, run_volumes, drop_v
 
 # helper function to read in run-wise time series that will be multiplied against convolved regressors (PPI)
 get_ts_multipliers <- function(ts_multipliers = NULL, run_data, shorten_ts) {
-  # handle time series modulator regressors
-  if (!is.null(ts_multipliers)) {
-    ts_multipliers_df <- data.frame()
+  if (is.null(ts_multipliers)) return(NULL) # NULL input -> NULL output
 
-    for (i in seq_along(ts_multipliers)) {
-      if (is.character(ts_multipliers)) {
-        ts_multipliers_currun <- read.table(ts_multipliers[i]) # read in ith text file
-      } else {
-        ts_multipliers_currun <- ts_multipliers[[i]] # use ith element of list of data.frames
-      }
+  ts_multipliers_df <- data.frame()
 
-      stopifnot(is.data.frame(ts_multipliers_currun))
-      # mean center PPI signals -- crucial for convolution to be sensible
-      ts_multipliers_currun <- as.data.frame(lapply(ts_multipliers_currun, function(x) {
-        x - mean(x, na.rm = TRUE)
-      }))
-      ts_multipliers_currun$run_number <- i
+  # if ts_multipliers is a data.frame with run_number
+  if (is.data.frame(ts_multipliers) && !"run_number" %in% names(ts_multipliers)) { # required for this to work
+    stop("If ts_multipliers is a data.frame, it must contain run_number")
+  }
 
-      # define which rows of the dataset to keep based on drop_volumes settings
-      if (isTRUE(shorten_ts)) {
-        rv <- 1:run_data$run_volumes[i] + run_data$drop_volumes[i]
-      } else {
-        rv <- 1:run_data$run_volumes[i]
-      }
-
-      # message(paste0("Current run_volumes:", rv))
-      if (nrow(ts_multipliers_currun) < length(rv)) {
-        stop("ts_multiplier regressor has fewer observations than run_volumes")
-      }
-      ts_multipliers_currun <- dplyr::slice(ts_multipliers_currun, rv) %>% as.data.frame()
-      ts_multipliers_df <- dplyr::bind_rows(ts_multipliers_df, ts_multipliers_currun)
+  for (i in seq_len(nrow(run_data))) {
+    ts_current <- if (is.data.frame(ts_multipliers)) {
+      ts_multipliers[ts_multipliers$run_number == i, , drop = FALSE]
+    } else if (is.character(ts_multipliers)) {
+      read.table(ts_multipliers[i])
+    } else if (is.list(ts_multipliers)) {
+      ts_multipliers[[i]]
+    } else {
+      stop("Don't know how to handle ts_multipliers input")
     }
-  } else {
-    ts_multipliers_df <- NULL
+
+    if (nrow(ts_current) == 0L) warning(glue::glue("No ts_multipliers found for run {i}"))
+
+    # mean center
+    tocenter <- setdiff(names(ts_current), c("id", "session", "run_number", "volume"))
+    if (length(tocenter) > 0L) ts_current[, tocenter] <- lapply(ts_current[, tocenter], function(x) x - mean(x, na.rm = TRUE))
+    if ("run_number" %in% names(ts_current) && ts_current$run_number[1L] != i) {
+      warning("run_number present in ts_current, but it doesn't match iterator i in the loop over runs")
+    }
+    ts_current$run_number <- i
+
+    rv <- if (isTRUE(shorten_ts)) {
+      seq_len(run_data$run_volumes[i]) + run_data$drop_volumes[i]
+    } else {
+      seq_len(run_data$run_volumes[i])
+    }
+
+    if (nrow(ts_current) < length(rv)) {
+      stop(glue::glue("ts_multiplier has fewer observations than run_volumes for run {i}"))
+    }
+
+    ts_current <- dplyr::slice(ts_current, rv) %>% as.data.frame()
+    ts_multipliers_df <- dplyr::bind_rows(ts_multipliers_df, ts_current)
   }
 
   return(ts_multipliers_df)
 }
+
 
 #Example Data Set that can be used to visualize what build design matrix expects
 # source("fmri_utility_fx.R")

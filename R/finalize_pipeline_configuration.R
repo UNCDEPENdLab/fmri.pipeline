@@ -8,7 +8,7 @@
 #' @importFrom stringr str_count fixed
 #' @importFrom magrittr %>%
 #' @importFrom lgr get_logger
-#' @importFrom DBI dbConnect dbIsValid dbWriteTable
+#' @importFrom DBI dbConnect dbIsValid dbWriteTable dbDisconnect
 #' @importFrom RSQLite SQLite
 #' @export
 finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
@@ -22,10 +22,8 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
     return(gpa)
   }
 
-  if (is.null(gpa$sqlite_con) || !DBI::dbIsValid(gpa$sqlite_con)) {
-    lg$info("Opening SQLite connection to: %s", gpa$output_locations$sqlite_db)
-    gpa$sqlite_con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
-  }
+  lg$debug("In finalize_pipeline_configuration, opening SQLite connection to: %s", gpa$output_locations$sqlite_db)
+  sqlite_con <- DBI::dbConnect(RSQLite::SQLite(), gpa$output_locations$sqlite_db)
 
   # final checks on compute environment now that we're running inside the compute environment
   test_compute_environment(gpa, stop_on_fail=TRUE)
@@ -171,16 +169,18 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
 
   # save subject, run, and trial data to the database, too
   lg$info("Writing run_data to sqlite db: %s", gpa$output_locations$sqlite_db)
-  DBI::dbWriteTable(conn = gpa$sqlite_con, name = "run_data", value = gpa$run_data, overwrite = TRUE)
+  DBI::dbWriteTable(conn = sqlite_con, name = "run_data", value = gpa$run_data, overwrite = TRUE)
 
   lg$info("Writing subject_data to sqlite db: %s", gpa$output_locations$sqlite_db)
-  DBI::dbWriteTable(conn = gpa$sqlite_con, name = "subject_data", value = gpa$subject_data, overwrite = TRUE)
+  DBI::dbWriteTable(conn = sqlite_con, name = "subject_data", value = gpa$subject_data, overwrite = TRUE)
 
   lg$info("Writing trial_data to sqlite db: %s", gpa$output_locations$sqlite_db)
-  DBI::dbWriteTable(conn = gpa$sqlite_con, name = "trial_data", value = gpa$trial_data, overwrite = TRUE)
+  DBI::dbWriteTable(conn = sqlite_con, name = "trial_data", value = gpa$trial_data, overwrite = TRUE)
 
   lg$debug("Setting finalize_complete to TRUE")
   gpa$finalize_complete <- TRUE
+
+  try(DBI::dbDisconnect(sqlite_con)) # close SQLite connection
 
   return(gpa)
 }

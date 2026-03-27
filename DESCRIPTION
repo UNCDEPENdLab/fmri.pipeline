@@ -63,5 +63,6 @@ Suggests:
     testthat (>= 3.0.0)
 LinkingTo:
     Rcpp,
-    RcppArmadillo
+    RcppArmadillo,
+    RNifti
 Config/testthat/edition: 3

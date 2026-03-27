@@ -29,7 +29,7 @@
 #' @importFrom yaml read_yaml
 #' @importFrom jsonlite read_json
 #' @export
-build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_spec_file=NULL,
+build_l1_models <- function(gpa=NULL, trial_data=NULL, ppi_data = NULL, l1_model_set=NULL, from_spec_file=NULL,
                            onset_cols=NULL, onset_regex=".*(onset|time).*",
                            duration_cols=NULL, duration_regex=".*duration.*",
                            value_cols=NULL, value_regex=NULL, isi_cols=NULL, isi_regex="^(iti|isi).*") {
@@ -39,12 +39,14 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
   lg <- lgr::get_logger("glm_pipeline/build_l1_models")
   lg$set_threshold(gpa$lgr_threshold)
 
+  # TODO: we should almost definitely eliminate the use case where gpa is null... 
   checkmate::assert_class(gpa, "glm_pipeline_arguments", null.ok = TRUE)
   if (!is.null(gpa)) {
     lg$info("In build_l1_models, using existing gpa object to build l1 models (ignoring trial_data argument etc.)")
     use_gpa <- TRUE
     trial_data <- gpa$trial_data
     l1_model_set <- gpa$l1_models
+    ppi_data <- gpa$ppi_data
   } else {
     lg$debug("In build_l1_models, using trial_data passed in, rather than gpa object")
     use_gpa <- FALSE
@@ -144,7 +146,7 @@ build_l1_models <- function(gpa=NULL, trial_data=NULL, l1_model_set=NULL, from_s
         l1_model_set <- bl1_build_events(l1_model_set, trial_data=trial_data, lg=lg)
       } else if (aa == 7) {
         # signals
-        l1_model_set <- bl1_build_signals(l1_model_set, trial_data, lg=lg)
+        l1_model_set <- bl1_build_signals(l1_model_set, trial_data, ppi_data = ppi_data, lg=lg)
       } else if (aa == 8) {
         # models
         l1_model_set <- bl1_build_models(l1_model_set, lg=lg)
@@ -523,8 +525,8 @@ summarize_l1_signals <- function(sl) {
     cat("  Within-subject factor:", c_string(this$wi_factors), "\n")
     cat("  Generate beta series:", as.character(this$beta_series), "\n")
     cat(
-      "  Multiply convolved regressor against time series:",
-      ifelse(is.null(this$ts_multiplier || isFALSE(this$ts_multiplier)),
+      "  Multiply convolved regressor against time series (PPI):",
+      ifelse(is.null(this$ts_multiplier) || isFALSE(this$ts_multiplier),
         "FALSE", this$ts_multiplier
       ), "\n"
     )
@@ -551,10 +553,11 @@ summarize_l1_models <- function(ml) {
 #' helper function to build level 1 signals
 #' @param l1_model_set An \code{l1_model_set} object whose signals should be created or modified
 #' @param trial_data A data.frame containing trial-level signal information
+#' @param ppi_data An optional data.frame containing physiological signals for PPI analysis
 #'
 #' @return a modified version of \code{l1_model_set} with updated \code{$signals}
 #' @keywords internal
-bl1_build_signals <- function(l1_model_set, trial_data, block_data = NULL, subtrial_data = NULL, lg=NULL) {
+bl1_build_signals <- function(l1_model_set, trial_data, block_data = NULL, subtrial_data = NULL, ppi_data = NULL, lg=NULL) {
   cat("\nNow, we will build up a set of signals that can be included as regressors in the level 1 model.\n")
 
   checkmate::assert_class(lg, "Logger")
@@ -838,21 +841,31 @@ bl1_build_signals <- function(l1_model_set, trial_data, block_data = NULL, subtr
           }
         }
 
-        ss$ts_multiplier <- FALSE
-        # ts multiplier [not quite there]
-        ## while (is.null(ss$ts_multiplier)) {
-        ##   res <- menu(c("No", "Yes"),
-        ##     title="Generate beta series for this signal (one regressor per trial)?")
-        ##   if (res == 1L) { ss$beta_series <- FALSE
-        ##   } else if (res == 2L) { ss$beta_series <- TRUE }
-        ## }
+        if (is.null(ppi_data)) {
+          ss$ts_multiplier <- FALSE
+        } else {
+          while (is.null(ss$ts_multiplier)) {
+            res <- menu(c("No", "Yes"),
+              title = "Multiply this signal against a physiological regressor for PPI analysis?"
+            )
+            if (res == 1L) {
+              ss$ts_multiplier <- FALSE
+            } else if (res == 2L) {
+              possible_cols <- setdiff(names(ppi_data), c("id", "session", "run_number", "volume"))
+              ppi_col <- select.list(possible_cols,
+                multiple = FALSE,
+                title = "Which column in the PPI data should multiply this signal?"
+              )
+              if (ppi_col[1L] != "") ss$ts_multiplier <- ppi_col
+            }
+          }
+        }        
       }
 
       signal_list[[ss$name]] <- ss
     }
   }
 
-  
   class(signal_list) <- c("list", "l1_model_set_signals") # set 'l1_model_set_signals' class
 
   # populate back into model set
@@ -963,7 +976,8 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
     add_more <- 4 # quit out of model builder when working from spec file
   }
 
-  while (add_more != 4) {
+  done <- FALSE
+  while (!done) {
     summarize_l1_models(model_list)
 
     add_more <- menu(c("Add model", "Modify model", "Delete model", "Done with l1 model setup"),
@@ -997,11 +1011,18 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
           cat("  Not deleting ", names(model_list)[which_del], "\n")
         }
       }
+    } else if (add_more == 4L) { # Requesting exit
+      if (is.null(model_list)) {
+        proceed <- menu(c("Proceed", "Cancel"), title="No l1 models have been setup. Are you sure you want to exit?")          
+        if (proceed==1) done <- TRUE
+      } else {
+        done <- TRUE
+      }
     }
   }
 
   # add class 'l1_model_set_models'
-  class(model_list) <- c("list", "l1_model_set_models")
+  if (!is.null(model_list))  class(model_list) <- c("list", "l1_model_set_models")
   l1_model_set$models <- model_list
   l1_model_set$n_contrasts <- sapply(model_list, function(mm) { nrow(mm$contrasts) })
 

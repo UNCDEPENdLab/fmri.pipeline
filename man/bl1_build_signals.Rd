@@ -9,6 +9,7 @@ bl1_build_signals(
   trial_data,
   block_data = NULL,
   subtrial_data = NULL,
+  ppi_data = NULL,
   lg = NULL
 )
 }
@@ -16,6 +17,8 @@ bl1_build_signals(
 \item{l1_model_set}{An \code{l1_model_set} object whose signals should be created or modified}
 
 \item{trial_data}{A data.frame containing trial-level signal information}
+
+\item{ppi_data}{An optional data.frame containing physiological signals for PPI analysis}
 }
 \value{
 a modified version of \code{l1_model_set} with updated \code{$signals}

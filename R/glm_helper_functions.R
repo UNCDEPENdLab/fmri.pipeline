@@ -1363,38 +1363,20 @@ respecify_l3_model <- function(mobj, new_data) {
 
 #' Helper function to obtain the number of volumes in a 4D nifti file
 #' 
-#' @details This function prefers to use fslval instead of an internal R library
-#'   because both oro.nifti and RNifti are rather slow to obtain a single value from
-#'   the NIfTI header
-#' 
 #' @param nifti a 4D nifti file
 #' @return the number of volumes in \code{nifti}
 #' @keywords internal
 lookup_run_volumes <- function(nifti) {
   if (!file.exists(nifti)) return(NA_integer_)
 
-  # fslval is much faster than any internal R command. Use it, if possible
-  # TODO: Make this more robust, more like run_fsl_command with path expectations
-  has_fslval <- system2("which", "fslval", stdout = FALSE, stderr = FALSE)
-  has_fslval <- ifelse(has_fslval == 0L, TRUE, FALSE)
-  if (isTRUE(has_fslval)) {
-    nvol <- as.integer(system2("fslval", args = c(nifti, "dim4"), stdout = TRUE))
-  } else {
-    nvol <- oro.nifti::readNIfTI(nifti, read_data = FALSE)@dim_[5L]
-  }
+  # use fast Rcpp function to get dims without reading data
+  nii_dim <- get_nifti_dim(nifti)
+  stopifnot(length(nii_dim) > 3)
 
-  # system.time(run_volumes <- oro.nifti::readNIfTI(run_nifti[nn], read_data = FALSE)@dim_[5L])
-  # system.time(run_volumes <- RNifti::readNifti(run_nifti[nn], internal = TRUE))
-
-  return(nvol)
+  return(nii_dim[4])
 }
 
-
 #' Helper function to obtain the number of voxels in a 4D file for populating FEAT FSF
-#'
-#' @details This function prefers to use fslval instead of an internal R library
-#'   because both oro.nifti and RNifti are rather slow to obtain a single value from
-#'   the NIfTI header
 #'
 #' @param nifti a 4D nifti file
 #' @return the number of voxels in \code{nifti} as calculated by x * y * z * t
@@ -1402,57 +1384,25 @@ lookup_run_volumes <- function(nifti) {
 lookup_nvoxels <- function(nifti) {
   if (!file.exists(nifti)) return(NA_integer_)
 
-  # fslval is much faster than any internal R command. Use it, if possible
-  # TODO: Make this more robust, more like run_fsl_command with path expectations
-  # TODO: should probably have a single global lookup for fslval in gpa (finalize step)
-  has_fslval <- system2("which", "fslval", stdout = FALSE, stderr = FALSE)
-  has_fslval <- ifelse(has_fslval == 0L, TRUE, FALSE)
-  if (isTRUE(has_fslval)) {
-    ndim <- as.integer(system2("fslval", args = c(nifti, "dim0"), stdout = TRUE))
-    nvoxels <- prod(sapply(1:ndim, function(xx) {
-      as.integer(system2("fslval", args = c(nifti, paste0("dim", xx)), stdout = TRUE))
-    }))
-  } else {
-    nihead <- oro.nifti::readNIfTI(nifti, read_data = FALSE)
-    ndim <- nihead@dim_[1L]
-    nvoxels <- prod(nihead@dim_[2:(ndim + 1)])
-  }
+  # use fast Rcpp function to get dims without reading data
+  nii_dim <- get_nifti_dim(nifti)
+  nvoxels <- prod(nii_dim)
 
   return(nvoxels)
 }
 
-
-#' Helper function to obtain the dimensions of a 4D file
+#' Helper function to obtain the dimensions of a NIfTI file
 #'
-#' @details This function prefers to use fslval instead of an internal R library
-#'   because both oro.nifti and RNifti are rather slow to obtain a single value from
-#'   the NIfTI header
-#'
-#' @param nifti a 4D nifti file
-#' @return a named vector of dimensions for the input (dim_x, dim_y, dim_z)
+#' @param nifti a nifti file
+#' @return a named vector of dimensions for the input (dim_x, dim_y, dim_z, dim_t)
 #' @keywords internal
 lookup_dim <- function(nifti) {
   ret_vec <- c(dim_x = NA_integer_, dim_y = NA_integer_, dim_z = NA_integer_, dim_t = NA_integer_)
   if (!file.exists(nifti)) return(ret_vec)
-
-  # fslval is much faster than any internal R command. Use it, if possible
-  # TODO: Make this more robust, more like run_fsl_command with path expectations
-  # TODO: should probably have a single global lookup for fslval in gpa (finalize step)
-  has_fslval <- system2("which", "fslval", stdout = FALSE, stderr = FALSE)
-  has_fslval <- ifelse(has_fslval == 0L, TRUE, FALSE)
-  if (isTRUE(has_fslval)) {
-    ndim <- min(4, as.integer(system2("fslval", args = c(nifti, "dim0"), stdout = TRUE)))
-    dim_vec <- sapply(1:ndim, function(xx) {
-      as.integer(system2("fslval", args = c(nifti, paste0("dim", xx)), stdout = TRUE))
-    })
-  } else {
-    nihead <- oro.nifti::readNIfTI(nifti, read_data = FALSE)
-    ndim <- min(4, nihead@dim_[1L])
-    dim_vec <- nihead@dim_[2:(ndim + 1)]
-  }
-
-  ret_vec[seq_along(dim_vec)] <- dim_vec # populate available dims
-
+  
+  nii_dim <- get_nifti_dim(nifti)
+  ret_vec[seq_along(nii_dim)] <- nii_dim
+  
   return(ret_vec)
 }
 
