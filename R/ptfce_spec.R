@@ -117,7 +117,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
         checkmate::assert_directory_exists(gfeat_dir)
         private$gfeat_info <- lapply(gfeat_dir, read_gfeat_dir, what = "stat_files") # don't parse dof, smoothness, etc.
 
-        private$all_cope_df <- dplyr::bind_rows(rlang::flatten(lapply(private$gfeat_info, function(x) {
+        private$all_cope_df <- dplyr::bind_rows(purrr::list_flatten(lapply(private$gfeat_info, function(x) {
           lapply(x$cope_dirs, "[[", "cope_df")
         }))) %>% dplyr::select(cope_number, contrast_name, z)
 

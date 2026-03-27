@@ -973,10 +973,12 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
       model_list[[mobj$name]] <- mobj # add to set
     }
 
-    add_more <- 4 # quit out of model builder when working from spec file
+    # quit out of model builder when working from spec file
+    done <- TRUE
+  } else {
+    done <- FALSE
   }
 
-  done <- FALSE
   while (!done) {
     summarize_l1_models(model_list)
 

@@ -121,8 +121,8 @@ truncate_runs <- function(mr_df, gpa = NULL, subj_outdir = NULL, truncation_data
     trunc_file <- file.path(img_odir, fname)
     if (!file.exists(trunc_file)) {
       lg$debug("Creating truncated file: %s", trunc_file)
-      # create truncated image with fslroi, which uses 0-based indexing
-      run_fsl_command(paste("fslroi", mr_df$run_nifti, trunc_file, mr_df$first_volume - 1, final_volumes))
+      keep_tpts <- seq.int(mr_df$first_volume, mr_df$last_volume)
+      subset_nifti_volumes(mr_df$run_nifti, tpts = keep_tpts, mode = "keep", outfile = trunc_file)
     }
     mr_df$run_nifti <- trunc_file # will always have type character
 

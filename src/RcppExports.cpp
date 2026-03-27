@@ -130,6 +130,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// subset_nifti_volumes
+void subset_nifti_volumes(std::string infile, const std::vector<int>& tpts, std::string mode, std::string outfile);
+RcppExport SEXP _fmri_pipeline_subset_nifti_volumes(SEXP infileSEXP, SEXP tptsSEXP, SEXP modeSEXP, SEXP outfileSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::string >::type infile(infileSEXP);
+    Rcpp::traits::input_parameter< const std::vector<int>& >::type tpts(tptsSEXP);
+    Rcpp::traits::input_parameter< std::string >::type mode(modeSEXP);
+    Rcpp::traits::input_parameter< std::string >::type outfile(outfileSEXP);
+    subset_nifti_volumes(infile, tpts, mode, outfile);
+    return R_NilValue;
+END_RCPP
+}
 // sigmoid
 arma::vec sigmoid(const arma::vec& x, double beta);
 RcppExport SEXP _fmri_pipeline_sigmoid(SEXP xSEXP, SEXP betaSEXP) {
@@ -153,6 +166,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_fmri_pipeline_generate_feature", (DL_FUNC) &_fmri_pipeline_generate_feature, 2},
     {"_fmri_pipeline_generate_feature_armadillo", (DL_FUNC) &_fmri_pipeline_generate_feature_armadillo, 2},
     {"_fmri_pipeline_get_nifti_dim", (DL_FUNC) &_fmri_pipeline_get_nifti_dim, 1},
+    {"_fmri_pipeline_subset_nifti_volumes", (DL_FUNC) &_fmri_pipeline_subset_nifti_volumes, 4},
     {"_fmri_pipeline_sigmoid", (DL_FUNC) &_fmri_pipeline_sigmoid, 2},
     {NULL, NULL, 0}
 };

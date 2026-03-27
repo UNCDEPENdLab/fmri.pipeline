@@ -4,10 +4,12 @@
 \alias{cleanup_glm_pipeline}
 \title{helper function to refresh l3 model status and save gpa object from batch pipeline back to its cache}
 \usage{
-cleanup_glm_pipeline(gpa)
+cleanup_glm_pipeline(gpa, backend_cache_paths = NULL)
 }
 \arguments{
 \item{gpa}{a glm_pipeline_arguments object}
+
+\item{backend_cache_paths}{optional named character vector of backend cache files to merge}
 }
 \value{
 a refreshed version of the gpa object

@@ -90,6 +90,12 @@ Must match 1:1 with \code{fwhmx_input_files}.}
 
 \item{\code{residuals_njobs}}{The number of independent jobs for splitting up the residuals permutations. If NULL, 32 jobs will be used.}
 
+\item{\code{inset_files}}{A character vector of dataset files to pass directly to 3dClustSim via -inset.}
+
+\item{\code{insdat_file}}{An sdat file containing null datasets to be passed to 3dClustSim via -insdat.}
+
+\item{\code{insdat_mask_file}}{A mask file corresponding to the insdat_file that maps values to space.}
+
 \item{\code{dxyz}}{the size of voxels in x y z (vector of 3 numbers)}
 
 \item{\code{nxyz}}{the number of voxels along x y z (vector of 3 positive integers)}

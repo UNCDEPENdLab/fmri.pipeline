@@ -145,7 +145,7 @@ run_fsl_command <- function(args, fsldir = NULL, stdout = NULL, stderr = NULL, e
 # to setup the compute environment.
 # @param gpa a glm_pipeline_arguments object
 # @param what which programs to pull from the compute environment. If not specified, it pulls all
-#   programs. At present, the options are "global" (only global setup), "fsl", "afni", and "r".
+#   programs. At present, the options are "global" (only global setup), "fsl", "afni", "spm", and "r".
 get_compute_environment <- function(gpa, what="all") {
   # always include global
   compute_string <- gpa$parallel$compute_environment$global
@@ -156,6 +156,10 @@ get_compute_environment <- function(gpa, what="all") {
 
   if (any(what %in% c("all", "afni"))) {
     compute_string <- c(compute_string, gpa$parallel$compute_environment$afni)
+  }
+
+  if (any(what %in% c("all", "spm")) && "spm" %in% gpa$glm_software) {
+    compute_string <- c(compute_string, gpa$parallel$compute_environment$spm)
   }
 
   if (any(what %in% c("all", "r"))) {
@@ -226,6 +230,18 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
     )
   }
 
+  if (any(what %in% c("all", "spm")) && "spm" %in% gpa$glm_software) {
+    matlab_cmd <- gpa$glm_settings$spm$matlab_cmd
+    if (is.null(matlab_cmd) || !nzchar(matlab_cmd)) matlab_cmd <- "matlab"
+    prog_str <- c(
+      prog_str,
+      sprintf(
+        "%s_loc=$(command -v %s)\n      [ $? -eq 0 ] && %s_exists=1 || %s_exists=0\n      if [ $%s_exists -eq 0 ]; then\n        echo 'Cannot find %s!'\n        checks_passed=0\n      else\n        echo \"%s found: ${%s_loc}\"\n      fi",
+        matlab_cmd, matlab_cmd, matlab_cmd, matlab_cmd, matlab_cmd, matlab_cmd, matlab_cmd, matlab_cmd
+      )
+    )
+  }
+
   prog_str <- c(
     prog_str,
     "
@@ -240,9 +256,16 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
 
   check_script <- tempfile(pattern="chk")
   writeLines(prog_str, check_script)
-  res <- suppressWarnings(system(paste("bash", check_script), intern = TRUE))
+  res <- suppressWarnings(system(paste("bash -lc", shQuote(paste("source", check_script))), intern = TRUE))
   cat(res, sep = "\n")
   exit_code <- attr(res, "status")
+  if ("spm" %in% gpa$glm_software && isTRUE(gpa$glm_settings$spm$require_matlab)) {
+    matlab_cmd <- gpa$glm_settings$spm$matlab_cmd
+    if (is.null(matlab_cmd) || !nzchar(matlab_cmd)) matlab_cmd <- "matlab"
+    if (!is.null(exit_code) && exit_code != 0L) {
+      stop(sprintf("MATLAB command '%s' not available; spm.require_matlab is TRUE.", matlab_cmd))
+    }
+  }
   if (!is.null(exit_code) && exit_code == 1) {
     if (stop_on_fail) {
       stop("One or more problems were detected in the compute environment. Setup cannot continue.")
@@ -250,6 +273,76 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
       warning("One or more problems were detected in the compute environment. The pipeline may fail if these are not resolved.")
     }
   }
+}
+
+# Local SPM test using the configured MATLAB/Octave command and compute environment.
+# This is intended to catch missing SPM paths before submitting jobs.
+test_spm_compute_environment <- function(gpa, stop_on_fail = TRUE) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_logical(stop_on_fail, len = 1L)
+  lg <- lgr::get_logger("glm_pipeline/test_spm_compute_environment")
+
+  matlab_cmd <- gpa$glm_settings$spm$matlab_cmd
+  if (is.null(matlab_cmd) || !nzchar(matlab_cmd)) matlab_cmd <- "matlab"
+  matlab_args <- gpa$glm_settings$spm$matlab_args
+  if (is.null(matlab_args) || !nzchar(matlab_args)) matlab_args <- "-batch"
+  matlab_timeout <- gpa$glm_settings$spm$matlab_timeout
+  if (is.null(matlab_timeout) || !is.numeric(matlab_timeout) || length(matlab_timeout) != 1L || is.na(matlab_timeout)) {
+    matlab_timeout <- 120
+  }
+
+  spm_path <- gpa$glm_settings$spm$spm_path
+  if (is.null(spm_path) || !nzchar(spm_path)) {
+    msg <- "spm_path is not set; cannot validate SPM availability."
+    if (stop_on_fail) stop(msg) else warning(msg)
+    return(invisible(FALSE))
+  }
+
+  compute_env <- get_compute_environment(gpa, c("spm"))
+  spm_cmd <- paste0(
+    "try; ",
+    "addpath('", spm_path, "'); ",
+    "spm('defaults','fmri'); ",
+    "spm_get_defaults('cmdline',1); ",
+    "spm_jobman('initcfg'); ",
+    "catch ME; disp(getReport(ME,'extended')); exit(1); end; exit(0);"
+  )
+  matlab_call <- paste(matlab_cmd, matlab_args, shQuote(spm_cmd))
+  cmd <- if (!is.null(compute_env) && length(compute_env) > 0L) {
+    paste(c(compute_env, matlab_call), collapse = " && ")
+  } else {
+    matlab_call
+  }
+  # Use coreutils timeout if available since R.utils::withTimeout cannot reliably interrupt system().
+  timeout_bin <- Sys.which("timeout")
+  if (nzchar(timeout_bin)) {
+    cmd <- paste(timeout_bin, matlab_timeout, "bash -lc", shQuote(cmd))
+  } else {
+    cmd <- paste("bash -lc", shQuote(cmd))
+  }
+
+  lg$info("Starting SPM compute environment check (timeout: %ss)", matlab_timeout)
+  res <- tryCatch(
+    R.utils::withTimeout(
+      suppressWarnings(system(cmd, intern = TRUE)),
+      timeout = matlab_timeout,
+      onTimeout = "error"
+    ),
+    TimeoutException = function(e) {
+      msg <- sprintf("SPM compute environment check timed out after %ss. MATLAB may be hanging.", matlab_timeout)
+      if (stop_on_fail) stop(msg) else warning(msg)
+      return(structure(character(0), status = 124L))
+    }
+  )
+  lg$info("Finished SPM compute environment check")
+  exit_code <- attr(res, "status")
+  if (!is.null(exit_code) && exit_code != 0L) {
+    msg <- paste("SPM compute environment check failed:", paste(res, collapse = "\n"))
+    if (stop_on_fail) stop(msg) else warning(msg)
+    return(invisible(FALSE))
+  }
+
+  invisible(TRUE)
 }
 
 #' internal function for getting a file extension that may include a compressed ending
@@ -829,6 +922,34 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   # for within-subject factors, always add the signal name as a prefix (cf. get_regressors_from_signal)
   c_colnames <- paste0(prefix, c_colnames)
 
+  # If no contrasts were specified in spec or contrast_list for L2/L3 models,
+  # default to diagonal contrasts and warn the user.
+  if (inherits(mobj, "hi_model_spec")) {
+    has_list_contrasts <- any(vapply(contrast_list, function(x) {
+      if (is.null(x)) return(FALSE)
+      if (is.matrix(x)) return(nrow(x) > 0L)
+      length(x) > 0L
+    }, logical(1)))
+
+    has_spec_contrasts <- any(c(
+      isTRUE(spec$diagonal),
+      length(spec$cond_means) > 0L,
+      length(spec$pairwise_diffs) > 0L,
+      isTRUE(spec$cell_means),
+      isTRUE(spec$overall_response),
+      length(spec$simple_slopes) > 0L
+    ))
+
+    if (!isTRUE(has_list_contrasts) && !isTRUE(has_spec_contrasts)) {
+      warning(
+        "No valid contrasts were specified; adding diagonal contrasts by default.",
+        call. = FALSE
+      )
+      spec$diagonal <- TRUE
+      mobj$contrast_spec$diagonal <- TRUE
+    }
+  }
+
   ### add diagonal contrasts
   c_diagonal <- contrast_list$diagonal
   if (isTRUE(spec$diagonal) && is.null(c_diagonal)) {
@@ -842,6 +963,19 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
 
   ### add condition means, if requested
   c_cond_means <- contrast_list$cond_means
+  if (is.null(lmfit) && (length(spec$cond_means) > 0L || length(spec$pairwise_diffs) > 0L ||
+    isTRUE(spec$cell_means) || isTRUE(spec$overall_response) || length(spec$simple_slopes) > 0L)) {
+    warning(
+      "emmeans-based contrasts requested, but no model is available. Dropping emmeans contrasts.",
+      call. = FALSE
+    )
+    spec$cond_means <- character(0)
+    spec$pairwise_diffs <- character(0)
+    spec$cell_means <- FALSE
+    spec$overall_response <- FALSE
+    spec$simple_slopes <- list()
+  }
+
   if (length(spec$cond_means) > 0L && is.null(c_cond_means)) {
     for (vv in spec$cond_means) {
       ee <- emmeans(lmfit, as.formula(paste("~", vv)), weights = spec$weights)
@@ -981,6 +1115,16 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
 
   # handle contrasts from the full matrix that should be deleted
   # these are processed dynamically here so that the same set can be dropped if a contrast is respecified for a data subset or subject
+  if (!is.null(spec$delete)) {
+    if (!is.character(spec$delete)) {
+      warning("contrast_spec$delete must be a character vector; ignoring invalid values.", call. = FALSE)
+      spec$delete <- NULL
+    } else {
+      spec$delete <- spec$delete[!is.na(spec$delete) & nzchar(spec$delete)]
+      if (length(spec$delete) == 0L) spec$delete <- NULL
+    }
+  }
+
   if (!is.null(spec$delete)) {
     which_del <- match(spec$delete, rownames(cmat_full))
     if (!any(is.na(which_del))) {
@@ -1128,15 +1272,22 @@ respecify_l2_models_by_subject <- function(mobj, data) {
     lmfit <- lm(model_formula, data = dsplit[[vv, "dt"]])
 
     mm <- get_contrasts_from_spec(mobj, lmfit)
+    n_contrasts <- if (is.null(mm$contrasts)) 0L else nrow(mm$contrasts)
+    contrast_names <- if (n_contrasts > 0L) rownames(mm$contrasts) else character(0)
+    if (is.null(contrast_names)) {
+      contrast_names <- if (n_contrasts > 0L) paste0("contrast_", seq_len(n_contrasts)) else character(0)
+    }
     cope_df <- data.frame(
-      id = dsplit$id[vv], session = dsplit$session[vv],
-      l2_cope_number = seq_len(nrow(mm$contrasts)), l2_cope_name = rownames(mm$contrasts)
+      id = rep(dsplit$id[vv], n_contrasts),
+      session = rep(dsplit$session[vv], n_contrasts),
+      l2_cope_number = if (n_contrasts > 0L) seq_len(n_contrasts) else integer(0),
+      l2_cope_name = contrast_names
     )
 
     cope_list[[vv]] <- cope_df
     contrast_list[[vv]] <- mm$contrasts
     model_matrix_list[[vv]] <- model.matrix(lmfit)
-    n_l2_copes[vv] <- ncol(mm$contrasts)
+    n_l2_copes[vv] <- if (is.null(mm$contrasts)) 0L else ncol(mm$contrasts)
   }
 
   dsplit[, cope_list := cope_list]
@@ -1501,16 +1652,25 @@ hours_to_dhms <- function(hours, frac=FALSE) {
 #' helper function to refresh l3 model status and save gpa object from batch pipeline back to its cache
 #' 
 #' @param gpa a glm_pipeline_arguments object
+#' @param backend_cache_paths optional named character vector of backend cache files to merge
 #' @return a refreshed version of the gpa object
 #' @importFrom lgr get_logger
 #' @export
-cleanup_glm_pipeline <- function(gpa) {
+cleanup_glm_pipeline <- function(gpa, backend_cache_paths = NULL) {
   lg <- lgr::get_logger("glm_pipeline/cleanup_glm_pipeline")
   lg$set_threshold(gpa$lgr_threshold)
-  
-  gpa <- refresh_feat_status(gpa, level = 1L, lg = lg)
-  gpa <- refresh_feat_status(gpa, level = 2L, lg = lg)
-  gpa <- refresh_feat_status(gpa, level = 3L, lg = lg)
+
+  if (!is.null(backend_cache_paths)) {
+    checkmate::assert_character(backend_cache_paths)
+    if (is.null(names(backend_cache_paths)) || any(names(backend_cache_paths) == "")) {
+      warning("backend_cache_paths should be a named character vector keyed by backend.")
+    }
+    gpa <- merge_backend_caches(gpa, backend_cache_paths, lg = lg)
+  }
+
+  gpa <- refresh_glm_status(gpa, level = 1L, lg = lg)
+  gpa <- refresh_glm_status(gpa, level = 2L, lg = lg)
+  gpa <- refresh_glm_status(gpa, level = 3L, lg = lg)
   res <- tryCatch(saveRDS(gpa, file = gpa$output_locations$object_cache), error = function(e) {
     lg$error("Could not save gpa object to file: %s", gpa$output_locations$object_cache)
     return(NULL)
@@ -1531,6 +1691,49 @@ cleanup_glm_pipeline <- function(gpa) {
   }
 
   return(gpa)
+}
+
+merge_backend_caches <- function(shared_gpa, backend_cache_paths, lg = NULL) {
+  checkmate::assert_class(shared_gpa, "glm_pipeline_arguments")
+  checkmate::assert_character(backend_cache_paths)
+  if (is.null(lg)) lg <- lgr::get_logger()
+
+  for (backend_name in names(backend_cache_paths)) {
+    cache_path <- backend_cache_paths[[backend_name]]
+    if (!file.exists(cache_path)) {
+      lg$warn("Backend cache missing for %s: %s", backend_name, cache_path)
+      next
+    }
+
+    env <- new.env(parent = emptyenv())
+    load(cache_path, envir = env)
+    if (!exists("gpa", envir = env)) {
+      lg$warn("No gpa object found in backend cache: %s", cache_path)
+      next
+    }
+
+    backend_gpa <- env$gpa
+    if (!inherits(backend_gpa, "glm_pipeline_arguments")) {
+      lg$warn("Backend cache %s does not contain a glm_pipeline_arguments object.", cache_path)
+      next
+    }
+
+    for (level in 1:3) {
+      setup_name <- paste0("l", level, "_model_setup")
+      setup_class <- paste0("l", level, "_setup")
+
+      backend_setup <- backend_gpa[[setup_name]]
+      if (is.null(backend_setup) || !inherits(backend_setup, setup_class)) next
+
+      if (is.null(shared_gpa[[setup_name]]) || !inherits(shared_gpa[[setup_name]], setup_class)) {
+        shared_gpa[[setup_name]] <- backend_setup
+      } else if (backend_name %in% names(backend_setup)) {
+        shared_gpa[[setup_name]][[backend_name]] <- backend_setup[[backend_name]]
+      }
+    }
+  }
+
+  return(shared_gpa)
 }
 
 #' helper function to copy any missing fields in target
@@ -1621,6 +1824,23 @@ enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
         )
       }
     }
+
+    if ("spm" %in% gpa$glm_software) {
+      if (!is.null(obj$spm) && "spm_complete" %in% names(obj$spm)) {
+        nmiss <- sum(obj$spm$spm_complete == FALSE)
+        n_spm_runs <- nrow(obj$spm)
+        if (nmiss == n_spm_runs) {
+          msg <- sprintf("All SPM runs in %s$spm are incomplete.", obj_name)
+          lg$error(msg)
+          stop(msg)
+        } else if (nmiss > 0) {
+          lg$warn(
+            "There are %d missing SPM outputs in %s$spm. Using complete %d outputs.",
+            nmiss, obj_name, n_spm_runs - nmiss
+          )
+        }
+      }
+    }
   }
 
   return(invisible(NULL))
@@ -1634,7 +1854,7 @@ enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
 #' @return a character vector of user-specified model names at this level
 #' @keywords internal
 choose_glm_models <- function(gpa, model_names, level, lg=NULL) {
-  checkmate::assert_integerish(level, min = 1, max = 3)
+  checkmate::assert_integerish(level, lower = 1, upper = 3)
   all_m_names <- names(gpa[[paste0("l", level, "_models")]]$models)
   checkmate::assert_subset(model_names, c("prompt", "all", "none", all_m_names))
   if (is.null(lg)) lg <- lgr::get_logger("")
@@ -1698,6 +1918,7 @@ check_nums <- function(inp, lower = 0, upper = 1e10, as_string = TRUE) {
 #'   together using dplyr::bind_rows.
 #' @importFrom dplyr bind_rows across
 #' @importFrom tidyselect all_of
+#' @importFrom checkmate assert_character assert_data_frame assert_subset test_data_table
 #' @keywords internal
 update_df <- function(current = NULL, new = NULL, id_cols = NULL, sort = TRUE) {
   checkmate::assert_character(id_cols, any.missing = FALSE)
@@ -1713,6 +1934,10 @@ update_df <- function(current = NULL, new = NULL, id_cols = NULL, sort = TRUE) {
   }
 
   checkmate::assert_subset(id_cols, names(new)) # enforce all id columns in new
+
+  # data.table uses different subsetting semantics; normalize to data.frame
+  if (checkmate::test_data_table(current)) current <- as.data.frame(current)
+  if (checkmate::test_data_table(new)) new <- as.data.frame(new)
 
   id_list <- as.list(id_cols) # to make do.call happy
 

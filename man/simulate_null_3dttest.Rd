@@ -87,8 +87,7 @@ submit the permutation job to the cluster
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{force}}{whether to run the permutation job even if the outputs are already complete
-method to return R_batch_job to run 3dttest permutations}
+\item{\code{force}}{whether to run the permutation job even if the outputs are already complete}
 }
 \if{html}{\out{</div>}}
 }
@@ -97,37 +96,61 @@ method to return R_batch_job to run 3dttest permutations}
 \if{html}{\out{<a id="method-simulate_null_3dttest-get_3dttest_calls"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-get_3dttest_calls}{}}}
 \subsection{Method \code{get_3dttest_calls()}}{
+build the 3dttest++ command strings for each permutation job
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$get_3dttest_calls(include_complete = FALSE)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{include_complete}}{If TRUE, include calls whose output files already exist.
+If FALSE, return only calls with missing outputs.}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A character vector of 3dttest++ calls.
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-get_permutation_files"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-get_permutation_files}{}}}
 \subsection{Method \code{get_permutation_files()}}{
+return the permutation output files once available
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$get_permutation_files()}\if{html}{\out{</div>}}
 }
 
+\subsection{Returns}{
+A named character vector with entries for the mask file and permutation file.
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-get_batch"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-get_batch}{}}}
 \subsection{Method \code{get_batch()}}{
+return the R_batch_job used to run 3dttest permutations
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$get_batch()}\if{html}{\out{</div>}}
 }
 
+\subsection{Returns}{
+An R_batch_job object.
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-get_use_sdat"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-get_use_sdat}{}}}
 \subsection{Method \code{get_use_sdat()}}{
+indicate whether sdat output is enabled
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$get_use_sdat()}\if{html}{\out{</div>}}
 }
 
+\subsection{Returns}{
+A logical scalar.
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-clone"></a>}}

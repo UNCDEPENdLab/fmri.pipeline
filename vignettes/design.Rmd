@@ -143,10 +143,19 @@ For example, consider a scenario where one level 1 model includes a parametric m
 The default file and folder structure of `fmri.pipeline` generally follows the Brain Imaging Data Structure (BIDS) specification, though somewhat loosely. That said, the user can exert considerable control over the output structure by changing the contents of the `$output_locations` list in the `gpa` object. The general idea is that the output locations can include dynamic expressions (based on the R `glue` package) that are evaluated in the appropriate context to generate the proper output file/folder. For example, this is the default expression for first-level FEAT directories (`$feat_l1_directory`):
 
 ```
-"{gpa$output_directory}/feat_l1/sub-{id}/ses-{session}/{l1_model_name}"
+"{gpa$output_directory}/feat_l1/sub-{id}/ses-{session}/{l1_model}"
 ```
 
 Anything in curly braces is evaluated at the time of execution, allowing for the right id, session, model name, etc. to be included.
+
+Level 2 FEAT outputs are stored under a top-level `feat_l2` directory. To avoid collisions across multiple Level 1 models, the default
+expression includes the L1 model name in the path:
+
+```
+"{gpa$output_directory}/feat_l2/sub-{id}/ses-{session}/{l1_model}"
+```
+
+This yields paths like `feat_l2/sub-123/ses-1/basic/FEAT_LVL2_l2int.fsf` and keeps Level 2 outputs grouped by subject and L1 model.
 
 TODO: Create a helper function like `gpa <- setup_output_locations(gpa)` that conducts a simple walkthrough like `build_l1_models`.
 
@@ -154,6 +163,7 @@ Here is a description of the fields in this list:
 
 - feat_sub_directory: The location of FEAT outputs for a single subject [Is this a good idea if the user can provide anything for feat_l1?]
 - feat_ses_directory: The location of FEAT outputs for a single session (of one subject)
+- feat_l2_directory: The location of FEAT outputs for level 2 (subject-level) analyses. Defaults to a `feat_l2` folder and includes `{l1_model}` to avoid collisions across L1 models.
 
 
 
@@ -345,4 +355,3 @@ These settings control how much time is requested on the scheduler for a given s
 ## SELF NOTES
 
 1. Finalize pipeline configuration now enforces that l1, l2, and l3 models are in place. This is necessary to handle run truncation.
-

@@ -132,6 +132,19 @@ get_feat_status <- function(feat_dir, feat_fsf=NULL, lg=NULL, prefix=NULL) {
          }
        }
     }
+
+    # Detect whether the retry wrapper re-ran this model with robust_yn=0
+    retry_warning_file <- file.path(feat_dir, ".feat_auto_retry_warning")
+    if (file.exists(retry_warning_file)) {
+      feat_checks$feat_auto_retried <- TRUE
+      lg$warn("FEAT model was auto-retried with robust outlier deweighting disabled: %s", feat_dir)
+      retry_info <- readLines(retry_warning_file, warn = FALSE)
+      for (line in retry_info) lg$warn("  %s", line)
+    } else {
+      feat_checks$feat_auto_retried <- FALSE
+    }
+  } else {
+    feat_checks$feat_auto_retried <- FALSE
   }
 
   df <- as.data.frame(feat_checks)
@@ -195,44 +208,6 @@ add_custom_feat_syntax <- function(fsf_syntax, feat_args, lg=NULL) {
 
   return(fsf_syntax)
 
-}
-
-#' Helper function to look at feat outputs and files to determine if execution is complete
-#'
-#' @param gpa a \code{glm_pipeline_arguments object}
-#' @param level the level of analysis to be refreshed (1, 2, or 3)
-#' @param lg an optional lgr logger object used for logging
-#' @return a modified copy of \code{gpa} with the feat columns of
-#'   $l1_model_setup, $l2_model_setup, or $l3_model_setup refreshed
-#'
-#' @export
-#' @importFrom dplyr select
-#' @importFrom purrr pmap_dfr
-refresh_feat_status <- function(gpa, level = 1L, lg = NULL) {
-  checkmate::assert_class(gpa, "glm_pipeline_arguments")
-  checkmate::assert_integerish(level, lower = 1L, upper = 3L)
-  checkmate::assert_class(lg, "Logger", null.ok = TRUE)
-  setup_name <- paste0("l", level, "_model_setup")
-
-  if ("fsl" %in% gpa$glm_software && setup_name %in% names(gpa)) {
-    if (is.null(lg)) lg <- lgr::get_logger()
-    orig <- gpa[[setup_name]]$fsl
-    if (is.null(orig) || (is.data.frame(orig) && nrow(orig) == 0L)) {
-      lg$warn("Could not find populated $fsl object in gpa$%s$fsl", setup_name)
-    } else if (!"feat_fsf" %in% names(orig)) {
-      lg$warn("No $feat_fsf field in gpa$%s$fsl", setup_name)
-    } else {
-      lg$info("Found existing %s field. Refreshing status of L%d feat execution and outputs.", setup_name, level)
-      refresh <- orig %>%
-        dplyr::select(feat_dir, feat_fsf) %>%
-        purrr::pmap_dfr(get_feat_status, lg = lg)
-
-      # copy back relevant columns into data structure
-      gpa[[setup_name]]$fsl[, names(refresh)] <- refresh
-    }
-  }
-
-  return(gpa)
 }
 
 #' helper function to look up core stats outputs from a .gfeat folder

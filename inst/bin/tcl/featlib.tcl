@@ -71,6 +71,15 @@
 #
 
 ### general procs
+
+proc defaultIfUnset { keyName defaultValue } {
+    upvar 1 $keyName key
+    if { ! [ info exists key ] } {
+		return $defaultValue
+	}
+	return $key
+}
+
 # feat5:write
 
 proc feat5:write { w feat_model write_image_filenames exitoncheckfail filename } {
@@ -90,7 +99,6 @@ proc feat5:write { w feat_model write_image_filenames exitoncheckfail filename }
     if { ! [ info exists fmri(gdc) ] } {
 	set fmri(gdc) ""
     }
-
 
     set filename [ file rootname $filename ]
 
@@ -378,6 +386,13 @@ puts $channel "
 set fmri(totalVoxels) $fmri(totalVoxels)
 "
 }
+
+if { [ info exists fmri(fnirt_config) ] } {
+	puts $channel "
+set fmri(fnirt_config) \"$fmri(fnirt_config)\"
+"
+}
+
 
 puts $channel "
 # Number of lower-level copes feeding into higher-level analysis
@@ -5165,7 +5180,8 @@ set fugueOptions ""
 	set flirtOptions "$flirtOptions -h \"$highres_files($session)\" -w  $fmri(reghighres_dof) -x $fmri(reghighres_search)"
     }
     if { $fmri(regstandard_yn) } {
-	set flirtOptions "$flirtOptions -s \"$fmri(regstandard)\" -y $fmri(regstandard_dof) -z $fmri(regstandard_search)"
+		set flirtOptions "$flirtOptions -s \"$fmri(regstandard)\" -y $fmri(regstandard_dof) -z $fmri(regstandard_search)"
+		set flirtOptions "$flirtOptions -c \"[ defaultIfUnset {fmri(fnirt_config)} {T1_2_MNI152_2mm} ]\""
     }
 if { [ info exists fmri(gdc) ] && [ file exists $fmri(gdc) ] } {
 	set flirtOptions "$flirtOptions -G \"$fmri(gdc)\""
@@ -5336,7 +5352,9 @@ set funcdata_unmasked $funcdata
 
 if { [ info exists fmri(alternative_mask) ] && [ imtest $fmri(alternative_mask) ] } {
 
-    fsl:exec "${FSLDIR}/bin/fslmaths $funcdata -mas $fmri(alternative_mask) prefiltered_func_data_altmasked"
+    set ps "$ps; alternative mask applied"
+    fsl:exec "${FSLDIR}/bin/imcp $fmri(alternative_mask) mask"
+    fsl:exec "${FSLDIR}/bin/fslmaths $funcdata -mas mask prefiltered_func_data_altmasked"
     set funcdata prefiltered_func_data_altmasked
 
 } else {
@@ -5368,8 +5386,12 @@ if { $fmri(brain_thresh) > 0 } {
     fsl:exec "${FSLDIR}/bin/fslmaths $funcdata_unmasked -mas mask prefiltered_func_data_thresh"
     set funcdata prefiltered_func_data_thresh
 } else {
-    fsl:exec "${FSLDIR}/bin/fslmaths example_func -mul 0 -add 1 mask -odt char"
-    set median_intensity [ fsl:exec "${FSLDIR}/bin/fslstats $funcdata -p 90" ]
+    if { [ info exists fmri(alternative_mask) ] && [ imtest $fmri(alternative_mask) ] } {
+        set median_intensity [ fsl:exec "${FSLDIR}/bin/fslstats $funcdata -k mask -p 50" ]
+    } else {
+        fsl:exec "${FSLDIR}/bin/fslmaths example_func -mul 0 -add 1 mask -odt char"
+        set median_intensity [ fsl:exec "${FSLDIR}/bin/fslstats $funcdata -p 90" ]
+    }
 }
 
 #
@@ -5835,7 +5857,7 @@ eds. P. Jezzard, P.M. Matthews and S.M. Smith. OUP, 2001.<br>
 	set pImage [ string replace $rawstats 0 0 "p" ]
 	set ExtraClusterOptions "$ExtraClusterOptions --empiricalNull=thresh_$pImage"
     }
-    fsl:exec "$FSLDIR/bin/cluster -i thresh_$rawstats -t $threshold --othresh=thresh_$rawstats -o cluster_mask_$rawstats --connectivity=[ feat5:connectivity thresh_$rawstats ] $VOXorMM --olmax=lmax_${rawstats}${STDEXT}.txt $ExtraClusterOptions > cluster_${rawstats}${STDEXT}.txt"
+    fsl:exec "$FSLDIR/bin/fsl-cluster -i thresh_$rawstats -t $threshold --othresh=thresh_$rawstats -o cluster_mask_$rawstats --connectivity=[ feat5:connectivity thresh_$rawstats ] $VOXorMM --olmax=lmax_${rawstats}${STDEXT}.txt $ExtraClusterOptions > cluster_${rawstats}${STDEXT}.txt"
     fsl:exec "$FSLDIR/bin/cluster2html . cluster_$rawstats $STDOPT"
     set firsttime 0
 }
@@ -5912,7 +5934,7 @@ After all thresholding, $rawstats was masked with $themask.<br>"
             set COPE "-c stats/cope$i"
         }
         #Turn off p-threshold as not sensible when dealing with a masked stat
-        fsl:exec "$FSLDIR/bin/cluster -i thresh_$rawstats $COPE -t $threshold --othresh=thresh_$rawstats -o cluster_mask_$rawstats --connectivity=[ feat5:connectivity thresh_$rawstats ] $VOXorMM --olmax=lmax_${rawstats}${STDEXT}.txt $ExtraClusterOptions > cluster_${rawstats}${STDEXT}.txt"
+        fsl:exec "$FSLDIR/bin/fsl-cluster -i thresh_$rawstats $COPE -t $threshold --othresh=thresh_$rawstats -o cluster_mask_$rawstats --connectivity=[ feat5:connectivity thresh_$rawstats ] $VOXorMM --olmax=lmax_${rawstats}${STDEXT}.txt $ExtraClusterOptions > cluster_${rawstats}${STDEXT}.txt"
         fsl:exec "$FSLDIR/bin/cluster2html . cluster_$rawstats $STDOPT"
     }
 }
@@ -5965,7 +5987,7 @@ if { $higherLevel == 0 && [ file exists reg/example_func2standard.mat ]} {
 	    set stdxfm "-x reg/example_func2highres.mat --warpvol=reg/highres2standard_warp"
 	}
 
-	fsl:exec "$FSLDIR/bin/cluster -i thresh_$rawstats ${COPE} -t $z_thresh  $p_opt -d $fmri(DLH$rawstats) --volume=$fmri(VOLUME$rawstats) $stdxfm --stdvol=reg/standard --mm --connectivity=[ feat5:connectivity thresh_$rawstats ] --olmax=lmax_${rawstats}_std.txt --scalarname=Z $iscorrthresh > cluster_${rawstats}_std.txt"
+	fsl:exec "$FSLDIR/bin/fsl-cluster -i thresh_$rawstats ${COPE} -t $z_thresh  $p_opt -d $fmri(DLH$rawstats) --volume=$fmri(VOLUME$rawstats) $stdxfm --stdvol=reg/standard --mm --connectivity=[ feat5:connectivity thresh_$rawstats ] --olmax=lmax_${rawstats}_std.txt --scalarname=Z $iscorrthresh > cluster_${rawstats}_std.txt"
 	fsl:exec "$FSLDIR/bin/cluster2html . cluster_${rawstats} -std"
     }
 }
@@ -6631,7 +6653,7 @@ return 0
 #
 }
 
-proc feat5:proc_flame2 { njobs } {
+proc feat5:proc_flame2 { {njobs ""} } {
     # basic setups
 
 global FSLDIR FSLSLASH PWD HOME HOSTNAME OSFLAVOUR logout fmri feat_files unwarp_files unwarp_files_mag initial_highres_files highres_files FD report ps rs comout gui_ext FSLPARALLEL localfeat
@@ -6642,9 +6664,11 @@ set FD [ pwd ]
 set logout ${FD}/logs/feat3b_flame
 
 #
-#fsl:exec "sh ./.flame"
-fsl:exec "${localfeat}/flame_runner ./.flame ${njobs}"
-
+if { $njobs != "" && [ info exists localfeat ] && [ file executable "${localfeat}/flame_runner" ] } {
+    fsl:exec "${localfeat}/flame_runner ./.flame ${njobs}"
+} else {
+    fsl:exec "sh ./.flame"
+}
     return 0
 }
 

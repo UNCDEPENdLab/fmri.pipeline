@@ -91,17 +91,17 @@ proc fsl:echo { thefilename thestring args } {
 # usage: fsl:exec "the command" [options]
 # note the double-quotes round "the command"
 # -n                : don't output logging information
-# -b <job_duration> : submit to SGE (if available) and return immediately; otherwise wait to return until <command> has finished
+# -b <job_duration> : submit to fsl_sub (if available) and return immediately; otherwise wait to return until <command> has finished
 #                     job_duration is in minutes, set 0 for unknown
 # -f                : "the command" is a filename to be treated as a parallel batch job (one command per line)
-# -h <job-hold-id>  : ID of SGE job that must finish before this job gets run
-# -N <job_name>     : the job will have the name <job_name> on the SGE submission
+# -h <job-hold-id>  : ID of fsl_sub job that must finish before this job gets run
+# -N <job_name>     : the job will have the name <job_name> on the fsl_sub submission
 # -l <logdir>       : output logs in <logdir>
 # -i                : ignore errors ( return exit status 0 to calling script )
 
 proc fsl:exec { thecommand args } {
 
-    global logout comout FSLDIR FD SGEID
+    global env logout comout FSLDIR FD SGEID
 
     # process args
     set do_logout 1
@@ -151,6 +151,10 @@ proc fsl:exec { thecommand args } {
 	    set do_runfsl 1
 	    incr argindex 1
 	    set runtime [ lindex $args $argindex ]
+
+ 		if { [info exists env(FSL_QUEUE_TIME_SCALE) ] } {
+       		set runtime [ expr int(ceil($runtime * $env(FSL_QUEUE_TIME_SCALE))) ]
+ 		}
 	}
 
 	if { $thearg == "-i" } {
@@ -176,12 +180,13 @@ proc fsl:exec { thecommand args } {
     }
 
     # run and log the actual command
+	if { ! [ info exists ::errorCode ] } { set ::errorCode "NONE" }
     if { $do_logout } {
 	fsl:echo $logout "\n$thecommand"
 	if { $logout != "" } {
 	    set errorCode [ catch { exec sh -c $thecommand >>& $logout } errmsg ]
 	    set actualCode [lindex $::errorCode 0]
-	    if { $errorCode != 0 && $actualCode ne "NONE" &&  $ignoreErrors != 1 } { 
+	    if { $errorCode != 0 && $actualCode ne "NONE" &&  $ignoreErrors != 1 } {
 	    } else {
 	    # Trim errmsg to final line
 		set errmsg [ exec sh -c "tail -n 1 $logout" ]
@@ -196,9 +201,9 @@ proc fsl:exec { thecommand args } {
 	set actualCode [lindex $::errorCode 0]
     }
 
-    if { $errorCode != 0 && $actualCode ne "NONE" &&  $ignoreErrors != 1 } { 
+    if { $errorCode != 0 && $actualCode ne "NONE" &&  $ignoreErrors != 1 } {
 	if { $do_logout } {
-	    fsl:echo $logout "\nFATAL ERROR ENCOUNTERED:\nCOMMAND:\n$thecommand\nERROR MESSAGE:\n$errmsg\nEND OF ERROR MESSAGE" 	
+	    fsl:echo $logout "\nFATAL ERROR ENCOUNTERED:\nCOMMAND:\n$thecommand\nERROR MESSAGE:\n$errmsg\nEND OF ERROR MESSAGE"
 	}
     } else {
        	set errorCode 0
@@ -206,6 +211,5 @@ proc fsl:exec { thecommand args } {
 
 
     # now return errmsg in case the exec call needs to know the output
-    return -code $errorCode $errmsg 
+    return -code $errorCode $errmsg
 }
-

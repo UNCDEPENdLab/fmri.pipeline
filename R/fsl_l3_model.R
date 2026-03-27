@@ -120,8 +120,12 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   deweight <- if(isTRUE(mobj$fsl_outlier_deweighting)) list(robust_yn = 1) else list(robust_yn = 0)
   l3_fsf_syntax <- add_custom_feat_syntax(l3_fsf_syntax, deweight, lg)
 
-  # skip re-creation of FSF and do not run below unless force==TRUE
-  if (!file.exists(l3_feat_fsf) || isTRUE(gpa$glm_settings$fsl$force_l3_creation)) {
+  # rewrite FSF whenever this model is queued to run so updated settings (e.g., robust_yn) are not masked by a stale existing file.
+  write_l3_fsf <- !file.exists(l3_feat_fsf) ||
+    isTRUE(gpa$glm_settings$fsl$force_l3_creation) ||
+    isTRUE(feat_l3_df$to_run[1L])
+
+  if (isTRUE(write_l3_fsf)) {
     lg$info("Writing L3 FSF syntax to: %s", l3_feat_fsf)
     cat(l3_fsf_syntax, file = l3_feat_fsf, sep = "\n")
   } else {

@@ -9,7 +9,8 @@ setup_l3_models(
   gpa,
   l3_model_names = NULL,
   l2_model_names = NULL,
-  l1_model_names = NULL
+  l1_model_names = NULL,
+  backend = NULL
 )
 }
 \arguments{
@@ -23,6 +24,9 @@ all models in gpa$l2_models will be included}
 
 \item{l1_model_names}{a subset of L1 models to be passed to L2 by this function. If not
 specified, all models in gpa$l1_models will be included}
+
+\item{backend}{optional backend filter (e.g., "spm"). If supplied, only those backends
+will be processed.}
 }
 \description{
 This function generates the inputs for level 3 analyses, where multi-subject data are analyzed

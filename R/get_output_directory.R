@@ -56,7 +56,15 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
   }
 
   if (what == "l1") {
-    if (gpa$output_locations$feat_l1_directory == "local") {
+    # choose software-specific output template if available
+    l1_directory <- gpa$output_locations$feat_l1_directory
+    if (glm_software == "spm" && "spm_l1_directory" %in% names(gpa$output_locations)) {
+      l1_directory <- gpa$output_locations$spm_l1_directory
+    } else if (glm_software == "afni" && "afni_l1_directory" %in% names(gpa$output_locations)) {
+      l1_directory <- gpa$output_locations$afni_l1_directory
+    }
+
+    if (l1_directory == "local") {
       checkmate::assert_integerish(run_number, lower = 1, null.ok = FALSE) # enforce run_number for l1 lookup
       rinfo <- subset_run_data(gpa$run_data, list(id=id, session=session, run_number=run_number))
       if ("mr_dir" %in% names(rinfo)) {
@@ -88,23 +96,41 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
         }
       }
     } else {
-      out_dir <- glue::glue(gpa$output_locations$feat_l1_directory) # evaluate glue expression
+      out_dir <- glue::glue(l1_directory) # evaluate glue expression
     }
   } else if (what == "l2") {
     out_dir <- glue::glue(gpa$output_locations$feat_l2_directory) # evaluate glue expression
   } else if (what == "l3") {
-    out_dir <- glue::glue(gpa$output_locations$feat_l3_directory) # evaluate glue expression
+    l3_directory <- gpa$output_locations$feat_l3_directory
+    if (glm_software == "spm" && "spm_l3_directory" %in% names(gpa$output_locations)) {
+      l3_directory <- gpa$output_locations$spm_l3_directory
+    }
+    out_dir <- glue::glue(l3_directory) # evaluate glue expression
   } else if (what == "sub") {
-    if (gpa$output_locations$feat_sub_directory == "local") {
+    sub_directory <- gpa$output_locations$feat_sub_directory
+    if (glm_software == "spm" && "spm_sub_directory" %in% names(gpa$output_locations)) {
+      sub_directory <- gpa$output_locations$spm_sub_directory
+    } else if (glm_software == "afni" && "afni_sub_directory" %in% names(gpa$output_locations)) {
+      sub_directory <- gpa$output_locations$afni_sub_directory
+    }
+
+    if (sub_directory == "local") {
       rinfo <- subset_run_data(gpa$run_data, list(id = id, session = session, run_number = run_number))
     } else {
-      out_dir <- glue::glue(gpa$output_locations$feat_sub_directory) # evaluate glue expression
+      out_dir <- glue::glue(sub_directory) # evaluate glue expression
     }
   } else if (what == "ses") {
-    if (gpa$output_locations$feat_ses_directory == "local") {
+    ses_directory <- gpa$output_locations$feat_ses_directory
+    if (glm_software == "spm" && "spm_sub_directory" %in% names(gpa$output_locations)) {
+      ses_directory <- gpa$output_locations$spm_sub_directory
+    } else if (glm_software == "afni" && "afni_sub_directory" %in% names(gpa$output_locations)) {
+      ses_directory <- gpa$output_locations$afni_sub_directory
+    }
+
+    if (ses_directory == "local") {
       rinfo <- subset_run_data(gpa$run_data, list(id = id, session = session))
     } else {
-      out_dir <- glue::glue(gpa$output_locations$feat_ses_directory) # evaluate glue expression
+      out_dir <- glue::glue(ses_directory) # evaluate glue expression
     }
   }
 

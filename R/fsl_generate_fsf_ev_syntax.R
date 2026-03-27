@@ -24,8 +24,15 @@
 #' @author Michael Hallquist
 #' @export
 fsl_generate_fsf_ev_syntax <- function(inputs, dmat, group_membership=NULL) {
-
+  checkmate::assert_character(inputs, any.missing = FALSE, min.len = 1)
+  checkmate::assert_matrix(dmat, mode = "numeric", any.missing = FALSE, min.rows = 1)
   stopifnot(length(inputs) == nrow(dmat))
+
+  ev_titles <- colnames(dmat)
+  if (is.null(ev_titles)) {
+    ev_titles <- paste0("EV_", seq_len(ncol(dmat)))
+  }
+  ev_titles <- gsub("(Intercept)", "Intercept", ev_titles, fixed = TRUE)
 
   #overall number of inputs
   fsf_syntax <- c(
@@ -58,7 +65,7 @@ fsl_generate_fsf_ev_syntax <- function(inputs, dmat, group_membership=NULL) {
   for (j in seq_len(ncol(dmat))) {
     fsf_syntax <- c(fsf_syntax,
       paste0("# EV ", j, " title"),
-      paste0("set fmri(evtitle", j, ") \"", colnames(dmat)[j], "\""),
+      paste0("set fmri(evtitle", j, ") \"", ev_titles[j], "\""),
       "",
       paste0("# Basic waveform shape (EV ", j, ")"),
       "# 0 : Square",

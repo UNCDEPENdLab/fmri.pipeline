@@ -1088,6 +1088,8 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
     #'   are retained by this function. If \code{'default'} or \code{TRUE}, the subset atlas will be placed in the same
     #'   folder as the 3dClusterize input image, with a filename that combines the atlas file name with the input/threshold
     #'   image name. To disable creation of this file, set \code{output_atlas = FALSE}.
+    #' @param roi_stats A character vector of summary stats to extract from the cluster-masked data file. Supported values:
+    #'   \code{"mean"}, \code{"min"}, \code{"max"}. Set to NULL to skip extraction.
     subset_atlas_against_clusters = function(atlas_file = NULL, atlas_lower_threshold = 0, atlas_upper_threshold = Inf,
       minimum_overlap = 0.8, mask_by_overlap = FALSE, output_atlas = "default", roi_stats = c("mean", "max", "min")) {
 

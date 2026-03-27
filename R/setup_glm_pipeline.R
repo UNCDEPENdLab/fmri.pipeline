@@ -100,8 +100,8 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                  motion_params_colnames = c("rx", "ry", "rz", "tx", "ty", "tz"),
                                  confound_input_file = NULL, # assumed to be in the same folder as the fmri run NIfTIs -- use *relative* paths to alter this assumption
                                  confound_input_colnames = NULL, # names of confound columns -- if null, we will attempt to find a header row
-                                 l1_confound_regressors = NULL, # column names in motion_params_file and/or confound_input_file
-                                 exclude_run = "mean(framewise_displacement) > 0.9 | max(framewise_displacement) > 6",
+                                 l1_confound_regressors = NULL, # column names in motion_params_file and/or confound_input_file ("all" to include all columns)
+                                 exclude_run = NULL,
                                  truncate_run = NULL, # "framewise_displacement > 1 & volume > last_onset"
                                  exclude_subject = NULL,
                                  spike_volumes = "framewise_displacement > 0.9"
@@ -364,6 +364,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
     # l3 analysis details
     l3_models = l3_models,
+    glm_software = glm_software,
     finalize_complete = FALSE,
     lgr_threshold = lgr_threshold
   )
@@ -387,8 +388,20 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   # populate $parallel
   gpa <- setup_parallel_settings(gpa, lg)
 
+  # ensure glm_settings is a list before any compute environment checks
+  if (is.null(gpa$glm_settings) || identical(gpa$glm_settings, "default")) {
+    gpa$glm_settings <- list(fsl = list(), afni = list(), spm = list())
+  } else if (is.list(gpa$glm_settings)) {
+    if (is.null(gpa$glm_settings$fsl)) gpa$glm_settings$fsl <- list()
+    if (is.null(gpa$glm_settings$afni)) gpa$glm_settings$afni <- list()
+    if (is.null(gpa$glm_settings$spm)) gpa$glm_settings$spm <- list()
+  }
+
   # initial checks on compute environment
   test_compute_environment(gpa, stop_on_fail=FALSE)
+  if ("spm" %in% gpa$glm_software) {
+    test_spm_compute_environment(gpa, stop_on_fail = FALSE)
+  }
 
   return(gpa)
 }
@@ -398,17 +411,23 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 #' @param gpa a \code{glm_pipeline_arguments} object
 #' @return a modified gpa object containing settings for the compute environment
 #' @export
-setup_compute_environment <- function(gpa) {
-  cat(c(
-    "\n",
-    "We will now handle setup of the compute environment on your system.",
-    "The commands you provide here are included at the beginning of scripts produced",
-    "by the pipeline in order to configure the environment for your system.",
-    "Typically, this includes commands to ensure that things like FSL or AFNI are in",
-    "your system's path so that these programs can be found. On high-performance clusters,",
-    "module configuration and loading are also common.", "\n"
-  ), sep = "\n")
+setup_compute_environment <- function(gpa, preselect_action = NULL) {
 
+  if(!is.null(preselect_action)) {
+    if (preselect_action %in% c(0L, 5L)){
+      cat(c("The environment is configured.", "\n"))
+    }
+  } else {
+    cat(c(
+      "\n",
+      "We will now handle setup of the compute environment on your system.",
+      "The commands you provide here are included at the beginning of scripts produced",
+      "by the pipeline in order to configure the environment for your system.",
+      "Typically, this includes commands to ensure that things like FSL or AFNI are in",
+      "your system's path so that these programs can be found. On high-performance clusters,",
+      "module configuration and loading are also common.", "\n"
+    ), sep = "\n")
+  }
   sanitize_compute_environment <- function(ll = NULL) {
     if (!is.list(ll)) ll <- list()
     if (!is.null(ll$global)) checkmate::assert_character(ll$global)
@@ -508,6 +527,17 @@ setup_compute_environment <- function(gpa) {
     return(gpa)
   }
 
+  setup_spm_compute <- function(gpa) {
+    cat(c(
+      "Please provide any commands needed to make MATLAB or Octave available for SPM jobs.",
+      "For example, on a cluster, you might have a command like module load matlab/R2017b,",
+      "or module load octave/7.3.0."
+    ), sep = "\n")
+
+    gpa$parallel$compute_environment$spm <- get_lines(gpa$parallel$compute_environment$spm, "spm")
+    return(gpa)
+  }
+
   setup_r_compute <- function(gpa) {
     cat(c(
       "Please provide any commands needed to make R available for jobs that require this.",
@@ -519,6 +549,14 @@ setup_compute_environment <- function(gpa) {
   }
 
   action <- 1
+  if(!is.null(preselect_action)) {
+    if (preselect_action %in% c(0L, 5L)){
+      action <- preselect_action
+    } else {
+      print("Invalid preselected action. Please select from the menu.")
+      action <- 1
+    }
+  }
   while (!action %in% c(0L, 5L)) {
     cat(c(
       "Here are the current compute environment settings:",
@@ -528,11 +566,13 @@ setup_compute_environment <- function(gpa) {
       paste("  ", gpa$parallel$compute_environment$afni, collapse = "\n"),
       "\nFSL",
       paste("  ", gpa$parallel$compute_environment$fsl, collapse = "\n"),
+      "\nSPM (MATLAB/Octave)",
+      paste("  ", gpa$parallel$compute_environment$spm, collapse = "\n"),
       "\nR",
       paste("  ", gpa$parallel$compute_environment$r, collapse = "\n"), "\n"
     ), sep = "\n")
 
-    action <- menu(c("Modify global", "Modify AFNI", "Modify FSL", "Modify R", "Finish setup"), title = "What would you like to do?")
+    action <- menu(c("Modify global", "Modify AFNI", "Modify FSL", "Modify SPM (MATLAB/Octave)", "Modify R", "Finish setup"), title = "What would you like to do?")
     if (action == 1L) {
       gpa <- setup_global_compute(gpa)
     } else if (action == 2L) {
@@ -540,8 +580,10 @@ setup_compute_environment <- function(gpa) {
     } else if (action == 3L) {
       gpa <- setup_fsl_compute(gpa)
     } else if (action == 4L) {
-      gpa <- setup_r_compute(gpa)
+      gpa <- setup_spm_compute(gpa)
     } else if (action == 5L) {
+      gpa <- setup_r_compute(gpa)
+    } else if (action == 6L) {
       break
     }
   }
@@ -566,6 +608,11 @@ validate_input_data <- function(df, vm, lg, level = "trial") {
     lg$error(msg)
     stop(msg)
   }
+
+  # enforce that id is stored as a character vector so that joins between data.frames operate on a consistent character type
+  # regardless of how the id was coded in the input data
+  lg$debug("Converting id to character in %s data", level)
+  df[[vm["id"]]] <- as.character(df[[vm["id"]]])
 
   if (!vm["session"] %in% names(df)) {
     lg$debug("Adding session = 1 to %s data", level)

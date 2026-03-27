@@ -27,6 +27,15 @@ create a new afni_3dclustsim_list object
 \if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim_list$new(obj_list = NULL, ...)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{obj_list}}{A list of afni_3dclustsim objects.}
+
+\item{\code{...}}{One or more afni_3dclustsim objects. Used if \code{obj_list} is NULL.}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-afni_3dclustsim_list-submit"></a>}}

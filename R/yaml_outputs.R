@@ -218,18 +218,21 @@ get_l1_config <- function(gpa) {
   for (mm in l1m$models) {
     mobj <- list()
     mobj$signals <- mm$signals
-
-    mobj$diagonal <- mm$contrast_spec$diagonal
-    mobj$cell_means <- mm$contrast_spec$cell_means
-    mobj$overall_response <- mm$contrast_spec$overall_response
+    mobj$contrasts <- list(
+      diagonal = mm$contrast_spec$diagonal,
+      cell_means = mm$contrast_spec$cell_means,
+      cond_means = mm$contrast_spec$cond_means,
+      pairwise_diffs = mm$contrast_spec$pairwise_diffs,
+      overall_response = mm$contrast_spec$overall_response,
+      weights = mm$contrast_spec$weights,
+      delete = mm$contrast_spec$delete
+    )
     if (!is.null(mm$contrast_spec$simple_slopes) && length(mm$contrast_spec$simple_slopes) > 0L) {
-      mobj$simple_slopes <- mm$contrast_spec$simple_slopes
+      mobj$contrasts$simple_slopes <- mm$contrast_spec$simple_slopes
     }
-    mobj$weights <- mm$contrast_spec$weights
-    mobj$delete <- mm$contrast_spec$delete
 
     if (!is.null(mm$wi_models)) {
-      mobj$wi_contrasts <- list()
+      mobj$contrasts$wi_contrasts <- list()
       for (cc in names(mm$wi_models)) {
         mcopy <- mm$wi_models[[cc]]$contrast_spec
         mcopy$cat_vars <- NULL
@@ -243,7 +246,7 @@ get_l1_config <- function(gpa) {
         #   wi_factors = mm$wi_models[[cc]]$wi_factors
         #   wi_formula = mm$wi_models[[cc]]$wi_factors
         # )
-        mobj$wi_contrasts[[cc]] <- mcopy
+        mobj$contrasts$wi_contrasts[[cc]] <- mcopy
       }
     }
 
@@ -298,16 +301,18 @@ get_l2_config <- function(gpa) {
     if (!is.null(mm$covariate_transform)) mobj$covariate_transform <- as.list(mm$covariate_transform) # settings for covariate transformation
     if (!is.null(mm$reference_level)) mobj$reference_level <- as.list(mm$reference_level) # settings for covariate transformation
 
-    mobj$diagonal <- mm$contrast_spec$diagonal
-    mobj$cell_means <- mm$contrast_spec$cell_means
-    mobj$cond_means <- mm$contrast_spec$cond_means
-    mobj$pairwise_diffs <- mm$contrast_spec$pairwise_diffs
-    mobj$overall_response <- mm$contrast_spec$overall_response
+    mobj$contrasts <- list(
+      diagonal = mm$contrast_spec$diagonal,
+      cell_means = mm$contrast_spec$cell_means,
+      cond_means = mm$contrast_spec$cond_means,
+      pairwise_diffs = mm$contrast_spec$pairwise_diffs,
+      overall_response = mm$contrast_spec$overall_response,
+      weights = mm$contrast_spec$weights,
+      delete = mm$contrast_spec$delete
+    )
     if (!is.null(mm$contrast_spec$simple_slopes) && length(mm$contrast_spec$simple_slopes) > 0L) {
-      mobj$simple_slopes <- mm$contrast_spec$simple_slopes
+      mobj$contrasts$simple_slopes <- mm$contrast_spec$simple_slopes
     }
-    mobj$weights <- mm$contrast_spec$weights
-    mobj$delete <- mm$contrast_spec$delete
 
     if (level == 3L) {
       mobj$fsl_outlier_deweighting <- mm$fsl_outlier_deweighting

@@ -137,6 +137,9 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
     #' @param residuals_file The filename of the group residuals file to be used in null dataset generation (permutation approach).
     #' @param residuals_mask_file The volume over which null datasets should be generated from the residuals
     #' @param residuals_njobs The number of independent jobs for splitting up the residuals permutations. If NULL, 32 jobs will be used.
+    #' @param inset_files A character vector of dataset files to pass directly to 3dClustSim via -inset.
+    #' @param insdat_file An sdat file containing null datasets to be passed to 3dClustSim via -insdat.
+    #' @param insdat_mask_file A mask file corresponding to the insdat_file that maps values to space.
     #' @param dxyz the size of voxels in x y z (vector of 3 numbers)
     #' @param nxyz the number of voxels along x y z (vector of 3 positive integers)
     #' @param clustsim_mask This controls the volume over which to correct for FWE using 3dClustSim. If you give a whole-brain mask,
@@ -581,6 +584,8 @@ afni_3dclustsim_list <- R6::R6Class("afni_3dclustsim_list",
   ),
   public = list(
     #' @description create a new afni_3dclustsim_list object
+    #' @param obj_list A list of afni_3dclustsim objects.
+    #' @param ... One or more afni_3dclustsim objects. Used if \code{obj_list} is NULL.
     initialize = function(obj_list=NULL, ...) {
       if (is.null(obj_list)) {
         # assume the ... contains a set of afni_3dclustsim objects
