@@ -269,8 +269,30 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
     by_subj_session <- split(to_run, by = c("id", "session"))
 
     # setup Feat L2 files for each id and session
+    lsubj <- c()
     for (l1_df in by_subj_session) {
       subj_id <- l1_df$id[1L]
+      # update logger upon new subjects
+      if (!length(lsubj) || isFALSE(subj_id %in% lsubj)) {
+        lsubj <- c(lsubj, subj_id)
+        # subject level logging
+        subj_log_folder <- file.path(gpa$output_locations$log_directory, paste0("subj", subj_id))
+        if (!dir.exists(subj_log_folder)) dir.create(subj_log_folder, recursive = TRUE)
+        
+        slg <- lgr::get_logger(paste0("glm_pipeline/l2_setup/subj", subj_id))
+        slg$set_threshold(gpa$lgr_threshold)
+        # set_propogate?
+        
+        if (isTRUE(gpa$log_json)) {
+          subj_log_json <- file.path(subj_log_folder, glue("setup_l2_models_subj{subj_id}.json"))
+          slg$add_appender(lgr::AppenderJson$new(subj_log_json), name = glue("setup_l2_log_subj{subj_id}_json"))
+        }
+        if (isTRUE(gpa$log_txt)) {
+          subj_log_txt <- file.path(subj_log_folder, glue("setup_l2_models_subj{subj_id}.txt"))
+          slg$add_appender(lgr::AppenderFile$new(subj_log_txt), name = glue("setup_l2_log_subj{subj_id}_txt"))
+        }
+    }
+      
       subj_session <- l1_df$session[1L]
       feat_l2_df <- tryCatch({
         backend$l2_setup(
@@ -278,11 +300,11 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
           l2_model = this_l2_model, gpa = gpa
         )},
         error = function(e) {
-          lg$error(
+          slg$error(
             "Problem with fsl_l2_model. L1 Model: %s, L2 Model: %s, Subject: %s, Session: %s",
             this_l1_model, this_l2_model, subj_id, subj_session
           )
-          lg$error("Error message: %s", as.character(e))
+          slg$error("Error message: %s", as.character(e))
           return(NULL)
         }
       )
