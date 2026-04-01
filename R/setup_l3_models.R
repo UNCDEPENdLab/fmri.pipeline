@@ -109,13 +109,14 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   setup_l3_log_txt <- add_log_suffix(gpa$output_locations$setup_l3_log_txt, log_suffix)
   setup_l3_log_json <- add_log_suffix(gpa$output_locations$setup_l3_log_json, log_suffix)
 
-  if (isTRUE(gpa$log_txt) && !"setup_l3_log_txt" %in% names(lg$appenders)) {
-    lg$add_appender(lgr::AppenderFile$new(setup_l3_log_txt), name = "setup_l3_log_txt")
-  }
-
-  if (isTRUE(gpa$log_json) && !"setup_l3_log_json" %in% names(lg$appenders)) {
-    lg$add_appender(lgr::AppenderJson$new(setup_l3_log_json), name = "setup_l3_log_json")
-  }
+  add_base_logger_appenders(
+    lg = lg,
+    gpa = gpa,
+    log_txt_path = setup_l3_log_txt,
+    log_json_path = setup_l3_log_json,
+    txt_appender_name = "setup_l3_log_txt",
+    json_appender_name = "setup_l3_log_json"
+  )
 
   lg$debug("In setup_l3_models, setting up the following L3 models:")
   lg$debug("L3 model: %s", l3_model_names)

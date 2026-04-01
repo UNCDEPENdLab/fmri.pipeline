@@ -32,6 +32,20 @@ diagnose_pipeline <- function(input) {
     proj_files <- list.files(proj_dir, include.dirs = TRUE)
     scheduler_scripts_dir <- file.path(input, "scheduler_scripts")
     sqlite_db <- file.path(input, grep(".sqlite", proj_files, value = TRUE))
+    if (length(sqlite_db) > 1) {
+      cli::cli_inform(
+        c("More than one SQLite database found in folder.",
+          "Which one would you like to use for diagnosis?")
+      )
+      db_choice <- prompt_input(
+        type = "integer",
+        required = TRUE,
+        lower = 1,
+        upper = length(sqlite_db),
+        prompt = "Enter an integer"
+      )
+      sqlite_db <- sqlite_db[db_choice]
+    }
     config_file <- file.path(proj_dir, "project_config.json")
     
     input_is_gpa <- FALSE
@@ -90,7 +104,7 @@ diagnose_pipeline <- function(input) {
   
   config_res <- summarize_project_config(config_file) # print submission history or return error code
   
-  if (config_res == "file_dne") {
+  if (length(config_res) == 1 && config_res == "file_dne") {
     cli::cli_warn(
       c("Project configuration file does not exist.",
         "Batch folders will be read manually.")
@@ -132,7 +146,7 @@ diagnose_pipeline <- function(input) {
     
     default <- n_batch
     
-  } else if (config_res == "no_history") {
+  } else if (length(config_res) == 1 && config_res == "no_history") {
     
     cli::cli_abort(
       c("Project configuration file has no submission history.",
@@ -159,7 +173,7 @@ diagnose_pipeline <- function(input) {
   
   this_sequence_id <- sequence_ids[ss]
   
-  if (config_res == "file_dne") {
+  if (length(config_res) == 1 && config_res == "file_dne") {
     batch_directory <- batch_dirs[ss]
   } else {
     batch_directory <- get_sequence_info(config_file = config_file, sequence_id = this_sequence_id)$batch_directory
@@ -491,7 +505,7 @@ diagnose_pipeline <- function(input) {
     }
     
     if (isTRUE(input_is_gpa)) {
-      try_fsl_log <- input$output_locations[[glue::glue("logs/setup_l{this_step_model_no}_models.txt")]]
+      try_fsl_log <- input$output_locations[[glue::glue("setup_l{this_step_model_no}_log_txt")]]
     } else {
       try_fsl_log <- file.path(proj_dir, glue::glue("logs/setup_l{this_step_model_no}_models.txt"))
     }
@@ -803,13 +817,13 @@ view_log <- function(input, from_end = TRUE, lines = 15L, level = NULL, id = NUL
   
   # get log path
   if (!is.null(id)) {
-    log_path <- file.path(log_dir, glue("subj{id}/setup_l{level}_models_subj{subj_id}.txt"))
+    log_path <- file.path(log_dir, glue("subj{id}/setup_l{level}_models_subj{id}.txt"))
   } else {
     log_path <- file.path(log_dir, glue("setup_l{level}_models.txt"))
   }
   if (!file.exists(log_path)) {
     cli::cli_warn(
-      c("Could not find level {level} model{glue(tag)} setup log.",
+      c("Could not find level {level} models{glue(tag)} setup log.",
         "i" = "You will not be able to view it.")
     )
     return(invisible(FALSE))
@@ -820,7 +834,7 @@ view_log <- function(input, from_end = TRUE, lines = 15L, level = NULL, id = NUL
   log_n_lines <- min(lines, length(log_lines)) # make sure lines choice is not too long
   
   # print lines
-  cli::cli_h1("Log file for level {level} models{tag}")
+  cli::cli_h1("Log file for level {level} models{glue(tag)}")
   if (isTRUE(from_end)) {
     cli::cli_verbatim(
       c("...", head(log_lines, lines))
@@ -849,10 +863,12 @@ get_step_title <- Vectorize(
     switch(step, 
       "finalize_configuration" = "Finalize Configuration",
       "setup_l1" = "Set Up L1 Models",
-      "run_l1" = "Run L1 Models",
+      "split_backend_caches" = "Split Backend Caches",
+      "run_l1_fsl" = "Run L1 Models",
       "setup_run_l2" = "Set Up/Run L2 Models",
       "setup_run_l3" = "Set Up/Run L3 Models",
-      "cleanup_fsl" = "Clean Up Pipeline")
+      "cleanup_glm" = "Clean Up Pipeline",
+      paste0("`", step, "`"))
   },
   USE.NAMES = FALSE
   )

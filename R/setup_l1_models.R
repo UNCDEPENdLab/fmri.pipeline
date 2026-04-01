@@ -34,14 +34,14 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
   lg$set_threshold(gpa$lgr_threshold)
-
-  if (isTRUE(gpa$log_json) && !"setup_l1_log_json" %in% names(lg$appenders)) {
-    lg$add_appender(lgr::AppenderJson$new(gpa$output_locations$setup_l1_log_json), name = "setup_l1_log_json")
-  }
-
-  if (isTRUE(gpa$log_txt) && !"setup_l1_log_txt" %in% names(lg$appenders)) {
-    lg$add_appender(lgr::AppenderFile$new(gpa$output_locations$setup_l1_log_txt), name = "setup_l1_log_txt")
-  }
+  add_base_logger_appenders(
+    lg = lg,
+    gpa = gpa,
+    log_txt_path = gpa$output_locations$setup_l1_log_txt,
+    log_json_path = gpa$output_locations$setup_l1_log_json,
+    txt_appender_name = "setup_l1_log_txt",
+    json_appender_name = "setup_l1_log_json"
+  )
 
   # TODO: This is a mess if use the l1_model_names since we will always be overwriting what's in the l1_model_setup
   # data.frame. We need more of an append/update approach, perhaps like the sqlite setup for the overall pipeline.
@@ -81,23 +81,11 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
     backend_spm <- glm_backends[["spm"]]
     
     # subject level logging
-    subj_log_folder <- file.path(gpa$output_locations$log_directory, paste0("subj", subj_id))
-    if (!dir.exists(subj_log_folder)) dir.create(subj_log_folder, recursive = TRUE)
+    slg <- get_subject_logger(
+      base_logger = "glm_pipeline/l1_setup", id = subj_id, gpa = gpa,
+      log_prefix = "setup_l1_models"
+    )
     
-    slg <- lgr::get_logger(paste0("glm_pipeline/l1_setup/subj", subj_id))
-    slg$set_threshold(gpa$lgr_threshold)
-    # set_propogate?
-    
-    if (isTRUE(gpa$log_json)) {
-      subj_log_json <- file.path(subj_log_folder, glue("setup_l1_models_subj{subj_id}.json"))
-      slg$add_appender(lgr::AppenderJson$new(subj_log_json), name = glue("setup_l1_log_subj{subj_id}_json"))
-    }
-    if (isTRUE(gpa$log_txt)) {
-      subj_log_txt <- file.path(subj_log_folder, glue("setup_l1_models_subj{subj_id}.txt"))
-      slg$add_appender(lgr::AppenderFile$new(subj_log_txt), name = glue("setup_l1_log_subj{subj_id}_txt"))
-    }
-    
-
     # find the run data for analysis
     rdata <- gpa$run_data %>% dplyr::filter(id == !!subj_id & session == !!subj_session & run_nifti_present == TRUE)
     run_nifti <- get_mr_abspath(rdata, "run_nifti")

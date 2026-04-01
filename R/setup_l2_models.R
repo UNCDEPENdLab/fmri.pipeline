@@ -78,13 +78,14 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, backe
   setup_l2_log_txt <- add_log_suffix(gpa$output_locations$setup_l2_log_txt, log_suffix)
   setup_l2_log_json <- add_log_suffix(gpa$output_locations$setup_l2_log_json, log_suffix)
 
-  if (isTRUE(gpa$log_txt) && !"setup_l2_log_txt" %in% names(lg$appenders)) {
-    lg$add_appender(lgr::AppenderFile$new(setup_l2_log_txt), name = "setup_l2_log_txt")
-  }
-
-  if (isTRUE(gpa$log_json) && !"setup_l2_log_json" %in% names(lg$appenders)) {
-    lg$add_appender(lgr::AppenderJson$new(setup_l2_log_json), name = "setup_l2_log_json")
-  }
+  add_base_logger_appenders(
+    lg = lg,
+    gpa = gpa,
+    log_txt_path = setup_l2_log_txt,
+    log_json_path = setup_l2_log_json,
+    txt_appender_name = "setup_l2_log_txt",
+    json_appender_name = "setup_l2_log_json"
+  )
 
   lg$debug("In setup_l2_models, setting up the following L2 models:")
   lg$debug("L2 model: %s", l2_model_names)
@@ -280,18 +281,12 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
         if (!dir.exists(subj_log_folder)) dir.create(subj_log_folder, recursive = TRUE)
         
         slg <- lgr::get_logger(paste0("glm_pipeline/l2_setup/subj", subj_id))
-        slg$set_threshold(gpa$lgr_threshold)
-        # set_propogate?
-        
-        if (isTRUE(gpa$log_json)) {
           subj_log_json <- file.path(subj_log_folder, glue("setup_l2_models_subj{subj_id}.json"))
-          slg$add_appender(lgr::AppenderJson$new(subj_log_json), name = glue("setup_l2_log_subj{subj_id}_json"))
-        }
-        if (isTRUE(gpa$log_txt)) {
-          subj_log_txt <- file.path(subj_log_folder, glue("setup_l2_models_subj{subj_id}.txt"))
-          slg$add_appender(lgr::AppenderFile$new(subj_log_txt), name = glue("setup_l2_log_subj{subj_id}_txt"))
-        }
-    }
+        slg <- get_subject_logger(
+          base_logger = "glm_pipeline/l2_setup", id = subj_id, gpa = gpa,
+          log_prefix = "setup_l2_models"
+        )
+      }
       
       subj_session <- l1_df$session[1L]
       feat_l2_df <- tryCatch({
