@@ -277,11 +277,6 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
       if (!length(lsubj) || isFALSE(subj_id %in% lsubj)) {
         lsubj <- c(lsubj, subj_id)
         # subject level logging
-        subj_log_folder <- file.path(gpa$output_locations$log_directory, paste0("subj", subj_id))
-        if (!dir.exists(subj_log_folder)) dir.create(subj_log_folder, recursive = TRUE)
-        
-        slg <- lgr::get_logger(paste0("glm_pipeline/l2_setup/subj", subj_id))
-          subj_log_json <- file.path(subj_log_folder, glue("setup_l2_models_subj{subj_id}.json"))
         slg <- get_subject_logger(
           base_logger = "glm_pipeline/l2_setup", id = subj_id, gpa = gpa,
           log_prefix = "setup_l2_models"
