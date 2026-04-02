@@ -129,6 +129,11 @@ diagnose_pipeline <- function(input) {
     creation_times <- do.call("c", tmp)
     ord <- sort(as.numeric(creation_times), index.return = TRUE, decreasing = TRUE)$ix
     
+    # reorder so that display order matches selection indices
+    batch_dirs <- batch_dirs[ord]
+    sequence_ids <- sequence_ids[ord]
+    creation_times <- creation_times[ord]
+    
     tags <- c("{.emph (Latest)}", rep("", length(batch_dirs) - 1))
     
     cli::cli_inform(
@@ -136,15 +141,15 @@ diagnose_pipeline <- function(input) {
         "These are the batch folders in the scheduler scripts directory:")
     )
     
-    # list batch directory names in order of creation time
+    # list batch directory names in order of creation time (newest first)
     cli::cli_ol(
       cli::col_cyan(
-        glue::glue("{basename(batch_dirs)[ord]} (Run on {format(as.POSIXct(creation_times[ord]), '%D')} 
-                   at {format(as.POSIXct(creation_times[ord]), '%I:%M:%S %p')}) {tags}")
+        glue::glue("{basename(batch_dirs)} (Run on {format(as.POSIXct(creation_times), '%D')} 
+                   at {format(as.POSIXct(creation_times), '%I:%M:%S %p')}) {tags}")
         )
     )
     
-    default <- n_batch
+    default <- 1
     
   } else if (length(config_res) == 1 && config_res == "no_history") {
     
@@ -166,8 +171,8 @@ diagnose_pipeline <- function(input) {
     prompt = "Enter an integer",
     default = default,
     type = "integer",
-    lower = min(default, 1),
-    upper = default,
+    lower = 1,
+    upper = length(sequence_ids),
     len = 1
   )
   
