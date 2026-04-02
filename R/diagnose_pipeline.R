@@ -465,7 +465,7 @@ diagnose_pipeline <- function(input) {
         "return_Rout" = cli::col_cyan("Return output file as character object")),
       after = 0
     )
-    max_choice = max_choice + 1
+    max_choice <- length(actions)
   }
   
   # add view children action?
@@ -475,7 +475,7 @@ diagnose_pipeline <- function(input) {
       c("view_children" = cli::col_cyan("View child job details (statuses, etc.)")),
       after = length(actions) - 1
     ) 
-    max_choice <- max_choice + 1
+    max_choice <- length(actions)
   }
   
   # get feat table and log, if applicable
@@ -539,7 +539,7 @@ diagnose_pipeline <- function(input) {
       c("view_fsl_table" = cli::col_cyan("View feat status table")),
       after = length(actions) - 1
     ) 
-    max_choice <- max_choice + 1
+    max_choice <- length(actions)
     
     total_feat <- nrow(fsl_table)
     n_feat_complete <- sum(fsl_table$feat_complete)
@@ -551,7 +551,7 @@ diagnose_pipeline <- function(input) {
       c("view_fsl_log" = cli::col_cyan("View feat log")),
       after = length(actions) - 1
     ) 
-    max_choice <- max_choice + 1
+    max_choice <- length(actions)
   }
   
   # exit if no choices are available
