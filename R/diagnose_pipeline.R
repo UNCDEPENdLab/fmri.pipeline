@@ -673,7 +673,7 @@ diagnose_pipeline <- function(input) {
       lines_choice <- prompt_input(
         prompt = "Enter an integer",
         type = "integer",
-        min = 1,
+        lower = 1,
         default = 15,
         required = TRUE
       )
@@ -707,7 +707,7 @@ diagnose_pipeline <- function(input) {
           lines_choice <- prompt_input(
             prompt = "Enter an integer",
             type = "integer",
-            min = 1,
+            lower = 1,
             default = 15,
             required = TRUE
           )
