@@ -119,7 +119,7 @@ summarize_project_config <- function(config_file = NULL) {
       ifelse(job_seq$finalize, "Finalize Config.", ""),
       ifelse(job_seq$l1, "L1 Mods.", ""),
       ifelse(job_seq$l2, "L2 Mods.", ""),
-      ifelse(job_seq$finalize, "L3 Mods.", ""),
+      ifelse(job_seq$l3, "L3 Mods.", ""),
       ifelse(job_seq$cleanup, "Clean Up", ""),
       sep = " \u2192 "
     )
@@ -132,7 +132,7 @@ summarize_project_config <- function(config_file = NULL) {
     
     # print time of submission & user
     cli::cli_li(
-      cli::col_cyan(paste("Run on {format(as.POSIXct(time), '%D')} at {format(as.POSIXct(time), '%I:%M:%S %p')} by {user}", tag)),
+      cli::col_cyan(paste("Run on {format(as.POSIXct(time), '%D')} at {format(as.POSIXct(time), '%I:%M:%S %p')} by {user}", tag))
     )
     # print submission sequence
     cli::cli_bullets(

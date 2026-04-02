@@ -10,8 +10,9 @@
 #' @author Zach Vig
 diagnose_pipeline <- function(input) {
   
-  if (options()$warn < 1) {
-    on.exit(options(warn = options()$warn))
+  old_warn <- getOption("warn")
+  if (old_warn < 1) {
+    on.exit(options(warn = old_warn), add = TRUE)
     options(warn = 1)
   }
   
@@ -31,7 +32,7 @@ diagnose_pipeline <- function(input) {
     proj_dir <- input
     proj_files <- list.files(proj_dir, include.dirs = TRUE)
     scheduler_scripts_dir <- file.path(input, "scheduler_scripts")
-    sqlite_db <- file.path(input, grep(".sqlite", proj_files, value = TRUE))
+    sqlite_db <- list.files(proj_dir, pattern = "\\.sqlite$", full.names = TRUE)
     if (length(sqlite_db) > 1) {
       cli::cli_inform(
         c("More than one SQLite database found in folder.",
@@ -264,11 +265,12 @@ diagnose_pipeline <- function(input) {
         
         # format table of children statuses
         tab <- table(children_status)
-        tab_name <- sapply(names(tab), function(x) ifelse(x == "FAILED_BY_EXT", "FAILED (due to parent)", x))
+        tab_codes <- names(tab)
+        tab_labels <- sapply(tab_codes, function(x) ifelse(x == "FAILED_BY_EXT", "FAILED (due to parent)", x))
         n_row_tab <- length(tab)
         tab_count <- unname(tab)
         bullets <- c(rep("\u251c" , n_row_tab - 1), "\u2514")
-        drop_rows <- sprintf("%s\u2500 %s of %s [%s] %s", bullets, tab_count, n_children, get_status_symbol(tab_name), tab_name)
+        drop_rows <- sprintf("%s\u2500 %s of %s [%s] %s", bullets, tab_count, n_children, get_status_symbol(tab_codes), tab_labels)
         names(drop_rows) <- " "
         
         # print results
@@ -581,8 +583,8 @@ diagnose_pipeline <- function(input) {
     action_choice <- prompt_input(
       prompt = "Enter an integer or hit ESC",
       type = "integer",
-      min = 1,
-      max = max_choice,
+      lower = 1,
+      upper = max_choice,
       default = 1,
       required = TRUE
     )
@@ -603,12 +605,18 @@ diagnose_pipeline <- function(input) {
       tab <- table(children_status)
       tab_count <- unname(tab)
       tab_name <- names(tab)
-      tab_tag <- switch(tab_name,
-                         "COMPLETED" = "{?has/have} {.emph completed successfully}",
-                         "STARTED" = "{?has/have} {.emph started} by not finished:",
-                         "QUEUED" = "{?has/have} been {.emph submitted} but have not started:",
-                         "FAILED" = "{?has/have} {.emph failed}:",
-                         "FAILED_BY_EXT" = "{?has/have} {.emph failed} because the parent job failed:")
+      tab_tag <- vapply(
+        tab_name,
+        function(x) switch(
+          x,
+          "COMPLETED"     = "{?has/have} {.emph completed successfully}",
+          "STARTED"       = "{?has/have} {.emph started} by not finished:",
+          "QUEUED"        = "{?has/have} been {.emph submitted} but have not started:",
+          "FAILED"        = "{?has/have} {.emph failed}:",
+          "FAILED_BY_EXT" = "{?has/have} {.emph failed} because the parent job failed:"
+        ),
+        character(1L)
+      )
 
       # print child job statuses
       cli::cli_h3(
@@ -728,7 +736,7 @@ diagnose_pipeline <- function(input) {
         lines_choice <- prompt_input(
           prompt = "Enter an integer",
           type = "integer",
-          min = 1,
+          lower = 1,
           default = min(Rout_n_lines, 15),
           required = TRUE
         )
@@ -842,11 +850,11 @@ view_log <- function(input, from_end = TRUE, lines = 15L, level = NULL, id = NUL
   cli::cli_h1("Log file for level {level} models{glue(tag)}")
   if (isTRUE(from_end)) {
     cli::cli_verbatim(
-      c("...", head(log_lines, lines))
+      c("...", tail(log_lines, log_n_lines))
     )
   } else {
     cli::cli_verbatim(
-      c("...", tail(log_lines, lines))
+      c("...", head(log_lines, log_n_lines))
     )
   }
   cli::cli_h1("")

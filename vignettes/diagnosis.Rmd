@@ -114,7 +114,7 @@ The function will print out detailed information about the selected step (queue/
 ── Job `cleanup_fsl`... 
 • ...was submitted at 2025-07-31 14:50:14
 • ...and was started at 2025-07-31 16:18:58
-• ...failed before finshing
+• ...failed before finishing
 • ...had no downstream (dependent) jobs
 • ...had no child jobs
 ```

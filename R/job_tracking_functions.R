@@ -298,7 +298,17 @@ populate_list_arg = function(list_to_populate, arg_name, new_value = NULL, appen
 get_top_parent <- function(tracking_df, ref_id) {
   repeat {
     parent <- with(tracking_df, parent_id[id == ref_id])
-    if(isTRUE(is.na(parent))) break
+    
+    # if no parent found or all parents are NA, stop at current ref_id
+    if (length(parent) == 0L || all(is.na(parent))) {
+      break
+    }
+    
+    # if multiple parents are found, take only the first to keep ref_id scalar
+    if (length(parent) > 1L) {
+      parent <- parent[1L]
+    }
+    
     ref_id <- parent
   }
   return(ref_id)
