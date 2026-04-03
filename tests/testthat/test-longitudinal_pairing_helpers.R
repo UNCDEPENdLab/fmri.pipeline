@@ -30,7 +30,7 @@ test_that("normalize_longitudinal_model_signatures sets defaults", {
   l3_modes <- vapply(gpa2$l3_models$models, function(mm) mm$l3_input_mode, character(1))
 
   expect_true(all(l2_scopes == "id_session"))
-  expect_true(all(l3_modes == "separate_sessions"))
+  expect_true(all(l3_modes == "per_session"))
 })
 
 test_that("normalize_longitudinal_model_signatures rejects invalid L2 scope", {
@@ -53,11 +53,21 @@ test_that("normalize_longitudinal_model_signatures rejects invalid L3 input mode
   )
 })
 
+test_that("normalize_longitudinal_model_signatures rejects legacy separate_sessions mode", {
+  gpa <- make_signature_test_gpa()
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "separate_sessions"
+
+  expect_error(
+    normalize_longitudinal_model_signatures(gpa),
+    "Unknown l3_input_mode"
+  )
+})
+
 test_that("resolve_l2_l3_compatible_pairs enforces signature compatibility", {
   gpa <- make_signature_test_gpa()
   gpa$l2_models$models$l2_model1$l2_scope <- "id_session"
   gpa$l2_models$models$l2_model2$l2_scope <- "id"
-  gpa$l3_models$models$l3_model1$l3_input_mode <- "separate_sessions"
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "per_session"
   gpa$l3_models$models$l3_model2$l3_input_mode <- "subject_rows"
   gpa$l3_models$models$l3_model3$l3_input_mode <- "pooled_sessions_subject_ev"
 
@@ -72,7 +82,7 @@ test_that("resolve_l2_l3_compatible_pairs respects model subset filters", {
   gpa <- make_signature_test_gpa()
   gpa$l2_models$models$l2_model1$l2_scope <- "id_session"
   gpa$l2_models$models$l2_model2$l2_scope <- "id"
-  gpa$l3_models$models$l3_model1$l3_input_mode <- "separate_sessions"
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "per_session"
   gpa$l3_models$models$l3_model2$l3_input_mode <- "subject_rows"
   gpa$l3_models$models$l3_model3$l3_input_mode <- "pooled_sessions_subject_ev"
 
@@ -90,7 +100,7 @@ test_that("enumerate_l2_l3_signature_pairs reports incompatibility reasons", {
   gpa <- make_signature_test_gpa()
   gpa$l2_models$models$l2_model1$l2_scope <- "id_session"
   gpa$l2_models$models$l2_model2$l2_scope <- "id"
-  gpa$l3_models$models$l3_model1$l3_input_mode <- "separate_sessions"
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "per_session"
   gpa$l3_models$models$l3_model2$l3_input_mode <- "subject_rows"
   gpa$l3_models$models$l3_model3$l3_input_mode <- "pooled_sessions_subject_ev"
 
@@ -107,7 +117,7 @@ test_that("format_l2_l3_incompatibilities summarizes pair diagnostics", {
   gpa <- make_signature_test_gpa()
   gpa$l2_models$models$l2_model1$l2_scope <- "id"
   gpa$l2_models$models$l2_model2$l2_scope <- "id"
-  gpa$l3_models$models$l3_model1$l3_input_mode <- "separate_sessions"
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "per_session"
   gpa$l3_models$models$l3_model2$l3_input_mode <- "subject_rows"
   gpa$l3_models$models$l3_model3$l3_input_mode <- "pooled_sessions_subject_ev"
 

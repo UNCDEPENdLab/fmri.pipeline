@@ -3,6 +3,7 @@
 #' @param gpa a \code{glm_pipeline_arguments} object containing an analysis pipeline to which $l1_models
 #'   should be added. If $l1_models is already present, these will be amended.
 #' @param trial_data a data.frame containing trial-level data for one or more subjects
+#' @param ppi_data an optional data.frame containing physiological time-series inputs for PPI signal construction
 #' @param l1_model_set optional existing l1_model_set to be modified
 #' @param from_spec_file optional YAML or JSON file containing settings to populated into l1 models
 #' @param onset_cols an optional character vector of columns in \code{trial_data} that should be
@@ -326,7 +327,9 @@ bl1_get_cols <- function(l1_model_set, trial_data, field_name = NULL, field_desc
 
 #' helper function to build events consisting of onsets and durations
 #' @param l1_model_set an l1_model_set object that may have extant events in it
+#' @param spec_list an optional parsed YAML/JSON model specification used to populate events non-interactively
 #' @param trial_data the trial_data object from the \code{gpa} object
+#' @param lg an lgr logger used for status and warning messages
 #' @return a modified copy of l1_model_set with events added/updated
 #' @keywords internal
 #' @importFrom dplyr select mutate
@@ -554,7 +557,10 @@ summarize_l1_models <- function(ml) {
 #' helper function to build level 1 signals
 #' @param l1_model_set An \code{l1_model_set} object whose signals should be created or modified
 #' @param trial_data A data.frame containing trial-level signal information
+#' @param block_data An optional data.frame containing block-level signal information
+#' @param subtrial_data An optional data.frame containing subtrial-level signal information
 #' @param ppi_data An optional data.frame containing physiological signals for PPI analysis
+#' @param lg an lgr logger used for status and warning messages
 #'
 #' @return a modified version of \code{l1_model_set} with updated \code{$signals}
 #' @keywords internal
@@ -904,6 +910,10 @@ bl1_build_models <- function(l1_model_set, spec_list=NULL, lg=NULL) {
 
     if (!is.null(spec_list$name)) { # populate from specification, if requested
       mobj$name <- spec_list$name
+    }
+
+    if (!is.null(spec_list$execution_backend)) {
+      mobj$execution_backend <- normalize_backend_strings(spec_list$execution_backend)
     }
 
     while (is.null(mobj$name) || mobj$name == "") {

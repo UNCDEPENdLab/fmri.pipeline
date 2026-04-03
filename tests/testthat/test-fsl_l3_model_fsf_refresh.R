@@ -211,7 +211,7 @@ test_that("fsl_l3_model allows pooled multi-session input for pooled_sessions_su
   expect_equal(result$l3_input_mode[1L], "pooled_sessions_subject_ev")
 })
 
-test_that("fsl_l3_model adds session suffix for separate_sessions in multi-session projects", {
+test_that("fsl_l3_model adds session suffix for per_session in multi-session projects", {
   outdir <- tempfile("l3_session_suffix_")
   dir.create(outdir, recursive = TRUE)
 
@@ -221,7 +221,7 @@ test_that("fsl_l3_model adds session suffix for separate_sessions in multi-sessi
     l1_model = "l1m",
     l2_model = "l2m",
     l3_model = "l3m",
-    l3_input_mode = "separate_sessions",
+    l3_input_mode = "per_session",
     l1_cope_name = "EV_choice",
     l2_cope_name = "EV_Intercept",
     cope_file = c("dummy1.nii.gz", "dummy2.nii.gz"),
@@ -231,7 +231,7 @@ test_that("fsl_l3_model adds session suffix for separate_sessions in multi-sessi
   gpa <- list(
     lgr_threshold = "warn",
     multi_run = TRUE,
-    l3_models = list(models = list(l3m = list(l3_input_mode = "separate_sessions"))),
+    l3_models = list(models = list(l3m = list(l3_input_mode = "per_session"))),
     output_locations = list(feat_l3_fsf = "FEAT_l1c-{l1_contrast}.fsf"),
     additional = list(feat_l3_args = NULL),
     glm_settings = list(fsl = list(force_l3_creation = TRUE)),

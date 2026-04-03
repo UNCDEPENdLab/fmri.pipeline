@@ -47,7 +47,16 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   checkmate::assert_class(gpa$l3_models, "hi_model_set")
   checkmate::assert_class(gpa$l1_models, "l1_model_set")
 
-  glm_backends <- get_glm_backends(gpa)
+  if (is.null(l3_model_names)) l3_model_names <- names(gpa$l3_models$models)
+  if (is.null(l1_model_names)) l1_model_names <- names(gpa$l1_models$models)
+
+  backend_specs <- gpa$glm_backend_specs
+  if (is.null(backend_specs)) backend_specs <- default_glm_backend_specs()
+  gpa$glm_backend_specs <- backend_specs
+  l3_model_backend_map <- get_effective_model_backends(gpa, level = 3L, model_names = l3_model_names)
+  requested_l3_backends <- normalize_backend_strings(unlist(l3_model_backend_map, use.names = FALSE))
+  resolved_backends <- resolve_glm_backends(backend_specs)
+  glm_backends <- resolved_backends[intersect(requested_l3_backends, names(resolved_backends))]
   backend_names <- names(glm_backends)
   if (!is.null(backend)) {
     backend <- tolower(backend)
@@ -61,23 +70,47 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     backend_names <- intersect(backend_names, backend)
   }
 
-  glm_software_orig <- gpa$glm_software
+  level_backends_orig <- gpa$level_backends
   if (!is.null(backend)) {
-    gpa$glm_software <- backend_names
-    on.exit({ gpa$glm_software <- glm_software_orig }, add = TRUE)
+    level_backends <- normalize_level_backend_config(gpa)
+    level_backends$l3 <- backend_names
+    gpa$level_backends <- level_backends
+    on.exit({ gpa$level_backends <- level_backends_orig }, add = TRUE)
   }
 
   use_fsl <- "fsl" %in% backend_names
   use_spm <- "spm" %in% backend_names
   use_afni <- "afni" %in% backend_names
-  requires_l2 <- isTRUE(gpa$multi_run) && any_l3_backend_requires_l2(glm_backends[backend_names])
+  l3_models_in_scope <- l3_model_names[vapply(
+    l3_model_names,
+    function(model_name) any(backend_names %in% normalize_backend_strings(l3_model_backend_map[[model_name]])),
+    logical(1)
+  )]
+  l3_requirement_df <- resolve_model_l3_requirements(
+    gpa = gpa,
+    l3_model_names = l3_models_in_scope,
+    execution_backend_map = l3_model_backend_map,
+    specs = backend_specs,
+    multi_run = isTRUE(gpa$multi_run)
+  )
+  producer_stage_requirements <- if (nrow(l3_requirement_df) > 0L) {
+    unique(l3_requirement_df[, c("producer_backend", "producer_level"), drop = FALSE])
+  } else {
+    data.frame(
+      producer_backend = character(0),
+      producer_level = integer(0),
+      stringsAsFactors = FALSE
+    )
+  }
+  uses_level2_inputs <- nrow(producer_stage_requirements) > 0L &&
+    any(producer_stage_requirements$producer_level == 2L)
 
   # Validate model name subsets
   checkmate::assert_subset(l3_model_names, names(gpa$l3_models$models))
   checkmate::assert_subset(l1_model_names, names(gpa$l1_models$models))
 
   # full 3-level analysis (runs, subject, sample)
-  if (isTRUE(gpa$multi_run) && isTRUE(requires_l2)) {
+  if (isTRUE(gpa$multi_run) && isTRUE(uses_level2_inputs)) {
     checkmate::assert_class(gpa$l2_models, "hi_model_set")
     checkmate::assert_subset(l2_model_names, names(gpa$l2_models$models))
 
@@ -86,12 +119,6 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   } else if (isTRUE(gpa$multi_run)) {
     l2_model_names <- NULL
   }
-
-  # if no l3 model subset is requested, output all models
-  if (is.null(l3_model_names)) l3_model_names <- names(gpa$l3_models$models)
-
-  # if no l1 model subset is requested, output all models
-  if (is.null(l1_model_names)) l1_model_names <- names(gpa$l1_models$models)
 
   lg <- lgr::get_logger("glm_pipeline/l3_setup")
   lg$set_threshold(gpa$lgr_threshold)
@@ -123,15 +150,24 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
 
   lg$debug("In setup_l3_models, setting up the following L3 models:")
   lg$debug("L3 model: %s", l3_model_names)
-  if (isTRUE(requires_l2)) {
+  if (isTRUE(uses_level2_inputs)) {
     lg$debug("In setup_l3_models, passing the following L2 models to L3:")
     lg$debug("L2 model: %s", l2_model_names)
   }
   lg$debug("In setup_l3_models, passing the following L1 models to L3:")
   lg$debug("L1 model: %s", l1_model_names)
+  if (nrow(producer_stage_requirements) > 0L) {
+    for (ii in seq_len(nrow(producer_stage_requirements))) {
+      lg$info(
+        "L3 prerequisites resolved to backend '%s' outputs at level %d.",
+        producer_stage_requirements$producer_backend[ii],
+        producer_stage_requirements$producer_level[ii]
+      )
+    }
+  }
 
   l2_l3_pairs <- NULL
-  if (isTRUE(requires_l2)) {
+  if (isTRUE(uses_level2_inputs)) {
     l2_l3_pairs <- resolve_l2_l3_compatible_pairs(
       gpa,
       l2_model_names = l2_model_names,
@@ -165,14 +201,18 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   }
 
   # handle refresh of feat status for lower-level models
-  # For multi-run data, L2 inputs must be complete for entry into L3
-  # For single-run data, L1 inputs must be complete for entry into L3
-  if (isTRUE(requires_l2)) {
-    # refresh l2 model status in $l2_model_setup
-    gpa <- refresh_glm_status(gpa, level = 2L, lg = lg)
-  } else {
-    # refresh l1 model status in $l1_model_setup
+  # Resolve and refresh the concrete producer stage(s) that feed the requested L3 models.
+  if (nrow(producer_stage_requirements) == 0L) {
     gpa <- refresh_glm_status(gpa, level = 1L, lg = lg)
+  } else {
+    for (ii in seq_len(nrow(producer_stage_requirements))) {
+      gpa <- refresh_glm_status(
+        gpa,
+        level = producer_stage_requirements$producer_level[ii],
+        lg = lg,
+        glm_software = producer_stage_requirements$producer_backend[ii]
+      )
+    }
   }
 
   excluded_runs <- gpa$run_data %>%
@@ -187,17 +227,27 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     )
   }
 
-  # make sure l1 models have already been generated
-  enforce_glms_complete(gpa, level = 1L, lg)
-
-  if (isTRUE(requires_l2)) {
-    lg$info("In setup_l3_models, using a multi-run 3-level setup with runs (l1), subjects (l2), sample (l3)")
-
-    # in multi-run setup, an l2_model_setup must be present
-    enforce_glms_complete(gpa, level = 2L, lg)
-
+  if (nrow(producer_stage_requirements) == 0L) {
+    enforce_glms_complete(gpa, level = 1L, lg)
   } else {
-    lg$info("In setup_l3_models, using a single run 2-level setup with subjects (l1), sample (l3)")
+    for (ii in seq_len(nrow(producer_stage_requirements))) {
+      enforce_glms_complete(
+        gpa,
+        level = producer_stage_requirements$producer_level[ii],
+        lg = lg,
+        glm_software = producer_stage_requirements$producer_backend[ii]
+      )
+    }
+  }
+
+  if (isTRUE(uses_level2_inputs)) {
+    lg$info("In setup_l3_models, using producer outputs from level 2 to supply subject/session contrasts to L3.")
+  } else {
+    if (isTRUE(gpa$multi_run)) {
+      lg$info("In setup_l3_models, using multi-run inputs produced without a standalone L2 step.")
+    } else {
+      lg$info("In setup_l3_models, using a single run 2-level setup with subjects (l1), sample (l3)")
+    }
     # only retain good runs and subjects
     run_data <- gpa$run_data %>%
       dplyr::filter(exclude_run == FALSE & exclude_subject == FALSE)
@@ -225,6 +275,13 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   backend_results <- list()
   metadata <- NULL
   for (backend_name in backend_names) {
+    backend_l3_model_names <- l3_model_names[vapply(
+      l3_model_names,
+      function(model_name) backend_name %in% normalize_backend_strings(l3_model_backend_map[[model_name]]),
+      logical(1)
+    )]
+    if (length(backend_l3_model_names) == 0L) next
+
     helper <- get_l3_backend_helper(backend_name)
     if (is.null(helper)) {
       lg$warn("No L3 helper registered for backend '%s'. Skipping.", backend_name)
@@ -237,10 +294,10 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
       lg = lg,
       l1_model_names = l1_model_names,
       l2_model_names = l2_model_names,
-      l3_model_names = l3_model_names,
+      l3_model_names = backend_l3_model_names,
       l2_l3_pairs = l2_l3_pairs,
       subj_df = subj_df,
-      requires_l2 = requires_l2
+      requires_l2 = uses_level2_inputs
     )
     backend_results[[backend_name]] <- res
     if (is.null(metadata) && !is.null(res$metadata)) metadata <- res$metadata
@@ -492,7 +549,7 @@ setup_l3_backend_spm <- function(gpa, backend, lg, l1_model_names, l2_model_name
 #' @param l3_model_names L3 models to process
 #' @param l2_l3_pairs data.frame of compatible L2/L3 model pairs
 #' @param subj_df filtered subject data.frame
-#' @param requires_l2 whether L2 is required (always TRUE for 3dLMEr longitudinal)
+#' @param requires_l2 whether the resolved upstream producer emits required inputs at level 2
 #'
 #' @return a setup list with metadata and status data.frame
 #' @keywords internal
@@ -500,9 +557,40 @@ afni_3dlmer_setup <- function(gpa, backend, lg, l1_model_names, l2_model_names, 
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_class(lg, "Logger")
 
-  # harvest inputs
-  harvested <- harvest_fsl_copes(gpa, l3_model_names = l3_model_names)
-  
+  if (is.null(backend)) backend <- list(name = "afni")
+
+  harvested <- list()
+  producer_backend_map <- get_effective_model_backends(gpa, level = 3L, model_names = l3_model_names, type = "producer")
+  for (l3_name in l3_model_names) {
+    provider_backends <- normalize_backend_strings(producer_backend_map[[l3_name]])
+    if (length(provider_backends) > 0L && any(provider_backends != "fsl")) {
+      stop(
+        sprintf(
+          "AFNI 3dLMEr currently supports only FSL as an upstream producer backend. Model '%s' requested: %s",
+          l3_name, paste(provider_backends, collapse = ", ")
+        ),
+        call. = FALSE
+      )
+    }
+
+    this_backend <- backend
+    if (length(provider_backends) > 0L) {
+      this_backend$l3_input_provider_backends <- provider_backends
+    }
+
+    harvested_one <- harvest_l3_inputs(
+      gpa = gpa,
+      l3_backend = this_backend,
+      l1_model_names = l1_model_names,
+      l2_model_names = l2_model_names,
+      l3_model_names = l3_name,
+      lg = lg
+    )
+    if (!is.null(harvested_one)) {
+      harvested[[l3_name]] <- harvested_one[[l3_name]]
+    }
+  }
+
   if (is.null(harvested) || length(harvested) == 0) {
     lg$warn("No harvested inputs for AFNI 3dLMEr setup.")
     return(list(metadata = NULL, data = NULL, id_cols = NULL))
@@ -541,7 +629,8 @@ afni_3dlmer_setup <- function(gpa, backend, lg, l1_model_names, l2_model_names, 
       )
 
       # Auto-detect qVars from the refit model data used to generate the AFNI table.
-      qVars <- model_vars[vapply(datatable[, model_vars, drop = FALSE], is.numeric, logical(1))]
+      datatable_df <- as.data.frame(datatable, stringsAsFactors = FALSE)
+      qVars <- model_vars[vapply(datatable_df[, model_vars, drop = FALSE], is.numeric, logical(1))]
       glt_codes <- emmeans_to_3dlmer_glt(l3_fit, datatable)
 
       l1_model <- dt$l1_model[1]
@@ -734,11 +823,7 @@ get_fsl_l3_model_df <- function(gpa, model_df, subj_df=NULL) {
     model_df$l3_input_mode <- vapply(
       model_df$l3_model,
       function(mm) {
-        mode <- gpa$l3_models$models[[mm]]$l3_input_mode
-        if (is.null(mode) || !is.character(mode) || length(mode) != 1L || !nzchar(mode)) {
-          mode <- "separate_sessions"
-        }
-        mode
+        normalize_l3_input_mode(gpa$l3_models$models[[mm]]$l3_input_mode)
       },
       character(1)
     )
@@ -883,15 +968,11 @@ get_feat_l3_inputs <- function(gpa, l3_cope_config, lg=NULL) {
   }
 
   if (!"l3_input_mode" %in% names(feat_inputs)) {
-    feat_inputs$l3_input_mode <- "separate_sessions"
+    feat_inputs$l3_input_mode <- "per_session"
   }
-  feat_inputs$l3_input_mode <- ifelse(
-    is.na(feat_inputs$l3_input_mode) | !nzchar(feat_inputs$l3_input_mode),
-    "separate_sessions",
-    feat_inputs$l3_input_mode
-  )
+  feat_inputs$l3_input_mode <- normalize_l3_input_mode(feat_inputs$l3_input_mode)
   feat_inputs$l3_session_partition <- ifelse(
-    feat_inputs$l3_input_mode == "separate_sessions",
+    feat_inputs$l3_input_mode == "per_session",
     as.character(feat_inputs$session),
     "all"
   )
@@ -924,11 +1005,7 @@ get_spm_l3_model_df <- function(gpa, model_df, subj_df = NULL) {
     model_df$l3_input_mode <- vapply(
       model_df$l3_model,
       function(mm) {
-        mode <- gpa$l3_models$models[[mm]]$l3_input_mode
-        if (is.null(mode) || !is.character(mode) || length(mode) != 1L || !nzchar(mode)) {
-          mode <- "separate_sessions"
-        }
-        mode
+        normalize_l3_input_mode(gpa$l3_models$models[[mm]]$l3_input_mode)
       },
       character(1)
     )
@@ -1001,15 +1078,11 @@ get_spm_l3_inputs <- function(gpa, l3_cope_config, lg = NULL) {
     dplyr::filter(file.exists(con_file))
 
   if (!"l3_input_mode" %in% names(spm_inputs)) {
-    spm_inputs$l3_input_mode <- "separate_sessions"
+    spm_inputs$l3_input_mode <- "per_session"
   }
-  spm_inputs$l3_input_mode <- ifelse(
-    is.na(spm_inputs$l3_input_mode) | !nzchar(spm_inputs$l3_input_mode),
-    "separate_sessions",
-    spm_inputs$l3_input_mode
-  )
+  spm_inputs$l3_input_mode <- normalize_l3_input_mode(spm_inputs$l3_input_mode)
   spm_inputs$l3_session_partition <- ifelse(
-    spm_inputs$l3_input_mode == "separate_sessions",
+    spm_inputs$l3_input_mode == "per_session",
     as.character(spm_inputs$session),
     "all"
   )

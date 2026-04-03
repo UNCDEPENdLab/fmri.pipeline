@@ -21,7 +21,14 @@ knitr::opts_chunk$set(
 
 ## Introduction
 
-Longitudinal fMRI data presents unique statistical challenges, specifically regarding the proper treatment of variance components across different time points (sessions) versus repeated within-session observations (runs). This vignette details the current implementations of longitudinal modeling in the `fmri.pipeline` package, highlights specific statistical and computational considerations for FSL users, and proposes best practices for handling multi-session, multi-run datasets.
+Longitudinal fMRI data presents unique statistical challenges, specifically regarding the proper treatment of variance components across different time points (sessions) versus repeated within-session observations (runs). This vignette details the current longitudinal pathways in `fmri.pipeline`, highlights specific statistical and computational considerations for FSL users, and shows when a hybrid **FSL L1/L2 + AFNI `3dLMEr` L3** workflow is preferable.
+
+The package now supports two practically important longitudinal routes:
+
+- FSL-native longitudinal analysis, where session-level maps are modeled at Level 3 with subject explanatory variables (`l3_input_mode = "pooled_sessions_subject_ev"`).
+- A hybrid workflow in which FSL produces session-level COPEs at Level 2 and AFNI `3dLMEr` fits the longitudinal mixed-effects model at Level 3 (`l3_input_mode = "3dlmer"`).
+
+This distinction matters. AFNI's current `3dLMEr` documentation describes it as the more flexible successor to `3dLME`, especially for complex random-effects structures. In `fmri.pipeline`, however, `3dLMEr` is used as a **session-level longitudinal modeler** on top of FSL-derived L2 inputs rather than as a single end-to-end replacement for all lower-level FSL estimation.
 
 ## Statistical Framework: The Hierarchical fMRI Model
 
@@ -117,6 +124,17 @@ This is the fundamental tension underlying all longitudinal FSL approaches intro
 
 ---
 
+## Choosing a Pathway
+
+The most defensible workflow depends on what scientific question is primary.
+
+| Use case | Recommended path | Why |
+|----------|------------------|-----|
+| Balanced baseline/follow-up study, categorical session effect, want to stay inside FEAT/FLAME | `l2_scope = "id_session"` + `l3_input_mode = "pooled_sessions_subject_ev"` | Keeps the analysis fully within FSL and properly models subject means at L3 |
+| Need separate session-specific group maps rather than an explicit longitudinal slope | `l2_scope = "id_session"` + `l3_input_mode = "per_session"` | Straightforward per-session inference with modular recomputation |
+| Unequal spacing between visits, missing follow-up sessions, continuous time covariates, treatment-by-time interactions, or subject-specific random slopes | `l2_scope = "id_session"` + `l3_input_mode = "3dlmer"` | Uses AFNI `3dLMEr` for a more flexible longitudinal mixed-effects model |
+| Near-contiguous acquisitions where "sessions" are essentially pseudo-runs and only a grand subject average is needed | `l2_scope = "id"` | Acceptable only when between-session structure is scientifically unimportant |
+
 ## The Challenge of Variance in FSL
 
 FSL's standard higher-level analysis tool, FLAME (FMRIB's Local Analysis of Mixed Effects), is designed intrinsically around hierarchical fixed and mixed-effects variance modeling. For cross-sectional data with multiple runs per subject, the standard pipeline is:
@@ -181,7 +199,7 @@ In this widely recommended FSL approach, runs are collapsed within sessions via 
 #### How it works:
 -   **Level 1:** Run modeling.
 -   **Level 2 (`l2_scope = "id_session"`):** Runs are combined strictly within their respective sessions. A subject with 3 sessions will generate 3 separate L2 `gfeat` directories.
--   **Level 3 (`l3_input_mode = "pooled_sessions_subject_ev"` or `"separate_sessions"`):** The L2 session outputs are fed into a Level 3 analysis. If modeling longitudinal change internally in FSL, you must use a subject-mean approach.
+-   **Level 3 (`l3_input_mode = "pooled_sessions_subject_ev"` or `"per_session"`):** The L2 session outputs are fed into a Level 3 analysis. If modeling longitudinal change internally in FSL, you must use a subject-mean approach.
 
 #### Variance Decomposition Under This Approach
 
@@ -230,6 +248,49 @@ For a study with $N = 100$ subjects and $J = 3$ sessions, this produces a $300 \
 #### Cons:
 -   **Subject Means Required:** The FSL GLM requires defining one Explanatory Variable (EV) per subject to model out the subject-specific intercept (mean). This rapidly balloons the design matrix size for large samples.
 -   **Balanced Designs Needed:** FLAME assumes relatively balanced designs. If continuous time covariates (e.g., days since baseline) or missing sessions are introduced, FLAME's subject-mean approach struggles to retain degrees of freedom and robust variance estimates.
+
+### 3. The Hybrid AFNI `3dLMEr` Approach (`l2_scope = "id_session"`, `l3_input_mode = "3dlmer"`)
+
+This is the package's current flexible pathway for longitudinal Level 3 modeling.
+
+#### How it works:
+-   **Level 1:** Each run is estimated in FSL as usual.
+-   **Level 2 (`l2_scope = "id_session"`):** Runs are collapsed within session, producing one session-level COPE per subject-session combination.
+-   **Level 3 (`l3_input_mode = "3dlmer"`):** `fmri.pipeline` harvests those FSL L2 outputs, writes an AFNI `dataTable.txt`, and generates a `3dLMEr` script using the requested fixed and random effects.
+
+#### What AFNI is solving here
+
+Let $\hat{\alpha}_{ij}$ denote the session-level COPE for subject $i$ at visit $j$ after FSL Level 2 averaging across runs. The AFNI stage then fits a longitudinal mixed model of the form:
+
+$$\hat{\alpha}_{ij} = X_{ij}\beta + b_{0i} + b_{1i} t_{ij} + u_{ij}$$
+
+where:
+
+- $X_{ij}\beta$ contains the fixed effects (session, time, group, covariates, interactions),
+- $b_{0i}$ is a subject-specific random intercept,
+- $b_{1i}$ is an optional subject-specific random slope for time or session, and
+- $u_{ij}$ is the residual session-level error.
+
+This is more accurate than pooled FSL L2 for most longitudinal questions because the repeated session structure is modeled explicitly. At the same time, it is important to be precise about what is and is not estimated here: **run-level combination has already happened in FSL**. In other words, this is a hybrid two-stage workflow, not a single model that jointly re-estimates run-, session-, and subject-level variance from raw L1 outputs.
+
+#### Package-specific implementation details
+
+-   `3dlmer` is only compatible with `l2_scope = "id_session"`.
+-   The AFNI backend currently consumes **FSL-produced subject-session contrasts** at L3.
+-   Numeric predictors in the refit L3 model are automatically written under AFNI's `-qVars`.
+-   Random effects are specified with `random_effects`, then appended to the AFNI `-model` formula.
+-   `fmri.pipeline` uses `Subj` as the subject column in the AFNI data table, which matches AFNI's recommended conventions.
+
+#### Pros:
+-   **Flexible random-effects structure:** Random intercepts and random slopes are easier to express than in FSL's subject-EV workaround.
+-   **More natural longitudinal covariates:** Continuous time, age-at-scan, treatment duration, and similar predictors fit naturally into the model.
+-   **Missing visits are easier to tolerate:** AFNI mixed models are generally much better suited than FSL FEAT to incomplete longitudinal schedules.
+-   **Clearer modeling of treatment-by-time questions:** Interactions such as `group * days_since_baseline` are straightforward.
+
+#### Cons:
+-   **Hybrid, not fully joint:** The model does not explicitly carry L2 VARCOPEs into AFNI as observation-specific weights.
+-   **Extra software dependency:** AFNI plus its required R packages must be available on the compute environment.
+-   **Interpretation requires mixed-model discipline:** Centering of quantitative variables and selection of random-effects terms matter.
 
 ---
 
@@ -296,11 +357,11 @@ where $c_{jr}$ are the L2 contrast weights ($+1/2$ for Session 2 runs, $-1/2$ fo
 
 ---
 
-## Alternative Proposals and Best Practices
+## Practical Recipes and Best Practices
 
-Given the rigid limitations of adding a 4th level (Group) natively into FSL FLAME, and considering FSL's poor handling of true linear mixed-effects designs, we strongly suggest modifying the pipeline workflow to offload higher-level modeling to more sophisticated toolsets.
+Given the rigid limitations of adding a 4th level (Group) natively into FSL FLAME, and considering FSL's limited handling of true linear mixed-effects designs, the most useful question is not whether one platform is globally "best", but which route best matches the longitudinal structure of your study.
 
-### 2. The Subject-Mean Approach (`l3_input_mode = "pooled_sessions_subject_ev"`)
+### A. The Subject-Mean Approach (`l3_input_mode = "pooled_sessions_subject_ev"`)
 
 This is the statistically preferred FSL-native approach for pooled session analysis. It separates the session effect from the subject-specific baseline. 
 
@@ -309,23 +370,134 @@ This is the statistically preferred FSL-native approach for pooled session analy
 - **Formula Transformation:** A formula like `~ session` is internally transformed to `~ 0 + id + session`.
 - **Statistical Benefit:** This models a separate intercept for every subject, allowing FSL to estimate the session effect while controlling for subject-level means. It effectively performs the standard longitudinal partitioning of variance within the FSL model.
 
-**Why use this over Id Pooling?** It correctly treats sessions as repeated observations within subjects and models the individual differences in baseline activation levels. 
+**Why use this over Id Pooling?** It correctly treats sessions as repeated observations within subjects and models the individual differences in baseline activation levels.
+
+**Best fit:** Balanced designs with a modest number of sessions, categorical visit indicators, and a strong preference to keep the entire analysis inside FEAT/FLAME.
+
+#### Example configuration
+
+```yaml
+l2_models:
+  session_summary:
+    level: 2
+    l2_scope: id_session
+    model_formula: ~ 1
+    contrasts:
+      diagonal: yes
+
+l3_models:
+  longitudinal_fsl:
+    level: 3
+    l3_input_mode: pooled_sessions_subject_ev
+    model_formula: ~ session_label
+    reference_level:
+      session_label: baseline
+    contrasts:
+      diagonal: yes
+      cond_means: session_label
+      pairwise_diffs: session_label
+      overall_response: yes
+    fsl_outlier_deweighting: no
+```
 
 **Why PALM?** PALM explicitly supports multi-level exchangeability blocks (EBs), allowing you to tell the permutation test exactly which runs belong to which sessions, and which sessions belong to which subjects.
 
-### B. Route into AFNI's `3dLME` or `3dLMEr`
-For powerful, true generative mixed-effects modeling:
-1.  Process Level 1 (and optionally Level 2 within-session) in FSL via `fmri.pipeline`.
-2.  Use a pipeline export step to collect the resulting `cope.nii.gz` files.
-3.  Feed the multi-session copes directly into **AFNI's `3dLME` or `3dLMEr`** (which leverage R's `nlme` and `lme4` libraries on the backend).
+### B. Route into AFNI's `3dLMEr`
+For more flexible mixed-effects modeling at the session level:
+1.  Process Level 1 in FSL.
+2.  Collapse runs within session at Level 2 using `l2_scope = "id_session"`.
+3.  Set the Level 3 model to `l3_input_mode = "3dlmer"` so that `fmri.pipeline` writes the AFNI script and `dataTable.txt` automatically.
 
-**Why 3dLME?** `3dLMEr` natively handles missing data, naturally accepts continuous time intervals (e.g., Age at Scan), and models sophisticated nested interactions (Subject Random Intercepts + Subject Random Slopes) without the crippling constraints of a single monolithic L2 fixed effects setup. 
+AFNI's current documentation recommends `3dLMEr` over `3dLME` when the random-effects structure becomes more complex. That matches the package implementation: the supported longitudinal AFNI path in `fmri.pipeline` is `3dLMEr`.
 
-In notation, `3dLMEr` fits the full 4-level model directly:
+**Best fit:** Irregular visit timing, continuous time metrics, partially missing follow-up, or any design where you want subject-specific random slopes rather than only subject intercept EVs.
 
-$$\hat{\gamma}_{ijr} = X_{ijr} \beta + b_{0i} + b_{1i} t_{ij} + \xi_{ij} + e_{ijr}$$
+#### Example 1: Categorical visit effect with random intercepts
 
-where $b_{0i}, b_{1i}$ are random intercepts and slopes for subject $i$, $\xi_{ij}$ captures session-level residual variation, and $e_{ijr}$ accounts for run-level variability—all estimated simultaneously.
+```yaml
+glm_software: [fsl, afni]
+
+l2_models:
+  session_summary:
+    level: 2
+    l2_scope: id_session
+    model_formula: ~ 1
+    contrasts:
+      diagonal: yes
+
+l3_models:
+  longitudinal_3dlmer:
+    level: 3
+    l3_input_mode: 3dlmer
+    execution_backend: afni
+    producer_backend: fsl
+    model_formula: ~ session_label
+    random_effects: (1 | Subj)
+    reference_level:
+      session_label: baseline
+    contrasts:
+      diagonal: yes
+      cond_means: session_label
+      pairwise_diffs: session_label
+      overall_response: yes
+    fsl_outlier_deweighting: no
+```
+
+Here, `execution_backend: afni` tells the pipeline that this model is estimated by AFNI `3dLMEr`, and `producer_backend: fsl` indicates that the Level 2 inputs it consumes were produced by FSL. These fields can also be set programmatically on the `gpa` object (see the **Choosing model backends** section of `vignette("design")`).
+
+#### Example 2: Unequally spaced visits with a random slope for time
+
+```yaml
+glm_software: [fsl, afni]
+
+l2_models:
+  session_summary:
+    level: 2
+    l2_scope: id_session
+    model_formula: ~ 1
+    contrasts:
+      diagonal: yes
+
+l3_models:
+  longitudinal_time_slope:
+    level: 3
+    l3_input_mode: 3dlmer
+    model_formula: ~ days_since_baseline + group + age_baseline
+    random_effects: (1 + days_since_baseline | Subj)
+    contrasts:
+      diagonal: yes
+      overall_response: yes
+    fsl_outlier_deweighting: no
+```
+
+In this second pattern, `days_since_baseline` and `age_baseline` are numeric covariates. `fmri.pipeline` will emit them as AFNI `-qVars` automatically. AFNI also recommends thinking carefully about centering quantitative variables, so centering time at baseline or at a clinically meaningful visit is often preferable.
+
+#### Example 3: Treatment-by-time interaction
+
+```yaml
+glm_software: [fsl, afni]
+
+l2_models:
+  session_summary:
+    level: 2
+    l2_scope: id_session
+    model_formula: ~ 1
+    contrasts:
+      diagonal: yes
+
+l3_models:
+  treatment_time_interaction:
+    level: 3
+    l3_input_mode: 3dlmer
+    model_formula: ~ days_since_baseline * treatment_group
+    random_effects: (1 + days_since_baseline | Subj)
+    contrasts:
+      diagonal: yes
+      overall_response: yes
+    fsl_outlier_deweighting: no
+```
+
+This is precisely the kind of model that becomes awkward inside FSL's subject-EV framework but is natural in `3dLMEr`.
 
 ### C. Restrict "Id" Pooling to Specific Use Cases
 The `"id"` pooling approach should generally be deprecated as a default option for long-term longitudinal fMRI studies, as the statistical tradeoff is severe. It should only be used when:
@@ -333,4 +505,9 @@ The `"id"` pooling approach should generally be deprecated as a default option f
 - The researcher explicitly wishes to compute a grand average across all data for a subject with no interest in temporal dynamics.
 
 ## Conclusion
-While `fmri.pipeline` can mathematically construct the "Id" pooling approach, it sacrifices statistical validity and computational modularity. Moving forward, the package should heavily prioritize the `id_session` scoping standard, and recommend external tools like `PALM` or `3dLME` for robust population-level longitudinal inference. The formal treatment of variance components and error propagation above makes explicit that these are not mere convenience choices—conflating variance components produces systematically biased standard errors that undermine the inferential validity of longitudinal contrasts.
+While `fmri.pipeline` can mathematically construct the `"id"` pooling approach, it sacrifices statistical validity and computational modularity. In most real longitudinal studies, the package should prioritize `l2_scope = "id_session"` and then choose between two downstream paths:
+
+- FSL subject-EV modeling when the design is balanced and relatively simple.
+- AFNI `3dLMEr` when the longitudinal structure is genuinely mixed-effects in nature.
+
+The formal treatment of variance components and error propagation above makes explicit that these are not mere convenience choices. The main current lesson is simple: avoid conflating run and session variance, and use `3dLMEr` when the scientific question demands longitudinal flexibility that FEAT/FLAME does not provide gracefully.

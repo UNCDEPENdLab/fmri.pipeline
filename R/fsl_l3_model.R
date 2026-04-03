@@ -36,14 +36,12 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   if (is.null(l3_input_mode)) {
     l3_input_mode <- gpa$l3_models$models[[l3_model]]$l3_input_mode
   }
-  if (is.null(l3_input_mode) || !is.character(l3_input_mode) || length(l3_input_mode) != 1L || !nzchar(l3_input_mode)) {
-    l3_input_mode <- "separate_sessions"
-  }
+  l3_input_mode <- normalize_l3_input_mode(l3_input_mode)
   checkmate::assert_subset(l3_input_mode, longitudinal_l3_input_modes())
 
   n_sessions_input <- length(unique(l3_df$session))
-  if (identical(l3_input_mode, "separate_sessions") && n_sessions_input > 1L) {
-    msg <- "fsl_l3_model with l3_input_mode='separate_sessions' requires a single-session input data.frame"
+  if (identical(l3_input_mode, "per_session") && n_sessions_input > 1L) {
+    msg <- "fsl_l3_model with l3_input_mode='per_session' requires a single-session input data.frame"
     lg$error(msg)
     stop(msg)
   }
@@ -117,7 +115,7 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   if (!is.null(gpa$run_data) && "session" %in% names(gpa$run_data)) {
     n_global_sessions <- length(unique(gpa$run_data$session))
   }
-  if (identical(l3_input_mode, "separate_sessions") && n_global_sessions > 1L) {
+  if (identical(l3_input_mode, "per_session") && n_global_sessions > 1L) {
     if (grepl("\\.fsf$", l3_feat_fsf)) {
       l3_feat_fsf <- sub("\\.fsf$", paste0("_ses-", session, ".fsf"), l3_feat_fsf)
     } else {

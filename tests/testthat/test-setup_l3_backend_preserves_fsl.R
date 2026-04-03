@@ -71,6 +71,9 @@ test_that("setup_l3_models(backend='spm') preserves existing FSL l3 tables", {
     glm_backend_specs = list(
       spm = list(
         name = "spm",
+        runs_l1 = TRUE, runs_l2 = FALSE, runs_l3 = TRUE,
+        multi_run_strategy = "concat_in_l1",
+        produced_artifacts = c("run_level_contrasts", "subject_session_contrasts", "group_level_stats"),
         l1_status = fake_spm_status,
         l3_status = fake_spm_status,
         l1_status_inputs = c("spm_dir"),

@@ -31,6 +31,9 @@
 #' @param run_data a data.frame containing metadata about the runs for which we want to model the task design. This
 #'           data.frame should contain the columns run_number, run_volumes, run_nifti, and drop_volumes. If run_nifti
 #'           is provided, but run_volumes is not, then the number of volumes is looked up from the NIfTI header.
+#' @param run_nifti_drop_applied Logical indicating whether the NIfTI inputs in \code{run_data$run_nifti}
+#'           already have \code{drop_volumes} removed. If \code{TRUE} (default), reported NIfTI lengths are treated
+#'           as post-drop lengths; if \code{FALSE}, \code{drop_volumes} are subtracted when deriving modeled volumes.
 #' @param drop_volumes By default, all volumes are retained. If specified, this can be a vector of the number of volumes
 #'           that will be removed from the \emph{beginning} of each convolved regressor. If you pass a single number (e.g., 3),
 #'           this number of volumes will be dropped from each run. This is useful if you have dropped the first n volumes
@@ -425,9 +428,36 @@ build_design_matrix <- function(
     })
   }))
 
-  # enforce that run subsetting depends on having the runs present in the run_data object
-  stopifnot(all(runs_to_output %in% run_data$run_number))
+  missing_run_data <- setdiff(runs_to_output, run_data$run_number)
+  if (length(missing_run_data) > 0L) {
+    stop(
+      sprintf(
+        paste(
+          "Requested runs_to_output are not present in run_data: %s.",
+          "Available run_data runs: %s."
+        ),
+        paste(missing_run_data, collapse = ", "),
+        paste(unique(run_data$run_number), collapse = ", ")
+      )
+    )
+  }
   run_data <- run_data %>% dplyr::filter(run_number %in% !!runs_to_output)
+
+  available_dmat_runs <- sub("^run_number", "", rownames(dmat))
+  missing_dmat_runs <- setdiff(as.character(runs_to_output), available_dmat_runs)
+  if (length(missing_dmat_runs) > 0L) {
+    stop(
+      sprintf(
+        paste(
+          "Requested runs_to_output could not be built for run(s): %s.",
+          "This usually means event data are missing for those runs.",
+          "Available design-matrix runs: %s."
+        ),
+        paste(missing_dmat_runs, collapse = ", "),
+        paste(available_dmat_runs, collapse = ", ")
+      )
+    )
+  }
 
   # use row names, rather than numeric positions, to enforce subsetting (e.g., noncontiguous runs in dmat)
   dmat <- dmat[paste0("run_number", runs_to_output), , drop = FALSE]

@@ -17,6 +17,7 @@ convolve_regressor(
   convolve = TRUE,
   ts_multiplier = NULL,
   hrf_parameters = c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35),
+  microtime_resolution = 20L,
   lg = NULL
 )
 }
@@ -46,10 +47,12 @@ based on the corresponding onsets, durations, and values.}
 
 \item{ts_multiplier}{A vector that is n_vols in length that will be multiplied against the stimulus vector before convolution.}
 
-\item{lg}{An lgr object used for logging messages}
-
-\item{hrf_parameters.}{A named vector of parameters passed to \code{fmri.stimulus} that control the shape of the double gamma HRF.
+\item{hrf_parameters}{A named vector of parameters passed to \code{fmri.stimulus} that control the shape of the double gamma HRF.
 Default: \code{c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35)}.}
+
+\item{microtime_resolution}{Number of microtime bins per TR used when evaluating and normalizing the convolved regressor.}
+
+\item{lg}{An lgr object used for logging messages}
 }
 \description{
 It extends \code{fmri.stimulus} by allowing for two normalization approaches (building on AFNI dmUBLOCK):

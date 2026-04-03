@@ -31,7 +31,7 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, backe
   checkmate::assert_subset(l2_model_names, names(gpa$l2_models$models))
   checkmate::assert_character(backend, null.ok = TRUE)
 
-  glm_backends <- get_glm_backends(gpa)
+  glm_backends <- get_glm_backends(gpa, level = 2L)
   backend_names <- names(glm_backends)
   if (!is.null(backend)) {
     backend <- tolower(backend)

@@ -138,6 +138,156 @@ A major asset of using `fmri.pipeline` is that it handles model estimation for a
 
 For example, consider a scenario where one level 1 model includes a parametric modulator for working memory load, while another model only includes onsets for the encoding and retrieval phases of the task. Likewise, if runs vary in terms of average difficulty, one level 2 model might include the average as a continuous covariate, while another might treat average difficulty as a categorical variable (aka factor) so that nonlinearities can be examined. Finally, in the level 3 specification, one model might include nonverbal intelligence as a covariate, while another includes both age and nonverbal intelligence as covariates. In this case, `fmri.pipeline` will fit all eight model combinations (2 level 1 x 2 level 2 x 2 level 3) and provide labeled outputs for each.
 
+## Choosing model backends
+
+`fmri.pipeline` now supports backend selection at multiple levels of specificity. The simplest workflow is still to choose one software package globally:
+
+```r
+gpa$glm_software <- "fsl"
+```
+
+This means "use FSL everywhere unless something more specific overrides it."
+
+For more complex workflows, users can override backend choice at three additional levels:
+
+- Per level of analysis using `gpa$level_backends`
+- Per model using `execution_backend`
+- At run time using arguments to `run_glm_pipeline()`
+
+The intended precedence order is:
+
+1. Run-time model override
+2. Model-specific backend field
+3. Run-time level override
+4. `gpa$level_backends`
+5. `gpa$glm_software`
+
+In other words, broad defaults are allowed, but more specific settings win.
+
+### Global default
+
+If you want one backend for all model setup and estimation, continue using `gpa$glm_software`:
+
+```r
+gpa$glm_software <- "fsl"
+```
+
+This remains the easiest option and is fully backward compatible.
+
+### Per-level overrides
+
+If you want different software at different levels, use `gpa$level_backends`:
+
+```r
+gpa$glm_software <- "fsl"
+gpa$level_backends <- list(
+  l1 = "fsl",
+  l2 = "fsl",
+  l3 = "afni"
+)
+```
+
+This says:
+
+- Level 1 setup and execution should use FSL
+- Level 2 setup and execution should use FSL
+- Level 3 setup and execution should use AFNI
+
+This is the most useful configuration for longitudinal `3dLMEr` analyses at present.
+
+### Per-model overrides
+
+If only some models should use a different backend, set a backend field on the model specification itself.
+
+For any model level, `execution_backend` controls where that model is estimated:
+
+```r
+gpa$l3_models$models$longitudinal_main$execution_backend <- "afni"
+```
+
+For Level 3 models that consume lower-level inputs, a separate `producer_backend` field can be used to indicate which upstream backend should provide those inputs:
+
+```r
+gpa$l3_models$models$longitudinal_main$execution_backend <- "afni"
+gpa$l3_models$models$longitudinal_main$producer_backend <- "fsl"
+```
+
+The distinction matters because the backend that estimates a model is not always the same as the backend that produces the inputs it needs. For example, an AFNI `3dLMEr` model may currently be estimated by AFNI while consuming lower-level contrast images produced by FSL.
+
+Model-level backend fields can also be included in YAML model specifications:
+
+- `execution_backend` for L1, L2, or L3 models
+- `producer_backend` for L3 models
+
+### Run-time overrides
+
+If you want to override backend selection without changing the saved `gpa` object, pass overrides directly to `run_glm_pipeline()`:
+
+```r
+run_glm_pipeline(
+  gpa,
+  l3_model_names = "longitudinal_main",
+  level_backends = list(l3 = "afni")
+)
+```
+
+For model-specific run-time overrides, use `backend_overrides`:
+
+```r
+run_glm_pipeline(
+  gpa,
+  l3_model_names = c("longitudinal_main", "cross_sectional_main"),
+  backend_overrides = list(
+    l3 = c(longitudinal_main = "afni", cross_sectional_main = "fsl")
+  )
+)
+```
+
+This is useful when you want to try a different backend for a subset of models without permanently modifying the model specification.
+
+### How backend resolution works in practice
+
+The current behavior is intentionally flexible but conservative:
+
+- If you only set `gpa$glm_software`, that backend is used as the default everywhere.
+- If you also set `gpa$level_backends`, those values override the global default for the specified levels.
+- If a model has `execution_backend`, that model uses that backend even if the level default is different.
+- If `run_glm_pipeline()` receives `level_backends` or `backend_overrides`, those run-time values override the object.
+
+This allows workflows such as:
+
+- Mostly-FSL analyses with one AFNI `3dLMEr` Level 3 model
+- SPM Level 1 with AFNI Level 3 for selected longitudinal models
+- Temporary run-time backend experiments without rewriting saved model objects
+
+### How backends declare artifacts and dependencies
+
+Under the hood, the backend system is organized around **artifacts** and **producer requirements**. Each backend declares which artifacts it produces (e.g., `cope`, `varcope`, `dof`) and at which analysis levels it operates. When a Level 3 backend needs lower-level inputs—such as an AFNI `3dLMEr` model consuming FSL-derived COPEs—it declares the required artifacts via its specification. The pipeline resolves these requirements at submission time by matching each L3 backend's declared needs against the artifacts produced by the upstream (producer) backend. This resolution step is what makes the `producer_backend` field meaningful: it tells the pipeline which earlier backend's outputs to harvest.
+
+The pipeline also logs a **preflight report** at submission time that shows, for every analysis level, which backends will execute, which will produce inputs for downstream levels, and whether all artifact requirements are satisfied. If you see unexpected "unsupported producer" errors, the preflight report (visible in the pipeline log at `info` level) is the first place to look.
+
+### Current limitations
+
+The backend-selection interface is more general than the currently implemented producer backends.
+
+At present:
+
+- FSL supports distinct Level 1, Level 2, and Level 3 execution
+- SPM concatenates runs/sessions at Level 1 and does not run a standalone Level 2 estimation step
+- AFNI `3dLMEr` is supported as a Level 3 execution backend
+- `producer_backend` for Level 3 models is currently implemented only for `fsl`
+
+So, while you can now declare producer backends explicitly, only FSL is presently supported as the upstream producer for Level 3 input harvesting. If a different producer backend is requested for Level 3 inputs, `fmri.pipeline` will stop with an explicit error rather than silently guessing.
+
+For longitudinal AFNI analyses, the recommended current pattern is:
+
+```r
+gpa$glm_software <- "fsl"
+gpa$level_backends <- list(l3 = "afni")
+gpa$l3_models$models$longitudinal_main$execution_backend <- "afni"
+gpa$l3_models$models$longitudinal_main$producer_backend <- "fsl"
+```
+
 # Naming outputs files and folders
 
 The default file and folder structure of `fmri.pipeline` generally follows the Brain Imaging Data Structure (BIDS) specification, though somewhat loosely. That said, the user can exert considerable control over the output structure by changing the contents of the `$output_locations` list in the `gpa` object. The general idea is that the output locations can include dynamic expressions (based on the R `glue` package) that are evaluated in the appropriate context to generate the proper output file/folder. For example, this is the default expression for first-level FEAT directories (`$feat_l1_directory`):

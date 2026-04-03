@@ -32,7 +32,7 @@ test_that("spm_l1_model enforces per-run vs concatenated confound expectations",
       list(gunzip_cmds = character(0), contrast_cmds = character(0))
     },
     get_spm_status = dummy_status,
-    .env = asNamespace("fmri.pipeline")
+    .package = "fmri.pipeline"
   )
 
   expect_error(
@@ -89,7 +89,7 @@ test_that("spm_l1_model defaults to non-concatenated confound expectations", {
       list(gunzip_cmds = character(0), contrast_cmds = character(0))
     },
     get_spm_status = dummy_status,
-    .env = asNamespace("fmri.pipeline")
+    .package = "fmri.pipeline"
   )
 
   expect_error(

@@ -26,6 +26,8 @@ should be added. If $l1_models is already present, these will be amended.}
 
 \item{trial_data}{a data.frame containing trial-level data for one or more subjects}
 
+\item{ppi_data}{an optional data.frame containing physiological time-series inputs for PPI signal construction}
+
 \item{l1_model_set}{optional existing l1_model_set to be modified}
 
 \item{from_spec_file}{optional YAML or JSON file containing settings to populated into l1 models}

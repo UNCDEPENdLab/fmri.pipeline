@@ -22,9 +22,10 @@ arma::vec convolve_double_gamma(const arma::vec& stimulus, double a1=6.0, double
   double d1 = a1 * b1; //time to peak
   double d2 = a2 * b2; //time to undershoot
 
-  arma::vec x = regspace(1, stimulus.n_elem); //1-based seq_along stimulus
-  //arma::vec c1 = pow(x/d1, a1);
-  //arma::vec c2 = cc * pow(x/d2, a2);
+  // Use 0-based time vector so the HRF is evaluated at t=0, 1, ..., n-1.
+  // h(0) = 0 for the double-gamma (both terms have t^a which is 0 at t=0),
+  // so the convolution output is naturally aligned without any post-hoc shift.
+  arma::vec x = regspace(0, stimulus.n_elem - 1);
   arma::vec res = pow(x/d1, a1) % exp(-(x-d1)/b1) - (cc * pow(x/d2, a2)) % exp(-(x-d2)/b2);
 
   //Rcpp::Rcout << "c1 is: " << c1 << endl;
@@ -35,8 +36,8 @@ arma::vec convolve_double_gamma(const arma::vec& stimulus, double a1=6.0, double
   //arma::vec cvector = conv(stimulus, res);
   arma::vec cvector = convolve_cpp(stimulus, res);
 
-  //need to subset down to just the first n_elem values post-convolution
-  arma::vec central = join_cols(zeros(1), cvector.elem(regspace<uvec>(0, stimulus.n_elem - 2)));
+  // Return the first n elements (causal part of the convolution)
+  arma::vec central = cvector.elem(regspace<uvec>(0, stimulus.n_elem - 1));
 
   return(central);
 }

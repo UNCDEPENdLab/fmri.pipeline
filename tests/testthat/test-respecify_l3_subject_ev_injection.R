@@ -1,7 +1,7 @@
 library(testthat)
 
 # Helper to create a minimal hi_model_spec for respecify_l3_model testing
-make_l3_mobj <- function(formula_str = "~ 1", l3_input_mode = "separate_sessions",
+make_l3_mobj <- function(formula_str = "~ 1", l3_input_mode = "per_session",
                          subject_data = NULL) {
   if (is.null(subject_data)) {
     subject_data <- data.frame(
@@ -78,10 +78,10 @@ test_that("respecify_l3_model auto-injects id EVs for pooled_sessions_subject_ev
 })
 
 
-test_that("respecify_l3_model does NOT inject id EVs for separate_sessions mode", {
+test_that("respecify_l3_model does NOT inject id EVs for per_session mode", {
   mobj <- make_l3_mobj(
     formula_str = "~ 1",
-    l3_input_mode = "separate_sessions"
+    l3_input_mode = "per_session"
   )
 
   # Create new_data for a single session
@@ -96,7 +96,7 @@ test_that("respecify_l3_model does NOT inject id EVs for separate_sessions mode"
   # Should NOT have id columns — just intercept
   mm_cols <- colnames(result$model_matrix)
   expect_false(any(grepl("^id", mm_cols)),
-    info = "separate_sessions mode should not inject id EVs"
+    info = "per_session mode should not inject id EVs"
   )
   expect_true("(Intercept)" %in% mm_cols)
 })

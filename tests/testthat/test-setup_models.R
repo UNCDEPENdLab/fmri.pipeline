@@ -224,6 +224,46 @@ test_that("setup_l1_models defaults to all models when l1_model_names is NULL", 
   expect_s3_class(result, "glm_pipeline_arguments")
 })
 
+test_that("setup_l1_models drops runs with missing event rows before building L1 designs", {
+  gpa <- create_mock_gpa_for_l1_setup(n_subjects = 1, n_runs = 2)
+
+  gpa$subject_data$mr_dir <- file.path(gpa$output_directory, gpa$subject_data$id)
+  gpa$run_data$run_nifti <- "bold.nii.gz"
+  dirs <- unique(gpa$run_data$mr_dir)
+  for (d in dirs) dir.create(d, recursive = TRUE, showWarnings = FALSE)
+  for (nii in file.path(gpa$run_data$mr_dir, gpa$run_data$run_nifti)) {
+    RNifti::writeNifti(array(0, dim = c(2, 2, 2, 100)), nii)
+  }
+
+  gpa$glm_software <- character(0)
+  gpa$level_backends <- list(l1 = character(0), l2 = character(0), l3 = character(0))
+  gpa$additional <- list(bdm_args = list(plot = FALSE))
+  gpa$use_preconvolve <- FALSE
+  gpa$glm_settings <- list()
+  gpa$output_locations$feat_l1_directory <- file.path(
+    gpa$output_directory, "feat_l1", "sub-{id}", "ses-{session}", "{l1_model}"
+  )
+  gpa$l1_models$models$model1$signals <- "parametric_signal"
+  gpa$l1_models$signals$parametric_signal$value <- subset(
+    gpa$l1_models$signals$parametric_signal$value,
+    run_number == 1
+  )
+
+  event_data <- subset(
+    gpa$trial_data,
+    run_number == 1,
+    select = c("id", "session", "run_number", "trial", "onset", "duration", "event")
+  )
+  gpa$l1_models$events <- list(
+    stimulus = list(name = "stimulus", data = event_data)
+  )
+
+  result <- setup_l1_models(gpa, l1_model_names = "model1")
+
+  expect_s3_class(result, "glm_pipeline_arguments")
+  expect_equal(result$l1_model_setup$metadata$run_number, 1)
+})
+
 # ==============================================================================
 # Tests for setup_l2_models input validation
 # ==============================================================================
@@ -368,6 +408,9 @@ test_that("setup_l2_models uses l2_scope to group L2 inputs", {
   gpa$glm_backend_specs <- list(
     fsl = list(
       name = "fsl",
+      runs_l1 = TRUE, runs_l2 = TRUE, runs_l3 = TRUE,
+      multi_run_strategy = "explicit_l2",
+      produced_artifacts = c("run_level_contrasts", "subject_session_contrasts", "group_level_stats"),
       l1_setup = NULL,
       l2_setup = fake_l2_setup,
       l3_setup = NULL,
@@ -464,7 +507,7 @@ test_that("setup_l3_models requires l2_models for multi_run", {
 test_that("setup_l3_models reports signature mismatch details when no pairs remain", {
   gpa <- create_mock_gpa_for_l3_setup(multi_run = TRUE)
   gpa$l2_models$models$l2_model1$l2_scope <- "id"
-  gpa$l3_models$models$l3_model1$l3_input_mode <- "separate_sessions"
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "per_session"
 
   expect_warning(
     result <- setup_l3_models(gpa),
@@ -475,7 +518,7 @@ test_that("setup_l3_models reports signature mismatch details when no pairs rema
   expect_match(result$l3_setup_status$reason, "requires l2_scope='id_session'")
 })
 
-test_that("get_feat_l3_inputs splits by session only for separate_sessions mode", {
+test_that("get_feat_l3_inputs splits by session only for per_session mode", {
   root <- tempfile("l3_split_mode_")
   dir.create(root, recursive = TRUE)
 
@@ -515,7 +558,7 @@ test_that("get_feat_l3_inputs splits by session only for separate_sessions mode"
   )
 
   cfg_sep <- cfg_base
-  cfg_sep$l3_input_mode <- "separate_sessions"
+  cfg_sep$l3_input_mode <- "per_session"
   sep_inputs <- fmri.pipeline:::get_feat_l3_inputs(gpa, cfg_sep, lg = lgr::get_logger("test"))
   expect_equal(length(sep_inputs), 2L)
   expect_true(all(vapply(sep_inputs, function(df) length(unique(df$session)), integer(1)) == 1L))
@@ -527,7 +570,7 @@ test_that("get_feat_l3_inputs splits by session only for separate_sessions mode"
   expect_equal(nrow(pooled_inputs[[1L]]), nrow(cfg_pool))
 })
 
-test_that("get_spm_l3_inputs splits by session only for separate_sessions mode", {
+test_that("get_spm_l3_inputs splits by session only for per_session mode", {
   root <- tempfile("spm_l3_split_mode_")
   dir.create(root, recursive = TRUE)
 
@@ -561,7 +604,7 @@ test_that("get_spm_l3_inputs splits by session only for separate_sessions mode",
   )
 
   cfg_sep <- cfg_base
-  cfg_sep$l3_input_mode <- "separate_sessions"
+  cfg_sep$l3_input_mode <- "per_session"
   sep_inputs <- fmri.pipeline:::get_spm_l3_inputs(gpa, cfg_sep, lg = lgr::get_logger("test"))
   expect_equal(length(sep_inputs), 2L)
   expect_true(all(vapply(sep_inputs, function(df) length(unique(df$session)), integer(1)) == 1L))

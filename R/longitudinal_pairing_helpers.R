@@ -4,11 +4,31 @@ longitudinal_l2_scopes <- function() {
 
  longitudinal_l3_input_modes <- function() {
   c(
-    "separate_sessions",
+    "per_session",
     "pooled_sessions_subject_ev",
     "subject_rows",
     "3dlmer"
   )
+}
+
+normalize_l3_input_mode <- function(x, default = "per_session") {
+  allowed <- longitudinal_l3_input_modes()
+  checkmate::assert_string(default)
+  checkmate::assert_subset(default, allowed)
+
+  if (is.null(x)) return(default)
+  if (!is.character(x)) x <- as.character(x)
+  x <- trimws(x)
+  x[is.na(x) | !nzchar(x)] <- default
+  bad <- !x %in% allowed
+  if (any(bad)) {
+    stop(
+      "Unknown l3_input_mode: ", paste(unique(x[bad]), collapse = ", "),
+      ". Allowed: ", paste(allowed, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  x
 }
 
 normalize_longitudinal_model_signatures <- function(gpa, lg = NULL) {
@@ -41,10 +61,7 @@ normalize_longitudinal_model_signatures <- function(gpa, lg = NULL) {
   if (checkmate::test_class(gpa$l3_models, "hi_model_set")) {
     for (mname in names(gpa$l3_models$models)) {
       mm <- gpa$l3_models$models[[mname]]
-      mode <- mm$l3_input_mode
-      if (is.null(mode) || !is.character(mode) || length(mode) != 1L || !nzchar(mode)) {
-        mode <- "separate_sessions"
-      }
+      mode <- normalize_l3_input_mode(mm$l3_input_mode)
       if (!mode %in% l3_allowed) {
         stop(
           "Unknown l3_input_mode for L3 model '", mname, "': ", mode,
@@ -62,16 +79,16 @@ normalize_longitudinal_model_signatures <- function(gpa, lg = NULL) {
 
 l2_l3_signature_compatible <- function(l2_scope, l3_input_mode) {
   checkmate::assert_string(l2_scope)
-  checkmate::assert_string(l3_input_mode)
+  l3_input_mode <- normalize_l3_input_mode(l3_input_mode)
 
   if (l3_input_mode == "subject_rows") return(l2_scope == "id")
-  if (l3_input_mode %in% c("separate_sessions", "pooled_sessions_subject_ev", "3dlmer")) return(l2_scope == "id_session")
+  if (l3_input_mode %in% c("per_session", "pooled_sessions_subject_ev", "3dlmer")) return(l2_scope == "id_session")
   FALSE
 }
 
 l2_l3_signature_incompatibility_reason <- function(l2_scope, l3_input_mode) {
   checkmate::assert_string(l2_scope)
-  checkmate::assert_string(l3_input_mode)
+  l3_input_mode <- normalize_l3_input_mode(l3_input_mode)
 
   if (l2_l3_signature_compatible(l2_scope, l3_input_mode)) return("")
 
@@ -79,7 +96,7 @@ l2_l3_signature_incompatibility_reason <- function(l2_scope, l3_input_mode) {
     return("l3_input_mode='subject_rows' requires l2_scope='id'")
   }
 
-  if (l3_input_mode %in% c("separate_sessions", "pooled_sessions_subject_ev", "3dlmer")) {
+  if (l3_input_mode %in% c("per_session", "pooled_sessions_subject_ev", "3dlmer")) {
     return(paste0("l3_input_mode='", l3_input_mode, "' requires l2_scope='id_session'"))
   }
 

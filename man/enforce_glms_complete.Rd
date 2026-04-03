@@ -4,7 +4,7 @@
 \alias{enforce_glms_complete}
 \title{Helper function to create named data.frame from a set of objects}
 \usage{
-enforce_glms_complete(gpa, level = 1L, lg = NULL)
+enforce_glms_complete(gpa, level = 1L, lg = NULL, glm_software = NULL)
 }
 \description{
 Helper function to create named data.frame from a set of objects

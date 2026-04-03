@@ -23,12 +23,15 @@ refresh_glm_status <- function(gpa, level = 1L, lg = NULL, glm_software = NULL) 
 
   if (is.null(lg)) lg <- lgr::get_logger()
 
+  gpa_for_backends <- gpa
   if (!is.null(glm_software)) {
-    gpa <- gpa
-    gpa$glm_software <- unique(tolower(glm_software))
+    gpa_for_backends$glm_software <- unique(tolower(glm_software))
+    level_backends <- normalize_level_backend_config(gpa_for_backends)
+    level_backends[[paste0("l", level)]] <- unique(tolower(glm_software))
+    gpa_for_backends$level_backends <- level_backends
   }
 
-  glm_backends <- get_glm_backends(gpa, must_exist = FALSE)
+  glm_backends <- get_glm_backends(gpa_for_backends, must_exist = FALSE, level = level)
   if (length(glm_backends) == 0L) {
     lg$warn("No GLM backends registered for status refresh.")
     return(gpa)

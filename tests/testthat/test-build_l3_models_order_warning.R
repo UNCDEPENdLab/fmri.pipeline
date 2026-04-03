@@ -16,7 +16,7 @@ test_that("build_l3_models warns when L2 models are not yet defined", {
         covariate_transform = list(),
         reference_level = list(),
         contrasts = list(diagonal = TRUE),
-        l3_input_mode = "separate_sessions"
+        l3_input_mode = "per_session"
       )
     )
   )
@@ -52,7 +52,7 @@ test_that("build_l3_models warning includes backend-specific SPM guidance", {
         covariate_transform = list(),
         reference_level = list(),
         contrasts = list(diagonal = TRUE),
-        l3_input_mode = "separate_sessions"
+        l3_input_mode = "per_session"
       )
     )
   )

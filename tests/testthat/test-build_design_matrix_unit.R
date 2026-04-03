@@ -2014,6 +2014,30 @@ test_that("build_design_matrix respects runs_to_output", {
   expect_equal(result$run_volumes, c(40, 40))
 })
 
+test_that("build_design_matrix reports missing event-backed runs explicitly", {
+  skip_on_cran()
+
+  set.seed(457)
+  events <- create_test_events(nruns = 2, ntrials = 5)
+  signals <- list(
+    cue_evt = list(name = "cue_evt", event = "cue", value = 1, normalization = "none")
+  )
+  run_data <- create_test_run_data(nruns = 2, run_volumes = 40)
+  run_data$run_number <- c(1, 3)
+
+  expect_error(
+    build_design_matrix(
+      events = events,
+      signals = signals,
+      tr = 1.0,
+      run_data = run_data,
+      runs_to_output = c(1, 3),
+      plot = FALSE
+    ),
+    regexp = "Requested runs_to_output could not be built for run\\(s\\): 3.*event data are missing"
+  )
+})
+
 test_that("build_design_matrix handles drop_volumes correctly", {
   skip_on_cran()
   

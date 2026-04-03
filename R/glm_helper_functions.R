@@ -1144,7 +1144,7 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   dupe_list <- get_dupe_rows(cmat)
   drop_rows <- c()
   if (length(dupe_list) > 0L) {
-    is_interactive <- interactive()
+    is_interactive <- rlang::is_interactive()
     if (is.null(rownames(cmat))) {
       rownames(cmat) <- paste0("contrast_", seq_len(nrow(cmat)))
     }
@@ -1969,21 +1969,23 @@ named_vector <- function(...) {
 # }
 
 
-enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
+enforce_glms_complete <- function(gpa, level=1L, lg=NULL, glm_software=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_integerish(level, lower=1L, upper=3L)
   checkmate::assert_class(lg, "Logger")
+  checkmate::assert_character(glm_software, null.ok = TRUE)
 
   obj_name <- glue("l{level}_model_setup")
   expect_class <- glue("l{level}_setup")
   obj <- gpa[[obj_name]]
+  backend_names <- if (is.null(glm_software)) normalize_backend_strings(gpa$glm_software) else normalize_backend_strings(glm_software)
 
   if (is.null(obj) || !inherits(obj, expect_class)) {
     msg <- sprintf("No l%d_model_setup found in the glm pipeline object.", level)
     lg$error(msg)
     stop(msg)
   } else {
-    if ("fsl" %in% gpa$glm_software) {
+    if ("fsl" %in% backend_names && !is.null(obj$fsl)) {
       nmiss <- sum(obj$fsl$feat_complete == FALSE)
       n_feat_runs <- nrow(obj$fsl)
       if (nmiss == n_feat_runs) {
@@ -1998,7 +2000,7 @@ enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
       }
     }
 
-    if ("spm" %in% gpa$glm_software) {
+    if ("spm" %in% backend_names) {
       if (!is.null(obj$spm) && "spm_complete" %in% names(obj$spm)) {
         nmiss <- sum(obj$spm$spm_complete == FALSE)
         n_spm_runs <- nrow(obj$spm)
@@ -2010,6 +2012,23 @@ enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
           lg$warn(
             "There are %d missing SPM outputs in %s$spm. Using complete %d outputs.",
             nmiss, obj_name, n_spm_runs - nmiss
+          )
+        }
+      }
+    }
+
+    if ("afni" %in% backend_names) {
+      if (!is.null(obj$afni) && "feat_complete" %in% names(obj$afni)) {
+        nmiss <- sum(obj$afni$feat_complete == FALSE)
+        n_afni_runs <- nrow(obj$afni)
+        if (nmiss == n_afni_runs) {
+          msg <- sprintf("All AFNI runs in %s$afni are incomplete.", obj_name)
+          lg$error(msg)
+          stop(msg)
+        } else if (nmiss > 0) {
+          lg$warn(
+            "There are %d missing AFNI outputs in %s$afni. Using complete %d outputs.",
+            nmiss, obj_name, n_afni_runs - nmiss
           )
         }
       }

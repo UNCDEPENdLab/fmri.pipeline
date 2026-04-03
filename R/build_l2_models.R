@@ -390,14 +390,15 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       chosen
     }
 
-    choose_l3_input_mode <- function(default_mode = "separate_sessions") {
+    choose_l3_input_mode <- function(default_mode = "per_session") {
       allowed <- longitudinal_l3_input_modes()
+      default_mode <- normalize_l3_input_mode(default_mode)
       checkmate::assert_subset(default_mode, allowed)
       if (!"session" %in% names(data) || length(unique(data$session)) <= 1L) {
         return(default_mode)
       }
       opts <- c(
-        "Separate L3 model by session (requires L2 scope id_session)",
+        "Per-session L3 model (requires L2 scope id_session)",
         "Pooled sessions with subject EVs (requires L2 scope id_session)",
         "One row per subject input (requires L2 scope id)",
         "3dLMEr (mixed-effects longitudinal model via AFNI; requires L2 scope id_session)"
@@ -413,7 +414,7 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       } else if (which_mode == 4L) {
         "3dlmer"
       } else {
-        "separate_sessions"
+        "per_session"
       }
     }
 
@@ -426,6 +427,13 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
 
     if (!is.null(spec_list$name)) { # populate from specification, if requested
       mobj$name <- spec_list$name
+    }
+
+    if (!is.null(spec_list$execution_backend)) {
+      mobj$execution_backend <- normalize_backend_strings(spec_list$execution_backend)
+    }
+    if (level == 3L && !is.null(spec_list$producer_backend)) {
+      mobj$producer_backend <- normalize_backend_strings(spec_list$producer_backend)
     }
 
     while (is.null(mobj$name) || mobj$name == "") {
@@ -645,9 +653,9 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
         mobj$l3_input_mode <- spec_list$l3_input_mode
       } else if (is.null(mobj$l3_input_mode)) {
         if (is.null(spec_list)) {
-          mobj$l3_input_mode <- choose_l3_input_mode(default_mode = "separate_sessions")
+          mobj$l3_input_mode <- choose_l3_input_mode(default_mode = "per_session")
         } else {
-          mobj$l3_input_mode <- "separate_sessions"
+          mobj$l3_input_mode <- "per_session"
         }
       } else {
         checkmate::assert_subset(mobj$l3_input_mode, longitudinal_l3_input_modes())

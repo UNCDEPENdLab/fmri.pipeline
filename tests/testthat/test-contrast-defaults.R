@@ -156,6 +156,7 @@ test_that("get_contrasts_from_spec resolves duplicate contrasts non-interactivel
   )
   mobj$contrast_list <- list(custom = custom)
 
+  rlang::local_interactive(FALSE)
   out <- NULL
   expect_warning(
     out <- fmri.pipeline:::get_contrasts_from_spec(mobj),

@@ -49,9 +49,17 @@ test_that("afni_3dlmer_setup builds 3dLMEr tables from refit model covariates", 
   class(gpa) <- c("glm_pipeline_arguments", "list")
 
   lg <- lgr::get_logger("test/afni_3dlmer_setup")
+  harvest_call <- new.env(parent = emptyenv())
 
   testthat::local_mocked_bindings(
-    harvest_fsl_copes = function(gpa, l3_model_names = NULL) harvested,
+    harvest_l3_inputs = function(gpa, l3_backend, l1_model_names = NULL, l2_model_names = NULL,
+                                 l3_model_names = NULL, lg = NULL) {
+      harvest_call$backend <- fmri.pipeline:::backend_name(l3_backend)
+      harvest_call$l1_model_names <- l1_model_names
+      harvest_call$l2_model_names <- l2_model_names
+      harvest_call$l3_model_names <- l3_model_names
+      harvested
+    },
     respecify_l3_model = function(mobj, new_data) {
       list(
         metadata = new_data[, c("id", "session"), drop = FALSE],
@@ -64,7 +72,7 @@ test_that("afni_3dlmer_setup builds 3dLMEr tables from refit model covariates", 
       )
     },
     emmeans_to_3dlmer_glt = function(mobj, data) list(),
-    .env = asNamespace("fmri.pipeline")
+    .package = "fmri.pipeline"
   )
 
   res <- fmri.pipeline:::afni_3dlmer_setup(
@@ -81,6 +89,10 @@ test_that("afni_3dlmer_setup builds 3dLMEr tables from refit model covariates", 
 
   expect_true(is.data.frame(res$data))
   expect_equal(nrow(res$data), 1L)
+  expect_identical(harvest_call$backend, "afni")
+  expect_identical(harvest_call$l1_model_names, "l1_model1")
+  expect_identical(harvest_call$l2_model_names, "l2_model1")
+  expect_identical(harvest_call$l3_model_names, "l3_model1")
   expect_true(file.exists(res$data$afni_script[1L]))
 
   data_table_file <- file.path(dirname(res$data$afni_script[1L]), "dataTable.txt")
