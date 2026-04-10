@@ -1306,7 +1306,53 @@ compose_l2_model_data <- function(gpa, lg = NULL) {
   }
 
   conflicts <- intersect(session_cols, names(l2_data))
+  redundant_conflicts <- character(0)
   rename_map <- character(0)
+  if (length(conflicts) > 0L) {
+    columns_equivalent <- function(run_col, session_col) {
+      na_match <- is.na(run_col) & is.na(session_col)
+      keep <- !na_match
+      if (!any(keep)) return(TRUE)
+
+      run_keep <- run_col[keep]
+      session_keep <- session_col[keep]
+
+      if (is.factor(run_keep) || is.factor(session_keep) ||
+          is.character(run_keep) || is.character(session_keep)) {
+        return(identical(as.character(run_keep), as.character(session_keep)))
+      }
+
+      isTRUE(all.equal(run_keep, session_keep, check.attributes = FALSE))
+    }
+
+    for (cc in conflicts) {
+      cmp <- dplyr::left_join(
+        l2_data %>% dplyr::select(id, session, run_value = dplyr::all_of(cc)),
+        sdat %>% dplyr::select(id, session, session_value = dplyr::all_of(cc)),
+        by = c("id", "session")
+      )
+
+      if (columns_equivalent(cmp$run_value, cmp$session_value)) {
+        redundant_conflicts <- c(redundant_conflicts, cc)
+      }
+    }
+
+    if (length(redundant_conflicts) > 0L) {
+      sdat <- sdat %>% dplyr::select(-dplyr::all_of(redundant_conflicts))
+      session_cols <- setdiff(session_cols, redundant_conflicts)
+      conflicts <- setdiff(conflicts, redundant_conflicts)
+      lg$info(
+        "Skipping session-level columns already present in run_data with identical values: %s",
+        paste(redundant_conflicts, collapse = ", ")
+      )
+    }
+  }
+
+  if (length(session_cols) == 0L) {
+    attr(l2_data, "l2_var_origin") <- origin
+    return(l2_data)
+  }
+
   if (length(conflicts) > 0L) {
     existing <- names(l2_data)
     for (cc in conflicts) {

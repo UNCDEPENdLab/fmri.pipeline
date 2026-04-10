@@ -206,18 +206,20 @@ R_batch_job <- R6::R6Class("batch_job",
         syntax <- c(
           syntax,
           "if (exists('child_job_ids') && inherits(child_job_ids, c('numeric', 'integer', 'character'))) {",
-          glue::glue("  sapply(child_job_ids, function(id) fmri.pipeline::add_tracked_job_parent(sqlite_db = '{self$sqlite_db}', job_id = id, parent_job_id = Sys.getenv('JOBID'), child_level = 2))"),          
+          "  if (length(child_job_ids) > 0L) {",
+          glue::glue("    sapply(child_job_ids, function(id) fmri.pipeline::add_tracked_job_parent(sqlite_db = '{self$sqlite_db}', job_id = id, parent_job_id = Sys.getenv('JOBID'), child_level = 2))"),
           paste0(
-            "  success <- fmri.pipeline::wait_for_job(child_job_ids, quiet=FALSE",
+            "    success <- fmri.pipeline::wait_for_job(child_job_ids, quiet=FALSE",
             ", repolling_interval=", self$repolling_interval,
             ", max_wait=", lubridate::period_to_seconds(dhms(self$wall_time)),
             ", scheduler='", self$scheduler, "')"
           ),
           if (isTRUE(self$all_children_successful)) {
-            glue::glue("  if (isFALSE(success)) {{ fmri.pipeline::update_tracked_job_status('{self$sqlite_db}', Sys.getenv('JOBID'), 'FAILED', cascade = TRUE, exclude = child_job_ids); stop() }}") 
-          } else { 
+            glue::glue("    if (isFALSE(success)) {{ fmri.pipeline::update_tracked_job_status('{self$sqlite_db}', Sys.getenv('JOBID'), 'FAILED', cascade = TRUE, exclude = child_job_ids); stop() }}")
+          } else {
             NULL
           },
+          "  }",
           "} else {",
           "  warning('Attempt to wait for child jobs failed due to non-existent or improper child_job_ids variable.')",
           "}"

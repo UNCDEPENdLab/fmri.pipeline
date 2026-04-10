@@ -148,7 +148,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
 
   if (length(to_run) == 0L) {
     lg$warn("No Feat level %d .fsf files to execute.", level)
-    return(NULL)
+    return(invisible(character(0)))
   }
 
   lg$info("About to run the following fsf files in parallel:")

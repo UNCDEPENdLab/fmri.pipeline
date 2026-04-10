@@ -96,3 +96,69 @@ test_that("setup_l3_models refreshes and enforces the resolved producer stage", 
   expect_identical(enforce_calls[[1L]]$glm_software, "fsl")
   expect_true(any(vapply(refresh_calls, function(x) identical(x$level, 3L), logical(1))))
 })
+
+test_that("setup_l3_models rejects backend filters that exclude resolved 3dlmer execution", {
+  l1_models <- structure(
+    list(models = list(model1 = list())),
+    class = c("l1_model_set", "list")
+  )
+  l2_models <- structure(
+    list(models = list(l2_model1 = list(l1_model_names = "model1", l2_scope = "id_session"))),
+    class = c("hi_model_set", "list")
+  )
+  l3_models <- structure(
+    list(models = list(
+      l3_model1 = list(
+        l3_input_mode = "3dlmer"
+      )
+    )),
+    class = c("hi_model_set", "list")
+  )
+
+  gpa <- list(
+    glm_software = c("fsl", "afni"),
+    multi_run = TRUE,
+    lgr_threshold = "info",
+    log_txt = FALSE,
+    log_json = FALSE,
+    output_locations = list(
+      setup_l3_log_txt = file.path(tempdir(), "setup_l3_models.txt"),
+      setup_l3_log_json = file.path(tempdir(), "setup_l3_models.json")
+    ),
+    subject_data = data.frame(
+      id = paste0("sub", 1:2),
+      session = c(1L, 1L),
+      exclude_subject = FALSE,
+      stringsAsFactors = FALSE
+    ),
+    run_data = data.frame(
+      id = rep(paste0("sub", 1:2), each = 2L),
+      session = 1L,
+      run_number = rep(1:2, times = 2L),
+      exclude_run = FALSE,
+      exclude_subject = FALSE,
+      stringsAsFactors = FALSE
+    ),
+    l1_models = l1_models,
+    l2_models = l2_models,
+    l3_models = l3_models
+  )
+  class(gpa) <- c("glm_pipeline_arguments", "list")
+
+  testthat::local_mocked_bindings(
+    normalize_longitudinal_model_signatures = function(gpa, lg) gpa,
+    refresh_l1_cope_names = function(gpa, lg = NULL) gpa,
+    .package = "fmri.pipeline"
+  )
+
+  expect_error(
+    fmri.pipeline:::setup_l3_models(
+      gpa,
+      l1_model_names = "model1",
+      l2_model_names = "l2_model1",
+      l3_model_names = "l3_model1",
+      backend = "fsl"
+    ),
+    "excludes resolved execution backend\\(s\\)"
+  )
+})

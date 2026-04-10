@@ -54,6 +54,14 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   if (is.null(backend_specs)) backend_specs <- default_glm_backend_specs()
   gpa$glm_backend_specs <- backend_specs
   l3_model_backend_map <- get_effective_model_backends(gpa, level = 3L, model_names = l3_model_names)
+  l3_producer_backend_map <- get_effective_model_backends(gpa, level = 3L, model_names = l3_model_names, type = "producer")
+  validate_l3_backend_resolution(
+    gpa = gpa,
+    l3_model_names = l3_model_names,
+    execution_backend_map = l3_model_backend_map,
+    producer_backend_map = l3_producer_backend_map,
+    requested_backends = backend
+  )
   requested_l3_backends <- normalize_backend_strings(unlist(l3_model_backend_map, use.names = FALSE))
   resolved_backends <- resolve_glm_backends(backend_specs)
   glm_backends <- resolved_backends[intersect(requested_l3_backends, names(resolved_backends))]
@@ -90,6 +98,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     gpa = gpa,
     l3_model_names = l3_models_in_scope,
     execution_backend_map = l3_model_backend_map,
+    producer_backend_map = l3_producer_backend_map,
     specs = backend_specs,
     multi_run = isTRUE(gpa$multi_run)
   )
@@ -642,6 +651,13 @@ afni_3dlmer_setup <- function(gpa, backend, lg, l1_model_names, l2_model_names, 
       target_dir <- as.character(glue::glue(gpa$output_locations$afni_3dlmer_directory))
       
       prefix <- file.path(target_dir, paste0(l3_name, "_LMEr"))
+      mask_file <- resolve_3dlmer_mask(
+        target_dir = target_dir,
+        harvested_inputs = dt,
+        explicit_mask = l3_obj$lmer_mask %||% gpa$mask_file,
+        requires_l2 = requires_l2,
+        lg = lg
+      )
       
       cmd <- build_3dlmer_command(
         prefix = prefix,
@@ -649,7 +665,7 @@ afni_3dlmer_setup <- function(gpa, backend, lg, l1_model_names, l2_model_names, 
         qVars = qVars,
         glt_codes = glt_codes,
         data_table_file = "dataTable.txt", # Relative to script
-        mask = l3_obj$lmer_mask %||% gpa$mask_file,
+        mask = mask_file,
         njobs = l3_obj$lmer_njobs %||% gpa$parallel$afni$l3_lmer_njobs %||% 1,
         ss_type = 3
       )
@@ -663,6 +679,7 @@ afni_3dlmer_setup <- function(gpa, backend, lg, l1_model_names, l2_model_names, 
         l1_cope_name = l1_cope_name,
         l2_cope_name = l2_cope_name,
         afni_script = files$script,
+        mask_file = mask_file,
         output_file = prefix,
         feat_complete = FALSE, # Reusing this field for status
         stringsAsFactors = FALSE

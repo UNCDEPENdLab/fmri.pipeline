@@ -177,6 +177,7 @@ test_that("AFNI L3 multi-run path schedules FSL prerequisites and cache sync", {
   gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
   gpa$glm_software <- "afni"
   gpa$multi_run <- TRUE
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "3dlmer"
   gpa$output_locations$sqlite_db <- NULL
   gpa$parallel <- modifyList(gpa$parallel, list(
     finalize_time = "0:10:00",
@@ -275,6 +276,7 @@ test_that("run_glm_pipeline honors per-level backend selection", {
     l3 = "afni"
   )
   gpa$multi_run <- TRUE
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "3dlmer"
   gpa$output_locations$sqlite_db <- NULL
   gpa$parallel <- modifyList(gpa$parallel, list(
     finalize_time = "0:10:00",
@@ -318,6 +320,7 @@ test_that("run_glm_pipeline honors model-specific execution backend overrides", 
   gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
   gpa$glm_software <- "fsl"
   gpa$multi_run <- TRUE
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "3dlmer"
   gpa$l3_models$models$l3_model1$execution_backend <- "afni"
   gpa$l3_models$models$l3_model1$producer_backend <- "fsl"
   gpa$output_locations$sqlite_db <- NULL
@@ -362,6 +365,7 @@ test_that("run_glm_pipeline emits backend preflight report for resolved mixed ba
   gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
   gpa$glm_software <- "fsl"
   gpa$multi_run <- TRUE
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "3dlmer"
   gpa$l3_models$models$l3_model1$execution_backend <- "afni"
   gpa$l3_models$models$l3_model1$producer_backend <- "fsl"
   gpa$output_locations$sqlite_db <- NULL
@@ -445,6 +449,7 @@ test_that("reassign_unrunnable_models reassigns AFNI-assigned L1 model to FSL wh
   # Explicitly assign L1 to AFNI (which can't run L1) and L3 to AFNI
   gpa$level_backends <- list(l1 = "afni", l2 = "afni", l3 = "afni")
   gpa$multi_run <- TRUE
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "3dlmer"
   gpa$output_locations$sqlite_db <- NULL
   gpa$parallel <- modifyList(gpa$parallel, list(
     finalize_time = "0:10:00",
@@ -485,4 +490,60 @@ test_that("reassign_unrunnable_models reassigns AFNI-assigned L1 model to FSL wh
   # L3 remains AFNI
   expect_true("setup_run_l3_afni" %in% job_names)
   expect_false("setup_run_l3_fsl" %in% job_names)
+})
+
+test_that("run_glm_pipeline rejects explicit FSL execution for 3dlmer models", {
+  gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
+  gpa$glm_software <- c("fsl", "afni")
+  gpa$multi_run <- TRUE
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "3dlmer"
+  gpa$l3_models$models$l3_model1$execution_backend <- "fsl"
+  gpa$output_locations$sqlite_db <- NULL
+  gpa$parallel <- modifyList(gpa$parallel, list(
+    finalize_time = "0:10:00",
+    l1_setup_time = "0:10:00",
+    l1_setup_memgb = "1G",
+    l2_setup_cores = 1L,
+    l2_setup_run_time = "0:10:00",
+    l3_setup_run_time = "0:10:00",
+    fsl = list(l1_feat_alljobs_time = "0:10:00")
+  ))
+
+  expect_error(
+    fmri.pipeline:::run_glm_pipeline(
+      gpa,
+      l1_model_names = "model1",
+      l2_model_names = "l2_model1",
+      l3_model_names = "l3_model1"
+    ),
+    "must execute only with backend 'afni'"
+  )
+})
+
+test_that("run_glm_pipeline rejects AFNI execution for non-3dlmer models", {
+  gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
+  gpa$glm_software <- c("fsl", "afni")
+  gpa$multi_run <- TRUE
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "per_session"
+  gpa$l3_models$models$l3_model1$execution_backend <- "afni"
+  gpa$output_locations$sqlite_db <- NULL
+  gpa$parallel <- modifyList(gpa$parallel, list(
+    finalize_time = "0:10:00",
+    l1_setup_time = "0:10:00",
+    l1_setup_memgb = "1G",
+    l2_setup_cores = 1L,
+    l2_setup_run_time = "0:10:00",
+    l3_setup_run_time = "0:10:00",
+    fsl = list(l1_feat_alljobs_time = "0:10:00")
+  ))
+
+  expect_error(
+    fmri.pipeline:::run_glm_pipeline(
+      gpa,
+      l1_model_names = "model1",
+      l2_model_names = "l2_model1",
+      l3_model_names = "l3_model1"
+    ),
+    "AFNI L3 execution currently supports only l3_input_mode='3dlmer'"
+  )
 })

@@ -14,7 +14,7 @@ test_that("build_3dlmer_command constructs valid strings", {
   
   expect_match(cmd, "3dLMEr")
   expect_match(cmd, "-prefix myset")
-  expect_match(cmd, "-model 'Group\\*Session \\+ \\(1\\|Subj\\)'")
+  expect_match(cmd, "-model 'Group\\*Session\\+\\(1\\|Subj\\)'")
   expect_match(cmd, "-qVars 'Age'")
   expect_match(cmd, "con1 'Group : 1\\*patient -1\\*control'")
   expect_match(cmd, "-dataTable @dt.txt")
@@ -22,9 +22,31 @@ test_that("build_3dlmer_command constructs valid strings", {
   expect_match(cmd, "-jobs 4")
 })
 
+test_that("build_3dlmer_command removes whitespace from model formulas for AFNI parsing", {
+  cmd <- fmri.pipeline:::build_3dlmer_command(
+    prefix = "myset",
+    model_formula = " session_label + ( 1 | Subj ) ",
+    data_table_file = "dt.txt"
+  )
+
+  expect_match(cmd, "-model 'session_label\\+\\(1\\|Subj\\)'")
+  expect_no_match(cmd, "-model '.* .*'")
+})
+
 test_that("build_3dlmer_datatable handles factor merging", {
-  dt <- data.frame(id = c("s1", "s2"), session = 1, InputFile = c("f1.nii.gz", "f2.nii.gz"), stringsAsFactors = FALSE)
-  subject_data <- data.frame(id = c("s1", "s2"), session = 1, Group = c("A", "B"), Age = c(20, 30), stringsAsFactors = FALSE)
+  dt <- data.frame(
+    id = c("s1", "s1", "s2"),
+    session = 1,
+    InputFile = c("f1.nii.gz", "f1.nii.gz", "f2.nii.gz"),
+    stringsAsFactors = FALSE
+  )
+  subject_data <- data.frame(
+    id = c("s1", "s1", "s2"),
+    session = 1,
+    Group = c("A", "A", "B"),
+    Age = c(20, 20, 30),
+    stringsAsFactors = FALSE
+  )
   
   res <- fmri.pipeline:::build_3dlmer_datatable(subject_data, dt, model_variables = c("Group", "Age"))
   

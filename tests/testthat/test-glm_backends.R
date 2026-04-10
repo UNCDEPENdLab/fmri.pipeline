@@ -223,6 +223,82 @@ test_that("model-specific execution overrides take precedence over level default
   expect_identical(override_map$l3_model1, "spm")
 })
 
+test_that("3dlmer models default to AFNI execution and FSL producer resolution", {
+  gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
+  gpa$glm_software <- c("fsl", "afni")
+  gpa$level_backends <- list(l1 = "fsl", l2 = "fsl", l3 = "fsl")
+  gpa$multi_run <- TRUE
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "3dlmer"
+  gpa <- fmri.pipeline:::initialize_glm_backends(gpa)
+
+  execution_map <- fmri.pipeline:::get_effective_model_backends(gpa, level = 3L, model_names = "l3_model1")
+  producer_map <- fmri.pipeline:::get_effective_model_backends(gpa, level = 3L, model_names = "l3_model1", type = "producer")
+
+  expect_identical(execution_map$l3_model1, "afni")
+  expect_identical(producer_map$l3_model1, "fsl")
+})
+
+test_that("validate_l3_backend_resolution rejects invalid 3dlmer execution backend", {
+  gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "3dlmer"
+  gpa$l3_models$models$l3_model1$execution_backend <- "fsl"
+  gpa <- fmri.pipeline:::initialize_glm_backends(gpa)
+
+  execution_map <- fmri.pipeline:::get_effective_model_backends(gpa, level = 3L, model_names = "l3_model1")
+  producer_map <- fmri.pipeline:::get_effective_model_backends(gpa, level = 3L, model_names = "l3_model1", type = "producer")
+
+  expect_error(
+    fmri.pipeline:::validate_l3_backend_resolution(
+      gpa = gpa,
+      l3_model_names = "l3_model1",
+      execution_backend_map = execution_map,
+      producer_backend_map = producer_map
+    ),
+    "must execute only with backend 'afni'"
+  )
+})
+
+test_that("validate_l3_backend_resolution rejects AFNI execution for non-3dlmer models", {
+  gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "per_session"
+  gpa$l3_models$models$l3_model1$execution_backend <- "afni"
+  gpa <- fmri.pipeline:::initialize_glm_backends(gpa)
+
+  execution_map <- fmri.pipeline:::get_effective_model_backends(gpa, level = 3L, model_names = "l3_model1")
+  producer_map <- fmri.pipeline:::get_effective_model_backends(gpa, level = 3L, model_names = "l3_model1", type = "producer")
+
+  expect_error(
+    fmri.pipeline:::validate_l3_backend_resolution(
+      gpa = gpa,
+      l3_model_names = "l3_model1",
+      execution_backend_map = execution_map,
+      producer_backend_map = producer_map
+    ),
+    "AFNI L3 execution currently supports only l3_input_mode='3dlmer'"
+  )
+})
+
+test_that("validate_l3_backend_resolution rejects non-FSL producer backends for 3dlmer", {
+  gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
+  gpa$l3_models$models$l3_model1$l3_input_mode <- "3dlmer"
+  gpa$l3_models$models$l3_model1$execution_backend <- "afni"
+  gpa$l3_models$models$l3_model1$producer_backend <- "spm"
+  gpa <- fmri.pipeline:::initialize_glm_backends(gpa)
+
+  execution_map <- fmri.pipeline:::get_effective_model_backends(gpa, level = 3L, model_names = "l3_model1")
+  producer_map <- fmri.pipeline:::get_effective_model_backends(gpa, level = 3L, model_names = "l3_model1", type = "producer")
+
+  expect_error(
+    fmri.pipeline:::validate_l3_backend_resolution(
+      gpa = gpa,
+      l3_model_names = "l3_model1",
+      execution_backend_map = execution_map,
+      producer_backend_map = producer_map
+    ),
+    "supports only producer_backend='fsl'"
+  )
+})
+
 test_that("normalize_backend_override_config handles explicit execution/producer shape", {
   # Explicit shape: list(execution = list(l3 = ...), producer = list(l3 = ...))
   cfg <- fmri.pipeline:::normalize_backend_override_config(list(

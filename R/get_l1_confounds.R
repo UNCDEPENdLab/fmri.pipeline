@@ -199,7 +199,16 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   run_df$exclude_run <- exclude_run_output$exclude_run
 
   # COPIED FROM HERE confound_manip
-  all_confounds <- confound_manipulations(gpa, all_confounds, expected_l1_confound_file, run_df, demean, lg)
+  all_confounds <- confound_manipulations(
+    gpa,
+    all_confounds,
+    expected_l1_confound_file,
+    run_df,
+    demean,
+    lg,
+    confound_path = confound_path,
+    motion_path = motion_path
+  )
 
   # incorporate spike regressors if requested (not used in conventional AROMA)
   spikes <- compute_spike_regressors(motion_df, gpa$confound_settings$spike_volumes, lg = lg)
@@ -504,8 +513,55 @@ test_exclude_run <- function(gpa, id, session, run_number, generate_run_exclusio
   return(list(exclude_data = exclude_data, exclude_run = exclude_run))
 }
 
+format_available_confound_columns <- function(cols, n = 10L) {
+  if (length(cols) == 0L) return("<none>")
+  sample_cols <- head(cols, n)
+  extra <- length(cols) - length(sample_cols)
+  suffix <- if (extra > 0L) paste0(" ... +", extra, " more") else ""
+  paste0(paste(sample_cols, collapse = ", "), suffix)
+}
+
+abort_missing_l1_confound_columns <- function(requested, available, run_df, confound_path, motion_path, lg) {
+  missing <- setdiff(requested, available)
+  source_file <- confound_path
+  if (is.na(source_file) || !nzchar(source_file)) source_file <- motion_path
+  if (is.na(source_file) || !nzchar(source_file)) source_file <- "<unknown>"
+
+  source_columns <- setdiff(available, c("volume", "time"))
+  generic_names <- length(source_columns) > 0L && all(grepl("^V[0-9]+$", source_columns))
+  header_hint <- if (isTRUE(generic_names)) {
+    paste(
+      "Available columns look generic (for example V1, V2), which usually means the confounds file was read",
+      "without a header row. Provide a headed confounds file or set confound_settings$confound_input_colnames."
+    )
+  } else {
+    NULL
+  }
+
+  msg <- paste(
+    sprintf(
+      "Cannot build l1 confounds for id %s, session %s, run_number %s: requested confound columns are missing.",
+      run_df$id[1L], run_df$session[1L], run_df$run_number[1L]
+    ),
+    sprintf("Missing columns: %s", paste(missing, collapse = ", ")),
+    sprintf("Confound file: %s", source_file),
+    if (!is.na(motion_path) && nzchar(motion_path)) sprintf("Motion params file: %s", motion_path) else NULL,
+    sprintf(
+      "Available columns (n=%d): %s",
+      length(available), format_available_confound_columns(available)
+    ),
+    sprintf("Requested l1_confound_regressors: %s", paste(requested, collapse = ", ")),
+    header_hint,
+    sep = "\n"
+  )
+
+  lg$error("%s", msg)
+  stop(msg, call. = FALSE)
+}
+
 #' helper function to manipulate confounds
-confound_manipulations <- function(gpa, all_confounds, expected_l1_confound_file, run_df, demean, lg) {
+confound_manipulations <- function(gpa, all_confounds, expected_l1_confound_file, run_df, demean, lg,
+                                   confound_path = NA_character_, motion_path = NA_character_) {
   requested <- gpa$confound_settings$l1_confound_regressors
   use_all <- is.character(requested) && length(requested) == 1L && tolower(requested) == "all"
 
@@ -516,8 +572,14 @@ confound_manipulations <- function(gpa, all_confounds, expected_l1_confound_file
   } else {
     # check for missing confound columns
     if (!all(requested %in% names(all_confounds))) {
-      lg$warn("Missing confound columns for subject: %s, session: %s", run_df$id[1L], run_df$session[1L])
-      lg$warn("Column: %s", setdiff(requested, names(all_confounds)))
+      abort_missing_l1_confound_columns(
+        requested = requested,
+        available = names(all_confounds),
+        run_df = run_df,
+        confound_path = confound_path,
+        motion_path = motion_path,
+        lg = lg
+      )
     }
 
     # trim l1 confounds to only those requested

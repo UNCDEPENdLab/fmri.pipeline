@@ -45,6 +45,12 @@ l3_model_names = "prompt", glm_software = NULL, level_backends = NULL, backend_o
   l2_model_backend_map <- get_effective_model_backends(gpa, level = 2L, model_names = model_list$l2_model_names)
   l3_model_backend_map <- get_effective_model_backends(gpa, level = 3L, model_names = model_list$l3_model_names)
   l3_producer_backend_map <- get_effective_model_backends(gpa, level = 3L, model_names = model_list$l3_model_names, type = "producer")
+  validate_l3_backend_resolution(
+    gpa = gpa,
+    l3_model_names = model_list$l3_model_names,
+    execution_backend_map = l3_model_backend_map,
+    producer_backend_map = l3_producer_backend_map
+  )
   l3_requirement_df <- if (!is.null(model_list$l3_model_names)) {
     resolve_model_l3_requirements(
       gpa = gpa,

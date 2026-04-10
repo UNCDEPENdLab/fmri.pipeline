@@ -463,12 +463,7 @@ spm_l1_model <- function(
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
   lg$set_threshold(gpa$lgr_threshold)
-  if (isTRUE(gpa$log_json) && !"setup_l1_log_json" %in% names(lg$appenders)) {
-    lg$add_appender(lgr::AppenderJson$new(gpa$output_locations$setup_l1_log_json), name = "setup_l1_log_json")
-  }
-  if (isTRUE(gpa$log_txt) && !"setup_l1_log_txt" %in% names(lg$appenders)) {
-    lg$add_appender(lgr::AppenderFile$new(gpa$output_locations$setup_l1_log_txt), name = "setup_l1_log_txt")
-  }
+  bind_l1_log_appenders(lg = lg, gpa = gpa)
 
   if (!is.null(d_obj$run_nifti)) {
     lg$debug("Using internal NIfTI files (run_nifti) within d_obj for SPM level 1 setup")

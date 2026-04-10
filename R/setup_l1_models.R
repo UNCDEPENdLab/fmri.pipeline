@@ -62,6 +62,39 @@ setup_l1_models <- function(gpa, l1_model_names=NULL) {
   return(gpa)
 }
 
+bind_l1_log_appenders <- function(lg, gpa) {
+  checkmate::assert_class(lg, "Logger")
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+
+  sync_appender <- function(name, enabled, factory, target_path) {
+    if (!isTRUE(enabled)) return(invisible(NULL))
+    existing <- lg$appenders[[name]]
+    existing_path <- if (!is.null(existing)) existing$file %||% NULL else NULL
+    if (!is.null(existing) && !identical(existing_path, target_path)) {
+      lg$remove_appender(name)
+      existing <- NULL
+    }
+    if (is.null(existing)) {
+      lg$add_appender(factory(target_path), name = name)
+    }
+    invisible(NULL)
+  }
+
+  sync_appender(
+    name = "setup_l1_log_json",
+    enabled = gpa$log_json,
+    factory = function(path) lgr::AppenderJson$new(path),
+    target_path = gpa$output_locations$setup_l1_log_json
+  )
+
+  sync_appender(
+    name = "setup_l1_log_txt",
+    enabled = gpa$log_txt,
+    factory = function(path) lgr::AppenderFile$new(path),
+    target_path = gpa$output_locations$setup_l1_log_txt
+  )
+}
+
 
 # Internal helper: resolve backends, logger state, and SPM session-mode context once.
 init_l1_setup_context <- function(gpa, l1_model_names) {
@@ -79,14 +112,7 @@ init_l1_setup_context <- function(gpa, l1_model_names) {
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")
   lg$set_threshold(gpa$lgr_threshold)
-
-  if (isTRUE(gpa$log_json) && !"setup_l1_log_json" %in% names(lg$appenders)) {
-    lg$add_appender(lgr::AppenderJson$new(gpa$output_locations$setup_l1_log_json), name = "setup_l1_log_json")
-  }
-
-  if (isTRUE(gpa$log_txt) && !"setup_l1_log_txt" %in% names(lg$appenders)) {
-    lg$add_appender(lgr::AppenderFile$new(gpa$output_locations$setup_l1_log_txt), name = "setup_l1_log_txt")
-  }
+  bind_l1_log_appenders(lg = lg, gpa = gpa)
 
   gpa <- refresh_l1_cope_names(gpa, lg = lg)
   gpa <- refresh_glm_status(gpa, level = 1L, lg = lg)

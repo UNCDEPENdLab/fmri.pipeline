@@ -12,6 +12,14 @@ build_3dlmer_datatable <- function(subject_data, input_files, model_variables) {
   checkmate::assert_character(model_variables)
   checkmate::assert_subset(c("id", "session", "InputFile"), names(input_files))
 
+  subject_data <- subject_data %>%
+    dplyr::select(dplyr::all_of(c("id", "session", model_variables))) %>%
+    dplyr::distinct()
+
+  input_files <- input_files %>%
+    dplyr::select(id, session, InputFile) %>%
+    dplyr::distinct()
+
   # Merge input files with subject data to get covariates
   # subject_data should contain 'id' and 'session' for longitudinal
   dt <- input_files %>%
@@ -24,6 +32,69 @@ build_3dlmer_datatable <- function(subject_data, input_files, model_variables) {
     dplyr::select(dplyr::all_of(c("Subj", "session", model_variables, "InputFile")))
 
   return(dt)
+}
+
+build_3dlmer_intersection_mask <- function(mask_files, output_file, lg = NULL) {
+  checkmate::assert_character(mask_files, min.len = 1L)
+  checkmate::assert_file_exists(mask_files)
+  checkmate::assert_string(output_file)
+  checkmate::assert_class(lg, "Logger", null.ok = TRUE)
+
+  mask_files <- unique(mask_files)
+  if (is.null(lg)) lg <- lgr::get_logger("fmri.pipeline/afni_3dlmer/mask")
+  if (!dir.exists(dirname(output_file))) dir.create(dirname(output_file), recursive = TRUE)
+
+  mask_imgs <- lapply(mask_files, RNifti::readNifti)
+  mask_dims <- vapply(mask_imgs, function(img) paste(dim(img), collapse = "x"), character(1))
+  if (length(unique(mask_dims)) != 1L) {
+    stop(
+      sprintf(
+        "Cannot build AFNI 3dLMEr intersection mask from mismatched FSL masks: %s",
+        paste(unique(mask_dims), collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+
+  mask_4d <- do.call(abind::abind, c(mask_imgs, list(along = 4)))
+  mask_sum <- rowSums(mask_4d, dims = 3)
+  intersect_img <- 1L * (mask_sum == dim(mask_4d)[4L])
+
+  header <- RNifti::niftiHeader(mask_files[1L])
+  intersect_nifti <- RNifti::asNifti(intersect_img, header)
+  RNifti::writeNifti(intersect_nifti, file = output_file)
+
+  lg$info(
+    "Computed AFNI 3dLMEr intersection mask from %d FSL L2 masks: %s",
+    length(mask_files), output_file
+  )
+
+  output_file
+}
+
+resolve_3dlmer_mask <- function(target_dir, harvested_inputs, explicit_mask = NULL, requires_l2 = FALSE, lg = NULL) {
+  checkmate::assert_string(target_dir)
+  checkmate::assert_data_frame(harvested_inputs)
+  checkmate::assert_string(explicit_mask, null.ok = TRUE)
+  checkmate::assert_flag(requires_l2)
+  checkmate::assert_class(lg, "Logger", null.ok = TRUE)
+
+  if (!is.null(explicit_mask)) return(explicit_mask)
+  if (!isTRUE(requires_l2) || !"feat_dir" %in% names(harvested_inputs)) return(NULL)
+
+  mask_files <- unique(file.path(as.character(harvested_inputs$feat_dir), "mask.nii.gz"))
+  if (length(mask_files) == 0L || anyNA(mask_files) || any(!file.exists(mask_files))) {
+    if (!is.null(lg)) {
+      lg$warn("Could not derive AFNI 3dLMEr intersection mask because one or more FSL L2 masks were missing.")
+    }
+    return(NULL)
+  }
+
+  build_3dlmer_intersection_mask(
+    mask_files = mask_files,
+    output_file = file.path(target_dir, "intersection_mask.nii.gz"),
+    lg = lg
+  )
 }
 
 #' Internal function to construct the 3dLMEr command string
@@ -39,6 +110,12 @@ build_3dlmer_datatable <- function(subject_data, input_files, model_variables) {
 #'
 #' @return a character string containing the 3dLMEr command
 #' @keywords internal
+# Collapse whitespace because AFNI counts spaces inside -model formulas.
+sanitize_3dlmer_model_formula <- function(model_formula) {
+  checkmate::assert_string(model_formula)
+  gsub("[[:space:]]+", "", model_formula)
+}
+
 build_3dlmer_command <- function(prefix, model_formula, qVars = NULL, glt_codes = NULL,
                                  data_table_file, mask = NULL, njobs = 1, ss_type = 3) {
   checkmate::assert_string(prefix)
@@ -49,6 +126,8 @@ build_3dlmer_command <- function(prefix, model_formula, qVars = NULL, glt_codes 
   checkmate::assert_string(mask, null.ok = TRUE)
   checkmate::assert_integerish(njobs, lower = 1)
   checkmate::assert_integerish(ss_type, lower = 1, upper = 3)
+
+  model_formula <- sanitize_3dlmer_model_formula(model_formula)
 
   cmd <- glue::glue("3dLMEr -prefix {prefix} -model '{model_formula}'")
 
@@ -102,6 +181,9 @@ write_3dlmer_files <- function(output_dir, dt, cmd, script_name = "run_3dlmer.sh
     "#!/bin/bash",
     "",
     "# Load AFNI if needed (placeholder, setup_l3_run will handle compute env)",
+    "script_dir=\"$(cd \"$(dirname \"$0\")\" && pwd)\"",
+    "cd \"$script_dir\"",
+    "",
     cmd
   )
   writeLines(script_content, script_file)

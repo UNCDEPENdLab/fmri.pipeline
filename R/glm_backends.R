@@ -679,6 +679,76 @@ get_model_backend_override <- function(gpa, level, model_name, type = c("executi
   normalize_backend_strings(overrides[[type]][[level_key]][[model_name]])
 }
 
+validate_l3_backend_resolution <- function(gpa, l3_model_names, execution_backend_map,
+                                           producer_backend_map = NULL, requested_backends = NULL) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_character(l3_model_names, null.ok = TRUE)
+  checkmate::assert_list(execution_backend_map)
+  checkmate::assert_list(producer_backend_map, null.ok = TRUE)
+  checkmate::assert_character(requested_backends, null.ok = TRUE)
+
+  if (is.null(l3_model_names) || length(l3_model_names) == 0L) {
+    return(invisible(TRUE))
+  }
+
+  requested_backends <- normalize_backend_strings(requested_backends)
+
+  for (model_name in l3_model_names) {
+    model_spec <- get_model_spec_for_level(gpa, level = 3L, model_name = model_name)
+    l3_input_mode <- if (!is.null(model_spec)) normalize_l3_input_mode(model_spec$l3_input_mode) else "per_session"
+    execution_backends <- normalize_backend_strings(execution_backend_map[[model_name]])
+    producer_backends <- normalize_backend_strings(producer_backend_map[[model_name]])
+
+    if (length(requested_backends) > 0L &&
+        length(intersect(execution_backends, requested_backends)) == 0L) {
+      stop(
+        sprintf(
+          "Requested backend filter '%s' excludes resolved execution backend(s) for L3 model '%s': %s",
+          paste(requested_backends, collapse = ", "),
+          model_name,
+          paste(execution_backends, collapse = ", ")
+        ),
+        call. = FALSE
+      )
+    }
+
+    if (identical(l3_input_mode, "3dlmer")) {
+      if (length(execution_backends) == 0L || any(execution_backends != "afni")) {
+        stop(
+          sprintf(
+            "L3 model '%s' uses l3_input_mode='3dlmer' and must execute only with backend 'afni'. Resolved execution backend(s): %s",
+            model_name,
+            if (length(execution_backends) > 0L) paste(execution_backends, collapse = ", ") else "<none>"
+          ),
+          call. = FALSE
+        )
+      }
+
+      if (length(producer_backends) > 0L && any(producer_backends != "fsl")) {
+        stop(
+          sprintf(
+            "L3 model '%s' uses l3_input_mode='3dlmer' and currently supports only producer_backend='fsl'. Resolved producer backend(s): %s",
+            model_name,
+            paste(producer_backends, collapse = ", ")
+          ),
+          call. = FALSE
+        )
+      }
+    } else if ("afni" %in% execution_backends) {
+      stop(
+        sprintf(
+          "L3 model '%s' resolves to execution_backend='afni' but uses l3_input_mode='%s'. AFNI L3 execution currently supports only l3_input_mode='3dlmer'.",
+          model_name,
+          l3_input_mode
+        ),
+        call. = FALSE
+      )
+    }
+  }
+
+  invisible(TRUE)
+}
+
 get_effective_model_backends <- function(gpa, level, model_names = NULL, type = c("execution", "producer"),
                                          level_backends = NULL, backend_overrides = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
@@ -707,6 +777,9 @@ get_effective_model_backends <- function(gpa, level, model_names = NULL, type = 
     model_override <- if (!is.null(model_spec)) normalize_backend_strings(model_spec[[spec_field]]) else character(0)
     if (length(model_override) > 0L) {
       out[[model_name]] <- model_override
+    } else if (isTRUE(level == 3L) && !is.null(model_spec) &&
+               identical(normalize_l3_input_mode(model_spec$l3_input_mode), "3dlmer")) {
+      out[[model_name]] <- if (identical(type, "execution")) "afni" else "fsl"
     } else {
       out[[model_name]] <- default_backends
     }
