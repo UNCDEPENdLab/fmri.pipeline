@@ -46,6 +46,7 @@ Imports:
     lubridate,
     lme4,
     lmerTest,
+    matlabr,
     magrittr,
     psych,
     patchwork,
