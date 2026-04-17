@@ -78,13 +78,14 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, backe
   setup_l2_log_txt <- add_log_suffix(gpa$output_locations$setup_l2_log_txt, log_suffix)
   setup_l2_log_json <- add_log_suffix(gpa$output_locations$setup_l2_log_json, log_suffix)
 
-  if (isTRUE(gpa$log_txt) && !"setup_l2_log_txt" %in% names(lg$appenders)) {
-    lg$add_appender(lgr::AppenderFile$new(setup_l2_log_txt), name = "setup_l2_log_txt")
-  }
-
-  if (isTRUE(gpa$log_json) && !"setup_l2_log_json" %in% names(lg$appenders)) {
-    lg$add_appender(lgr::AppenderJson$new(setup_l2_log_json), name = "setup_l2_log_json")
-  }
+  add_base_logger_appenders(
+    lg = lg,
+    gpa = gpa,
+    log_txt_path = setup_l2_log_txt,
+    log_json_path = setup_l2_log_json,
+    txt_appender_name = "setup_l2_log_txt",
+    json_appender_name = "setup_l2_log_json"
+  )
 
   lg$debug("In setup_l2_models, setting up the following L2 models:")
   lg$debug("L2 model: %s", l2_model_names)
@@ -269,8 +270,19 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
     by_subj_session <- split(to_run, by = c("id", "session"))
 
     # setup Feat L2 files for each id and session
+    lsubj <- c()
     for (l1_df in by_subj_session) {
       subj_id <- l1_df$id[1L]
+      # update logger upon new subjects
+      if (!length(lsubj) || isFALSE(subj_id %in% lsubj)) {
+        lsubj <- c(lsubj, subj_id)
+        # subject level logging
+        slg <- get_subject_logger(
+          base_logger = "glm_pipeline/l2_setup", id = subj_id, gpa = gpa,
+          log_prefix = "setup_l2_models"
+        )
+      }
+      
       subj_session <- l1_df$session[1L]
       feat_l2_df <- tryCatch({
         backend$l2_setup(
@@ -278,11 +290,11 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
           l2_model = this_l2_model, gpa = gpa
         )},
         error = function(e) {
-          lg$error(
+          slg$error(
             "Problem with fsl_l2_model. L1 Model: %s, L2 Model: %s, Subject: %s, Session: %s",
             this_l1_model, this_l2_model, subj_id, subj_session
           )
-          lg$error("Error message: %s", as.character(e))
+          slg$error("Error message: %s", as.character(e))
           return(NULL)
         }
       )
