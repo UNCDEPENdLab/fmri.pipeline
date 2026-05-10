@@ -717,6 +717,7 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       fixed_rhs <- tail(as.character(model_formula), 1L)
       fixed_rhs <- sub("^~\\s*", "", fixed_rhs, perl = TRUE)
       mobj$lmer_formula <- paste(fixed_rhs, "+", mobj$random_effects)
+      mobj$lmer_glt_codes <- spec_list$lmer_glt_codes
       cat("Full 3dLMEr formula: ", mobj$lmer_formula, "\n")
     }
 

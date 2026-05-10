@@ -692,15 +692,16 @@ The output directory structure is as follows:
   * feat_l2: Second-level analysis outputs
     * sub-{id}: Subject-specific directory
       * ses-{session}: Session-specific directory (if applicable)
-        * {l1_model}: Directory for the Level 1 model feeding into L2
-          * FEAT_LVL2_{l2_model_name}.gfeat: Subject-level FEAT directory for the L2 model
-          * FEAT_LVL2_{l2_model_name}.fsf: FSL Feat design file for the L2 model
+        * L1m-{l1_model}: Directory for the Level 1 model feeding into L2
+          * l1c-{l1_contrast}: Directory for the Level 1 contrast feeding into L2
+            * L2m-{l2_model_name}: Subject-level FEAT directory for the L2 model
 
   * feat_l3: Third-level analysis outputs
-    * {l1_model}: Directory for the specific Level 1 model
-      * L2m-{l2_model_name}_l2c-{l2_contrast}: Directory for the specific Level 2 model
-      * L2m-{l2_model_name}_l2c-overall: generated if in L2 building step you say "yes" to do you want to get the overall response (averaging over all the covariates in the level 2 model).
-        * L3m-{l3_model_name}: Directory for the specific Level 3 model. If you want to look at a specific regressor for a level 1 model and look at a specific contrast, you will look into these directories.
+    * L3m-{l3_model_name}: Directory for the specific Level 3 model
+      * L1m-{l1_model}: Directory for the specific Level 1 model
+        * L2m-{l2_model_name}: Directory for the specific Level 2 model
+          * l2c-{l2_contrast}: Directory for the Level 2 contrast
+            * FEAT_l1c-{l1_contrast}.gfeat: Group-level FEAT directory for the Level 1 contrast
 
   * scheduler_scripts: Directory containing job submission scripts for the scheduler (e.g., SLURM, Torque)
     * batch_{batch_id}: Directory for a specific batch of jobs. Everytime `run_glm_pipeline()` is called, a new batch directory is created.

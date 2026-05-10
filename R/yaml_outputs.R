@@ -328,6 +328,7 @@ get_l2_config <- function(gpa) {
         mobj$lmer_formula <- mm$lmer_formula
         mobj$lmer_mask <- mm$lmer_mask
         mobj$lmer_njobs <- mm$lmer_njobs
+        mobj$lmer_glt_codes <- mm$lmer_glt_codes
       }
     }
 

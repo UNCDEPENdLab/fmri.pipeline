@@ -26,8 +26,14 @@ test_that("get_output_directory uses software-specific sub/ses directories", {
 
 test_that("get_output_directory routes pooled L2 models to subject-root path", {
   gpa <- create_mock_gpa()
-  gpa$output_locations$feat_l2_directory <- file.path("{gpa$output_directory}", "feat_l2", "sub-{id}", "ses-{session}", "{l1_model}")
-  gpa$output_locations$feat_l2_id_scope_directory <- file.path("{gpa$output_directory}", "feat_l2", "sub-{id}", "{l1_model}")
+  gpa$output_locations$feat_l2_directory <- file.path(
+    "{gpa$output_directory}", "feat_l2", "sub-{id}", "ses-{session}",
+    "L1m-{l1_model}", "l1c-{l1_cope_label}", "L2m-{l2_model}"
+  )
+  gpa$output_locations$feat_l2_id_scope_directory <- file.path(
+    "{gpa$output_directory}", "feat_l2", "sub-{id}",
+    "L1m-{l1_model}", "l1c-{l1_cope_label}", "L2m-{l2_model}"
+  )
 
   gpa$l1_models <- list(models = list(model1 = list(name = "model1")))
   class(gpa$l1_models) <- c("l1_model_set", "list")
@@ -39,21 +45,34 @@ test_that("get_output_directory routes pooled L2 models to subject-root path", {
 
   pooled_dir <- get_output_directory(
     id = "sub1", session = 0L, l1_model = "model1", l2_model = "l2_pooled",
+    l1_cope_number = 2L, l1_contrast = "EV_house",
     what = "l2", gpa = gpa, glm_software = "fsl"
   )
   session_dir <- get_output_directory(
     id = "sub1", session = 2L, l1_model = "model1", l2_model = "l2_session",
+    l1_cope_number = 2L, l1_contrast = "EV_house",
     what = "l2", gpa = gpa, glm_software = "fsl"
   )
 
-  expect_match(pooled_dir, file.path(gpa$output_directory, "feat_l2", "sub-sub1", "model1"), fixed = TRUE)
+  expect_match(
+    pooled_dir,
+    file.path(gpa$output_directory, "feat_l2", "sub-sub1", "L1m-model1", "l1c-02_EV_house", "L2m-l2_pooled"),
+    fixed = TRUE
+  )
   expect_false(grepl("ses-0", pooled_dir, fixed = TRUE))
-  expect_match(session_dir, file.path(gpa$output_directory, "feat_l2", "sub-sub1", "ses-2", "model1"), fixed = TRUE)
+  expect_match(
+    session_dir,
+    file.path(gpa$output_directory, "feat_l2", "sub-sub1", "ses-2", "L1m-model1", "l1c-02_EV_house", "L2m-l2_session"),
+    fixed = TRUE
+  )
 })
 
 test_that("get_output_directory pooled L2 fallback removes ses token when id path is unset", {
   gpa <- create_mock_gpa()
-  gpa$output_locations$feat_l2_directory <- file.path("{gpa$output_directory}", "feat_l2", "sub-{id}", "ses-{session}", "{l1_model}")
+  gpa$output_locations$feat_l2_directory <- file.path(
+    "{gpa$output_directory}", "feat_l2", "sub-{id}", "ses-{session}",
+    "L1m-{l1_model}", "l1c-{l1_cope_label}", "L2m-{l2_model}"
+  )
   gpa$output_locations$feat_l2_id_scope_directory <- NULL
 
   gpa$l1_models <- list(models = list(model1 = list(name = "model1")))
@@ -63,10 +82,15 @@ test_that("get_output_directory pooled L2 fallback removes ses token when id pat
 
   pooled_dir <- get_output_directory(
     id = "sub1", session = 0L, l1_model = "model1", l2_model = "l2_pooled",
+    l1_cope_number = 2L, l1_contrast = "EV_house",
     what = "l2", gpa = gpa, glm_software = "fsl"
   )
 
-  expect_match(pooled_dir, file.path(gpa$output_directory, "feat_l2", "sub-sub1", "model1"), fixed = TRUE)
+  expect_match(
+    pooled_dir,
+    file.path(gpa$output_directory, "feat_l2", "sub-sub1", "L1m-model1", "l1c-02_EV_house", "L2m-l2_pooled"),
+    fixed = TRUE
+  )
   expect_false(grepl("ses-0", pooled_dir, fixed = TRUE))
 })
 

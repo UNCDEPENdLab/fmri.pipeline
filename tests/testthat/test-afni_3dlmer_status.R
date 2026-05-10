@@ -11,10 +11,12 @@ test_that("get_3dlmer_status returns a refresh-compatible data frame", {
 
   expect_true(is.data.frame(status))
   expect_identical(status$output_file, prefix)
-  expect_true(status$output_file_exists)
-  expect_identical(status$output_file_resolved, head_file)
-  expect_true(status$feat_complete)
-  expect_false(status$feat_failed)
+  expect_true(status$afni_output_file_exists)
+  expect_identical(status$afni_output_file_resolved, head_file)
+  expect_true(status$afni_complete)
+  expect_false(status$afni_failed)
+  expect_false("feat_complete" %in% names(status))
+  expect_false("feat_failed" %in% names(status))
 })
 
 test_that("refresh_glm_status updates AFNI L3 tables via get_3dlmer_status", {
@@ -30,7 +32,7 @@ test_that("refresh_glm_status updates AFNI L3 tables via get_3dlmer_status", {
     list(
       afni = data.frame(
         output_file = prefix,
-        feat_complete = FALSE,
+        afni_complete = FALSE,
         stringsAsFactors = FALSE
       )
     ),
@@ -39,7 +41,9 @@ test_that("refresh_glm_status updates AFNI L3 tables via get_3dlmer_status", {
 
   res <- fmri.pipeline:::refresh_glm_status(gpa, level = 3L, glm_software = "afni")
 
-  expect_true(res$l3_model_setup$afni$feat_complete[1])
-  expect_true(res$l3_model_setup$afni$output_file_exists[1])
-  expect_identical(res$l3_model_setup$afni$output_file_resolved[1], paste0(prefix, "+tlrc.HEAD"))
+  expect_true(res$l3_model_setup$afni$afni_complete[1])
+  expect_true(res$l3_model_setup$afni$afni_output_file_exists[1])
+  expect_identical(res$l3_model_setup$afni$afni_output_file_resolved[1], paste0(prefix, "+tlrc.HEAD"))
+  expect_false("feat_complete" %in% names(res$l3_model_setup$afni))
+  expect_false("feat_failed" %in% names(res$l3_model_setup$afni))
 })

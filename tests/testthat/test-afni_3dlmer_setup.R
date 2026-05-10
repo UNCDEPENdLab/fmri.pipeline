@@ -36,10 +36,9 @@ test_that("afni_3dlmer_setup builds 3dLMEr tables from refit model covariates", 
     output_directory = tmp_dir,
     output_locations = list(
       afni_3dlmer_directory = file.path(
-        "{gpa$output_directory}", "afni_3dlmer",
-        "L1m-{l1_model}", "l1c-{l1_cope_name}",
-        "L2m-{l2_model}_l2c-{l2_cope_name}",
-        "L3m-{l3_model}"
+        "{gpa$output_directory}", "afni_3dlmer", "L3m-{l3_model}",
+        "L1m-{l1_model}", "L2m-{l2_model}",
+        "l1c-{l1_cope_name}", "l2c-{l2_cope_name}"
       )
     ),
     parallel = list(afni = list(l3_lmer_njobs = 2L)),
@@ -71,7 +70,7 @@ test_that("afni_3dlmer_setup builds 3dLMEr tables from refit model covariates", 
         model_variables = c("age", "group")
       )
     },
-    emmeans_to_3dlmer_glt = function(mobj, data) list(),
+    emmeans_to_3dlmer_glt = function(mobj, data, ...) list(),
     .package = "fmri.pipeline"
   )
 
@@ -111,7 +110,7 @@ test_that("afni_3dlmer_setup builds 3dLMEr tables from refit model covariates", 
   expect_true(any(grepl("cd \"$script_dir\"", script_lines, fixed = TRUE)))
   expect_true(any(grepl("-qVars 'age'", script_lines, fixed = TRUE)))
   expect_true(any(grepl("-model 'age+group+(1|Subj)'", script_lines, fixed = TRUE)))
-  expect_true(any(grepl("-dataTable @dataTable.txt", script_lines, fixed = TRUE)))
+  expect_true(any(grepl(paste("-dataTable", shQuote("@dataTable.txt")), script_lines, fixed = TRUE)))
 })
 
 test_that("afni_3dlmer_setup builds an intersection mask from FSL L2 inputs when no explicit mask is set", {
@@ -161,10 +160,9 @@ test_that("afni_3dlmer_setup builds an intersection mask from FSL L2 inputs when
     output_directory = tmp_dir,
     output_locations = list(
       afni_3dlmer_directory = file.path(
-        "{gpa$output_directory}", "afni_3dlmer",
-        "L1m-{l1_model}", "l1c-{l1_cope_name}",
-        "L2m-{l2_model}_l2c-{l2_cope_name}",
-        "L3m-{l3_model}"
+        "{gpa$output_directory}", "afni_3dlmer", "L3m-{l3_model}",
+        "L1m-{l1_model}", "L2m-{l2_model}",
+        "l1c-{l1_cope_name}", "l2c-{l2_cope_name}"
       )
     ),
     parallel = list(afni = list(l3_lmer_njobs = 2L)),
@@ -189,7 +187,7 @@ test_that("afni_3dlmer_setup builds an intersection mask from FSL L2 inputs when
         model_variables = c("age", "group")
       )
     },
-    emmeans_to_3dlmer_glt = function(mobj, data) list(),
+    emmeans_to_3dlmer_glt = function(mobj, data, ...) list(),
     .package = "fmri.pipeline"
   )
 
@@ -213,5 +211,5 @@ test_that("afni_3dlmer_setup builds an intersection mask from FSL L2 inputs when
   expect_identical(sum(mask_img != 0), 6L)
 
   script_lines <- readLines(res$data$afni_script[1L])
-  expect_true(any(grepl(paste0("-mask ", res$data$mask_file[1L]), script_lines, fixed = TRUE)))
+  expect_true(any(grepl(paste("-mask", shQuote(res$data$mask_file[1L])), script_lines, fixed = TRUE)))
 })

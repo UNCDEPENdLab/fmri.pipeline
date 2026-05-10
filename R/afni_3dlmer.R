@@ -116,12 +116,260 @@ sanitize_3dlmer_model_formula <- function(model_formula) {
   gsub("[[:space:]]+", "", model_formula)
 }
 
+validate_3dlmer_formula_datatable <- function(model_formula, datatable, context = NULL) {
+  checkmate::assert_string(model_formula)
+  checkmate::assert_data_frame(datatable)
+  checkmate::assert_string(context, null.ok = TRUE)
+
+  formula_text <- trimws(model_formula)
+  if (!grepl("~", formula_text, fixed = TRUE)) {
+    formula_text <- paste("~", formula_text)
+  }
+
+  parsed_formula <- tryCatch(
+    stats::as.formula(formula_text, env = baseenv()),
+    error = function(e) {
+      stop(
+        sprintf(
+          "Could not parse AFNI 3dLMEr lmer_formula%s: %s",
+          if (!is.null(context)) paste0(" for ", context) else "",
+          conditionMessage(e)
+        ),
+        call. = FALSE
+      )
+    }
+  )
+
+  formula_vars <- unique(all.vars(parsed_formula))
+  missing_vars <- setdiff(formula_vars, names(datatable))
+  if (length(missing_vars) > 0L) {
+    msg <- sprintf(
+      "AFNI 3dLMEr lmer_formula%s references variable(s) not present in dataTable: %s. Available dataTable columns: %s.",
+      if (!is.null(context)) paste0(" for ", context) else "",
+      paste(missing_vars, collapse = ", "),
+      paste(names(datatable), collapse = ", ")
+    )
+    if ("id" %in% missing_vars && "Subj" %in% names(datatable)) {
+      msg <- paste(
+        msg,
+        "Use 'Subj' instead of 'id' in 3dLMEr random-effects terms because the AFNI dataTable renames subject IDs to Subj."
+      )
+    }
+    stop(msg, call. = FALSE)
+  }
+
+  invisible(formula_vars)
+}
+
+sanitize_3dlmer_glt_names <- function(glt_names) {
+  checkmate::assert_character(glt_names, any.missing = TRUE)
+
+  glt_names[is.na(glt_names)] <- ""
+  glt_names <- trimws(glt_names)
+  glt_names <- gsub("[^A-Za-z0-9_]+", "_", glt_names)
+  glt_names <- gsub("_+", "_", glt_names)
+  glt_names <- gsub("^_+|_+$", "", glt_names)
+
+  empty_names <- !nzchar(glt_names)
+  if (any(empty_names)) {
+    glt_names[empty_names] <- paste0("glt", which(empty_names))
+  }
+
+  starts_badly <- !grepl("^[A-Za-z]", glt_names)
+  glt_names[starts_badly] <- paste0("glt_", glt_names[starts_badly])
+  make.unique(glt_names, sep = "_")
+}
+
+empty_3dlmer_glt_table <- function() {
+  data.frame(
+    label_raw = character(0),
+    label_afni = character(0),
+    code = character(0),
+    source = character(0),
+    contrast_type = character(0),
+    valid = logical(0),
+    message = character(0),
+    stringsAsFactors = FALSE
+  )
+}
+
+as_3dlmer_glt_table <- function(glt_codes, source = "user", contrast_type = "raw") {
+  if (is.null(glt_codes) || length(glt_codes) == 0L) return(empty_3dlmer_glt_table())
+
+  if (is.data.frame(glt_codes)) {
+    required <- c("label_raw", "code")
+    missing_cols <- setdiff(required, names(glt_codes))
+    if (length(missing_cols) > 0L) {
+      stop("3dLMEr GLT table is missing required column(s): ", paste(missing_cols, collapse = ", "), call. = FALSE)
+    }
+    out <- as.data.frame(glt_codes, stringsAsFactors = FALSE)
+    if (!"label_afni" %in% names(out)) out$label_afni <- sanitize_3dlmer_glt_names(out$label_raw)
+    if (!"source" %in% names(out)) out$source <- source
+    if (!"contrast_type" %in% names(out)) out$contrast_type <- contrast_type
+    if (!"valid" %in% names(out)) out$valid <- TRUE
+    if (!"message" %in% names(out)) out$message <- ""
+    return(out[, names(empty_3dlmer_glt_table()), drop = FALSE])
+  }
+
+  if (is.character(glt_codes)) {
+    glt_codes <- as.list(glt_codes)
+  }
+  checkmate::assert_list(glt_codes)
+  labels <- names(glt_codes)
+  if (is.null(labels)) labels <- paste0("glt", seq_along(glt_codes))
+  labels[is.na(labels) | !nzchar(labels)] <- paste0("glt", which(is.na(labels) | !nzchar(labels)))
+
+  data.frame(
+    label_raw = labels,
+    label_afni = sanitize_3dlmer_glt_names(labels),
+    code = as.character(unlist(glt_codes, use.names = FALSE)),
+    source = source,
+    contrast_type = contrast_type,
+    valid = TRUE,
+    message = "",
+    stringsAsFactors = FALSE
+  )
+}
+
+parse_3dlmer_glt_blocks <- function(code, datatable_names) {
+  checkmate::assert_string(code)
+  checkmate::assert_character(datatable_names, min.len = 1L)
+
+  var_pattern <- paste(gsub("([][{}()+*^$.|\\\\?])", "\\\\\\1", datatable_names), collapse = "|")
+  matches <- gregexpr(paste0("(?<![A-Za-z0-9_.])(", var_pattern, ")\\s*:"), code, perl = TRUE)[[1L]]
+  if (identical(matches[1L], -1L)) {
+    return(list(blocks = list(), error = "No 'variable :' block found."))
+  }
+
+  pre <- substr(code, 1L, matches[1L] - 1L)
+  if (nzchar(trimws(pre))) {
+    return(list(blocks = list(), error = sprintf("Unexpected text before first GLT variable block: %s", trimws(pre))))
+  }
+
+  lengths <- attr(matches, "match.length")
+  headers <- regmatches(code, list(matches))[[1L]]
+  vars <- trimws(sub(":\\s*$", "", headers))
+  blocks <- vector("list", length(matches))
+  for (ii in seq_along(matches)) {
+    start <- matches[ii] + lengths[ii]
+    end <- if (ii < length(matches)) matches[ii + 1L] - 1L else nchar(code)
+    blocks[[ii]] <- list(var = vars[ii], expr = trimws(substr(code, start, end)))
+  }
+
+  list(blocks = blocks, error = "")
+}
+
+validate_3dlmer_glt_table <- function(glt_table, datatable, qVars = NULL, context = NULL) {
+  checkmate::assert_data_frame(datatable)
+  checkmate::assert_character(qVars, null.ok = TRUE)
+  checkmate::assert_string(context, null.ok = TRUE)
+
+  glt_table <- as_3dlmer_glt_table(glt_table)
+  if (nrow(glt_table) == 0L) return(glt_table)
+
+  qVars <- qVars %||% character(0)
+  datatable_names <- names(datatable)
+  numeric_pattern <- "[+-]?(?:(?:[0-9]+(?:\\.[0-9]*)?)|(?:\\.[0-9]+))(?:[eE][+-]?[0-9]+)?"
+  errors <- character(nrow(glt_table))
+
+  for (ii in seq_len(nrow(glt_table))) {
+    code <- glt_table$code[ii]
+    row_errors <- character(0)
+
+    if (is.na(code) || !nzchar(trimws(code))) {
+      row_errors <- c(row_errors, "GLT code is empty.")
+    } else {
+      parsed <- parse_3dlmer_glt_blocks(code, datatable_names)
+      if (nzchar(parsed$error)) {
+        row_errors <- c(row_errors, parsed$error)
+      } else {
+        for (block in parsed$blocks) {
+          var <- block$var
+          expr <- block$expr
+          if (!var %in% datatable_names) {
+            row_errors <- c(row_errors, sprintf("Variable '%s' is not in dataTable.", var))
+            next
+          }
+
+          is_qvar <- var %in% qVars || is.numeric(datatable[[var]])
+          tokens <- strsplit(expr, "\\s+")[[1L]]
+          tokens <- tokens[nzchar(tokens)]
+          if (length(tokens) == 0L) {
+            row_errors <- c(row_errors, sprintf("Variable '%s' has no GLT weight expression.", var))
+            next
+          }
+
+          if (is_qvar) {
+            bad <- !grepl(paste0("^", numeric_pattern, "$"), tokens, perl = TRUE)
+            if (any(bad) || length(tokens) != 1L) {
+              row_errors <- c(row_errors, sprintf(
+                "Quantitative variable '%s' must use one numeric weight, e.g. '%s : 1'.",
+                var, var
+              ))
+            }
+          } else {
+            bad_syntax <- !grepl(paste0("^", numeric_pattern, "\\*.+$"), tokens, perl = TRUE)
+            if (any(bad_syntax)) {
+              row_errors <- c(row_errors, sprintf(
+                "Categorical variable '%s' has invalid level weight token(s): %s.",
+                var, paste(tokens[bad_syntax], collapse = ", ")
+              ))
+              next
+            }
+            levels_seen <- sub(paste0("^", numeric_pattern, "\\*"), "", tokens, perl = TRUE)
+            known_levels <- unique(as.character(datatable[[var]]))
+            missing_levels <- setdiff(levels_seen, known_levels)
+            if (length(missing_levels) > 0L) {
+              row_errors <- c(row_errors, sprintf(
+                "Categorical variable '%s' references level(s) not present in dataTable: %s.",
+                var, paste(missing_levels, collapse = ", ")
+              ))
+            }
+            if (identical(glt_table$contrast_type[ii], "pairwise_diff")) {
+              weights <- as.numeric(sub("\\*.*$", "", tokens, perl = TRUE))
+              if (length(weights) < 2L || !isTRUE(all.equal(sum(weights), 0, tolerance = 1e-8))) {
+                row_errors <- c(row_errors, sprintf(
+                  "Pairwise AFNI 3dLMEr GLT '%s' must use explicit cell-level weights that sum to zero for '%s' (for example, '%s : 1*A -1*B'), not treatment-coded coefficient weights.",
+                  glt_table$label_raw[ii], var, var
+                ))
+              }
+            }
+          }
+        }
+      }
+    }
+
+    errors[ii] <- paste(row_errors, collapse = " ")
+  }
+
+  glt_table$valid <- !nzchar(errors)
+  glt_table$message <- errors
+  if (any(!glt_table$valid)) {
+    bad <- glt_table[!glt_table$valid, , drop = FALSE]
+    stop(
+      sprintf(
+        "Invalid AFNI 3dLMEr GLT code%s: %s",
+        if (!is.null(context)) paste0(" for ", context) else "",
+        paste(sprintf("%s: %s", bad$label_raw, bad$message), collapse = " | ")
+      ),
+      call. = FALSE
+    )
+  }
+
+  glt_table
+}
+
 build_3dlmer_command <- function(prefix, model_formula, qVars = NULL, glt_codes = NULL,
                                  data_table_file, mask = NULL, njobs = 1, ss_type = 3) {
   checkmate::assert_string(prefix)
   checkmate::assert_string(model_formula)
   checkmate::assert_character(qVars, null.ok = TRUE)
-  checkmate::assert_list(glt_codes, null.ok = TRUE)
+  if (!is.null(glt_codes) &&
+      !checkmate::test_list(glt_codes) &&
+      !checkmate::test_data_frame(glt_codes) &&
+      !checkmate::test_character(glt_codes)) {
+    stop("glt_codes must be a list, character vector, data.frame, or NULL.", call. = FALSE)
+  }
   checkmate::assert_string(data_table_file)
   checkmate::assert_string(mask, null.ok = TRUE)
   checkmate::assert_integerish(njobs, lower = 1)
@@ -129,14 +377,14 @@ build_3dlmer_command <- function(prefix, model_formula, qVars = NULL, glt_codes 
 
   model_formula <- sanitize_3dlmer_model_formula(model_formula)
 
-  cmd <- glue::glue("3dLMEr -prefix {prefix} -model '{model_formula}'")
+  cmd <- glue::glue("3dLMEr -prefix {shQuote(prefix)} -model {shQuote(model_formula)}")
 
   if (!is.null(qVars) && length(qVars) > 0) {
-    cmd <- paste(cmd, glue::glue("-qVars '{paste(qVars, collapse=\",\")}'"))
+    cmd <- paste(cmd, glue::glue("-qVars {shQuote(paste(qVars, collapse=\",\"))}"))
   }
 
   if (!is.null(mask)) {
-    cmd <- paste(cmd, glue::glue("-mask {mask}"))
+    cmd <- paste(cmd, glue::glue("-mask {shQuote(mask)}"))
   }
 
   if (njobs > 1) {
@@ -146,15 +394,16 @@ build_3dlmer_command <- function(prefix, model_formula, qVars = NULL, glt_codes 
   cmd <- paste(cmd, glue::glue("-SS_type {ss_type}"))
 
   if (!is.null(glt_codes) && length(glt_codes) > 0) {
-    for (i in seq_along(glt_codes)) {
-      glt_name <- names(glt_codes)[i]
-      glt_code <- glt_codes[[i]]
+    glt_table <- as_3dlmer_glt_table(glt_codes)
+    for (i in seq_len(nrow(glt_table))) {
+      glt_name <- glt_table$label_afni[i]
+      glt_code <- glt_table$code[i]
       # glt_code should already be in AFNI format: "Factor : 1*Level1 -1*Level2"
-      cmd <- paste(cmd, glue::glue("-gltCode {glt_name} '{glt_code}'"))
+      cmd <- paste(cmd, glue::glue("-gltCode {glt_name} {shQuote(glt_code)}"))
     }
   }
 
-  cmd <- paste(cmd, glue::glue("-dataTable @{data_table_file}"))
+  cmd <- paste(cmd, glue::glue("-dataTable {shQuote(paste0('@', data_table_file))}"))
 
   return(cmd)
 }
@@ -241,10 +490,10 @@ get_3dlmer_status <- function(output_file, lg = NULL, prefix = NULL) {
 
   out <- data.frame(
     output_file = output_file,
-    output_file_resolved = resolved_output,
-    output_file_exists = output_exists,
-    feat_complete = output_exists,
-    feat_failed = if (output_exists) FALSE else NA,
+    afni_output_file_resolved = resolved_output,
+    afni_output_file_exists = output_exists,
+    afni_complete = output_exists,
+    afni_failed = if (output_exists) FALSE else NA,
     stringsAsFactors = FALSE
   )
   if (!is.null(prefix)) names(out) <- paste0(prefix, names(out))
@@ -258,138 +507,120 @@ get_3dlmer_status <- function(output_file, lg = NULL, prefix = NULL) {
 #'
 #' @return a list of 3dLMEr gltCode strings
 #' @keywords internal
-emmeans_to_3dlmer_glt <- function(mobj, data) {
+emmeans_to_3dlmer_glt <- function(mobj, data, qVars = NULL, raw_glt_codes = NULL, context = NULL) {
   checkmate::assert_class(mobj, "hi_model_spec")
   checkmate::assert_data_frame(data)
+  checkmate::assert_character(qVars, null.ok = TRUE)
+  checkmate::assert_string(context, null.ok = TRUE)
   lg <- lgr::get_logger("fmri.pipeline/afni_3dlmer/emmeans_to_3dlmer_glt")
 
   if (is.null(mobj$lmfit)) {
     lg$warn("No lmfit in mobj. Cannot generate emmeans-to-3dlmer GLTs.")
-    return(NULL)
+    generated <- empty_3dlmer_glt_table()
+  } else {
+    generated <- empty_3dlmer_glt_table()
   }
 
   spec <- mobj$contrast_spec
-  if (is.null(spec)) return(NULL)
+  if (!is.null(spec) && !is.null(mobj$lmfit)) {
+    add_generated <- function(label, code, contrast_type) {
+      generated <<- rbind(
+        generated,
+        data.frame(
+          label_raw = label,
+          label_afni = label,
+          code = code,
+          source = "generated",
+          contrast_type = contrast_type,
+          valid = TRUE,
+          message = "",
+          stringsAsFactors = FALSE
+        )
+      )
+    }
 
-  glt_list <- list()
-
-  # 1. Diagonal contrasts
-  if (isTRUE(spec$diagonal)) {
-    # 3dLMEr can handle simple regressors by name if they are in the dataTable
-    # But for factors, it's better to use GLTs.
-    # Actually, for 3dLMEr, 'diagonal' usually means we want a test for each beta.
-    # For now, let's focus on the emmeans-based ones as they are the "hard work".
-  }
-
-  # 2. EMMeans-based contrasts (cond_means, pairwise_diffs, etc.)
-  # We'll reproduce the emmeans calls from get_contrasts_from_spec
-  # but instead of taking @linfct, we'll build strings.
-
-  process_emm <- function(vv, type = "means") {
-    # vv is a variable or interaction, e.g., "Group" or "Group:Session"
-    ee <- emmeans::emmeans(mobj$lmfit, as.formula(paste("~", vv)), weights = spec$weights)
-    edata <- summary(ee)
-    
-    # Identify factor columns
-    fac_cols <- strsplit(vv, ":")[[1]]
-    
-    if (type == "means") {
-      # One GLT per row of edata
-      for (i in seq_len(nrow(edata))) {
-        # Name: e.g., Group.patient or Group.Session.patient.post
-        con_name <- paste(vv, paste(unname(unlist(edata[i, fac_cols])), collapse="."), sep=".")
-        
-        # Code: "Group : 1*patient" or "Group : 1*patient Session : 1*post"
-        code_parts <- c()
-        for (f in fac_cols) {
-          code_parts <- c(code_parts, paste0(f, " : 1*", edata[i, f]))
-        }
-        glt_list[[con_name]] <<- paste(code_parts, collapse = " ")
+    reject_interaction <- function(vv, type) {
+      if (grepl(":", vv, fixed = TRUE)) {
+        stop(
+          sprintf(
+            "Automatic AFNI 3dLMEr GLT generation supports only one-factor %s. Contrast '%s'%s is an interaction; provide it explicitly with lmer_glt_codes.",
+            type,
+            vv,
+            if (!is.null(context)) paste0(" for ", context) else ""
+          ),
+          call. = FALSE
+        )
       }
-    } else if (type == "pairwise") {
-      # Pairwise differences
-      pw <- pairs(ee)
-      pw_data <- summary(pw)
-      pw_linfct <- pw@linfct # This is against the emmeans grid rows
-      
-      grid_data <- summary(ee)
-      
-      for (i in seq_len(nrow(pw_data))) {
-        con_name <- as.character(pw_data$contrast[i])
-        # Clean up name for AFNI (no spaces, etc.)
-        con_name <- gsub("[^[:alnum:]_]", ".", con_name)
-        con_name <- paste0(vv, ".pw.", con_name)
-        
-        # Build code from non-zero weights in pw_linfct[i,]
-        weights <- pw_linfct[i, ]
+    }
+
+    if (length(spec$cond_means) > 0L) {
+      for (vv in spec$cond_means) {
+        reject_interaction(vv, "condition means")
+        if (!vv %in% names(data)) {
+          stop(sprintf("Cannot generate AFNI 3dLMEr GLTs for '%s' because it is not in the dataTable.", vv), call. = FALSE)
+        }
+        levs <- unique(as.character(data[[vv]]))
+        levs <- levs[!is.na(levs)]
+        for (lev in levs) {
+          add_generated(
+            label = paste(vv, lev, sep = "."),
+            code = paste0(vv, " : 1*", lev),
+            contrast_type = "cond_mean"
+          )
+        }
+      }
+    }
+
+    if (length(spec$pairwise_diffs) > 0L) {
+      for (vv in spec$pairwise_diffs) {
+        reject_interaction(vv, "pairwise differences")
+        if (!vv %in% names(data)) {
+          stop(sprintf("Cannot generate AFNI 3dLMEr GLTs for '%s' because it is not in the dataTable.", vv), call. = FALSE)
+        }
+        levs <- unique(as.character(data[[vv]]))
+        levs <- levs[!is.na(levs)]
+        if (length(levs) >= 2L) {
+          pairs <- utils::combn(levs, 2L, simplify = FALSE)
+          for (pp in pairs) {
+            add_generated(
+              label = paste0(vv, ".pw.", pp[1L], ".vs.", pp[2L]),
+              code = paste0(vv, " : 1*", pp[1L], " -1*", pp[2L]),
+              contrast_type = "pairwise_diff"
+            )
+          }
+        }
+      }
+    }
+
+    if (!is.null(mobj$contrast_list$custom)) {
+      cmat <- mobj$contrast_list$custom
+      for (i in seq_len(nrow(cmat))) {
+        con_name <- rownames(cmat)[i]
+        weights <- cmat[i, ]
         non_zero <- which(abs(weights) > 1e-8)
-        
-        code_parts <- c()
-        # 3dLMEr GLT syntax for multi-factor interaction contrasts can be tricky.
-        # If it's a single factor, it's "Factor : 1*Level1 -1*Level2"
-        # If it's an interaction, it's harder.
-        
-        if (length(fac_cols) == 1) {
-          # Simple case
-          f <- fac_cols[1]
-          term_parts <- c()
-          for (j in non_zero) {
-            term_parts <- c(term_parts, paste0(weights[j], "*", grid_data[j, f]))
-          }
-          glt_list[[con_name]] <<- paste0(f, " : ", paste(term_parts, collapse = " "))
-        } else {
-          # Interaction pairwise: "Factor1 : 1*F1L1 -1*F1L2 Factor2 : 1*F2L1" etc.
-          # Actually, emmeans pairwise on interaction is usually (F1L1 F2L1) - (F1L2 F2L1) etc.
-          # We can represent any linear combination of grid rows:
-          # "Factor1 : 1*F1L1 Factor2 : 1*F2L1 ++ Factor1 : -1*F1L2 Factor2 : 1*F2L1"
-          # Wait, 3dLMEr supports weights on combinations:
-          # "Factor1 : 1*F1L1 Factor2 : 1*F2L1"
-          # Let's use the '++' syntax or just combine if they share factors.
-          
-          # More robust way for 3dLMEr:
-          # Each non-zero row in the grid gets its own "Factor1 : W*L1 Factor2 : 1*L2" snippet
-          full_code <- c()
-          for (j in non_zero) {
-            snippet <- c()
-            for (f in fac_cols) {
-              # The weight only needs to be on one factor's level for that combination
-              val <- if (f == fac_cols[1]) weights[j] else 1
-              snippet <- c(snippet, paste0(f, " : ", val, "*", grid_data[j, f]))
-            }
-            full_code <- c(full_code, paste(snippet, collapse = " "))
-          }
-          glt_list[[con_name]] <<- paste(full_code, collapse = " ")
+        vars <- names(weights)[non_zero]
+        if (!all(vars %in% names(data))) {
+          stop(
+            sprintf(
+              "Cannot convert custom contrast '%s' to AFNI 3dLMEr GLT because regressor(s) are not direct dataTable variables: %s. Provide lmer_glt_codes manually.",
+              con_name, paste(setdiff(vars, names(data)), collapse = ", ")
+            ),
+            call. = FALSE
+          )
         }
+        code_parts <- paste0(vars, " : ", as.numeric(weights[non_zero]))
+        add_generated(con_name, paste(code_parts, collapse = " "), "custom")
       }
     }
   }
 
-  if (length(spec$cond_means) > 0L) {
-    for (vv in spec$cond_means) process_emm(vv, "means")
+  raw_glt_codes <- raw_glt_codes %||% mobj$lmer_glt_codes
+  raw <- as_3dlmer_glt_table(raw_glt_codes, source = "user", contrast_type = "raw")
+  out <- rbind(generated, raw)
+  if (nrow(out) == 0L) {
+    return(out)
   }
-  
-  if (length(spec$pairwise_diffs) > 0L) {
-    for (vv in spec$pairwise_diffs) process_emm(vv, "pairwise")
-  }
+  out$label_afni <- sanitize_3dlmer_glt_names(out$label_raw)
 
-  # 3. Custom contrasts from contrast_list$custom
-  if (!is.null(mobj$contrast_list$custom)) {
-    # Custom contrasts are against regressors (betas).
-    # 3dLMEr supports this too: "-gltCode mycon 'reg1 : 1 reg2 : -1'"
-    cmat <- mobj$contrast_list$custom
-    for (i in seq_len(nrow(cmat))) {
-      con_name <- rownames(cmat)[i]
-      weights <- cmat[i, ]
-      non_zero <- which(abs(weights) > 1e-8)
-      
-      code_parts <- c()
-      for (j in non_zero) {
-        # 3dLMEr syntax for quantitative/beta contrasts: "Regname : Weight"
-        code_parts <- c(code_parts, paste0(names(weights)[j], " : ", weights[j]))
-      }
-      glt_list[[con_name]] <- paste(code_parts, collapse = " ")
-    }
-  }
-
-  return(glt_list)
+  validate_3dlmer_glt_table(out, datatable = data, qVars = qVars, context = context)
 }

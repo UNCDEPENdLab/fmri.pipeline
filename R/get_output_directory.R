@@ -8,11 +8,14 @@
 #' @param id The id of a participant
 #' @param session The session number to lookup
 #' @param run_number The run number to lookup
+#' @param l1_cope_number,l2_cope_number,l3_cope_number Optional cope numbers used in output templates.
+#'   These are combined with the corresponding contrast names into labels such as \code{02_EV_house}.
 #' @param gpa A \code{glm_pipeline_arguments} object
 #' @param glm_software which software is being used for the analysis (since directories may vary)
 #' @param create_if_missing whether to create the directory if it does not exist
 get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
   l1_model = NULL, l2_model = NULL, l3_model = NULL,
+  l1_cope_number = NULL, l2_cope_number = NULL, l3_cope_number = NULL,
   l1_contrast = NULL, l2_contrast = NULL, l3_contrast = NULL,
   what="l1", gpa, glm_software = "fsl", create_if_missing = FALSE) {
 
@@ -23,6 +26,9 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
   checkmate::assert_string(l1_model, null.ok=TRUE)
   checkmate::assert_string(l2_model, null.ok = TRUE)
   checkmate::assert_string(l3_model, null.ok = TRUE)
+  checkmate::assert_integerish(l1_cope_number, len = 1L, lower = 1L, null.ok = TRUE)
+  checkmate::assert_integerish(l2_cope_number, len = 1L, lower = 1L, null.ok = TRUE)
+  checkmate::assert_integerish(l3_cope_number, len = 1L, lower = 1L, null.ok = TRUE)
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   stopifnot("run_data" %in% names(gpa))
   checkmate::assert_data_frame(gpa$run_data)
@@ -39,6 +45,21 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
   l1_cope_name <- l1_contrast
   l2_cope_name <- l2_contrast
   l3_cope_name <- l3_contrast
+  l1_cope_label <- if (!is.null(l1_cope_number) && !is.null(l1_cope_name)) {
+    sprintf("%02d_%s", as.integer(l1_cope_number), l1_cope_name)
+  } else {
+    l1_cope_name
+  }
+  l2_cope_label <- if (!is.null(l2_cope_number) && !is.null(l2_cope_name)) {
+    sprintf("%02d_%s", as.integer(l2_cope_number), l2_cope_name)
+  } else {
+    l2_cope_name
+  }
+  l3_cope_label <- if (!is.null(l3_cope_number) && !is.null(l3_cope_name)) {
+    sprintf("%02d_%s", as.integer(l3_cope_number), l3_cope_name)
+  } else {
+    l3_cope_name
+  }
 
   # helper subfunction to select rows where all conditions in filter_list match
   subset_run_data <- function(run_data, filter_list) {

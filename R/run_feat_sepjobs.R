@@ -58,6 +58,9 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     } else {
       feat_queue <- gpa$l2_model_setup$fsl
     }
+    if ("l2_passthrough" %in% names(feat_queue)) {
+      feat_queue <- feat_queue %>% dplyr::filter(!(.data$l2_passthrough %in% TRUE))
+    }
 
     feat_time <- gpa$parallel$fsl$l2_feat_time
     feat_memgb <- gpa$parallel$fsl$l2_feat_memgb

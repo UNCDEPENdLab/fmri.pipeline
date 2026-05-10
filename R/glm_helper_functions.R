@@ -1457,7 +1457,7 @@ respecify_l2_models_by_subject <- function(mobj, data, split_on = c("id", "sessi
     cope_list[[vv]] <- cope_df
     contrast_list[[vv]] <- mm$contrasts
     model_matrix_list[[vv]] <- model.matrix(lmfit)
-    n_l2_copes[vv] <- if (is.null(mm$contrasts)) 0L else ncol(mm$contrasts)
+    n_l2_copes[vv] <- if (is.null(mm$contrasts)) 0L else nrow(mm$contrasts)
   }
 
   dsplit[, cope_list := cope_list]
@@ -2064,8 +2064,8 @@ enforce_glms_complete <- function(gpa, level=1L, lg=NULL, glm_software=NULL) {
     }
 
     if ("afni" %in% backend_names) {
-      if (!is.null(obj$afni) && "feat_complete" %in% names(obj$afni)) {
-        nmiss <- sum(obj$afni$feat_complete == FALSE)
+      if (!is.null(obj$afni) && "afni_complete" %in% names(obj$afni)) {
+        nmiss <- sum(obj$afni$afni_complete == FALSE)
         n_afni_runs <- nrow(obj$afni)
         if (nmiss == n_afni_runs) {
           msg <- sprintf("All AFNI runs in %s$afni are incomplete.", obj_name)

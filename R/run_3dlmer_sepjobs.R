@@ -30,7 +30,8 @@ run_3dlmer_sepjobs <- function(gpa, level=3L, model_names=NULL, rerun=FALSE, wai
   
   # Filter based on rerun and status
   if (!isTRUE(rerun)) {
-    setup_df <- setup_df %>% dplyr::filter(feat_complete == FALSE)
+    if (!"afni_complete" %in% names(setup_df)) setup_df$afni_complete <- FALSE
+    setup_df <- setup_df %>% dplyr::filter(afni_complete == FALSE)
   }
   
   if (nrow(setup_df) == 0L) {
@@ -95,15 +96,15 @@ run_3dlmer_sepjobs <- function(gpa, level=3L, model_names=NULL, rerun=FALSE, wai
     script_content <- c(
       header,
       "",
-      paste("Rscript", upd_job_status_path, "--job_id" , "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "STARTED"),
+      paste("Rscript", shQuote(upd_job_status_path), "--job_id" , "\"$job_id\"", "--sqlite_db", shQuote(tracking_sqlite_db), "--status", "STARTED"),
       "",
-      paste("bash", script_to_run),
+      paste("bash", shQuote(script_to_run)),
       "exit_code=$?",
       "",
       "if [ $exit_code -eq 0 ]; then",
-      paste("  Rscript", upd_job_status_path, "--job_id" , "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "COMPLETED"),
+      paste("  Rscript", shQuote(upd_job_status_path), "--job_id" , "\"$job_id\"", "--sqlite_db", shQuote(tracking_sqlite_db), "--status", "COMPLETED"),
       "else",
-      paste("  Rscript", upd_job_status_path, "--job_id" , "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "FAILED"),
+      paste("  Rscript", shQuote(upd_job_status_path), "--job_id" , "\"$job_id\"", "--sqlite_db", shQuote(tracking_sqlite_db), "--status", "FAILED"),
       "fi",
       "",
       "exit $exit_code"

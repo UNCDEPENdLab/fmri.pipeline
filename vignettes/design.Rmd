@@ -417,7 +417,7 @@ The folder and file naming scheme for FEAT group analysis outputs is controlled 
 their defaults: 
 
 ```
-gpa$output_locations$feat_l3_directory = "{gpa$output_directory}/feat_l3/L1m-{l1_model}/L2m-{l2_model}_l2c-{l2_contrast}/L3m-{l3_model}"
+gpa$output_locations$feat_l3_directory = "{gpa$output_directory}/feat_l3/L3m-{l3_model}/L1m-{l1_model}/L2m-{l2_model}/l2c-{l2_contrast}"
 gpa$output_locations$feat_l3_fsf = "FEAT_l1c-{l1_contrast}.fsf"
 ```
 
@@ -427,9 +427,9 @@ correct values for each combination fo models (this occurs in `fsl_l3_model.R`).
 Under these defaults, the resulting directories will look like this:
 
 ```
-feat_l3/L1m-abspe/L2m-runavg_l2c-overall/L3m-age/FEAT_l1c-EV_abspe.gfeat
-feat_l3/L1m-abspe/L2m-runavg_l2c-overall/L3m-age/FEAT_l1c-EV_clock.gfeat
-feat_l3/L1m-abspe/L2m-runavg_l2c-overall/L3m-age/FEAT_l1c-EV_feedback.gfeat
+feat_l3/L3m-age/L1m-abspe/L2m-runavg/l2c-overall/FEAT_l1c-EV_abspe.gfeat
+feat_l3/L3m-age/L1m-abspe/L2m-runavg/l2c-overall/FEAT_l1c-EV_clock.gfeat
+feat_l3/L3m-age/L1m-abspe/L2m-runavg/l2c-overall/FEAT_l1c-EV_feedback.gfeat
 ```
 
 In this case, the regressors in the first level model `abspe` are `clock`, `feedback`, and `abspe`.

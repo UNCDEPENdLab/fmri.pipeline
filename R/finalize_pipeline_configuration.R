@@ -482,38 +482,79 @@ setup_output_locations <- function(gpa, lg = NULL) {
     feat_sub_directory = feat_sub_directory,
     feat_ses_directory = feat_sub_directory, # no difference in defaults
     feat_l1_directory = file.path(feat_sub_directory, "{l1_model}"),
-    # include l1_model in L2 output path to avoid collisions across L1 models
-    feat_l2_directory = file.path(feat_l2_sub_directory, "{l1_model}"),
+    # organize L2 outputs by the lower-level cope because FEAT receives one L1 cope at a time
+    feat_l2_directory = file.path(
+      feat_l2_sub_directory,
+      "L1m-{l1_model}", "l1c-{l1_cope_label}", "L2m-{l2_model}"
+    ),
     # for pooled L2 models (l2_scope='id'), avoid synthetic ses-0 folders
-    feat_l2_id_scope_directory = file.path("{gpa$output_directory}", "feat_l2", "sub-{id}", "{l1_model}"),
+    feat_l2_id_scope_directory = file.path(
+      "{gpa$output_directory}", "feat_l2", "sub-{id}",
+      "L1m-{l1_model}", "l1c-{l1_cope_label}", "L2m-{l2_model}"
+    ),
     spm_sub_directory = spm_sub_directory,
     spm_l1_directory = file.path(spm_sub_directory, "{l1_model}"),
     # for pooled SPM L1 models (l1_session_mode='pooled'), avoid synthetic ses-0 folders
     spm_l1_id_scope_directory = file.path("{gpa$output_directory}", "spm_l1", "sub-{id}", "{l1_model}"),
-    spm_l3_directory = file.path("{gpa$output_directory}", "spm_l3", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}"),
+    # old default:
+    # spm_l3_directory = file.path("{gpa$output_directory}", "spm_l3", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}"),
+    spm_l3_directory = file.path("{gpa$output_directory}", "spm_l3", "L3m-{l3_model}", "L1m-{l1_model}", "l1c-{l1_cope_name}"),
     afni_sub_directory = afni_sub_directory,
     afni_l1_directory = file.path(afni_sub_directory, "{l1_model}"),
-    # default structure is like: L1m-abspexrew/L2m-modl2_l2c-EV_overall/L3m-int_only/FEAT_l1c-{l1_cope_name}.fsf
+    # old default:
+    # feat_l3_directory = ifelse(isTRUE(gpa$multi_run),
+    #   file.path("{gpa$output_directory}", "feat_l3", "L1m-{l1_model}", "L2m-{l2_model}_l2c-{l2_contrast}", "L3m-{l3_model}"),
+    #   file.path("{gpa$output_directory}", "feat_l3", "L1m_{l1_model}", "L3m-{l3_model}")
+    # )
     feat_l3_directory = ifelse(isTRUE(gpa$multi_run),
-      file.path("{gpa$output_directory}", "feat_l3", "L1m-{l1_model}", "L2m-{l2_model}_l2c-{l2_contrast}", "L3m-{l3_model}"),
-      file.path("{gpa$output_directory}", "feat_l3", "L1m_{l1_model}", "L3m-{l3_model}")
+      file.path(
+        "{gpa$output_directory}", "feat_l3", "L3m-{l3_model}",
+        "L1m-{l1_model}", "L2m-{l2_model}", "l2c-{l2_contrast}"
+      ),
+      file.path(
+        "{gpa$output_directory}", "feat_l3", "L3m-{l3_model}",
+        "L1m-{l1_model}"
+      )
     ),
     feat_l3_fsf = "FEAT_l1c-{l1_contrast}.fsf",
+    # old default:
+    # feat_l3_combined_filename = ifelse(isTRUE(gpa$multi_run),
+    #   file.path("{gpa$output_directory}", "feat_l3_combined", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L2m-{l2_model}_L3m-{l3_model}_stats"),
+    #   file.path("{gpa$output_directory}", "feat_l3_combined", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}_stats")
+    # )
     feat_l3_combined_filename = ifelse(isTRUE(gpa$multi_run), # settings for combining FEAT L3 models into a smaller set of AFNI files for visualization
-      file.path("{gpa$output_directory}", "feat_l3_combined", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L2m-{l2_model}_L3m-{l3_model}_stats"),
-      file.path("{gpa$output_directory}", "feat_l3_combined", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}_stats")
+      file.path(
+        "{gpa$output_directory}", "feat_l3_combined", "L3m-{l3_model}",
+        "L1m-{l1_model}", "L2m-{l2_model}", "l1c-{l1_cope_name}",
+        "stats"
+      ),
+      file.path(
+        "{gpa$output_directory}", "feat_l3_combined", "L3m-{l3_model}",
+        "L1m-{l1_model}", "l1c-{l1_cope_name}", "stats"
+      )
     ),
     feat_l3_combined_briknames = ifelse(isTRUE(gpa$multi_run),
       "l2c-{l2_cope_name}_l3c-{l3_cope_name}",
       "l3c-{l3_cope_name}"
     ),
-    spm_l3_combined_filename = file.path("{gpa$output_directory}", "spm_l3_combined", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}_stats"),
+    # old default:
+    # spm_l3_combined_filename = file.path("{gpa$output_directory}", "spm_l3_combined", "L1m-{l1_model}", "l1c-{l1_cope_name}", "L3m-{l3_model}_stats"),
+    spm_l3_combined_filename = file.path(
+      "{gpa$output_directory}", "spm_l3_combined", "L3m-{l3_model}",
+      "L1m-{l1_model}", "l1c-{l1_cope_name}", "stats"
+    ),
     spm_l3_combined_briknames = "l3c-{l3_cope_name}",
+    # old default:
+    # afni_3dlmer_directory = file.path(
+    #   "{gpa$output_directory}", "afni_3dlmer",
+    #   "L1m-{l1_model}", "l1c-{l1_cope_name}",
+    #   "L2m-{l2_model}_l2c-{l2_cope_name}",
+    #   "L3m-{l3_model}"
+    # ),
     afni_3dlmer_directory = file.path(
-      "{gpa$output_directory}", "afni_3dlmer",
-      "L1m-{l1_model}", "l1c-{l1_cope_name}",
-      "L2m-{l2_model}_l2c-{l2_cope_name}",
-      "L3m-{l3_model}"
+      "{gpa$output_directory}", "afni_3dlmer", "L3m-{l3_model}",
+      "L1m-{l1_model}", "L2m-{l2_model}",
+      "l1c-{l1_cope_name}", "l2c-{l2_cope_name}"
     ),
     scheduler_scripts = file.path(gpa$output_directory, "scheduler_scripts"),
     sqlite_db = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".sqlite")),
@@ -523,6 +564,7 @@ setup_output_locations <- function(gpa, lg = NULL) {
     setup_l1_log_json = file.path(gpa$output_directory, "setup_l1_models.json"),
     setup_l2_log_txt = file.path(gpa$output_directory, "setup_l2_models.txt"),
     setup_l2_log_json = file.path(gpa$output_directory, "setup_l2_models.json"),
+    setup_l2_l1_cope_validity_tsv = file.path(gpa$output_directory, "setup_l2_l1_cope_validity.tsv"),
     setup_l3_log_txt = file.path(gpa$output_directory, "setup_l3_models.txt"),
     setup_l3_log_json = file.path(gpa$output_directory, "setup_l3_models.json")
   )

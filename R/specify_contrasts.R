@@ -108,7 +108,7 @@ specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
       allow_noncontrast = c(
         "signals", "name", "level", "model_formula", "num2fac",
         "covariate_transform", "reference_level", "contrasts", "fsl_outlier_deweighting",
-        "l2_scope", "l3_input_mode", "random_effects", "lmer_formula", "lmer_mask", "lmer_njobs"
+        "l2_scope", "l3_input_mode", "random_effects", "lmer_formula", "lmer_mask", "lmer_njobs", "lmer_glt_codes"
       )
     )
 
