@@ -673,9 +673,9 @@ test_that("setup_l2_models creates per-cope L2 analyses and refits design after 
 
   expect_equal(row_copeA$n_input_files, 2L)
   expect_equal(row_copeB$n_input_files, 3L)
-  expect_match(row_copeA$feat_dir, file.path("L1m-model1", "l1c-01_copeA", "L2m-l2_model1", "FEAT_L2.gfeat"), fixed = TRUE)
-  expect_match(row_copeB$feat_dir, file.path("L1m-model1", "l1c-02_copeB", "L2m-l2_model1", "FEAT_L2.gfeat"), fixed = TRUE)
-  expect_match(row_copeA$feat_fsf, file.path("L1m-model1", "l1c-01_copeA", "L2m-l2_model1", "FEAT_L2.fsf"), fixed = TRUE)
+  expect_match(row_copeA$feat_dir, file.path("L1m-model1", "l1c-01_copeA", "L2m-l2_model1.gfeat"), fixed = TRUE)
+  expect_match(row_copeB$feat_dir, file.path("L1m-model1", "l1c-02_copeB", "L2m-l2_model1.gfeat"), fixed = TRUE)
+  expect_match(row_copeA$feat_fsf, file.path("L1m-model1", "l1c-01_copeA", "L2m-l2_model1.fsf"), fixed = TRUE)
 
   fsf_A <- readLines(row_copeA$feat_fsf, warn = FALSE)
   fsf_B <- readLines(row_copeB$feat_fsf, warn = FALSE)
@@ -958,8 +958,8 @@ test_that("setup_l2_models output feeds setup_l3_models with per-cope L2 inputs"
 
   expect_equal(length(feat_inputs$copeA), 8L)
   expect_equal(length(feat_inputs$copeB), 8L)
-  expect_true(all(grepl(file.path("l1c-01_copeA", "L2m-l2_model1", "FEAT_L2.gfeat", "cope1.feat", "stats"), feat_inputs$copeA, fixed = TRUE)))
-  expect_true(all(grepl(file.path("l1c-02_copeB", "L2m-l2_model1", "FEAT_L2.gfeat", "cope1.feat", "stats"), feat_inputs$copeB, fixed = TRUE)))
+  expect_true(all(grepl(file.path("l1c-01_copeA", "L2m-l2_model1.gfeat", "cope1.feat", "stats"), feat_inputs$copeA, fixed = TRUE)))
+  expect_true(all(grepl(file.path("l1c-02_copeB", "L2m-l2_model1.gfeat", "cope1.feat", "stats"), feat_inputs$copeB, fixed = TRUE)))
   expect_true(any(grepl("cope2.nii.gz", feat_inputs$copeA, fixed = TRUE)))
   expect_true(any(grepl("cope2.nii.gz", feat_inputs$copeB, fixed = TRUE)))
   expect_false(any(grepl("l1c-02_copeB", feat_inputs$copeA, fixed = TRUE)))

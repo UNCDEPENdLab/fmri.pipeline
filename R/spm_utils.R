@@ -126,45 +126,76 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
     paste(matlab_cmd, matlab_args, shQuote(cmd_str))
   }
 
+  child_log_directory <- Sys.getenv("SLURM_SUBMIT_DIR", unset = "")
+  if (!nzchar(child_log_directory)) child_log_directory <- Sys.getenv("PBS_O_WORKDIR", unset = "")
+  if (!nzchar(child_log_directory)) child_log_directory <- getwd()
+
   # Scheduler header
-  if (gpa$scheduler == "slurm") {
+  if (gpa$scheduler %in% c("slurm", "sbatch")) {
     file_suffix <- ".sbatch"
-    preamble <- c(
-      "#!/bin/bash",
-      "#SBATCH -N 1",
-      paste0("#SBATCH -n ", spm_cpus),
-      paste0("#SBATCH --time=", spm_time),
-      paste0("#SBATCH --mem-per-cpu=", spm_memgb, "G"),
-      ifelse(wait_for != "", paste0("#SBATCH --dependency=afterok:", paste(wait_for, collapse=":")), ""),
-      sched_args_to_header(gpa),
-      "",
-      get_compute_environment(gpa, c("spm", "r")),
-      "",
-      "cd $SLURM_SUBMIT_DIR",
-      "job_id=$SLURM_JOB_ID"
-    )
-  } else if (gpa$scheduler == "torque") {
+    preamble <- function(job_name, extra, batch_file) {
+      c(
+        "#!/bin/bash",
+        "#SBATCH -N 1",
+        paste0("#SBATCH -n ", spm_cpus),
+        paste0("#SBATCH --time=", spm_time),
+        paste0("#SBATCH --mem-per-cpu=", spm_memgb, "G"),
+        ifelse(wait_for != "", paste0("#SBATCH --dependency=afterok:", paste(wait_for, collapse=":")), ""),
+        sched_args_to_header(gpa),
+        paste("#SBATCH -J", scheduler_safe_token(job_name, max_chars = 80L)),
+        scheduler_output_directives(gpa$scheduler, child_log_directory, job_name = job_name, extra = extra),
+        "",
+        "job_id=$SLURM_JOB_ID",
+        paste0("job_name=", shQuote(job_name)),
+        "scheduler_name=slurm",
+        paste0("batch_directory=", shQuote(child_log_directory)),
+        paste0("batch_file=", shQuote(batch_file)),
+        scheduler_runtime_log_assignment(gpa$scheduler, child_log_directory, job_name = job_name, extra = extra),
+        "",
+        get_compute_environment(gpa, c("spm", "r")),
+        "",
+        "cd $SLURM_SUBMIT_DIR"
+      )
+    }
+  } else if (gpa$scheduler %in% c("torque", "qsub")) {
     file_suffix <- ".pbs"
-    preamble <- c(
-      "#!/bin/bash",
-      paste0("#PBS -l nodes=1:ppn=", spm_cpus),
-      paste0("#PBS -l pmem=", spm_memgb, "gb"),
-      ifelse(wait_for != "", paste0("#PBS -W depend=afterok:", paste(wait_for, collapse=":")), ""),
-      paste0("#PBS -l walltime=", spm_time),
-      sched_args_to_header(gpa),
-      "",
-      get_compute_environment(gpa, c("spm", "r")),
-      "",
-      "cd $PBS_O_WORKDIR",
-      "job_id=$PBS_JOBID"
-    )
+    preamble <- function(job_name, extra, batch_file) {
+      c(
+        "#!/bin/bash",
+        paste0("#PBS -l nodes=1:ppn=", spm_cpus),
+        paste0("#PBS -l pmem=", spm_memgb, "gb"),
+        ifelse(wait_for != "", paste0("#PBS -W depend=afterok:", paste(wait_for, collapse=":")), ""),
+        paste0("#PBS -l walltime=", spm_time),
+        sched_args_to_header(gpa),
+        paste("#PBS -N", substr(scheduler_safe_token(job_name, max_chars = 80L), 1L, 15L)),
+        scheduler_output_directives(gpa$scheduler, child_log_directory, job_name = job_name, extra = extra),
+        "",
+        "job_id=$PBS_JOBID",
+        paste0("job_name=", shQuote(job_name)),
+        "scheduler_name=pbs",
+        paste0("batch_directory=", shQuote(child_log_directory)),
+        paste0("batch_file=", shQuote(batch_file)),
+        scheduler_runtime_log_assignment(gpa$scheduler, child_log_directory, job_name = job_name, extra = extra),
+        "",
+        get_compute_environment(gpa, c("spm", "r")),
+        "",
+        "cd $PBS_O_WORKDIR"
+      )
+    }
   } else {
     file_suffix <- ".sh"
-    preamble <- c(
-      "#!/bin/bash",
-      get_compute_environment(gpa, c("spm", "r")),
-      "job_id=$$"
-    )
+    preamble <- function(job_name, extra, batch_file) {
+      c(
+        "#!/bin/bash",
+        get_compute_environment(gpa, c("spm", "r")),
+        "job_id=$$",
+        paste0("job_name=", shQuote(job_name)),
+        "scheduler_name=local",
+        paste0("batch_directory=", shQuote(child_log_directory)),
+        paste0("batch_file=", shQuote(batch_file)),
+        scheduler_runtime_log_assignment(gpa$scheduler, child_log_directory, job_name = job_name, extra = extra)
+      )
+    }
   }
 
   njobs <- ceiling(length(to_run_dirs) / (spm_cpus * runsperproc))
@@ -180,10 +211,13 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
   tracking_sqlite_db <- gpa$output_locations$sqlite_db
   for (j in seq_len(njobs)) {
     outfile <- file.path(spm_output_directory, paste0("spmsep_l", level, "_", j, "_", submission_id, file_suffix))
-    cat(preamble, file = outfile, sep = "\n")
+    job_name <- paste0("spmsep_l", level, "_", j)
+    cat(preamble(job_name, submission_id, outfile), file = outfile, sep = "\n")
 
     thisrun <- with(df, spm_dir[job == j])
     cat(
+      "",
+      job_manifest_shell_function(),
       "",
       "job_failed=0",
       paste0("matlab_cmd=", shQuote(matlab_cmd)),
@@ -274,11 +308,14 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
       "  end_time=$( date )",
       "  if [ $exit_code -eq 0 ]; then",
       "    status_file=\"${odir}/.spm_complete\"",
+      "    artifact_status=\"COMPLETED\"",
       "  else",
       "    status_file=\"${odir}/.spm_fail\"",
+      "    artifact_status=\"FAILED\"",
       "  fi",
       "  echo $start_time > \"${status_file}\"",
       "  echo $end_time >> \"${status_file}\"",
+      paste0("  write_job_manifest \"${odir}\" \"spm_l", level, "\" \"${artifact_status}\" \"${odir}\""),
       "  return $exit_code",
       "}",
       "",
@@ -286,6 +323,7 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
       "  kill_time=$( date )",
       "  if [ -n \"${odir}\" ]; then",
       "    echo $kill_time > \"${odir}/.spm_fail\"",
+      paste0("    write_job_manifest \"${odir}\" \"spm_l", level, "\" \"FAILED\" \"${odir}\""),
       "  fi",
       paste("  Rscript", upd_job_status_path, "--job_id", "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "FAILED"),
       "  exit 1",
@@ -326,7 +364,7 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
     )
 
     tracking_args <- list(
-      job_name = paste0("spmsep_l", level, "_", j),
+      job_name = job_name,
       batch_directory = spm_output_directory,
       n_nodes = 1,
       n_cpus = spm_cpus,

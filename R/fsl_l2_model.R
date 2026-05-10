@@ -163,22 +163,24 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
   # Add EVs and contrasts into FSF
   l2_fsf_syntax <- c(l2_fsf_syntax, ev_syntax, contrast_syntax)
 
-  # Get L2 output directory using the configured feat_l2_directory location
+  # Get L2 output basename using the configured feat_l2_directory location
   l1_cope_path_name <- fs::path_sanitize(l1_cope_name, replacement = "_")
-  fsl_l2_output_dir <- get_output_directory(
+  fsl_l2_output_base <- get_output_directory(
     id = id, session = session,
     l1_model = l1_model, l2_model = l2_model,
     l1_cope_number = l1_cope_number, l1_contrast = l1_cope_path_name,
     gpa = gpa, glm_software = "fsl", what = "l2"
   )
 
-  if (!dir.exists(fsl_l2_output_dir)) {
-    lg$debug("Creating L2 output directory: %s", fsl_l2_output_dir)
-    dir.create(fsl_l2_output_dir, recursive = TRUE)
-  }
+  feat_l2_fsf <- paste0(sub("\\.fsf$", "", fsl_l2_output_base), ".fsf")
+  l2_feat_fsf <- feat_l2_fsf
+  l2_feat_dir <- sub("\\.fsf$", ".gfeat", l2_feat_fsf)
 
-  l2_feat_dir <- file.path(fsl_l2_output_dir, "FEAT_L2.gfeat")
-  l2_feat_fsf <- file.path(fsl_l2_output_dir, "FEAT_L2.fsf")
+  l2_feat_parent_dir <- dirname(l2_feat_fsf)
+  if (!dir.exists(l2_feat_parent_dir)) {
+    lg$debug("Creating L2 output directory: %s", l2_feat_parent_dir)
+    dir.create(l2_feat_parent_dir, recursive = TRUE)
+  }
 
   # add columns regarding whether inputs already exist and FEAT is already complete
   feat_l2_df <- feat_l2_df %>%

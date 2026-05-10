@@ -22,6 +22,7 @@ test_that("afni_3dlmer_setup builds 3dLMEr tables from refit model covariates", 
       )
     )
   )
+  file.create(harvested$l3_model1$contrast1$InputFile)
 
   l3_obj <- list(
     l3_input_mode = "3dlmer",
@@ -106,8 +107,14 @@ test_that("afni_3dlmer_setup builds 3dLMEr tables from refit model covariates", 
   expect_identical(written$group, c("control", "control", "patient", "patient"))
 
   script_lines <- readLines(res$data$afni_script[1L])
+  expect_true(any(grepl("set -uo pipefail", script_lines, fixed = TRUE)))
   expect_true(any(grepl("script_dir=", script_lines, fixed = TRUE)))
   expect_true(any(grepl("cd \"$script_dir\"", script_lines, fixed = TRUE)))
+  expect_true(any(grepl("complete_file=\".afni_complete\"", script_lines, fixed = TRUE)))
+  expect_true(any(grepl("fail_file=\".afni_fail\"", script_lines, fixed = TRUE)))
+  expect_true(any(grepl("start_file=\".afni_start\"", script_lines, fixed = TRUE)))
+  expect_true(any(grepl("log_file=\"3dLMEr.log\"", script_lines, fixed = TRUE)))
+  expect_true(any(grepl(">> \"$log_file\" 2>&1", script_lines, fixed = TRUE)))
   expect_true(any(grepl("-qVars 'age'", script_lines, fixed = TRUE)))
   expect_true(any(grepl("-model 'age+group+(1|Subj)'", script_lines, fixed = TRUE)))
   expect_true(any(grepl(paste("-dataTable", shQuote("@dataTable.txt")), script_lines, fixed = TRUE)))
@@ -146,6 +153,7 @@ test_that("afni_3dlmer_setup builds an intersection mask from FSL L2 inputs when
       )
     )
   )
+  file.create(harvested$l3_model1$contrast1$InputFile)
 
   l3_obj <- list(
     l3_input_mode = "3dlmer",

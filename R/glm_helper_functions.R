@@ -169,10 +169,34 @@ get_compute_environment <- function(gpa, what="all") {
   return(compute_string)
 }
 
+gpa_uses_3dlmer <- function(gpa) {
+  if (is.null(gpa$l3_models) || !is.list(gpa$l3_models) || is.null(gpa$l3_models$models)) {
+    return(FALSE)
+  }
+
+  modes <- vapply(
+    gpa$l3_models$models,
+    function(mm) {
+      mode <- mm$l3_input_mode
+      if (is.null(mode) || length(mode) == 0L || is.na(mode[1L])) return("")
+      tolower(trimws(as.character(mode[1L])))
+    },
+    character(1)
+  )
+
+  any(modes == "3dlmer")
+}
+
 # write a small test script for the programs used in the compute environment
 # currently capable of testing FSL, R, and AFNI
 test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
   #"set -x",
+  what <- unique(tolower(what))
+  uses_3dlmer <- gpa_uses_3dlmer(gpa)
+  if (isTRUE(uses_3dlmer) && any(what %in% c("all", "afni"))) {
+    what <- unique(c(what, "r"))
+  }
+
   prog_str <- c(
     "#!/bin/bash", "checks_passed=1", "",
     "echo 'Checking the compute environment settings'",
@@ -192,6 +216,20 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
         echo \"afni found: ${afni_loc}\"
       fi"
     )
+
+    if (isTRUE(uses_3dlmer)) {
+      prog_str <- c(
+        prog_str,
+        "lmer_loc=$(command -v 3dLMEr)
+        [ $? -eq 0 ] && lmer_exists=1 || lmer_exists=0
+        if [ $lmer_exists -eq 0 ]; then
+          echo 'Cannot find 3dLMEr, which is required by l3_input_mode=3dlmer models!'
+          checks_passed=0
+        else
+          echo \"3dLMEr found: ${lmer_loc}\"
+        fi"
+      )
+    }
   }
 
   if (any(what %in% c("all", "fsl"))) {
@@ -227,6 +265,37 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
         echo \"R found: ${r_loc}\"
       fi
       "
+    )
+  }
+
+  if (isTRUE(uses_3dlmer) && any(what %in% c("all", "afni", "r"))) {
+    lmer_r_packages <- NULL
+    if (!is.null(gpa$glm_settings) && !is.null(gpa$glm_settings$afni)) {
+      lmer_r_packages <- gpa$glm_settings$afni$lmer_r_packages
+    }
+    if (is.null(lmer_r_packages) || length(lmer_r_packages) == 0L) {
+      lmer_r_packages <- c("lme4", "lmerTest", "phia", "snow")
+    }
+    lmer_r_packages <- unique(as.character(lmer_r_packages))
+    lmer_r_packages <- lmer_r_packages[nzchar(lmer_r_packages)]
+    lmer_pkg_expr <- paste(shQuote(lmer_r_packages), collapse = ", ")
+    prog_str <- c(
+      prog_str,
+      sprintf(
+        "rscript_loc=$(command -v Rscript)
+        [ $? -eq 0 ] && rscript_exists=1 || rscript_exists=0
+        if [ $rscript_exists -eq 0 ]; then
+          echo 'Cannot find Rscript for AFNI 3dLMEr R package checks!'
+          checks_passed=0
+        else
+          echo \"Rscript found for AFNI 3dLMEr checks: ${rscript_loc}\"
+          Rscript -e \"pkgs <- c(%s); missing <- pkgs[!vapply(pkgs, function(pkg) requireNamespace(pkg, quietly = TRUE), logical(1))]; if (length(missing)) stop('Missing R package(s) needed by AFNI 3dLMEr: ', paste(missing, collapse = ', ')); cat('AFNI 3dLMEr R package check passed: ', paste(pkgs, collapse = ', '), '\\n', sep = '')\"
+          if [ $? -ne 0 ]; then
+            checks_passed=0
+          fi
+        fi",
+        lmer_pkg_expr
+      )
     )
   }
 

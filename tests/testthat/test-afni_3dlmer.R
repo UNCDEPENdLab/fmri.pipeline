@@ -137,17 +137,22 @@ test_that("build_3dlmer_command quotes shell paths and sanitizes GLT names", {
 })
 
 test_that("build_3dlmer_datatable handles factor merging", {
+  tmp_dir <- tempfile("afni_3dlmer_datatable_")
+  dir.create(tmp_dir, recursive = TRUE)
+  input_paths <- file.path(tmp_dir, c("f1.nii.gz", "f2.nii.gz"))
+  file.create(input_paths)
+
   dt <- data.frame(
-    id = c("s1", "s1", "s2"),
+    id = c("s1", "s2"),
     session = 1,
-    InputFile = c("f1.nii.gz", "f1.nii.gz", "f2.nii.gz"),
+    InputFile = input_paths,
     stringsAsFactors = FALSE
   )
   subject_data <- data.frame(
-    id = c("s1", "s1", "s2"),
+    id = c("s1", "s2"),
     session = 1,
-    Group = c("A", "A", "B"),
-    Age = c(20, 20, 30),
+    Group = c("A", "B"),
+    Age = c(20, 30),
     stringsAsFactors = FALSE
   )
   
@@ -157,6 +162,59 @@ test_that("build_3dlmer_datatable handles factor merging", {
   expect_true(all(c("Group", "Age") %in% names(res)))
   # In modern R, these are character vectors by default
   expect_equal(as.character(res$Group), c("A", "B"))
+})
+
+test_that("build_3dlmer_datatable fails fast on integrity problems", {
+  tmp_dir <- tempfile("afni_3dlmer_datatable_integrity_")
+  dir.create(tmp_dir, recursive = TRUE)
+  input_paths <- file.path(tmp_dir, c("f1.nii.gz", "f2.nii.gz"))
+  file.create(input_paths)
+
+  input_files <- data.frame(
+    id = c("s1", "s2"),
+    session = c(1L, 1L),
+    InputFile = input_paths,
+    stringsAsFactors = FALSE
+  )
+  subject_data <- data.frame(
+    id = c("s1", "s2"),
+    session = c(1L, 1L),
+    Group = c("A", "B"),
+    Age = c(20, 30),
+    stringsAsFactors = FALSE
+  )
+
+  duplicate_input <- rbind(input_files, input_files[1L, ])
+  expect_error(
+    fmri.pipeline:::build_3dlmer_datatable(subject_data, duplicate_input, model_variables = c("Group", "Age")),
+    "Duplicate AFNI 3dLMEr input rows"
+  )
+
+  duplicate_subject_data <- rbind(subject_data, subject_data[1L, ])
+  expect_error(
+    fmri.pipeline:::build_3dlmer_datatable(duplicate_subject_data, input_files, model_variables = c("Group", "Age")),
+    "Duplicate AFNI 3dLMEr subject_data rows"
+  )
+
+  missing_subject_data <- subject_data[1L, , drop = FALSE]
+  expect_error(
+    fmri.pipeline:::build_3dlmer_datatable(missing_subject_data, input_files, model_variables = c("Group", "Age")),
+    "subject_data is missing id/session rows"
+  )
+
+  missing_covariate_data <- subject_data
+  missing_covariate_data$Age[2L] <- NA
+  expect_error(
+    fmri.pipeline:::build_3dlmer_datatable(missing_covariate_data, input_files, model_variables = c("Group", "Age")),
+    "missing model variable values"
+  )
+
+  missing_file_inputs <- input_files
+  missing_file_inputs$InputFile[2L] <- file.path(tmp_dir, "missing.nii.gz")
+  expect_error(
+    fmri.pipeline:::build_3dlmer_datatable(subject_data, missing_file_inputs, model_variables = c("Group", "Age")),
+    "InputFile entries do not exist"
+  )
 })
 
 test_that("emmeans_to_3dlmer_glt translates correctly", {

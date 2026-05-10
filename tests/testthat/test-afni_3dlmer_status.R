@@ -15,8 +15,55 @@ test_that("get_3dlmer_status returns a refresh-compatible data frame", {
   expect_identical(status$afni_output_file_resolved, head_file)
   expect_true(status$afni_complete)
   expect_false(status$afni_failed)
+  expect_false(status$afni_complete_file_exists)
+  expect_false(status$afni_fail_file_exists)
+  expect_true(is.na(status$afni_execution_min))
   expect_false("feat_complete" %in% names(status))
   expect_false("feat_failed" %in% names(status))
+})
+
+test_that("get_3dlmer_status uses AFNI marker timestamps for execution timing", {
+  out_dir <- tempfile("afni_3dlmer_status_markers_")
+  dir.create(out_dir, recursive = TRUE)
+  prefix <- file.path(out_dir, "lmer_result")
+  file.create(paste0(prefix, "+tlrc.HEAD"))
+
+  writeLines(
+    c("2026-05-10T12:00:00-04:00", "2026-05-10T13:30:00-04:00"),
+    file.path(out_dir, ".afni_complete")
+  )
+  writeLines("log", file.path(out_dir, "3dLMEr.log"))
+
+  status <- fmri.pipeline:::get_3dlmer_status(prefix)
+
+  expect_true(status$afni_complete)
+  expect_false(status$afni_failed)
+  expect_true(status$afni_complete_file_exists)
+  expect_false(status$afni_fail_file_exists)
+  expect_true(status$afni_log_file_exists)
+  expect_equal(status$afni_execution_min, 90)
+  expect_false(is.na(status$afni_execution_start))
+  expect_false(is.na(status$afni_execution_end))
+})
+
+test_that("get_3dlmer_status reports AFNI failure markers without outputs", {
+  out_dir <- tempfile("afni_3dlmer_status_fail_")
+  dir.create(out_dir, recursive = TRUE)
+  prefix <- file.path(out_dir, "lmer_result")
+
+  writeLines(
+    c("2026-05-10T12:00:00-04:00", "2026-05-10T12:05:00-04:00"),
+    file.path(out_dir, ".afni_fail")
+  )
+
+  status <- fmri.pipeline:::get_3dlmer_status(prefix)
+
+  expect_false(status$afni_output_file_exists)
+  expect_false(status$afni_complete)
+  expect_true(status$afni_failed)
+  expect_false(status$afni_complete_file_exists)
+  expect_true(status$afni_fail_file_exists)
+  expect_equal(status$afni_execution_min, 5)
 })
 
 test_that("refresh_glm_status updates AFNI L3 tables via get_3dlmer_status", {

@@ -83,8 +83,14 @@ R_batch_job <- R6::R6Class("batch_job",
           mem_string <- paste0("#SBATCH --mem=", self$mem_total)
         }
 
-        job_string <- if (is.null(self$job_name)) NULL else paste("#SBATCH -J", self$job_name)
+        job_string <- if (is.null(self$job_name)) NULL else paste("#SBATCH -J", scheduler_safe_token(self$job_name, max_chars = 80L))
         sched_string <- if (is.null(self$scheduler_options)) NULL else paste("#SBATCH", self$scheduler_options)
+        log_string <- scheduler_output_directives(
+          self$scheduler,
+          log_directory = self$batch_directory,
+          job_name = self$job_name,
+          extra = tools::file_path_sans_ext(basename(private$get_batch_file_name()))
+        )
 
         syntax <- c(
           syntax,
@@ -95,8 +101,16 @@ R_batch_job <- R6::R6Class("batch_job",
           mem_string,
           job_string,
           sched_string,
+          log_string,
           "",
           "export JOBID=$SLURM_JOB_ID",
+          scheduler_runtime_log_assignment(
+            self$scheduler,
+            log_directory = self$batch_directory,
+            job_name = self$job_name,
+            extra = tools::file_path_sans_ext(basename(private$get_batch_file_name())),
+            job_var = "JOBID"
+          ),
           "cd $SLURM_SUBMIT_DIR",
           self$batch_code
         )
@@ -108,8 +122,14 @@ R_batch_job <- R6::R6Class("batch_job",
           mem_string <- paste0("#PBS -l mem=", self$mem_total)
         }
 
-        job_string <- if (is.null(self$job_name)) NULL else paste("#PBS -N", substr(self$job_name, 1, 15)) # torque limits to 15 chars
+        job_string <- if (is.null(self$job_name)) NULL else paste("#PBS -N", substr(scheduler_safe_token(self$job_name, max_chars = 80L), 1, 15)) # torque limits to 15 chars
         sched_string <- if (is.null(self$scheduler_options)) NULL else paste("#PBS", self$scheduler_options)
+        log_string <- scheduler_output_directives(
+          self$scheduler,
+          log_directory = self$batch_directory,
+          job_name = self$job_name,
+          extra = tools::file_path_sans_ext(basename(private$get_batch_file_name()))
+        )
 
         syntax <- c(
           syntax,
@@ -118,8 +138,16 @@ R_batch_job <- R6::R6Class("batch_job",
           mem_string,
           job_string,
           sched_string,
+          log_string,
           "",
           "export JOBID=$PBS_JOBID",
+          scheduler_runtime_log_assignment(
+            self$scheduler,
+            log_directory = self$batch_directory,
+            job_name = self$job_name,
+            extra = tools::file_path_sans_ext(basename(private$get_batch_file_name())),
+            job_var = "JOBID"
+          ),
           "cd $PBS_O_WORKDIR",
           self$batch_code
         )

@@ -1,3 +1,50 @@
+format_3dlmer_datatable_keys <- function(df, id_col = "id", session_col = "session", max_items = 8L) {
+  if (nrow(df) == 0L) return("<none>")
+
+  keys <- paste0(
+    "id=", as.character(df[[id_col]]),
+    ", session=", as.character(df[[session_col]])
+  )
+  keys <- unique(keys)
+  if (length(keys) > max_items) {
+    keys <- c(keys[seq_len(max_items)], sprintf("... (%d more)", length(keys) - max_items))
+  }
+
+  paste(keys, collapse = "; ")
+}
+
+format_3dlmer_datatable_paths <- function(paths, max_items = 8L) {
+  paths <- unique(as.character(paths))
+  if (length(paths) == 0L) return("<none>")
+  if (length(paths) > max_items) {
+    paths <- c(paths[seq_len(max_items)], sprintf("... (%d more)", length(paths) - max_items))
+  }
+
+  paste(paths, collapse = "; ")
+}
+
+is_missing_3dlmer_field <- function(x) {
+  is.na(x) | !nzchar(trimws(as.character(x)))
+}
+
+find_3dlmer_rows_with_missing_fields <- function(df, fields) {
+  if (length(fields) == 0L) return(logical(nrow(df)))
+
+  missing_matrix <- vapply(
+    fields,
+    function(field) is_missing_3dlmer_field(df[[field]]),
+    logical(nrow(df))
+  )
+  if (is.null(dim(missing_matrix))) return(missing_matrix)
+
+  rowSums(missing_matrix) > 0L
+}
+
+find_3dlmer_duplicate_keys <- function(df, id_col = "id", session_col = "session") {
+  keys <- paste(as.character(df[[id_col]]), as.character(df[[session_col]]), sep = "\r")
+  duplicated(keys) | duplicated(keys, fromLast = TRUE)
+}
+
 #' Internal function to build the data table for AFNI 3dLMEr
 #'
 #' @param subject_data a data.frame containing subject-level covariates
@@ -10,26 +57,132 @@ build_3dlmer_datatable <- function(subject_data, input_files, model_variables) {
   checkmate::assert_data_frame(subject_data)
   checkmate::assert_data_frame(input_files)
   checkmate::assert_character(model_variables)
+  checkmate::assert_subset(c("id", "session", model_variables), names(subject_data))
   checkmate::assert_subset(c("id", "session", "InputFile"), names(input_files))
 
   subject_data <- subject_data %>%
-    dplyr::select(dplyr::all_of(c("id", "session", model_variables))) %>%
-    dplyr::distinct()
+    dplyr::select(dplyr::all_of(c("id", "session", model_variables)))
 
   input_files <- input_files %>%
-    dplyr::select(id, session, InputFile) %>%
-    dplyr::distinct()
+    dplyr::select(dplyr::all_of(c("id", "session", "InputFile")))
+
+  if (nrow(input_files) == 0L) {
+    stop("AFNI 3dLMEr dataTable has no input rows.", call. = FALSE)
+  }
+  if (nrow(subject_data) == 0L) {
+    stop("AFNI 3dLMEr subject_data has no rows.", call. = FALSE)
+  }
+
+  missing_input_rows <- find_3dlmer_rows_with_missing_fields(input_files, c("id", "session", "InputFile"))
+  if (any(missing_input_rows)) {
+    stop(
+      sprintf(
+        "AFNI 3dLMEr input_files has missing id, session, or InputFile values for rows: %s.",
+        paste(which(missing_input_rows), collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+
+  missing_subject_keys <- find_3dlmer_rows_with_missing_fields(subject_data, c("id", "session"))
+  if (any(missing_subject_keys)) {
+    stop(
+      sprintf(
+        "AFNI 3dLMEr subject_data has missing id or session values for rows: %s.",
+        paste(which(missing_subject_keys), collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+
+  missing_covariates <- find_3dlmer_rows_with_missing_fields(subject_data, model_variables)
+  if (any(missing_covariates)) {
+    stop(
+      sprintf(
+        "AFNI 3dLMEr subject_data has missing model variable values for id/session keys: %s.",
+        format_3dlmer_datatable_keys(subject_data[missing_covariates, , drop = FALSE])
+      ),
+      call. = FALSE
+    )
+  }
+
+  duplicate_input_keys <- find_3dlmer_duplicate_keys(input_files)
+  if (any(duplicate_input_keys)) {
+    stop(
+      sprintf(
+        "Duplicate AFNI 3dLMEr input rows for id/session keys: %s. Each contrast dataTable must have exactly one InputFile per id/session.",
+        format_3dlmer_datatable_keys(input_files[duplicate_input_keys, , drop = FALSE])
+      ),
+      call. = FALSE
+    )
+  }
+
+  duplicate_subject_keys <- find_3dlmer_duplicate_keys(subject_data)
+  if (any(duplicate_subject_keys)) {
+    stop(
+      sprintf(
+        "Duplicate AFNI 3dLMEr subject_data rows for id/session keys: %s. Covariates must be one-to-one with AFNI input rows.",
+        format_3dlmer_datatable_keys(subject_data[duplicate_subject_keys, , drop = FALSE])
+      ),
+      call. = FALSE
+    )
+  }
+
+  input_paths <- as.character(input_files$InputFile)
+  missing_files <- input_paths[!file.exists(input_paths)]
+  if (length(missing_files) > 0L) {
+    stop(
+      sprintf(
+        "AFNI 3dLMEr InputFile entries do not exist: %s.",
+        format_3dlmer_datatable_paths(missing_files)
+      ),
+      call. = FALSE
+    )
+  }
+
+  missing_subject_rows <- input_files %>%
+    dplyr::anti_join(subject_data %>% dplyr::select(dplyr::all_of(c("id", "session"))), by = c("id", "session"))
+  if (nrow(missing_subject_rows) > 0L) {
+    stop(
+      sprintf(
+        "AFNI 3dLMEr dataTable cannot be built because subject_data is missing id/session rows for input keys: %s.",
+        format_3dlmer_datatable_keys(missing_subject_rows)
+      ),
+      call. = FALSE
+    )
+  }
 
   # Merge input files with subject data to get covariates
   # subject_data should contain 'id' and 'session' for longitudinal
   dt <- input_files %>%
-    dplyr::inner_join(subject_data, by = c("id", "session"))
+    dplyr::left_join(subject_data, by = c("id", "session"))
+
+  if (nrow(dt) != nrow(input_files)) {
+    stop(
+      sprintf(
+        "AFNI 3dLMEr dataTable row count changed during merge: %d input row(s), %d merged row(s).",
+        nrow(input_files), nrow(dt)
+      ),
+      call. = FALSE
+    )
+  }
 
   # Keep only necessary columns: Subj, model_variables, InputFile
   # 3dLMEr requires the column name 'Subj' for the subject ID
   dt <- dt %>%
     dplyr::rename(Subj = id) %>%
     dplyr::select(dplyr::all_of(c("Subj", "session", model_variables, "InputFile")))
+
+  duplicate_final_keys <- find_3dlmer_duplicate_keys(dt, id_col = "Subj")
+  if (any(duplicate_final_keys)) {
+    stop(
+      sprintf(
+        "AFNI 3dLMEr dataTable contains duplicate Subj/session rows after merge: %s.",
+        format_3dlmer_datatable_keys(dt[duplicate_final_keys, , drop = FALSE], id_col = "Subj")
+      ),
+      call. = FALSE
+    )
+  }
 
   return(dt)
 }
@@ -428,12 +581,35 @@ write_3dlmer_files <- function(output_dir, dt, cmd, script_name = "run_3dlmer.sh
   # Basic script structure
   script_content <- c(
     "#!/bin/bash",
+    "set -uo pipefail",
     "",
-    "# Load AFNI if needed (placeholder, setup_l3_run will handle compute env)",
     "script_dir=\"$(cd \"$(dirname \"$0\")\" && pwd)\"",
     "cd \"$script_dir\"",
     "",
-    cmd
+    "complete_file=\".afni_complete\"",
+    "fail_file=\".afni_fail\"",
+    "start_file=\".afni_start\"",
+    "log_file=\"3dLMEr.log\"",
+    "rm -f \"$complete_file\" \"$fail_file\"",
+    "start_time=\"$(date -Is)\"",
+    "printf '%s\\n' \"$start_time\" > \"$start_file\"",
+    "",
+    "{",
+    "  printf '%s\\n' \"[$start_time] Starting AFNI 3dLMEr\"",
+    paste0("  printf '%s\\n' ", shQuote(paste("Command:", cmd))),
+    paste0("  ", cmd),
+    "} >> \"$log_file\" 2>&1",
+    "exit_code=$?",
+    "end_time=\"$(date -Is)\"",
+    "",
+    "if [ $exit_code -eq 0 ]; then",
+    "  printf '%s\\n%s\\n' \"$start_time\" \"$end_time\" > \"$complete_file\"",
+    "  rm -f \"$fail_file\"",
+    "else",
+    "  printf '%s\\n%s\\n' \"$start_time\" \"$end_time\" > \"$fail_file\"",
+    "fi",
+    "",
+    "exit $exit_code"
   )
   writeLines(script_content, script_file)
   Sys.chmod(script_file, "0755")
@@ -488,12 +664,77 @@ get_3dlmer_status <- function(output_file, lg = NULL, prefix = NULL) {
     lg$debug("No AFNI 3dLMEr output found for '%s'. Checked: %s", output_file, paste(candidates, collapse = ", "))
   }
 
+  output_dir <- dirname(output_file)
+  start_file <- file.path(output_dir, ".afni_start")
+  complete_file <- file.path(output_dir, ".afni_complete")
+  fail_file <- file.path(output_dir, ".afni_fail")
+  log_file <- file.path(output_dir, "3dLMEr.log")
+  start_file_exists <- file.exists(start_file)
+  complete_file_exists <- file.exists(complete_file)
+  fail_file_exists <- file.exists(fail_file)
+
+  execution_start <- as.POSIXct(NA)
+  execution_end <- as.POSIXct(NA)
+  execution_min <- NA_real_
+  timing_file <- NULL
+
+  if (complete_file_exists) {
+    timing_file <- complete_file
+    if (fail_file_exists) {
+      lg$warn("Both .afni_complete and .afni_fail files exist in %s", output_dir)
+      lg$warn(
+        "Treating this AFNI 3dLMEr run as %s based on output files.",
+        ifelse(isTRUE(output_exists), "complete", "failed")
+      )
+    }
+    if (!isTRUE(output_exists)) {
+      lg$warn("Found .afni_complete in %s, but expected AFNI 3dLMEr output is missing.", output_dir)
+    }
+    afni_complete <- isTRUE(output_exists)
+    afni_failed <- !isTRUE(output_exists)
+  } else if (fail_file_exists) {
+    lg$debug("Detected AFNI 3dLMEr failure marker in: %s", output_dir)
+    timing_file <- fail_file
+    afni_complete <- FALSE
+    afni_failed <- TRUE
+  } else {
+    afni_complete <- output_exists
+    afni_failed <- if (output_exists) FALSE else NA
+    if (start_file_exists) timing_file <- start_file
+  }
+
+  if (!is.null(timing_file)) {
+    timing <- readLines(timing_file, warn = FALSE)
+    if (length(timing) > 0L) {
+      timing <- anytime::anytime(timing)
+      execution_start <- timing[1L]
+      if (length(timing) >= 2L) {
+        execution_end <- timing[2L]
+        execution_min <- as.numeric(difftime(timing[2L], timing[1L], units = "mins"))
+      } else if (!identical(timing_file, start_file)) {
+        lg$warn("Did not find two timing entries in %s.", timing_file)
+        lg$warn("File contents: %s", paste(timing, collapse = "; "))
+      }
+    }
+  }
+
   out <- data.frame(
     output_file = output_file,
     afni_output_file_resolved = resolved_output,
     afni_output_file_exists = output_exists,
-    afni_complete = output_exists,
-    afni_failed = if (output_exists) FALSE else NA,
+    afni_start_file = start_file,
+    afni_start_file_exists = start_file_exists,
+    afni_complete_file = complete_file,
+    afni_complete_file_exists = complete_file_exists,
+    afni_fail_file = fail_file,
+    afni_fail_file_exists = fail_file_exists,
+    afni_log_file = log_file,
+    afni_log_file_exists = file.exists(log_file),
+    afni_execution_start = execution_start,
+    afni_execution_end = execution_end,
+    afni_execution_min = execution_min,
+    afni_complete = afni_complete,
+    afni_failed = afni_failed,
     stringsAsFactors = FALSE
   )
   if (!is.null(prefix)) names(out) <- paste0(prefix, names(out))

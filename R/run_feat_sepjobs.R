@@ -157,40 +157,62 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   lg$info("About to run the following fsf files in parallel:")
   lg$info("  File: %s", to_run)
 
-  if (gpa$scheduler == "slurm") {
-    file_suffix <- ".sbatch"
-    preamble <- c(
-      "#!/bin/bash",
-      "#SBATCH -N 1", #always single node for now
-      paste0("#SBATCH -n ", feat_cpus),
-      paste0("#SBATCH --time=", feat_time),
-      paste0("#SBATCH --mem-per-cpu=", feat_memgb, "G"),
-      ifelse(wait_for != "", paste0("#SBATCH --dependency=afterok:", paste(wait_for, collapse=":")), ""), # allow job dependency on upstream setup
-      sched_args_to_header(gpa), # analysis-level SBATCH directives
-      "",
-      "",
-      get_compute_environment(gpa, c("fsl", "r")), # r needed for job tracking sqlite
-      "",
-      "cd $SLURM_SUBMIT_DIR",
-      "job_id=$SLURM_JOB_ID"
-    )
+  child_log_directory <- Sys.getenv("SLURM_SUBMIT_DIR", unset = "")
+  if (!nzchar(child_log_directory)) child_log_directory <- Sys.getenv("PBS_O_WORKDIR", unset = "")
+  if (!nzchar(child_log_directory)) child_log_directory <- getwd()
 
-  } else if (gpa$scheduler == "torque") {
+  if (gpa$scheduler %in% c("slurm", "sbatch")) {
+    file_suffix <- ".sbatch"
+    preamble <- function(job_name, extra, batch_file) {
+      c(
+        "#!/bin/bash",
+        "#SBATCH -N 1", #always single node for now
+        paste0("#SBATCH -n ", feat_cpus),
+        paste0("#SBATCH --time=", feat_time),
+        paste0("#SBATCH --mem-per-cpu=", feat_memgb, "G"),
+        ifelse(wait_for != "", paste0("#SBATCH --dependency=afterok:", paste(wait_for, collapse=":")), ""), # allow job dependency on upstream setup
+        sched_args_to_header(gpa), # analysis-level SBATCH directives
+        paste("#SBATCH -J", scheduler_safe_token(job_name, max_chars = 80L)),
+        scheduler_output_directives(gpa$scheduler, child_log_directory, job_name = job_name, extra = extra),
+        "",
+        "job_id=$SLURM_JOB_ID",
+        paste0("job_name=", shQuote(job_name)),
+        "scheduler_name=slurm",
+        paste0("batch_directory=", shQuote(child_log_directory)),
+        paste0("batch_file=", shQuote(batch_file)),
+        scheduler_runtime_log_assignment(gpa$scheduler, child_log_directory, job_name = job_name, extra = extra),
+        "",
+        get_compute_environment(gpa, c("fsl", "r")), # r needed for job tracking sqlite
+        "",
+        "cd $SLURM_SUBMIT_DIR"
+      )
+    }
+
+  } else if (gpa$scheduler %in% c("torque", "qsub")) {
     file_suffix <- ".pbs"
-    preamble <- c(
-      "#!/bin/bash",
-      paste0("#PBS -l nodes=1:ppn=", feat_cpus),
-      paste0("#PBS -l pmem=", feat_memgb, "gb"),
-      ifelse(wait_for != "", paste0("#PBS -W depend=afterok:", paste(wait_for, collapse=":")), ""), # allow job dependency on upstream setup
-      paste0("#PBS -l walltime=", feat_time),
-      sched_args_to_header(gpa), # analysis-level PBS directives
-      "",
-      "",
-      get_compute_environment(gpa, c("fsl", "r")),
-      "",
-      "cd $PBS_O_WORKDIR",
-      "job_id=$PBS_JOBID"
-    )
+    preamble <- function(job_name, extra, batch_file) {
+      c(
+        "#!/bin/bash",
+        paste0("#PBS -l nodes=1:ppn=", feat_cpus),
+        paste0("#PBS -l pmem=", feat_memgb, "gb"),
+        ifelse(wait_for != "", paste0("#PBS -W depend=afterok:", paste(wait_for, collapse=":")), ""), # allow job dependency on upstream setup
+        paste0("#PBS -l walltime=", feat_time),
+        sched_args_to_header(gpa), # analysis-level PBS directives
+        paste("#PBS -N", substr(scheduler_safe_token(job_name, max_chars = 80L), 1L, 15L)),
+        scheduler_output_directives(gpa$scheduler, child_log_directory, job_name = job_name, extra = extra),
+        "",
+        "job_id=$PBS_JOBID",
+        paste0("job_name=", shQuote(job_name)),
+        "scheduler_name=pbs",
+        paste0("batch_directory=", shQuote(child_log_directory)),
+        paste0("batch_file=", shQuote(batch_file)),
+        scheduler_runtime_log_assignment(gpa$scheduler, child_log_directory, job_name = job_name, extra = extra),
+        "",
+        get_compute_environment(gpa, c("fsl", "r")),
+        "",
+        "cd $PBS_O_WORKDIR"
+      )
+    }
   }
 
   if (!file.exists(feat_output_directory)) {
@@ -239,7 +261,8 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   joblist <- rep(NA_character_, njobs)
   for (j in seq_len(njobs)) {
     outfile <- paste0(feat_output_directory, "/featsep_l", level, "_", j, "_", submission_id, file_suffix)
-    cat(preamble, file=outfile, sep="\n")
+    job_name <- paste0("featsep_l", level, "_", j)
+    cat(preamble(job_name, submission_id, outfile), file=outfile, sep="\n")
     thisrun <- with(df, fsf[job==j])
     # Compute expected output directories in the parent scope so the SIGTERM trap
     # can mark them all as failed. Each feat_runner call is backgrounded into its own
@@ -251,6 +274,8 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
 
     cat(
       paste0("all_odirs=(", paste0("\"", odir_values, "\"", collapse = " "), ")"),
+      "",
+      job_manifest_shell_function(),
       "",
       "function feat_runner() {",
       ifelse(level == 1L, "  odir=\"${1/.fsf/.feat}\"", "  odir=\"${1/.fsf/.gfeat}\""),
@@ -266,11 +291,14 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "  end_time=$( date )",
       "  if [ $exit_code -eq 0 ]; then",
       "    status_file=\"${odir}/.feat_complete\"",
+      "    artifact_status=\"COMPLETED\"",
       "  else",
       "    status_file=\"${odir}/.feat_fail\"",
+      "    artifact_status=\"FAILED\"",
       "  fi",
       "  echo $start_time > \"${status_file}\"",
       "  echo $end_time >> \"${status_file}\"",
+      paste0("  write_job_manifest \"${odir}\" \"fsl_l", level, "_feat\" \"${artifact_status}\" \"$1\""),
       "  return $exit_code",
       "}",
       "function feat_killed() {",
@@ -278,6 +306,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "  for _odir in \"${all_odirs[@]}\"; do",
       "    [ -f \"${_odir}/.feat_complete\" ] && continue",
       "    echo \"$kill_time\" > \"${_odir}/.feat_fail\"",
+      paste0("    write_job_manifest \"${_odir}\" \"fsl_l", level, "_feat\" \"FAILED\" \"\""),
       "  done",
       paste("  Rscript", upd_job_status_path, "--job_id" , "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "FAILED"),
       "  exit 1",
@@ -304,7 +333,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
 
     # gather tracking arguments
     if (!is.null(tracking_sqlite_db)) {
-      tracking_args <- list(job_name = paste0("featsep_l", level, "_", j), 
+      tracking_args <- list(job_name = job_name,
                             batch_directory = feat_output_directory,
                             n_nodes = 1,
                             n_cpus = feat_cpus,
