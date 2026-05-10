@@ -19,6 +19,7 @@ Imports:
     DBI,
     RSQLite,
     Rcpp,
+    R.matlab,
     R.utils,
     RNifti,
     R6,
