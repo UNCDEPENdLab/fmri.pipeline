@@ -30,6 +30,7 @@ Imports:
     checkmate,
     dplyr,
     data.table,
+    data.tree,
     doParallel,
     doFuture,
     emmeans,
