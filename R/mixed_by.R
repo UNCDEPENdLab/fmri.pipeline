@@ -198,7 +198,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
       rfc <- 0
       while (any(grepl("failed to converge", md@optinfo$conv$lme4$messages)) && rfc < refit_on_nonconvergence) {
         # print(md@optinfo$conv$lme4$conv)
-        ss <- getME(md, c("theta", "fixef"))
+        ss <- getME(md, "theta")
         lmod <- lmer_control
         lmod$optimizer <- "bobyqa" # produces convergence more reliably
         md <- update(md, start = ss, control = lmod)

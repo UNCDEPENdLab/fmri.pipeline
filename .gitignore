@@ -60,7 +60,7 @@ slurm-*.out
 tests/testthat/testdata/mri
 tests/testthat/testdata/gpa_base.rds
 
-# Test suite
+# Test space
 tmp/
 
 # local vscode and codex

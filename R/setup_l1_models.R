@@ -173,6 +173,7 @@ register_l1_parallel_backend <- function(gpa, lg) {
 setup_l1_subject <- function(subj_df, gpa, ctx) {
   subject_ctx <- prepare_subject_run_context(subj_df = subj_df, gpa = gpa, ctx = ctx)
   if (is.null(subject_ctx)) return(NULL)
+  slg <- subject_ctx$lg
 
   l1_file_setup <- list(fsl = list(), spm = list(), afni = list(), metadata = subject_ctx$mr_df)
 
@@ -182,7 +183,7 @@ setup_l1_subject <- function(subj_df, gpa, ctx) {
       model_name = this_model,
       subj_id = subject_ctx$subj_id,
       subj_session = subject_ctx$subj_session,
-      lg = ctx$lg
+      lg = slg
     )
 
     output_ctx <- ensure_l1_output_dir(
@@ -190,7 +191,7 @@ setup_l1_subject <- function(subj_df, gpa, ctx) {
       subj_id = subject_ctx$subj_id,
       subj_session = subject_ctx$subj_session,
       model_name = this_model,
-      lg = ctx$lg
+      lg = slg
     )
 
     d_obj <- load_or_build_l1_bdm(
@@ -200,7 +201,7 @@ setup_l1_subject <- function(subj_df, gpa, ctx) {
       model_name = this_model,
       l1_output_dir = output_ctx$l1_output_dir,
       bdm_out_file = output_ctx$bdm_out_file,
-      lg = ctx$lg
+      lg = slg
     )
     if (is.null(d_obj)) next
 
@@ -211,7 +212,7 @@ setup_l1_subject <- function(subj_df, gpa, ctx) {
       gpa = gpa,
       model_name = this_model,
       backend_fsl = ctx$glm_backends[["fsl"]],
-      lg = ctx$lg
+      lg = slg
     )
     if (!is.null(feat_l1_df)) {
       l1_file_setup$fsl <- rbind(l1_file_setup$fsl, feat_l1_df)
@@ -230,7 +231,7 @@ setup_l1_subject <- function(subj_df, gpa, ctx) {
     }
   }
 
-  ctx$lg$info("Completed processing of subject: %s", subject_ctx$subj_id)
+  slg$info("Completed processing of subject: %s", subject_ctx$subj_id)
   return(l1_file_setup)
 }
 
@@ -239,6 +240,12 @@ setup_l1_subject <- function(subj_df, gpa, ctx) {
 prepare_subject_run_context <- function(subj_df, gpa, ctx) {
   subj_id <- subj_df$id
   subj_session <- subj_df$session
+  slg <- get_subject_logger(
+    base_logger = "glm_pipeline/l1_setup",
+    id = subj_id,
+    gpa = gpa,
+    log_prefix = "setup_l1_models"
+  )
   is_spm_anchor <- !identical(ctx$spm_l1_session_mode, "pooled") ||
     (!is.null(ctx$spm_anchor_by_id) &&
       as.character(subj_id) %in% names(ctx$spm_anchor_by_id) &&
@@ -248,12 +255,12 @@ prepare_subject_run_context <- function(subj_df, gpa, ctx) {
     dplyr::filter(id == !!subj_id & session == !!subj_session & run_nifti_present == TRUE)
 
   if (!"tr" %in% names(rdata)) {
-    ctx$lg$error("No tr column in run data for subject: %s, session: %d", subj_id, subj_session)
+    slg$error("No tr column in run data for subject: %s, session: %d", subj_id, subj_session)
     return(NULL)
   }
 
   if (length(unique(rdata$tr)) > 1L) {
-    ctx$lg$error(
+    slg$error(
       "More than one TR value for runs within a subject. This is not currently supported! subject: %s, session: %d",
       subj_id, subj_session
     )
@@ -280,25 +287,25 @@ prepare_subject_run_context <- function(subj_df, gpa, ctx) {
 
   subj_mr_dir <- subj_df$mr_dir
   if (nrow(run_df) == 0L) {
-    ctx$lg$warn("Unable to find any preprocessed fMRI files in dir: %s", subj_mr_dir)
+    slg$warn("Unable to find any preprocessed fMRI files in dir: %s", subj_mr_dir)
     return(NULL)
   }
 
   nii_present <- file.exists(run_df$run_nifti)
   if (any(!nii_present)) {
-    ctx$lg$warn("Could not find some of the expected preprocessed fMRI files. These will be dropped.")
-    ctx$lg$warn("Missing: %s", run_df$run_nifti[!nii_present])
+    slg$warn("Could not find some of the expected preprocessed fMRI files. These will be dropped.")
+    slg$warn("Missing: %s", run_df$run_nifti[!nii_present])
     run_df <- run_df[nii_present, , drop = FALSE]
   } else {
-    ctx$lg$debug(paste("MR files to analyze:", run_df$run_nifti))
+    slg$debug(paste("MR files to analyze:", run_df$run_nifti))
   }
 
   if (nrow(run_df) == 0L) {
-    ctx$lg$warn("Unable to find any preprocessed fMRI files in dir: %s", subj_mr_dir)
+    slg$warn("Unable to find any preprocessed fMRI files in dir: %s", subj_mr_dir)
     return(NULL)
   }
 
-  ctx$lg$debug("Volumes in run_nifti: %s", paste(run_df$run_volumes, collapse = ", "))
+  slg$debug("Volumes in run_nifti: %s", paste(run_df$run_volumes, collapse = ", "))
 
   m_events <- data.table::rbindlist(
     lapply(gpa$l1_models$events, function(this_event) {
@@ -310,13 +317,13 @@ prepare_subject_run_context <- function(subj_df, gpa, ctx) {
     events = m_events,
     subj_id = subj_id,
     subj_session = subj_session,
-    lg = ctx$lg
+    lg = slg
   )
   run_df <- dropped$run_df
   m_events <- dropped$events
 
   if (nrow(run_df) == 0L) {
-    ctx$lg$warn(
+    slg$warn(
       "No analyzable runs remain after dropping runs with missing events for id=%s, session=%s. Skipping subject.",
       subj_id, subj_session
     )
@@ -351,7 +358,7 @@ prepare_subject_run_context <- function(subj_df, gpa, ctx) {
       run_numbers = run_df$run_number,
       confound_files = run_df$l1_confound_file,
       output_dir = confound_outdir,
-      lg = ctx$lg,
+      lg = slg,
       pooled = FALSE
     )
   }
@@ -360,6 +367,7 @@ prepare_subject_run_context <- function(subj_df, gpa, ctx) {
     subj_id = subj_id,
     subj_session = subj_session,
     subj_mr_dir = subj_mr_dir,
+    lg = slg,
     is_spm_anchor = is_spm_anchor,
     rdata = rdata,
     tr = rdata$tr[1L],
@@ -673,8 +681,11 @@ setup_l1_model_fsl <- function(subject_ctx, model_ctx, d_obj, gpa, model_name, b
 
 # Internal helper: dispatch SPM setup while keeping separate and pooled session modes isolated.
 setup_l1_model_spm <- function(subject_ctx, model_ctx, d_obj, gpa, model_name, ctx) {
+  lg <- subject_ctx$lg
+  if (is.null(lg)) lg <- ctx$lg
+
   if (!"spm" %in% model_ctx$model_backend_names) {
-    ctx$lg$debug(
+    lg$debug(
       "Skipping SPM L1 setup for model %s because its effective execution backend excludes SPM.",
       model_name
     )
@@ -683,7 +694,7 @@ setup_l1_model_spm <- function(subject_ctx, model_ctx, d_obj, gpa, model_name, c
 
   backend_spm <- ctx$glm_backends[["spm"]]
   if (is.null(backend_spm)) {
-    ctx$lg$warn(
+    lg$warn(
       "SPM backend is not configured; skipping SPM L1 setup for subject %s session %s.",
       subject_ctx$subj_id, subject_ctx$subj_session
     )
@@ -691,7 +702,7 @@ setup_l1_model_spm <- function(subject_ctx, model_ctx, d_obj, gpa, model_name, c
   }
 
   if (identical(ctx$spm_l1_session_mode, "pooled") && !isTRUE(subject_ctx$is_spm_anchor)) {
-    ctx$lg$debug(
+    lg$debug(
       "Skipping SPM pooled L1 setup for non-anchor row id=%s session=%s model=%s (anchor session=%s).",
       subject_ctx$subj_id, subject_ctx$subj_session, model_name,
       ctx$spm_anchor_by_id[[as.character(subject_ctx$subj_id)]]
@@ -706,7 +717,7 @@ setup_l1_model_spm <- function(subject_ctx, model_ctx, d_obj, gpa, model_name, c
       gpa = gpa,
       model_name = model_name,
       backend_spm = backend_spm,
-      lg = ctx$lg
+      lg = lg
     ))
   }
 
@@ -715,7 +726,7 @@ setup_l1_model_spm <- function(subject_ctx, model_ctx, d_obj, gpa, model_name, c
     gpa = gpa,
     model_name = model_name,
     backend_spm = backend_spm,
-    lg = ctx$lg
+    lg = lg
   )
 }
 

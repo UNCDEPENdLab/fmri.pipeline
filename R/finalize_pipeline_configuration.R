@@ -560,13 +560,14 @@ setup_output_locations <- function(gpa, lg = NULL) {
     sqlite_db = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".sqlite")),
     project_config_json = file.path(gpa$output_directory, "project_config.json"),
     object_cache = file.path(gpa$output_directory, paste0(gpa$analysis_name, ".rds")),
-    setup_l1_log_txt = file.path(gpa$output_directory, "setup_l1_models.txt"),
-    setup_l1_log_json = file.path(gpa$output_directory, "setup_l1_models.json"),
-    setup_l2_log_txt = file.path(gpa$output_directory, "setup_l2_models.txt"),
-    setup_l2_log_json = file.path(gpa$output_directory, "setup_l2_models.json"),
-    setup_l2_l1_cope_validity_tsv = file.path(gpa$output_directory, "setup_l2_l1_cope_validity.tsv"),
-    setup_l3_log_txt = file.path(gpa$output_directory, "setup_l3_models.txt"),
-    setup_l3_log_json = file.path(gpa$output_directory, "setup_l3_models.json")
+    log_directory = file.path(gpa$output_directory, "logs"),
+    setup_l1_log_txt = file.path(gpa$output_directory, "logs", "setup_l1_models.txt"),
+    setup_l1_log_json = file.path(gpa$output_directory, "logs", "setup_l1_models.json"),
+    setup_l2_log_txt = file.path(gpa$output_directory, "logs", "setup_l2_models.txt"),
+    setup_l2_log_json = file.path(gpa$output_directory, "logs", "setup_l2_models.json"),
+    setup_l2_l1_cope_validity_tsv = file.path(gpa$output_directory, "logs", "setup_l2_l1_cope_validity.tsv"),
+    setup_l3_log_txt = file.path(gpa$output_directory, "logs", "setup_l3_models.txt"),
+    setup_l3_log_json = file.path(gpa$output_directory, "logs", "setup_l3_models.json")
   )
 
   if (checkmate::test_string(gpa$output_locations) && gpa$output_locations[1L] == "default") {
@@ -579,6 +580,12 @@ setup_output_locations <- function(gpa, lg = NULL) {
       lg$info("Populating missing $output_locations field: %s with default: %s", mm, output_defaults[[mm]])
       gpa$output_locations[[mm]] <- output_defaults[[mm]]
     }
+  }
+
+  # ensure log directory exists if configured
+  log_dir <- gpa$output_locations$log_directory
+  if (checkmate::test_string(log_dir) && !dir.exists(log_dir)) {
+    dir.create(log_dir, recursive = TRUE)
   }
 
   return(gpa)

@@ -760,7 +760,6 @@ spm_matlab_to_string <- function(x) {
 #' @param spm_path path to spm12 installation; added to MATLAB path at runtime
 #' @param matlab_path location of MATLAB binary; used with matlabr for run_matlab_code()
 #' 
-#' @importFrom matlabr run_matlab_code
 #' @importFrom doParallel registerDoParallel
 #' @importFrom foreach registerDoSEQ foreach %dopar%
 #' @importFrom iterators iter
