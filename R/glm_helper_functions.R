@@ -169,10 +169,34 @@ get_compute_environment <- function(gpa, what="all") {
   return(compute_string)
 }
 
+gpa_uses_3dlmer <- function(gpa) {
+  if (is.null(gpa$l3_models) || !is.list(gpa$l3_models) || is.null(gpa$l3_models$models)) {
+    return(FALSE)
+  }
+
+  modes <- vapply(
+    gpa$l3_models$models,
+    function(mm) {
+      mode <- mm$l3_input_mode
+      if (is.null(mode) || length(mode) == 0L || is.na(mode[1L])) return("")
+      tolower(trimws(as.character(mode[1L])))
+    },
+    character(1)
+  )
+
+  any(modes == "3dlmer")
+}
+
 # write a small test script for the programs used in the compute environment
 # currently capable of testing FSL, R, and AFNI
 test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
   #"set -x",
+  what <- unique(tolower(what))
+  uses_3dlmer <- gpa_uses_3dlmer(gpa)
+  if (isTRUE(uses_3dlmer) && any(what %in% c("all", "afni"))) {
+    what <- unique(c(what, "r"))
+  }
+
   prog_str <- c(
     "#!/bin/bash", "checks_passed=1", "",
     "echo 'Checking the compute environment settings'",
@@ -192,6 +216,20 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
         echo \"afni found: ${afni_loc}\"
       fi"
     )
+
+    if (isTRUE(uses_3dlmer)) {
+      prog_str <- c(
+        prog_str,
+        "lmer_loc=$(command -v 3dLMEr)
+        [ $? -eq 0 ] && lmer_exists=1 || lmer_exists=0
+        if [ $lmer_exists -eq 0 ]; then
+          echo 'Cannot find 3dLMEr, which is required by l3_input_mode=3dlmer models!'
+          checks_passed=0
+        else
+          echo \"3dLMEr found: ${lmer_loc}\"
+        fi"
+      )
+    }
   }
 
   if (any(what %in% c("all", "fsl"))) {
@@ -227,6 +265,37 @@ test_compute_environment <- function(gpa, what="all", stop_on_fail=TRUE) {
         echo \"R found: ${r_loc}\"
       fi
       "
+    )
+  }
+
+  if (isTRUE(uses_3dlmer) && any(what %in% c("all", "afni", "r"))) {
+    lmer_r_packages <- NULL
+    if (!is.null(gpa$glm_settings) && !is.null(gpa$glm_settings$afni)) {
+      lmer_r_packages <- gpa$glm_settings$afni$lmer_r_packages
+    }
+    if (is.null(lmer_r_packages) || length(lmer_r_packages) == 0L) {
+      lmer_r_packages <- c("lme4", "lmerTest", "phia", "snow")
+    }
+    lmer_r_packages <- unique(as.character(lmer_r_packages))
+    lmer_r_packages <- lmer_r_packages[nzchar(lmer_r_packages)]
+    lmer_pkg_expr <- paste(shQuote(lmer_r_packages), collapse = ", ")
+    prog_str <- c(
+      prog_str,
+      sprintf(
+        "rscript_loc=$(command -v Rscript)
+        [ $? -eq 0 ] && rscript_exists=1 || rscript_exists=0
+        if [ $rscript_exists -eq 0 ]; then
+          echo 'Cannot find Rscript for AFNI 3dLMEr R package checks!'
+          checks_passed=0
+        else
+          echo \"Rscript found for AFNI 3dLMEr checks: ${rscript_loc}\"
+          Rscript -e \"pkgs <- c(%s); missing <- pkgs[!vapply(pkgs, function(pkg) requireNamespace(pkg, quietly = TRUE), logical(1))]; if (length(missing)) stop('Missing R package(s) needed by AFNI 3dLMEr: ', paste(missing, collapse = ', ')); cat('AFNI 3dLMEr R package check passed: ', paste(pkgs, collapse = ', '), '\\n', sep = '')\"
+          if [ $? -ne 0 ]; then
+            checks_passed=0
+          fi
+        fi",
+        lmer_pkg_expr
+      )
     )
   }
 
@@ -1138,16 +1207,48 @@ get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
     cmat <- cmat_full
   }
 
-  # check for contrasts that are duplicated and ask user what to do about it. This should only happen once because we then update the $delete field
+  # check for duplicated contrast rows and resolve naming collisions.
+  # In non-interactive contexts (e.g., scripts/tests), retain the first row
+  # deterministically and drop the rest.
   dupe_list <- get_dupe_rows(cmat)
   drop_rows <- c()
-  if (length(dupe_list) > 0L) {    
-    message("Duplicate contrasts found in your matrix. This can occur for many benign reasons, but we need you to say what you want
+  if (length(dupe_list) > 0L) {
+    is_interactive <- rlang::is_interactive()
+    if (is.null(rownames(cmat))) {
+      rownames(cmat) <- paste0("contrast_", seq_len(nrow(cmat)))
+    }
+    if (isTRUE(is_interactive)) {
+      message("Duplicate contrasts found in your matrix. This can occur for many benign reasons, but we need you to say what you want
       to call these contrasts in the output so that it is clear to you.\n")
+    } else {
+      warning(
+        "Duplicate contrasts found in non-interactive mode; keeping the first name from each duplicate set.",
+        call. = FALSE
+      )
+    }
     
     for (dd in dupe_list) {
       message("These contrasts are the same: ", paste(rownames(cmat)[dd], collapse=", "))
-      whichkeep <- menu(rownames(cmat)[dd], title = "Which name should we use?")
+      if (isTRUE(is_interactive)) {
+        whichkeep <- menu(rownames(cmat)[dd], title = "Which name should we use?")
+        if (!is.numeric(whichkeep) || length(whichkeep) != 1L || is.na(whichkeep) ||
+            whichkeep < 1L || whichkeep > length(dd)) {
+          whichkeep <- 1L
+          warning(
+            "Invalid duplicate-contrast selection; defaulting to first contrast name: ",
+            rownames(cmat)[dd][whichkeep],
+            call. = FALSE
+          )
+        }
+      } else {
+        whichkeep <- 1L
+        message(
+          "Non-interactive session detected while resolving duplicate contrasts; keeping '",
+          rownames(cmat)[dd][whichkeep],
+          "' and dropping: ",
+          paste(rownames(cmat)[dd][-whichkeep], collapse = ", ")
+        )
+      }
       drop_rows <- c(drop_rows, dd[-whichkeep])
     }
 
@@ -1234,32 +1335,170 @@ get_wi_contrast_matrix <- function(mobj, c_colnames) {
 
 # }
 
-#' Helper function to run the requested GLM model for each subject+session separately
+#' Build run-level L2 model data augmented with session-level predictors
+#'
+#' @param gpa A \code{glm_pipeline_arguments} object.
+#' @param lg Optional logger.
+#' @return A data.frame suitable for L2 model fitting/respecification.
+#' @keywords internal
+compose_l2_model_data <- function(gpa, lg = NULL) {
+  checkmate::assert_class(gpa, "glm_pipeline_arguments")
+  checkmate::assert_data_frame(gpa$run_data)
+
+  if (is.null(lg)) {
+    lg <- lgr::get_logger("glm_pipeline/l2_setup")
+  }
+
+  l2_data <- gpa$run_data
+  origin <- setNames(rep("run", ncol(l2_data)), names(l2_data))
+
+  if (is.null(gpa$session_data)) {
+    attr(l2_data, "l2_var_origin") <- origin
+    return(l2_data)
+  }
+
+  checkmate::assert_data_frame(gpa$session_data)
+  checkmate::assert_subset(c("id", "session"), names(gpa$session_data))
+
+  session_dupes <- gpa$session_data %>%
+    dplyr::count(id, session, name = "n") %>%
+    dplyr::filter(n > 1L)
+  if (nrow(session_dupes) > 0L) {
+    stop("session_data must have unique id/session rows", call. = FALSE)
+  }
+
+  sdat <- gpa$session_data
+  session_cols <- setdiff(names(sdat), c("id", "session"))
+  if (length(session_cols) == 0L) {
+    attr(l2_data, "l2_var_origin") <- origin
+    return(l2_data)
+  }
+
+  conflicts <- intersect(session_cols, names(l2_data))
+  redundant_conflicts <- character(0)
+  rename_map <- character(0)
+  if (length(conflicts) > 0L) {
+    columns_equivalent <- function(run_col, session_col) {
+      na_match <- is.na(run_col) & is.na(session_col)
+      keep <- !na_match
+      if (!any(keep)) return(TRUE)
+
+      run_keep <- run_col[keep]
+      session_keep <- session_col[keep]
+
+      if (is.factor(run_keep) || is.factor(session_keep) ||
+          is.character(run_keep) || is.character(session_keep)) {
+        return(identical(as.character(run_keep), as.character(session_keep)))
+      }
+
+      isTRUE(all.equal(run_keep, session_keep, check.attributes = FALSE))
+    }
+
+    for (cc in conflicts) {
+      cmp <- dplyr::left_join(
+        l2_data %>% dplyr::select(id, session, run_value = dplyr::all_of(cc)),
+        sdat %>% dplyr::select(id, session, session_value = dplyr::all_of(cc)),
+        by = c("id", "session")
+      )
+
+      if (columns_equivalent(cmp$run_value, cmp$session_value)) {
+        redundant_conflicts <- c(redundant_conflicts, cc)
+      }
+    }
+
+    if (length(redundant_conflicts) > 0L) {
+      sdat <- sdat %>% dplyr::select(-dplyr::all_of(redundant_conflicts))
+      session_cols <- setdiff(session_cols, redundant_conflicts)
+      conflicts <- setdiff(conflicts, redundant_conflicts)
+      lg$info(
+        "Skipping session-level columns already present in run_data with identical values: %s",
+        paste(redundant_conflicts, collapse = ", ")
+      )
+    }
+  }
+
+  if (length(session_cols) == 0L) {
+    attr(l2_data, "l2_var_origin") <- origin
+    return(l2_data)
+  }
+
+  if (length(conflicts) > 0L) {
+    existing <- names(l2_data)
+    for (cc in conflicts) {
+      base_name <- paste0("session_", cc)
+      candidate <- base_name
+      idx <- 1L
+      while (candidate %in% c(existing, session_cols, unname(rename_map))) {
+        candidate <- paste0(base_name, "_", idx)
+        idx <- idx + 1L
+      }
+      rename_map[cc] <- candidate
+      existing <- c(existing, candidate)
+    }
+
+    for (cc in names(rename_map)) {
+      names(sdat)[names(sdat) == cc] <- rename_map[[cc]]
+    }
+
+    lg$warn(
+      "Renaming session-level columns to avoid collisions with run-level columns: %s",
+      paste(sprintf("%s->%s", names(rename_map), unname(rename_map)), collapse = ", ")
+    )
+  }
+
+  l2_data <- dplyr::left_join(l2_data, sdat, by = c("id", "session"))
+  new_cols <- setdiff(names(l2_data), names(origin))
+  if (length(new_cols) > 0L) {
+    origin[new_cols] <- "session"
+  }
+
+  attr(l2_data, "l2_var_origin") <- origin
+  if (length(rename_map) > 0L) attr(l2_data, "session_rename_map") <- rename_map
+  l2_data
+}
+
+#' Recalculate an L2 model by grouping units derived from available run data
 #'
 #' @param mobj an \code{l1_model_spec} or \code{hi_model_spec} object containing the GLM model to run
-#' @param data The run-level data frame containing data for all ids and sessions. This will be split into individual chunks
+#' @param data The run-level data frame containing data for all ids and sessions. This is split into chunks by \code{split_on}.
+#' @param split_on Character vector defining grouping columns used to respecify the model. Must include \code{"id"} and may include
+#'   \code{"session"} (default: \code{c("id", "session")}).
+#' @param aggregated_session Integer session value assigned when grouping across sessions (i.e., when \code{split_on = "id"}). This keeps
+#'   output schemas consistent for downstream joins and cope metadata. Default is \code{0L}.
 #'
-#' @return a modified copy of \code{mobj} where the $by_subject field has been added
+#' @return a modified copy of \code{mobj} where the \code{$by_subject} field has been added
 #'
-#' @details The function adds the $by_subject field, which contains the design matrices and contrasts
-#'   for each subject and session in \code{data} based on the available data for that session. For example, if
-#'   a subject is missing a few runs (or these are dropped from analysis), then some contrasts may change or drop out of the model.
+#' @details The function adds the \code{$by_subject} field, which contains the design matrices and contrasts
+#'   for each grouping unit in \code{data}, based on the runs that remain available for that unit. For example, if
+#'   a subject is missing runs (or they are dropped from analysis), some contrasts may change or drop out of the model.
 #'
-#' The $by_subject field is a keyed data.table object containing list elements for the cope_list (mapping cope numbers to contrast names),
-#'   the contrasts, and the design matrix for each session.
+#' The \code{$by_subject} field is a keyed data.table containing list elements for \code{cope_list}
+#'   (mapping cope numbers to contrast names), \code{contrasts}, and the design matrix for each unit.
+#'   It also includes \code{grouping_scope} (\code{"id_session"} or \code{"id"}).
 #'
 #' @keywords internal
 #' @importFrom checkmate assert_data_frame assert_multi_class assert_subset
 #' @importFrom data.table data.table
-respecify_l2_models_by_subject <- function(mobj, data) {
+respecify_l2_models_by_subject <- function(mobj, data, split_on = c("id", "session"), aggregated_session = 0L) {
   checkmate::assert_multi_class(mobj, c("l1_model_spec", "hi_model_spec")) # verify that we have an object of known structure
   checkmate::assert_data_frame(data)
   checkmate::assert_subset(c("id", "session"), names(data))
+  checkmate::assert_character(split_on, min.len = 1L, any.missing = FALSE)
+  checkmate::assert_subset(split_on, c("id", "session"))
+  if (!"id" %in% split_on) {
+    stop("split_on must include 'id' for respecify_l2_models_by_subject", call. = FALSE)
+  }
+  checkmate::assert_integerish(aggregated_session, len = 1L)
+  split_on <- unique(split_on)
 
-  # create a nested data.table object for fitting each id + session separately
-  data <- data.table(data, key = c("id", "session"))
+  # create a nested data.table object for fitting each grouping unit
+  data <- data.table(data, key = split_on)
   data$dummy <- seq_len(nrow(data))
-  dsplit <- data[, .(dt = list(.SD)), by = c("id", "session")]
+  dsplit <- data[, .(dt = list(.SD)), by = split_on]
+
+  if (!"session" %in% names(dsplit)) {
+    dsplit$session <- as.integer(aggregated_session)
+  }
 
   # use model formula from parent object
   model_formula <- terms(mobj$lmfit)
@@ -1287,13 +1526,14 @@ respecify_l2_models_by_subject <- function(mobj, data) {
     cope_list[[vv]] <- cope_df
     contrast_list[[vv]] <- mm$contrasts
     model_matrix_list[[vv]] <- model.matrix(lmfit)
-    n_l2_copes[vv] <- if (is.null(mm$contrasts)) 0L else ncol(mm$contrasts)
+    n_l2_copes[vv] <- if (is.null(mm$contrasts)) 0L else nrow(mm$contrasts)
   }
 
   dsplit[, cope_list := cope_list]
   dsplit[, contrasts := contrast_list]
   dsplit[, model_matrix := model_matrix_list]
   dsplit[, n_l2_copes := n_l2_copes]
+  dsplit[, grouping_scope := ifelse("session" %in% split_on, "id_session", "id")]
   dsplit[, dt := NULL] # no longer need original split data
 
   mobj$by_subject <- dsplit
@@ -1500,10 +1740,58 @@ respecify_l3_model <- function(mobj, new_data) {
   checkmate::assert_subset(c("id", "session"), names(new_data))
 
   # use id and session in new_data to subset the full data from initial model specification
-  full_data <- cbind(mobj$metadata, mobj$model_data)
+  # ensure we combine metadata and model data without creating duplicate columns (e.g., session might be in both)
+  model_data_subset <- mobj$model_data
+  overlap_cols <- intersect(names(mobj$metadata), names(model_data_subset))
+  if (length(overlap_cols) > 0L) {
+    model_data_subset <- model_data_subset %>% dplyr::select(-dplyr::all_of(overlap_cols))
+  }
+  full_data <- cbind(mobj$metadata, model_data_subset)
+
   new_data <- new_data %>% dplyr::select(id, session) #just metadata of interest
   new_data <- new_data %>%
     dplyr::left_join(full_data, by=c("id", "session"))
+
+  # Auto-inject per-subject indicator EVs for pooled_sessions_subject_ev mode.
+  # FSL's repeated-measures approach requires one EV per subject to model out
+  # the subject-specific intercept (mean). If the user's L3 formula does not
+  # include 'id', we automatically add it as a factor to ensure correct
+  # repeated-measures modeling.
+  l3_input_mode <- mobj$l3_input_mode
+  if (identical(l3_input_mode, "pooled_sessions_subject_ev")) {
+    model_vars <- mobj$model_variables
+    formula_str <- mobj$model_formula
+    id_in_formula <- "id" %in% model_vars ||
+      (!is.null(formula_str) && grepl("\\bid\\b", formula_str, perl = TRUE))
+
+    if (!isTRUE(id_in_formula)) {
+      lgr::get_logger("glm_pipeline/l3_setup")$info(
+        "l3_input_mode='pooled_sessions_subject_ev': auto-injecting 'id' as a factor EV for subject-mean modeling."
+      )
+
+      # ensure id is a factor in the data
+      new_data$id <- as.factor(new_data$id)
+
+      # prepend id to the existing model formula
+      if (!is.null(formula_str) && nzchar(formula_str)) {
+        # strip any leading "~ " or "~" prefix, then rebuild
+        rhs <- sub("^~\\s*", "", formula_str)
+        if (rhs == "1" || rhs == "") {
+          # intercept-only model: replace with id (id already provides intercept per subject)
+          augmented_formula <- "~ 0 + id"
+        } else {
+          augmented_formula <- paste("~ 0 + id +", rhs)
+        }
+      } else {
+        augmented_formula <- "~ 0 + id"
+      }
+
+      lg_l3 <- lgr::get_logger("glm_pipeline/l3_setup")
+      lg_l3$info("Augmented L3 formula: %s", augmented_formula)
+      mobj$model_formula <- augmented_formula
+      mobj$model_variables <- unique(c("id", model_vars))
+    }
+  }
 
   mobj <- mobj_fit_lm(mobj=mobj, data=new_data)
 
@@ -1796,21 +2084,23 @@ named_vector <- function(...) {
 # }
 
 
-enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
+enforce_glms_complete <- function(gpa, level=1L, lg=NULL, glm_software=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_integerish(level, lower=1L, upper=3L)
   checkmate::assert_class(lg, "Logger")
+  checkmate::assert_character(glm_software, null.ok = TRUE)
 
   obj_name <- glue("l{level}_model_setup")
   expect_class <- glue("l{level}_setup")
   obj <- gpa[[obj_name]]
+  backend_names <- if (is.null(glm_software)) normalize_backend_strings(gpa$glm_software) else normalize_backend_strings(glm_software)
 
   if (is.null(obj) || !inherits(obj, expect_class)) {
     msg <- sprintf("No l%d_model_setup found in the glm pipeline object.", level)
     lg$error(msg)
     stop(msg)
   } else {
-    if ("fsl" %in% gpa$glm_software) {
+    if ("fsl" %in% backend_names && !is.null(obj$fsl)) {
       nmiss <- sum(obj$fsl$feat_complete == FALSE)
       n_feat_runs <- nrow(obj$fsl)
       if (nmiss == n_feat_runs) {
@@ -1825,7 +2115,7 @@ enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
       }
     }
 
-    if ("spm" %in% gpa$glm_software) {
+    if ("spm" %in% backend_names) {
       if (!is.null(obj$spm) && "spm_complete" %in% names(obj$spm)) {
         nmiss <- sum(obj$spm$spm_complete == FALSE)
         n_spm_runs <- nrow(obj$spm)
@@ -1837,6 +2127,23 @@ enforce_glms_complete <- function(gpa, level=1L, lg=NULL) {
           lg$warn(
             "There are %d missing SPM outputs in %s$spm. Using complete %d outputs.",
             nmiss, obj_name, n_spm_runs - nmiss
+          )
+        }
+      }
+    }
+
+    if ("afni" %in% backend_names) {
+      if (!is.null(obj$afni) && "afni_complete" %in% names(obj$afni)) {
+        nmiss <- sum(obj$afni$afni_complete == FALSE)
+        n_afni_runs <- nrow(obj$afni)
+        if (nmiss == n_afni_runs) {
+          msg <- sprintf("All AFNI runs in %s$afni are incomplete.", obj_name)
+          lg$error(msg)
+          stop(msg)
+        } else if (nmiss > 0) {
+          lg$warn(
+            "There are %d missing AFNI outputs in %s$afni. Using complete %d outputs.",
+            nmiss, obj_name, n_afni_runs - nmiss
           )
         }
       }

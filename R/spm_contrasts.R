@@ -76,12 +76,25 @@ generate_spm_contrasts <- function(output_dir, condition_contrasts=TRUE, unit_co
 #' @param matlab_cmd see generate_spm_mat
 #' @param matlab_args see generate_spm_mat
 #' @param average_across_runs whether to average regressor weights across run-specific columns in SPM.xX
-#'
+#' @param projection_interaction_terms optional character vector of projected L2-by-L1 interaction term names
+#' @param projection_interaction_contrast_modes optional character vector. Allowed values are
+#'   'pooled', 'session_specific', and 'session_differences'
+#' @param projection_interaction_run_labels optional run labels aligned to SPM sessions for naming
+#' @param projection_main_effect_terms optional character vector of projected L2 term names to
+#'   estimate in contrast-space against each L1 contrast row
+#' @param projection_main_effect_weights optional data.frame or matrix containing projected
+#'   L2 term values aligned to SPM session/run order
+#' 
 #' @export
 generate_spm_contrasts_from_model <- function(output_dir, mobj,
                                               spm_path="/gpfs/group/mnh5174/default/lab_resources/spm12",
                                               execute=FALSE, matlab_cmd="matlab", matlab_args="-batch",
-                                              average_across_runs=TRUE) {
+                                              average_across_runs=TRUE,
+                                              projection_interaction_terms=character(0),
+                                              projection_interaction_contrast_modes=character(0),
+                                              projection_interaction_run_labels=NULL,
+                                              projection_main_effect_terms=character(0),
+                                              projection_main_effect_weights=NULL) {
   if (missing(output_dir)) { stop("No output_dir provided. This must be the folder containing the SPM.mat file") }
   if (execute && !file.exists(file.path(output_dir, "SPM.mat"))) { stop("No SPM.mat file found in: ", output_dir, ". This must be setup prior to estimating contrasts.") }
 
@@ -95,10 +108,33 @@ generate_spm_contrasts_from_model <- function(output_dir, mobj,
     stop("Model contrast matrix is missing regressor column names.")
   }
 
+  if (!is.null(projection_main_effect_weights) &&
+      !is.data.frame(projection_main_effect_weights) &&
+      !is.matrix(projection_main_effect_weights)) {
+    stop("projection_main_effect_weights must be NULL, a data.frame, or a matrix.")
+  }
+
+  if (is.matrix(projection_main_effect_weights)) {
+    projection_main_effect_weights <- as.data.frame(
+      projection_main_effect_weights,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+  }
+
+  if (is.data.frame(projection_main_effect_weights)) {
+    projection_main_effect_weights[] <- lapply(projection_main_effect_weights, as.numeric)
+  }
+
   contrast_spec <- list(
     contrast_matrix = cmat,
     regressors = colnames(cmat),
-    average_across_runs = average_across_runs
+    average_across_runs = average_across_runs,
+    projection_interaction_terms = unique(as.character(projection_interaction_terms)),
+    projection_interaction_contrast_modes = unique(as.character(projection_interaction_contrast_modes)),
+    projection_interaction_run_labels = projection_interaction_run_labels,
+    projection_main_effect_terms = unique(as.character(projection_main_effect_terms)),
+    projection_main_effect_weights = projection_main_effect_weights
   )
   spec_path <- file.path(output_dir, "spm_contrast_spec.rds")
   saveRDS(contrast_spec, file = spec_path)

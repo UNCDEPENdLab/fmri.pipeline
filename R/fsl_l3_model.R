@@ -15,8 +15,33 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
   lg <- lgr::get_logger("glm_pipeline/l3_setup")
   lg$set_threshold(gpa$lgr_threshold)
 
-  if (length(unique(l3_df$session)) > 1L) {
-    msg <- "fsl_l3_model is designed for execution on a single session data.frame"
+  if (length(unique(l3_df$l3_model)) > 1L) {
+    msg <- "fsl_l3_model is designed for execution on a single l3 model"
+    lg$error(msg)
+    stop(msg)
+  }
+
+  l3_model <- l3_df$l3_model[1L]
+
+  l3_input_mode <- NULL
+  if ("l3_input_mode" %in% names(l3_df)) {
+    modes <- unique(stats::na.omit(l3_df$l3_input_mode))
+    if (length(modes) > 1L) {
+      msg <- "fsl_l3_model requires a single l3_input_mode within each input data.frame"
+      lg$error(msg)
+      stop(msg)
+    }
+    if (length(modes) == 1L) l3_input_mode <- modes[1L]
+  }
+  if (is.null(l3_input_mode)) {
+    l3_input_mode <- gpa$l3_models$models[[l3_model]]$l3_input_mode
+  }
+  l3_input_mode <- normalize_l3_input_mode(l3_input_mode)
+  checkmate::assert_subset(l3_input_mode, longitudinal_l3_input_modes())
+
+  n_sessions_input <- length(unique(l3_df$session))
+  if (identical(l3_input_mode, "per_session") && n_sessions_input > 1L) {
+    msg <- "fsl_l3_model with l3_input_mode='per_session' requires a single-session input data.frame"
     lg$error(msg)
     stop(msg)
   }
@@ -35,25 +60,18 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
     }
   }
 
-  if (length(unique(l3_df$l3_model)) > 1L) {
-    msg <- "fsl_l3_model is designed for execution on a single l3 model"
-    lg$error(msg)
-    stop(msg)
-  }
-
   # elements of metadata for l3
-  session <- l3_df$session[1L]
+  session <- if (n_sessions_input == 1L) l3_df$session[1L] else 0L
   l1_model <- l3_df$l1_model[1L]
   l2_model <- l3_df$l2_model[1L]
-  l3_model <- l3_df$l3_model[1L]
   l1_cope_name <- l1_contrast <- l3_df$l1_cope_name[1L] #use the double assign for synonyms used in glue() output expression
   l2_cope_name <- l2_contrast <- l3_df$l2_cope_name[1L]
 
   # tracking data frame for this model (column names should follow variable names)
   if (isTRUE(gpa$multi_run)) {
-    feat_l3_df <- data.frame(l1_model, l1_cope_name, l2_model, l2_cope_name, l3_model)
+    feat_l3_df <- data.frame(l1_model, l1_cope_name, l2_model, l2_cope_name, l3_model, session, l3_input_mode)
   } else {
-    feat_l3_df <- data.frame(l1_model, l1_cope_name, l3_model)
+    feat_l3_df <- data.frame(l1_model, l1_cope_name, l3_model, session, l3_input_mode)
   }
 
   # we need to regenerate the l3 model for the inputs provided
@@ -92,6 +110,18 @@ fsl_l3_model <- function(l3_df=NULL, gpa) {
     l3_outdir,
     glue::glue(gpa$output_locations$feat_l3_fsf) # evaluate glue expression
   )
+
+  n_global_sessions <- n_sessions_input
+  if (!is.null(gpa$run_data) && "session" %in% names(gpa$run_data)) {
+    n_global_sessions <- length(unique(gpa$run_data$session))
+  }
+  if (identical(l3_input_mode, "per_session") && n_global_sessions > 1L) {
+    if (grepl("\\.fsf$", l3_feat_fsf)) {
+      l3_feat_fsf <- sub("\\.fsf$", paste0("_ses-", session, ".fsf"), l3_feat_fsf)
+    } else {
+      l3_feat_fsf <- paste0(l3_feat_fsf, "_ses-", session, ".fsf")
+    }
+  }
 
   l3_feat_dir <- sub(".fsf$", ".gfeat", l3_feat_fsf)
 

@@ -31,19 +31,28 @@ read_l1_confound_columns <- function(gpa, id, session, run_number, lg = NULL) {
 }
 
 concat_l1_confounds <- function(gpa, id, session, run_numbers, confound_files, output_dir,
-                                lg = NULL, file_name = NULL) {
+                                lg = NULL, file_name = NULL, run_sessions = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_scalar(id, null.ok = FALSE)
   checkmate::assert_integerish(session, null.ok = FALSE)
   checkmate::assert_integerish(run_numbers, null.ok = FALSE)
   checkmate::assert_character(confound_files, null.ok = TRUE)
   checkmate::assert_string(output_dir, null.ok = FALSE)
+  checkmate::assert_integerish(run_sessions, null.ok = TRUE, any.missing = FALSE)
 
   if (is.null(lg)) lg <- lgr::get_logger("glm_pipeline/l1_setup")
 
   if (length(confound_files) == 0L) return(NULL)
   if (length(confound_files) != length(run_numbers)) {
     lg$warn("Confound files length (%d) does not match run_numbers length (%d).", length(confound_files), length(run_numbers))
+    return(NULL)
+  }
+  if (is.null(run_sessions)) {
+    run_sessions <- rep.int(as.integer(session), length(run_numbers))
+  }
+  run_sessions <- as.integer(run_sessions)
+  if (length(run_sessions) != length(run_numbers)) {
+    lg$warn("run_sessions length (%d) does not match run_numbers length (%d).", length(run_sessions), length(run_numbers))
     return(NULL)
   }
 
@@ -56,10 +65,12 @@ concat_l1_confounds <- function(gpa, id, session, run_numbers, confound_files, o
 
   run_info <- lapply(seq_along(run_numbers), function(ii) {
     run_no <- run_numbers[ii]
-    col_info <- read_l1_confound_columns(gpa, id, session, run_no, lg = lg)
+    run_session <- run_sessions[ii]
+    col_info <- read_l1_confound_columns(gpa, id, run_session, run_no, lg = lg)
     if (is.null(col_info)) return(NULL)
     list(
       run_number = run_no,
+      session = run_session,
       file = confound_files[ii],
       col_names = col_info$col_name,
       is_spike = col_info$is_spike

@@ -68,6 +68,10 @@ polynomial regressors that are orthogonal to substantive design factors.}
 data.frame should contain the columns run_number, run_volumes, run_nifti, and drop_volumes. If run_nifti
 is provided, but run_volumes is not, then the number of volumes is looked up from the NIfTI header.}
 
+\item{run_nifti_drop_applied}{Logical indicating whether the NIfTI inputs in \code{run_data$run_nifti}
+already have \code{drop_volumes} removed. If \code{TRUE} (default), reported NIfTI lengths are treated
+as post-drop lengths; if \code{FALSE}, \code{drop_volumes} are subtracted when deriving modeled volumes.}
+
 \item{drop_volumes}{By default, all volumes are retained. If specified, this can be a vector of the number of volumes
 that will be removed from the \emph{beginning} of each convolved regressor. If you pass a single number (e.g., 3),
 this number of volumes will be dropped from each run. This is useful if you have dropped the first n volumes

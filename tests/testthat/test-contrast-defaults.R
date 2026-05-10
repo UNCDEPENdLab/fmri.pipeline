@@ -117,3 +117,53 @@ test_that("malformed delete specs are ignored without dropping contrasts", {
   expect_equal(nrow(res_empty_delete$contrasts), 1L)
   expect_equal(rownames(res_empty_delete$contrasts), "EV_Intercept")
 })
+
+test_that("get_contrasts_from_spec resolves duplicate contrasts non-interactively", {
+  data <- data.frame(
+    id = c("sub1", "sub2", "sub3"),
+    session = c("ses1", "ses1", "ses1"),
+    run_number = c(1, 2, 3),
+    stringsAsFactors = FALSE
+  )
+
+  mobj <- list(level = 2L)
+  class(mobj) <- c("list", "hi_model_spec")
+  mobj <- fmri.pipeline:::mobj_fit_lm(
+    mobj = mobj,
+    model_formula = "~1",
+    data = data,
+    id_cols = c("id", "session", "run_number")
+  )
+
+  mobj$contrast_spec <- list(
+    diagonal = FALSE,
+    cond_means = character(0),
+    pairwise_diffs = character(0),
+    cell_means = FALSE,
+    overall_response = FALSE,
+    simple_slopes = list(),
+    weights = "cells",
+    cat_vars = character(0),
+    regressors = mobj$regressors,
+    delete = NULL
+  )
+
+  custom <- matrix(
+    c(1, 1),
+    nrow = 2,
+    ncol = 1,
+    dimnames = list(c("EV_(Intercept)", "stress_label.stress"), "(Intercept)")
+  )
+  mobj$contrast_list <- list(custom = custom)
+
+  rlang::local_interactive(FALSE)
+  out <- NULL
+  expect_warning(
+    out <- fmri.pipeline:::get_contrasts_from_spec(mobj),
+    "Duplicate contrasts found in non-interactive mode"
+  )
+
+  expect_equal(nrow(out$contrasts), 1L)
+  expect_equal(rownames(out$contrasts), "EV_Intercept")
+  expect_true("stress_label.stress" %in% out$contrast_spec$delete)
+})

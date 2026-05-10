@@ -9,7 +9,9 @@ run_glm_pipeline(
   l1_model_names = "prompt",
   l2_model_names = "prompt",
   l3_model_names = "prompt",
-  glm_software = NULL
+  glm_software = NULL,
+  level_backends = NULL,
+  backend_overrides = NULL
 )
 }
 \arguments{
@@ -22,6 +24,10 @@ run_glm_pipeline(
 \item{l3_model_names}{a character vector of level 3 model names (specified during build_l3_models) that should be executed}
 
 \item{glm_software}{which glm software should be used for model estimation (not implemented yet)}
+
+\item{level_backends}{optional per-level backend override list keyed by `l1`, `l2`, and/or `l3`}
+
+\item{backend_overrides}{optional model-specific backend override list}
 }
 \description{
 primary function for running a GLM analysis pipeline

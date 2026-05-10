@@ -266,8 +266,9 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
 #'          the regressor values are simply aligned onto the time grid without convolution
 #'          based on the corresponding onsets, durations, and values.
 #' @param ts_multiplier A vector that is n_vols in length that will be multiplied against the stimulus vector before convolution.
-#' @param hrf_parameters. A named vector of parameters passed to \code{fmri.stimulus} that control the shape of the double gamma HRF.
+#' @param hrf_parameters A named vector of parameters passed to \code{fmri.stimulus} that control the shape of the double gamma HRF.
 #'          Default: \code{c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35)}.
+#' @param microtime_resolution Number of microtime bins per TR used when evaluating and normalizing the convolved regressor.
 #' @param lg An lgr object used for logging messages
 #'
 #' @author Michael Hallquist
@@ -275,7 +276,8 @@ place_dmat_on_time_grid <- function(dmat, convolve=TRUE, run_timing=NULL, bdm_ar
 convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zeros=TRUE,
                                    center_values=TRUE, convmax_1=FALSE, demean_convolved=FALSE,
                                    high_pass=NULL, convolve=TRUE, ts_multiplier=NULL,
-                                   hrf_parameters=c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35), lg=NULL) {
+                                   hrf_parameters=c(a1 = 6, a2 = 12, b1 = 0.9, b2 = 0.9, cc = 0.35),
+                                   microtime_resolution=20L, lg=NULL) {
 
   if (is.null(lg)) lg <- lgr::get_logger()
 
@@ -324,7 +326,8 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
       n_vols = 300 / tr, values = 1.0, onsets = 100, durations = 100, tr = tr,
       demean = FALSE, # don't mean center for computing max height
       a1 = hrf_parameters["a1"], a2 = hrf_parameters["a2"], b1 = hrf_parameters["b1"],
-      b2 = hrf_parameters["b2"], cc = hrf_parameters["cc"]
+      b2 = hrf_parameters["b2"], cc = hrf_parameters["cc"],
+      microtime_resolution = microtime_resolution
     )
     hrf_max <- max(hrf_boxcar)
   } else if (normalization == "none") {
@@ -357,65 +360,150 @@ convolve_regressor <- function(n_vols, reg, tr=1.0, normalization="none", rm_zer
     }
   }
 
-  # Split regressor into separate events prior to convolution
-  # In the case of evtmax_1 normalization, normalize the HRF for the event to max height of 1 prior
-  #   to multiplying against the event value/height.
-  # In the case of durmax_1 normalization, normalize the HRF to a height of 1 for long events (~15s).
-  if (isTRUE(normalize_hrf)) {
-    
-    #for each event, convolve it with hrf, normalize, then sum convolved events to get full timecourse
+  # Convolve regressor with HRF, applying normalization if requested.
+  # evtmax_1 (normeach): normalize HRF peak to 1.0 for each event, regardless of duration (dmUBLOCK(1)).
+  # durmax_1: normalize HRF to peak 1.0 for long events (~15s) (dmUBLOCK(0)).
+  if (isTRUE(normeach) && is.null(ts_multiplier)) {
+    # Optimized evtmax_1 implementation (Apr 2026), inspired by AFNI's dmUBLOCK approach.
+    #
+    # OLD approach: for each of N events, call fmri.stimulus() over the full run length to
+    # convolve one event, take max() of the result as the peak, normalize, multiply by the
+    # parametric value, then sum across events. This had two problems:
+    #   1. Slow: N full-run FFT convolutions, each O(n_vols * micro_res * log(...)).
+    #   2. Incorrect for end-of-run events: the HRF may not reach its peak before the run
+    #      ends, so max(stim_conv) underestimates the true peak. The old code hacked around
+    #      this by re-convolving at the center of the run, but this was fragile.
+    #
+    # NEW approach: compute HRF peak for each unique (duration, grid-phase) pair using a
+    # small padded window, then convolve all events at once over the full run. This replaces
+    # N full-run FFTs with U small-window FFTs + 1 full-run FFT, where U is the number of
+    # unique (duration, grid-phase) combinations.
+    #
+    # Overlapping events are handled correctly because construct_stimulus uses additive
+    # accumulation: conv(A + B, hrf) = conv(A, hrf) + conv(B, hrf) by linearity.
+    #
+    # PERFORMANCE: Benchmarks (local/benchmark_evtmax1.R, run via devtools::load_all):
+    #                                    n_vols=300  n_vols=500  n_vols=600
+    #   Fixed durations (50 events):       5.7x        6.8x        9.1x
+    #   5 unique durations (50 events):    3.0x        3.9x        3.7x
+    #   RT-like unique durations (50 ev):  2.1x        3.9x        3.0x
+    #   RT-like unique durations (200 ev): 2.3x        4.2x        3.3x
+    # The speedup comes from replacing N full-run FFTs with U small-window FFTs + 1 full-run
+    # FFT. The small-window FFTs (n_vols ~60) are much cheaper than full-run FFTs
+    # (n_vols ~300-600), and the single combined full-run FFT replaces N full-run FFTs.
+    # Speedup scales with both event count and run length.
+    #
+    # CORRECTNESS: The key insight from AFNI's dmUBLOCK is that the normalization peak can
+    # be computed analytically (or in a padded context) independent of event position in the
+    # run. AFNI uses a closed-form integral (basis_block_hrf4) with an analytical peak time
+    # formula (TPEAK4). We achieve the same position-independence by computing peaks in a
+    # small window with generous padding (duration + 40s), which always provides sufficient
+    # room for the HRF to fully resolve.
+    #
+    # After convolving a boxcar event with the HRF and downsampling to the TR grid, the
+    # observed peak depends on which downsampled time point is closest to the continuous
+    # HRF peak. This is determined by the event's "grid phase": the microtime bin offset
+    # within a TR. Events with the same duration and grid phase produce identical peaks,
+    # allowing efficient grouping.
+    #
+    # The grid phase must match fmri.stimulus's internal rounding:
+    #   round(onset / (tr/micro_res) + 1), then (rounded_bin - 1) %% micro_res
+    #
+    # Each peak is computed in a small window (duration + 40s) with the event placed at a
+    # position that preserves its grid phase. This always provides sufficient room for the
+    # HRF to fully resolve, eliminating the old hack for end-of-run events.
+    #
+    # By linearity of convolution:
+    #   sum_i [v_i/peak_i * conv(boxcar_i, hrf)] = conv(sum_i [v_i/peak_i * boxcar_i], hrf)
+    # so we adjust values by 1/peak and do one convolution.
+    micro_res <- microtime_resolution
+    peak_base <- 20 # seconds — base onset in small window, well away from edges
+
+    # Compute grid phase: the microtime bin offset within a TR period. After downsampling
+    # the convolved microtime series to the TR grid, the peak amplitude depends on how
+    # close a TR sample falls to the continuous HRF peak. Two events with the same duration
+    # but different grid phases land on different points of the TR grid and thus have
+    # different observed peaks. The formula replicates fmri.stimulus's internal rounding:
+    #   onset_micro = round(onset_sec / (tr / micro_res) + 1)
+    #   grid_phase  = (onset_micro - 1) %% micro_res
+    # This gives a value in 0..(micro_res-1) that fully determines the TR-grid alignment.
+    grid_phase <- (round(times * micro_res / tr + 1) - 1L) %% micro_res
+
+    # Group by (duration, grid_phase) to avoid redundant peak computations.
+    peak_keys <- paste0(durations, "_", grid_phase)
+    unique_keys <- unique(peak_keys)
+    rep_idx <- match(unique_keys, peak_keys)
+
+    # Precompute peak for each unique (duration, grid_phase) pair
+    peak_lookup <- vapply(rep_idx, function(j) {
+      peak_onset <- peak_base + grid_phase[j] * tr / micro_res
+      peak_n_vols <- ceiling((peak_onset + durations[j] + 40) / tr)
+      max(fmri.stimulus(
+        n_vols = peak_n_vols, values = 1.0, onsets = peak_onset, durations = durations[j],
+        tr = tr, demean = FALSE, center_values = FALSE, convolve = convolve, rm_zeros = FALSE,
+        a1 = hrf_parameters["a1"], a2 = hrf_parameters["a2"],
+        b1 = hrf_parameters["b1"], b2 = hrf_parameters["b2"],
+        cc = hrf_parameters["cc"],
+        microtime_resolution = microtime_resolution
+      ))
+    }, numeric(1))
+
+    event_peaks <- peak_lookup[match(peak_keys, unique_keys)]
+
+    # Scale values by 1/peak so that a single convolution produces peak-normalized results.
+    # By linearity of convolution:
+    #   sum_i [v_i/peak_i * conv(boxcar_i, hrf)] = conv(sum_i [v_i/peak_i * boxcar_i], hrf)
+    # construct_stimulus uses additive accumulation, so overlapping events with different
+    # adjusted values correctly sum their contributions in a single fmri.stimulus call.
+    adjusted_values <- values / event_peaks
+
+    tc_conv <- fmri.stimulus(
+      n_vols = n_vols, values = adjusted_values, onsets = times, durations = durations,
+      tr = tr, demean = FALSE, center_values = FALSE, convolve = convolve, rm_zeros = FALSE,
+      a1 = hrf_parameters["a1"], a2 = hrf_parameters["a2"],
+      b1 = hrf_parameters["b1"], b2 = hrf_parameters["b2"],
+      cc = hrf_parameters["cc"],
+      microtime_resolution = microtime_resolution
+    )
+  } else if (isTRUE(normalize_hrf)) {
+    # Per-event convolution path: used for durmax_1 and for evtmax_1 with ts_multiplier.
+    # When ts_multiplier is present, the peak depends on local time series values around
+    # each event, so per-event convolution is required.
     normed_events <- sapply(seq_along(times), function(i) {
 
-      # TODO: sort out normalization for case where we use ts_multiplier and evtmax_1 -- for now, it's a bad idea at the end of a run
-      #obtain unit-convolved duration-modulated regressor to define HRF prior to modulation by parametric regressor
       stim_conv <- fmri.stimulus(
         n_vols = n_vols, values = 1.0, onsets = times[i], durations = durations[i], tr = tr, demean = FALSE,
-        center_values = FALSE, convolve = convolve, ts_multiplier = ts_multiplier, # ts_multiplier = NULL, #
-        a1 = hrf_parameters["a1"], a2 = hrf_parameters["a2"], b1 = hrf_parameters["b1"], b2 = hrf_parameters["b2"], cc = hrf_parameters["cc"]
+        center_values = FALSE, convolve = convolve, ts_multiplier = ts_multiplier,
+        a1 = hrf_parameters["a1"], a2 = hrf_parameters["a2"], b1 = hrf_parameters["b1"], b2 = hrf_parameters["b2"], cc = hrf_parameters["cc"],
+        microtime_resolution = microtime_resolution
       )
-      
+
       if (normeach) {
+        # evtmax_1 with ts_multiplier: per-event normalization
         if (times[i] + durations[i] > (n_vols*tr - 20)) {
-          # When the event occurs at the end of the time series and is the only event (i.e., as in evtmax_1),
-          # the HRF never reaches its peak. The further it is away from the peak, the stranger the stim_conv/max(stim_conv)
-          # scaling will be -- it can lead to odd between-event scaling in the regressor.
-
-          # Update Sep2019: it turns out that anything convolved regressor that has not achieved its peak by the end of the run
-          #   -- even if it fits within the time interval -- can be rescaled improperly. A general solution is to place this
-          #   event in the middle of the interval, convolve it with the HRF, then use *that* height as the normalization factor.
-          # Apply this alternative correction to any event that begins or is 'on' in the last 20 seconds.
-          msg <- glue(
-            "Event occurs at the tail of the run. Onset: {round(times[i], 2)}, Offset: {round(times[i] + durations[i], 2)}, Run duration: {n_vols*tr}. ",
-            "Using HRF peak from center of run for evtmax_1 regressor to avoid strange scaling. ",
-            "Please check that the end of your convolved regressors matches your expectation."
-          )
-          lg$debug(msg)
-
           mid_vol <- n_vols*tr/2
-          stim_at_center <- fmri.stimulus(n_vols=n_vols, values=1.0, onsets=mid_vol, durations=durations[i], tr=tr, demean=FALSE, 
-            center_values=FALSE, convolve = convolve, ts_multiplier=ts_multiplier, # ts_multiplier = NULL, 
-            a1=hrf_parameters["a1"], a2=hrf_parameters["a2"], b1=hrf_parameters["b1"], b2=hrf_parameters["b2"], cc=hrf_parameters["cc"])
-
-          # Rescale HRF to a max of 1.0 for each event, regardless of duration -- EQUIVALENT TO dmUBLOCK(1). 
-          # Use the peak of the HRF aligned to center of time interval.
+          stim_at_center <- fmri.stimulus(n_vols=n_vols, values=1.0, onsets=mid_vol, durations=durations[i], tr=tr, demean=FALSE,
+            center_values=FALSE, convolve = convolve, ts_multiplier=ts_multiplier,
+            a1=hrf_parameters["a1"], a2=hrf_parameters["a2"], b1=hrf_parameters["b1"], b2=hrf_parameters["b2"], cc=hrf_parameters["cc"],
+            microtime_resolution=microtime_resolution)
           stim_conv <- stim_conv/max(stim_at_center)
         } else {
-          # Rescale HRF to a max of 1.0 for each event, regardless of duration -- EQUIVALENT TO dmUBLOCK(1).
           stim_conv <- stim_conv/max(stim_conv)
         }
-      } else if (normalize_hrf == TRUE && normeach == FALSE) {
-        stim_conv <- stim_conv/hrf_max #rescale HRF to a max of 1.0 for long event -- EQUIVALENT TO dmUBLOCK(0)
+      } else {
+        stim_conv <- stim_conv/hrf_max #durmax_1: rescale HRF to max 1.0 for long event -- EQUIVALENT TO dmUBLOCK(0)
       }
-      
-      stim_conv <- stim_conv*values[i] #for each event, multiply by parametric regressor value
+
+      stim_conv <- stim_conv*values[i]
     })
 
-    tc_conv <- apply(normed_events, 1, sum) #sum individual HRF regressors for combined time course
+    tc_conv <- apply(normed_events, 1, sum)
   } else {
     #handle unnormalized convolution
     tc_conv <- fmri.stimulus(n_vols=n_vols, values=values, onsets=times, durations=durations, tr=tr, demean=FALSE,
       center_values=FALSE, convolve = convolve, ts_multiplier = ts_multiplier,
-      a1=hrf_parameters["a1"], a2=hrf_parameters["a2"], b1=hrf_parameters["b1"], b2=hrf_parameters["b2"], cc=hrf_parameters["cc"])
+      a1=hrf_parameters["a1"], a2=hrf_parameters["a2"], b1=hrf_parameters["b1"], b2=hrf_parameters["b2"], cc=hrf_parameters["cc"],
+      microtime_resolution=microtime_resolution)
   }
 
   #force the regressor to be a 1-column matrix so that apply calls below work
@@ -551,8 +639,14 @@ fmri.stimulus <- function(n_vols = 1, onsets = NULL, durations = NULL, values = 
   }
   
   convolve_stimulus <- function(stimulus, n_vols, tr, method) {
-    #  zero pad stimulus vector with 20 TRs on left and right to avoid bounding/edge effects in convolve
-    padding <- 20 * microtime_resolution
+    # Zero-pad stimulus vector on left and right to avoid circular convolution edge effects.
+    # Padding must be long enough for the double-gamma HRF undershoot to decay to ~zero.
+    # The undershoot is still ~-0.02 at 20s, so we use 30s of padding in absolute time.
+    # With sub-second TRs (e.g., multiband TR=0.5s), the old 20-TR padding was only 10s,
+    # which caused position-dependent artifacts near run boundaries.
+    # Note: at this point, tr is the micro-TR (original_TR / microtime_resolution),
+    # so 30/tr gives the number of microtime bins spanning 30 seconds.
+    padding <- ceiling(30 / tr)
     padded <- c(rep(0, padding), stimulus, rep(0, padding))
     if (method == "cpp") {
       out <- convolve_double_gamma(padded, a1, a2, b1 / tr, b2 / tr, cc) / microtime_resolution
@@ -579,7 +673,11 @@ fmri.stimulus <- function(n_vols = 1, onsets = NULL, durations = NULL, values = 
       if (durations[i] == 0) durations[i] <- 1L # support instantaneous events -- one-volume Dirac delta
       idx <- seq(from = onsets[i], length.out = durations[i])
       idx <- idx[idx <= n_vols]
-      stim[idx] <- values[i]
+      # Use additive accumulation so that overlapping events sum their contributions
+      # rather than later events overwriting earlier ones. By linearity of convolution,
+      # conv(A + B, hrf) = conv(A, hrf) + conv(B, hrf), so the summed stimulus produces
+      # exactly the same result as convolving each event separately and summing the outputs.
+      stim[idx] <- stim[idx] + values[i]
     }
     stim
   }
@@ -603,8 +701,19 @@ fmri.stimulus <- function(n_vols = 1, onsets = NULL, durations = NULL, values = 
   }
   
   cleaned <- cleanup_regressor(onsets, durations, values, rm_zeros = rm_zeros)
-  onsets <- cleaned$times / tr + 1 # re-express in volumes -- add 1 for one-based indexing in microtime space
-  durations <- cleaned$durations / tr
+
+  # Re-express onsets and durations in microtime volumes (1-indexed bins at resolution
+  # microtime_resolution within each TR). Without round(), floating-point arithmetic can
+  # produce values like 2012.9999... instead of 2013.0 (e.g., onset=100.65s, tr=1.0,
+  # microtime_resolution=20: 100.65/0.05 + 1 = 2013.999... due to IEEE 754 representation
+  # of 0.05). R's as.integer()/array indexing truncates toward zero, so this shifts the
+  # event by one microtime bin (50ms at 20x resolution). The shifted event lands on a
+  # different point of the downsampled TR grid, changing its observed peak amplitude by
+  # up to ~0.4% and making the peak position-dependent — identical events at different
+  # positions in the run would get different peaks. round() snaps to the nearest integer
+  # bin, making microtime placement deterministic and position-independent.
+  onsets <- round(cleaned$times / tr + 1)
+  durations <- round(cleaned$durations / tr)
   values <- cleaned$values
   
   # Mean center parametric values

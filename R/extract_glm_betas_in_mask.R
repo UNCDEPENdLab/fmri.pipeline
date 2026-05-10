@@ -236,7 +236,12 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   if (level == 1L) {
     to_extract <- extract %>% dplyr::left_join(gpa$l1_model_setup$fsl, by = c("l1_model"))
   } else if (level == 2L) {
-    to_extract <- extract %>% dplyr::left_join(gpa$l2_model_setup$fsl, by = c("l1_model", "l2_model"))
+    l2_join_keys <- intersect(
+      c("id", "session", "l1_model", "l1_cope_number", "l1_cope_name", "l2_model"),
+      names(extract)
+    )
+    l2_join_keys <- unique(c("l1_model", "l2_model", l2_join_keys))
+    to_extract <- extract %>% dplyr::left_join(gpa$l2_model_setup$fsl, by = l2_join_keys)
   } else if (level == 3L) {
     to_extract <- extract %>% dplyr::left_join(gpa$l3_model_setup$fsl, by = c("l1_model", "l2_model", "l3_model"))
   }
@@ -262,14 +267,46 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
     }
     extra <- "run_number" # also extract
   } else if (level == 2L) {
+    l2_df <- get_l2_cope_df(gpa, extract)
+    required_cols <- c(
+      "id", "session", "l1_model", "l1_cope_number", "l1_cope_name",
+      "l2_model", "l2_input_mode", "passthrough_cope_file"
+    )
+    missing_cols <- setdiff(required_cols, names(to_extract))
+    if (length(missing_cols) > 0L) {
+      stop(
+        "Level 2 FSL beta extraction requires per-cope L2 setup columns: ",
+        paste(required_cols, collapse = ", "),
+        ". Missing: ", paste(missing_cols, collapse = ", "),
+        call. = FALSE
+      )
+    }
+    bad_modes <- setdiff(unique(to_extract$l2_input_mode), c("cope_files", "l1_cope_file_passthrough"))
+    if (length(bad_modes) > 0L) {
+      stop("Unsupported L2 input mode in per-cope L2 setup: ", paste(bad_modes, collapse = ", "), call. = FALSE)
+    }
+
     stat_results <- to_extract %>%
-      inner_join(get_l2_cope_df(gpa, extract), by = c("id", "session", "l2_model")) %>%
-      inner_join(get_l1_cope_df(gpa, extract), by = c("id", "session", "l1_model"))
+      inner_join(
+        l2_df,
+        by = c(
+          "id", "session", "l1_model", "l1_cope_number",
+          "l1_cope_name", "l2_model", "l2_input_mode"
+        )
+      )
 
     for (ww in what) {
       # calculate the expected image location for this contrast and subject based on row values in stat_results data.frame
       stat_results <- stat_results %>%
-        mutate("{ww}" := glue_data(., "{feat_dir}/cope{l1_cope_number}.feat/stats/{ww}{l2_cope_number}.nii.gz"))
+        mutate(
+          l2_cope_dir = ifelse(.data$l2_input_mode == "cope_files", "cope1.feat", NA_character_),
+          "{ww}" := dplyr::if_else(
+            .data$l2_input_mode == "l1_cope_file_passthrough" & ww == "cope",
+            .data$passthrough_cope_file,
+            glue_data(., "{feat_dir}/{l2_cope_dir}/stats/{ww}{l2_cope_number}.nii.gz"),
+            missing = NA_character_
+          )
+        )
     }
   } else if (level == 3L) {
     browser()
@@ -282,7 +319,8 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   stat_results <- stat_results %>%
     dplyr::select(
       id, session, all_of(extra), feat_dir,
-      matches("l[1-3]_model"), matches("l[1-3]_cope_number"), matches("l[1-3]_cope_name"), all_of(what)
+      matches("l[1-3]_model"), matches("l[1-3]_cope_number"), matches("l[1-3]_cope_name"),
+      tidyselect::any_of("l2_input_mode"), all_of(what)
     )
 
   mask_img <- oro.nifti::readNIfTI(mask_file, reorient = FALSE)

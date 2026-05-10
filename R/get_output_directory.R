@@ -8,11 +8,14 @@
 #' @param id The id of a participant
 #' @param session The session number to lookup
 #' @param run_number The run number to lookup
+#' @param l1_cope_number,l2_cope_number,l3_cope_number Optional cope numbers used in output templates.
+#'   These are combined with the corresponding contrast names into labels such as \code{02_EV_house}.
 #' @param gpa A \code{glm_pipeline_arguments} object
 #' @param glm_software which software is being used for the analysis (since directories may vary)
 #' @param create_if_missing whether to create the directory if it does not exist
 get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
   l1_model = NULL, l2_model = NULL, l3_model = NULL,
+  l1_cope_number = NULL, l2_cope_number = NULL, l3_cope_number = NULL,
   l1_contrast = NULL, l2_contrast = NULL, l3_contrast = NULL,
   what="l1", gpa, glm_software = "fsl", create_if_missing = FALSE) {
 
@@ -23,6 +26,9 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
   checkmate::assert_string(l1_model, null.ok=TRUE)
   checkmate::assert_string(l2_model, null.ok = TRUE)
   checkmate::assert_string(l3_model, null.ok = TRUE)
+  checkmate::assert_integerish(l1_cope_number, len = 1L, lower = 1L, null.ok = TRUE)
+  checkmate::assert_integerish(l2_cope_number, len = 1L, lower = 1L, null.ok = TRUE)
+  checkmate::assert_integerish(l3_cope_number, len = 1L, lower = 1L, null.ok = TRUE)
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   stopifnot("run_data" %in% names(gpa))
   checkmate::assert_data_frame(gpa$run_data)
@@ -39,6 +45,21 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
   l1_cope_name <- l1_contrast
   l2_cope_name <- l2_contrast
   l3_cope_name <- l3_contrast
+  l1_cope_label <- if (!is.null(l1_cope_number) && !is.null(l1_cope_name)) {
+    sprintf("%02d_%s", as.integer(l1_cope_number), l1_cope_name)
+  } else {
+    l1_cope_name
+  }
+  l2_cope_label <- if (!is.null(l2_cope_number) && !is.null(l2_cope_name)) {
+    sprintf("%02d_%s", as.integer(l2_cope_number), l2_cope_name)
+  } else {
+    l2_cope_name
+  }
+  l3_cope_label <- if (!is.null(l3_cope_number) && !is.null(l3_cope_name)) {
+    sprintf("%02d_%s", as.integer(l3_cope_number), l3_cope_name)
+  } else {
+    l3_cope_name
+  }
 
   # helper subfunction to select rows where all conditions in filter_list match
   subset_run_data <- function(run_data, filter_list) {
@@ -60,6 +81,22 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
     l1_directory <- gpa$output_locations$feat_l1_directory
     if (glm_software == "spm" && "spm_l1_directory" %in% names(gpa$output_locations)) {
       l1_directory <- gpa$output_locations$spm_l1_directory
+      spm_mode <- "separate"
+      if (!is.null(gpa$glm_settings) &&
+          !is.null(gpa$glm_settings$spm) &&
+          "l1_session_mode" %in% names(gpa$glm_settings$spm) &&
+          !is.null(gpa$glm_settings$spm$l1_session_mode)) {
+        spm_mode <- tolower(as.character(gpa$glm_settings$spm$l1_session_mode)[1L])
+      }
+      if (spm_mode %in% c("pooled", "id", "across_sessions", "subject")) {
+        if ("spm_l1_id_scope_directory" %in% names(gpa$output_locations) &&
+            checkmate::test_string(gpa$output_locations$spm_l1_id_scope_directory)) {
+          l1_directory <- gpa$output_locations$spm_l1_id_scope_directory
+        } else if (checkmate::test_string(l1_directory)) {
+          # back-compat fallback for older objects lacking spm_l1_id_scope_directory
+          l1_directory <- gsub("([/\\\\])ses-\\{session\\}([/\\\\]|$)", "\\1", l1_directory, perl = TRUE)
+        }
+      }
     } else if (glm_software == "afni" && "afni_l1_directory" %in% names(gpa$output_locations)) {
       l1_directory <- gpa$output_locations$afni_l1_directory
     }
@@ -99,7 +136,26 @@ get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
       out_dir <- glue::glue(l1_directory) # evaluate glue expression
     }
   } else if (what == "l2") {
-    out_dir <- glue::glue(gpa$output_locations$feat_l2_directory) # evaluate glue expression
+    l2_directory <- gpa$output_locations$feat_l2_directory
+    if (!is.null(l2_model)) {
+      l2_scope <- gpa$l2_models$models[[l2_model]]$l2_scope
+      if (is.null(l2_scope) || !is.character(l2_scope) || length(l2_scope) != 1L || !nzchar(l2_scope)) {
+        l2_scope <- "id_session"
+      }
+
+      # pooled L2 models are subject-level and should not write to synthetic ses-0 folders
+      if (identical(l2_scope, "id")) {
+        if ("feat_l2_id_scope_directory" %in% names(gpa$output_locations) &&
+            checkmate::test_string(gpa$output_locations$feat_l2_id_scope_directory)) {
+          l2_directory <- gpa$output_locations$feat_l2_id_scope_directory
+        } else if (checkmate::test_string(l2_directory)) {
+          # back-compat fallback for older objects lacking feat_l2_id_scope_directory
+          l2_directory <- gsub("([/\\\\])ses-\\{session\\}([/\\\\]|$)", "\\1", l2_directory, perl = TRUE)
+        }
+      }
+    }
+
+    out_dir <- glue::glue(l2_directory) # evaluate glue expression
   } else if (what == "l3") {
     l3_directory <- gpa$output_locations$feat_l3_directory
     if (glm_software == "spm" && "spm_l3_directory" %in% names(gpa$output_locations)) {

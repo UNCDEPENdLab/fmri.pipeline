@@ -20,13 +20,11 @@ build_l2_models <- function(gpa, from_spec_file = NULL, regressor_cols = NULL) {
   fname <- match.call()[[1]]
   if (fname == "build_l2_models") {
     menu_desc <- "second-level (subject)"
-    data <- gpa$run_data # L2
     model_set <- gpa$l2_models
     level <- 2L # model level inside model object
     out_field <- "l2_models" # where to put results in gpa
   } else {
     menu_desc <- "third-level (sample)"
-    data <- gpa$subject_data # L3
     model_set <- gpa$l3_models
     level <- 3L
     out_field <- "l3_models" # where to put results in gpa
@@ -34,6 +32,12 @@ build_l2_models <- function(gpa, from_spec_file = NULL, regressor_cols = NULL) {
 
   lg <- lgr::get_logger(paste0("glm_pipeline/l", level, "_setup"))
   lg$set_threshold(gpa$lgr_threshold)
+
+  if (level == 2L) {
+    data <- compose_l2_model_data(gpa, lg = lg) # L2 pooled modeling frame: run + session predictors
+  } else {
+    data <- gpa$subject_data # L3
+  }
 
   # allow deferred model specification upstream
   if (!is.null(model_set) && model_set[1L] == "prompt") model_set <- NULL
@@ -127,6 +131,17 @@ build_l2_models <- function(gpa, from_spec_file = NULL, regressor_cols = NULL) {
     done_regressors <- FALSE
     while (isFALSE(done_regressors)) {
       cat("Current regressors for this model:\n\n  ", paste(regressor_cols, collapse = ", "), "\n\n")
+
+      # display session-level column annotations when available
+      var_origin <- attr(data, "l2_var_origin")
+      if (!is.null(var_origin)) {
+        session_vars <- names(var_origin)[var_origin == "session"]
+        if (length(session_vars) > 0L) {
+          cat("  Session-level columns (for between-session effects): ",
+            paste(session_vars, collapse = ", "), "\n\n", sep = "")
+        }
+      }
+
       action <- menu(c("Add/modify regressors", "Delete regressors", "Done with regressor selection"),
         title = "Would you like to modify the model regressors?"
       )
@@ -229,12 +244,70 @@ build_l2_models <- function(gpa, from_spec_file = NULL, regressor_cols = NULL) {
   }
 
   model_set$models <- model_list
-  model_set$n_contrasts <- sapply(model_list, function(mobj) { ncol(mobj$contrasts) })
+  model_set$n_contrasts <- sapply(model_list, function(mobj) { nrow(mobj$contrasts) })
 
   if (fname == "build_l2_models") {
     gpa$l2_models <- model_set
   } else if (fname == "build_l3_models") {
     gpa$l3_models <- model_set
+  }
+
+  has_l2_models <- checkmate::test_class(gpa$l2_models, "hi_model_set") &&
+    !is.null(gpa$l2_models$models) &&
+    length(gpa$l2_models$models) > 0L
+  has_l3_models <- checkmate::test_class(gpa$l3_models, "hi_model_set") &&
+    !is.null(gpa$l3_models$models) &&
+    length(gpa$l3_models$models) > 0L
+
+  if (fname == "build_l3_models" && !isTRUE(has_l2_models)) {
+    msg <- paste0(
+      "L3 models were built before any L2 models were defined. ",
+      "L2/L3 signature compatibility cannot be fully validated yet; ",
+      "run build_l2_models() and compatibility checks will be applied automatically."
+    )
+    backend_notes <- character(0)
+    if ("spm" %in% gpa$glm_software) {
+      backend_notes <- c(
+        backend_notes,
+        "For SPM, L1 setup also skips projected L2 run/session regressors until L2 models are defined."
+      )
+    }
+    if ("fsl" %in% gpa$glm_software) {
+      backend_notes <- c(
+        backend_notes,
+        "For FSL, L2/L3 pairing will be enforced once L2 models are defined."
+      )
+    }
+    if (length(backend_notes) > 0L) {
+      msg <- paste(msg, paste(backend_notes, collapse = " "))
+    }
+    lg$warn(msg)
+    warning(msg)
+  }
+
+  if (isTRUE(has_l2_models) && isTRUE(has_l3_models)) {
+    pair_df <- enumerate_l2_l3_signature_pairs(gpa, lg = lg)
+    incompatible <- pair_df[!pair_df$compatible, , drop = FALSE]
+    compatible <- pair_df[pair_df$compatible, , drop = FALSE]
+
+    if (nrow(incompatible) > 0L) {
+      detail <- format_l2_l3_incompatibilities(incompatible, max_items = 8L)
+      if (nrow(compatible) == 0L) {
+        msg <- paste0(
+          "All L2/L3 model combinations are currently incompatible by signature. ",
+          detail
+        )
+        lg$warn(msg)
+        warning(msg)
+      } else {
+        msg <- paste0(
+          "Some L2/L3 model combinations are incompatible by signature and will be skipped during L3 setup. ",
+          detail
+        )
+        lg$info(msg)
+        message(msg)
+      }
+    }
   }
 
   return(gpa)
@@ -264,6 +337,8 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       data <- as.data.frame(data) # make subsetting syntax in this function consistent with standard data.frame conventions
     }
 
+    checkmate::assert_class(lg, "Logger", null.ok = TRUE)
+    if (is.null(lg)) lg <- lgr::get_logger("fmri.pipeline/hi_model")
     checkmate::assert_class(to_modify, "hi_model_spec", null.ok = TRUE)
     if (is.null(to_modify)) {
       mobj <- list(level = level)
@@ -284,6 +359,65 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       id_cols <- c("id", "session")
     }
 
+    choose_l2_scope <- function(default_scope = "id_session") {
+      allowed <- longitudinal_l2_scopes()
+      checkmate::assert_subset(default_scope, allowed)
+      if (!"session" %in% names(data) || length(unique(data$session)) <= 1L) {
+        return(default_scope)
+      }
+      n_sessions <- length(unique(data$session))
+      cat(
+        "\nYour data contain ", n_sessions, " sessions per subject.\n",
+        "This choice determines whether between-session contrasts are available at L2.\n\n",
+        sep = ""
+      )
+      opts <- c(
+        "Within-session: combine runs within each session separately (between-session contrasts deferred to L3)",
+        "Across-session: stack all runs and sessions together (between-session contrasts available at L2)"
+      )
+      which_scope <- menu(
+        opts,
+        title = "How should this L2 model combine sessions?"
+      )
+      chosen <- if (which_scope == 2L) "id" else "id_session"
+      if (identical(chosen, "id_session")) {
+        cat(
+          "\nNote: With within-session scope, between-session differences cannot be tested at L2.\n",
+          "If you need between-session contrasts at L2, re-run model setup and choose across-session scope.\n\n",
+          sep = ""
+        )
+      }
+      chosen
+    }
+
+    choose_l3_input_mode <- function(default_mode = "per_session") {
+      allowed <- longitudinal_l3_input_modes()
+      default_mode <- normalize_l3_input_mode(default_mode)
+      checkmate::assert_subset(default_mode, allowed)
+      if (!"session" %in% names(data) || length(unique(data$session)) <= 1L) {
+        return(default_mode)
+      }
+      opts <- c(
+        "Per-session L3 model (requires L2 scope id_session)",
+        "Pooled sessions with subject EVs (requires L2 scope id_session)",
+        "One row per subject input (requires L2 scope id)",
+        "3dLMEr (mixed-effects longitudinal model via AFNI; requires L2 scope id_session)"
+      )
+      which_mode <- menu(
+        opts,
+        title = "How should this L3 model use sessions?"
+      )
+      if (which_mode == 2L) {
+        "pooled_sessions_subject_ev"
+      } else if (which_mode == 3L) {
+        "subject_rows"
+      } else if (which_mode == 4L) {
+        "3dlmer"
+      } else {
+        "per_session"
+      }
+    }
+
     ### ------ model name ------
     if (isTRUE(modify)) {
       cat("Current model name:", mobj$name, "\n")
@@ -293,6 +427,13 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
 
     if (!is.null(spec_list$name)) { # populate from specification, if requested
       mobj$name <- spec_list$name
+    }
+
+    if (!is.null(spec_list$execution_backend)) {
+      mobj$execution_backend <- normalize_backend_strings(spec_list$execution_backend)
+    }
+    if (level == 3L && !is.null(spec_list$producer_backend)) {
+      mobj$producer_backend <- normalize_backend_strings(spec_list$producer_backend)
     }
 
     while (is.null(mobj$name) || mobj$name == "") {
@@ -340,10 +481,26 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
           "Use variable names in the dataset provided to this function.",
           "Note that this syntax follows standard R model syntax. See ?lm for details.",
           "Example: ~ emotion * wmload + run_number\n",
-          "For an intercept-only model, specify: ~1\n",
-          "Available column names: \n"
+          "For an intercept-only model, specify: ~1\n"
         ), sep = "\n")
-        cat(strwrap(paste(names(data), collapse = ", "), 70, exdent = 5), sep = "\n")
+
+        # annotate columns by origin (run-level vs session-level)
+        var_origin <- attr(data, "l2_var_origin")
+        if (!is.null(var_origin) && level == 2L) {
+          run_vars <- setdiff(names(var_origin)[var_origin == "run"], id_cols)
+          session_vars <- names(var_origin)[var_origin == "session"]
+          if (length(run_vars) > 0L) {
+            cat("Run-level columns:\n")
+            cat(strwrap(paste(run_vars, collapse = ", "), 70, exdent = 5), sep = "\n")
+          }
+          if (length(session_vars) > 0L) {
+            cat("Session-level columns (useful for between-session contrasts):\n")
+            cat(strwrap(paste(session_vars, collapse = ", "), 70, exdent = 5), sep = "\n")
+          }
+        } else {
+          cat("Available column names:\n")
+          cat(strwrap(paste(names(data), collapse = ", "), 70, exdent = 5), sep = "\n")
+        }
 
         res <- trimws(readline("Enter the model formula: "))
         # always trim any LHS specification
@@ -474,8 +631,128 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       }
     }
 
+    # populate longitudinal signature fields used to derive L2/L3 compatibility
+    if (level == 2L) {
+      if (!is.null(spec_list$l2_scope)) {
+        checkmate::assert_string(spec_list$l2_scope)
+        checkmate::assert_subset(spec_list$l2_scope, longitudinal_l2_scopes())
+        mobj$l2_scope <- spec_list$l2_scope
+      } else if (is.null(mobj$l2_scope)) {
+        if (is.null(spec_list)) {
+          mobj$l2_scope <- choose_l2_scope(default_scope = "id_session")
+        } else {
+          mobj$l2_scope <- "id_session"
+        }
+      } else {
+        checkmate::assert_subset(mobj$l2_scope, longitudinal_l2_scopes())
+      }
+    } else if (level == 3L) {
+      if (!is.null(spec_list$l3_input_mode)) {
+        checkmate::assert_string(spec_list$l3_input_mode)
+        checkmate::assert_subset(spec_list$l3_input_mode, longitudinal_l3_input_modes())
+        mobj$l3_input_mode <- spec_list$l3_input_mode
+      } else if (is.null(mobj$l3_input_mode)) {
+        if (is.null(spec_list)) {
+          mobj$l3_input_mode <- choose_l3_input_mode(default_mode = "per_session")
+        } else {
+          mobj$l3_input_mode <- "per_session"
+        }
+      } else {
+        checkmate::assert_subset(mobj$l3_input_mode, longitudinal_l3_input_modes())
+      }
+
+      # Inform user about auto-injection of subject indicator EVs
+      if (identical(mobj$l3_input_mode, "pooled_sessions_subject_ev")) {
+        lg$info(
+          "L3 model '%s' uses pooled_sessions_subject_ev. Per-subject indicator EVs will be auto-injected at setup time if 'id' is not in the model formula.",
+          mobj$name
+        )
+      }
+    }
+
+    if (level == 2L) {
+      var_origin <- attr(data, "l2_var_origin")
+      if (!is.null(var_origin)) {
+        session_vars <- names(var_origin)[var_origin == "session"]
+        used_session_vars <- intersect(mobj$model_variables, session_vars)
+        if (length(used_session_vars) > 0L && identical(mobj$l2_scope, "id")) {
+          lg$info(
+            "L2 model '%s' includes session-level predictors in pooled id scope. These effects are run-weighted across sessions: %s",
+            mobj$name, paste(used_session_vars, collapse = ", ")
+          )
+        } else if (length(used_session_vars) > 0L && identical(mobj$l2_scope, "id_session")) {
+          lg$warn(
+            "L2 model '%s' includes session-level predictors with l2_scope='id_session'. These terms are typically aliased within-session and may be dropped: %s",
+            mobj$name, paste(used_session_vars, collapse = ", ")
+          )
+        }
+      }
+    }
+
     # fit linear model and populate model object
+    # For 3dLMEr, we still fit a standard lm to allow emmeans to work for gltCode generation
     mobj <- mobj_fit_lm(mobj, as.character(model_formula), data, id_cols, lg = lg)
+
+    # 3dLMEr-specific: collect lme4-style random-effects specification
+    if (level == 3L && identical(mobj$l3_input_mode, "3dlmer")) {
+      if (!is.null(spec_list$random_effects)) {
+        mobj$random_effects <- spec_list$random_effects
+      } else {
+        cat(
+          "\n--- 3dLMEr Random Effects ---\n",
+          "Specify the random-effects part of the lme4 formula.\n",
+          "Example: (1 | Subj) for random intercepts per subject\n",
+          "Example: (1 + Session | Subj) for random intercepts and random slopes\n",
+          "Note: Using 'Subj' as the grouping factor is recommended for 3dLMEr compatibility.\n\n",
+          sep = ""
+        )
+        res <- trimws(readline("Enter the random-effects specification: "))
+        if (res == "") res <- "(1 | Subj)" # sensible default
+        mobj$random_effects <- res
+      }
+      
+      # Combine fixed and random effects into full lmer formula for AFNI.
+      # One-sided formulas can deparse to c("~", "rhs"), while two-sided formulas
+      # use c("~", "lhs", "rhs"), so take the last non-empty element.
+      fixed_rhs <- tail(as.character(model_formula), 1L)
+      fixed_rhs <- sub("^~\\s*", "", fixed_rhs, perl = TRUE)
+      mobj$lmer_formula <- paste(fixed_rhs, "+", mobj$random_effects)
+      mobj$lmer_glt_codes <- spec_list$lmer_glt_codes
+      cat("Full 3dLMEr formula: ", mobj$lmer_formula, "\n")
+    }
+
+    # Guided longitudinal prompt: offer between-session pairwise contrasts when applicable
+    has_multi_session <- "session" %in% names(data) && length(unique(data$session)) > 1L
+    if (level == 2L && has_multi_session && identical(mobj$l2_scope, "id") && is.null(spec_list)) {
+      var_origin <- attr(data, "l2_var_origin")
+      session_vars <- if (!is.null(var_origin)) names(var_origin)[var_origin == "session"] else character(0)
+      # identify session-level factor or integer variables in the model that could yield between-session contrasts
+      session_contrast_candidates <- intersect(mobj$model_variables, session_vars)
+      # also check for session-related factor columns in the fitted model
+      if (length(session_contrast_candidates) > 0L) {
+        cat(
+          "\n--- Between-session contrasts ---\n",
+          "Your L2 model includes session-level variables: ",
+          paste(session_contrast_candidates, collapse = ", "), "\n",
+          "Between-session pairwise differences are commonly desired in longitudinal designs.\n\n",
+          sep = ""
+        )
+        for (sc in session_contrast_candidates) {
+          if (is.factor(data[[sc]]) || (is.integer(data[[sc]]) && length(unique(data[[sc]])) < 20L)) {
+            add_pw <- menu(
+              c("Yes", "No"),
+              title = paste0("Add pairwise between-session contrasts for '", sc, "'?")
+            )
+            if (add_pw == 1L) {
+              if (is.null(spec_list)) spec_list <- list()
+              existing_pw <- spec_list$pairwise_diffs
+              spec_list$pairwise_diffs <- unique(c(existing_pw, sc))
+              cat("  Added pairwise differences for '", sc, "'.\n", sep = "")
+            }
+          }
+        }
+      }
+    }
 
     # walk through contrast generation for this model
     mobj <- specify_contrasts(mobj, spec_list = spec_list)

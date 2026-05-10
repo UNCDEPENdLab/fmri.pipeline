@@ -9,7 +9,11 @@ bl1_build_events(l1_model_set, spec_list = NULL, trial_data, lg = NULL)
 \arguments{
 \item{l1_model_set}{an l1_model_set object that may have extant events in it}
 
+\item{spec_list}{an optional parsed YAML/JSON model specification used to populate events non-interactively}
+
 \item{trial_data}{the trial_data object from the \code{gpa} object}
+
+\item{lg}{an lgr logger used for status and warning messages}
 }
 \value{
 a modified copy of l1_model_set with events added/updated

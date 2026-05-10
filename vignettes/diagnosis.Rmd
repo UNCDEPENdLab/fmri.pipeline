@@ -34,7 +34,7 @@ You should receive a message that says
 Running pipeline diagnosis...
 (Hit ESC at any time to cancel)
 ```
-indicating the diagnosis has launched successfully. Note that the ESC key can be used to exit the diagnosis at any time. In the unusual case that a specific element necessary to diagnose the pipeline (e.g., the SQLite database) is missing, the function will throw an informative error and cancel automatically. 
+indicating the diagnosis has launched successfully. Note that the ESC key can be used to exit the diagnosis at any time. In the unusual case that a specific element necessary to diagnose the pipeline (e.g., the SQLite database) is missing, the function will throw an informative error and cancel automatically.
 
 ## Submission History
 
@@ -111,7 +111,7 @@ The function will print out detailed information about the selected step (queue/
 *Example*:
 
 ```
-── Job `cleanup_fsl`... 
+── Job `cleanup_fsl`...
 • ...was submitted at 2025-07-31 14:50:14
 • ...and was started at 2025-07-31 16:18:58
 • ...failed before finishing
@@ -125,7 +125,7 @@ The diagnosis function will then list a series of actions that can possibly be p
 
 - `View output file in console`: This will print the R output file from the step in the console. The user can specify how many lines from the end to view (default: 15).
 - `Return output file as character object`: This will return the R output file from the step as a character object if the function was assigned to an object initially.
-- `View child job details (statuses, etc.)`: If the step had level 2 child jobs (smaller, sub-jobs that are part of the step), this will print out a more detailed status table for each of those child jobs. 
+- `View child job details (statuses, etc.)`: If the step had level 2 child jobs (smaller, sub-jobs that are part of the step), this will print out a more detailed status table for each of those child jobs.
 - `View feat status table`: This will display which feat jobs have been completed and which have failed, with their corresponding ID.
 - `View feat log`: This will print a user-specified number (default: 15) of lines from the end of the corresponding log file for that step. It will also ask if the user wishes to view any individual-level logs by specifying the ID.
 - `Exit diagnosis and return full tracking tree`: This will end the diagnosis function and return the full tracking tree (see below)
@@ -146,23 +146,20 @@ Printing the tree yields a readable structure with the top level being a sequenc
 ```
                                   levelName
 1  seq_ae2c17c7-95d8-4dc8-a8c8-e4532334ef47
-2   °--chain1                              
-3       ¦--finalize_configuration          
-4       ¦--setup_l1                        
-5       ¦--run_l1                          
-6       ¦   ¦--featsep_l1_1                
-7       ¦   ¦--featsep_l1_2                
-8       ¦   ¦--featsep_l1_3                
-9       ¦   ¦--featsep_l1_4                
-10      ¦   °--featsep_l1_5                
-11      ¦--setup_run_l2                    
-12      ¦--setup_run_l3                    
-13      °--cleanup_fsl 
+2   °--chain1
+3       ¦--finalize_configuration
+4       ¦--setup_l1
+5       ¦--run_l1
+6       ¦   ¦--featsep_l1_1
+7       ¦   ¦--featsep_l1_2
+8       ¦   ¦--featsep_l1_3
+9       ¦   ¦--featsep_l1_4
+10      ¦   °--featsep_l1_5
+11      ¦--setup_run_l2
+12      ¦--setup_run_l3
+13      °--cleanup_fsl
 ```
 
 Accessible fields in the tree for each job include: `batch_directory`, `batch_file`, `child_level`, `code_file`, `compute_file`, `head`, `id`, `job_id`, `job_name`, `job_obj`, `mem_total`, `n_cpus`, `n_nodes`, `scheduler`, `sequence_id`, `status`, `time_ended`, `time_started`, `time_submitted`, `wall_time`, `parent_id`, `scheduler_options`, and `mem_per_cpu`. For example, simply execute `print(output, "status")` to view the status of each job in the tree.
 
-Read the [`data.tree`](https://cran.r-project.org/web/packages/data.tree/vignettes/data.tree.html) documentation for more information about working with this easy-to-use data structure. 
-
-
-
+Read the [`data.tree`](https://cran.r-project.org/web/packages/data.tree/vignettes/data.tree.html) documentation for more information about working with this easy-to-use data structure.

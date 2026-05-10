@@ -23,12 +23,15 @@ refresh_glm_status <- function(gpa, level = 1L, lg = NULL, glm_software = NULL) 
 
   if (is.null(lg)) lg <- lgr::get_logger()
 
+  gpa_for_backends <- gpa
   if (!is.null(glm_software)) {
-    gpa <- gpa
-    gpa$glm_software <- unique(tolower(glm_software))
+    gpa_for_backends$glm_software <- unique(tolower(glm_software))
+    level_backends <- normalize_level_backend_config(gpa_for_backends)
+    level_backends[[paste0("l", level)]] <- unique(tolower(glm_software))
+    gpa_for_backends$level_backends <- level_backends
   }
 
-  glm_backends <- get_glm_backends(gpa, must_exist = FALSE)
+  glm_backends <- get_glm_backends(gpa_for_backends, must_exist = FALSE, level = level)
   if (length(glm_backends) == 0L) {
     lg$warn("No GLM backends registered for status refresh.")
     return(gpa)
@@ -133,24 +136,35 @@ get_spm_status <- function(spm_dir, lg = NULL, prefix = NULL) {
   spm_checks$spm_beta_count <- length(beta_files)
   spm_checks$spm_contrast_exists <- length(con_files) > 0L
   spm_checks$spm_contrast_count <- length(con_files)
+  spm_checks$spm_minimal_outputs_exist <- isTRUE(spm_mat_exists && length(beta_files) > 0L)
 
   if (dir.exists(spm_dir)) {
     if (file.exists(spm_complete_file)) {
-      lg$debug("SPM directory is complete: %s", spm_dir)
+      if (isTRUE(spm_checks$spm_minimal_outputs_exist)) {
+        lg$debug("SPM directory is complete: %s", spm_dir)
+      } else {
+        lg$warn(
+          "Found .spm_complete in %s, but required outputs are missing (need SPM.mat and at least one beta image).",
+          spm_dir
+        )
+      }
       timing_file <- spm_complete_file
       if (file.exists(spm_fail_file)) {
         lg$warn("Both .spm_complete and .spm_fail objects exist in %s", spm_dir)
-        lg$warn("Assuming that .spm_complete reflects a successful completion of SPM")
+        lg$warn(
+          "Treating this run as %s based on output files.",
+          ifelse(isTRUE(spm_checks$spm_minimal_outputs_exist), "complete", "failed")
+        )
       }
-      spm_checks$spm_complete <- TRUE
-      spm_checks$spm_failed <- FALSE
+      spm_checks$spm_complete <- isTRUE(spm_checks$spm_minimal_outputs_exist)
+      spm_checks$spm_failed <- !isTRUE(spm_checks$spm_minimal_outputs_exist)
     } else if (file.exists(spm_fail_file)) {
       lg$debug("Detected SPM failure in: %s", spm_dir)
       timing_file <- spm_fail_file
       spm_checks$spm_failed <- TRUE
     } else {
       timing_file <- NULL
-      spm_checks$spm_complete <- isTRUE(spm_mat_exists && length(beta_files) > 0L)
+      spm_checks$spm_complete <- isTRUE(spm_checks$spm_minimal_outputs_exist)
     }
 
     if (!is.null(timing_file)) {

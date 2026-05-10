@@ -8,20 +8,166 @@
 #' @param l2_model_names a character vector of level 2 model names (specified during build_l2_models) that should be executed
 #' @param l3_model_names a character vector of level 3 model names (specified during build_l3_models) that should be executed
 #' @param glm_software which glm software should be used for model estimation (not implemented yet)
+#' @param level_backends optional per-level backend override list keyed by `l1`, `l2`, and/or `l3`
+#' @param backend_overrides optional model-specific backend override list
 #' @importFrom checkmate assert_string assert_class assert_subset assert_integerish
 #' @export
 run_glm_pipeline <- function(gpa, l1_model_names = "prompt", l2_model_names = "prompt",
-l3_model_names = "prompt", glm_software = NULL) {
+l3_model_names = "prompt", glm_software = NULL, level_backends = NULL, backend_overrides = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_character(l1_model_names, null.ok = TRUE)
   checkmate::assert_character(l2_model_names, null.ok = TRUE)
   checkmate::assert_character(l3_model_names, null.ok = TRUE)
+  checkmate::assert_character(glm_software, null.ok = TRUE)
 
   lg <- lgr::get_logger("glm_pipeline/run_glm_pipeline")
   lg$set_threshold(gpa$lgr_threshold)
 
+  if (!is.null(glm_software)) {
+    glm_software <- normalize_backend_strings(glm_software)
+    gpa$glm_software <- glm_software
+    gpa$level_backends <- list(l1 = glm_software, l2 = glm_software, l3 = glm_software)
+  }
+
+  backend_specs <- gpa$glm_backend_specs
+  if (is.null(backend_specs)) backend_specs <- default_glm_backend_specs()
+  gpa$glm_backend_specs <- backend_specs
+  gpa$level_backends <- merge_level_backend_overrides(gpa, level_backends = level_backends, specs = backend_specs)
+  gpa$backend_overrides <- normalize_backend_override_config(backend_overrides)
+  gpa <- initialize_glm_backends(gpa)
+
+  resolved_backends <- resolve_glm_backends(backend_specs)
+
   model_list <- choose_glm_set(gpa, l1_model_names, l2_model_names, l3_model_names, lg)
   if (is.null(model_list)) { return(invisible(NULL)) } # user canceled
+
+  l1_model_backend_map <- get_effective_model_backends(gpa, level = 1L, model_names = model_list$l1_model_names)
+  l2_model_backend_map <- get_effective_model_backends(gpa, level = 2L, model_names = model_list$l2_model_names)
+  l3_model_backend_map <- get_effective_model_backends(gpa, level = 3L, model_names = model_list$l3_model_names)
+  l3_producer_backend_map <- get_effective_model_backends(gpa, level = 3L, model_names = model_list$l3_model_names, type = "producer")
+  validate_l3_backend_resolution(
+    gpa = gpa,
+    l3_model_names = model_list$l3_model_names,
+    execution_backend_map = l3_model_backend_map,
+    producer_backend_map = l3_producer_backend_map
+  )
+  l3_requirement_df <- if (!is.null(model_list$l3_model_names)) {
+    resolve_model_l3_requirements(
+      gpa = gpa,
+      l3_model_names = model_list$l3_model_names,
+      execution_backend_map = l3_model_backend_map,
+      producer_backend_map = l3_producer_backend_map,
+      specs = backend_specs,
+      multi_run = isTRUE(gpa$multi_run)
+    )
+  } else {
+    empty_model_requirement_df()
+  }
+
+  unsupported_producers <- setdiff(
+    normalize_backend_strings(unlist(l3_producer_backend_map, use.names = FALSE)),
+    c("", "fsl")
+  )
+  if (length(unsupported_producers) > 0L) {
+    stop(
+      sprintf(
+        "L3 producer backends are currently implemented only for FSL. Unsupported producer override(s): %s",
+        paste(unsupported_producers, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+
+  l1_models_by_backend <- group_models_by_backend(l1_model_backend_map)
+  l2_models_by_backend <- group_models_by_backend(l2_model_backend_map)
+  l3_models_by_backend <- group_models_by_backend(l3_model_backend_map)
+
+  requested_l1_backend_names <- names(l1_models_by_backend)
+  requested_l2_backend_names <- names(l2_models_by_backend)
+  requested_l3_backend_names <- names(l3_models_by_backend)
+
+  l3_dependency_backends <- if (!is.null(model_list$l3_model_names) && isTRUE(gpa$multi_run)) {
+    get_requirement_producer_backends(l3_requirement_df)
+  } else {
+    character(0)
+  }
+
+  reassign_unrunnable_models <- function(model_backend_map, level, fallback_backends = character(0)) {
+    if (length(model_backend_map) == 0L) return(model_backend_map)
+    fallback_backends <- fallback_backends[vapply(
+      fallback_backends,
+      function(backend_name) {
+        backend <- resolved_backends[[backend_name]]
+        !is.null(backend) && backend_runs_level(backend, level)
+      },
+      logical(1)
+    )]
+
+    out <- model_backend_map
+    for (model_name in names(out)) {
+      current_backends <- normalize_backend_strings(out[[model_name]])
+      runnable_backends <- current_backends[vapply(
+        current_backends,
+        function(backend_name) {
+          backend <- resolved_backends[[backend_name]]
+          !is.null(backend) && backend_runs_level(backend, level)
+        },
+        logical(1)
+      )]
+      if (length(runnable_backends) > 0L) {
+        out[[model_name]] <- runnable_backends
+      } else if (length(fallback_backends) > 0L) {
+        out[[model_name]] <- fallback_backends
+      } else {
+        out[[model_name]] <- current_backends
+      }
+    }
+    out
+  }
+
+  l1_model_backend_map <- reassign_unrunnable_models(l1_model_backend_map, level = 1L, fallback_backends = l3_dependency_backends)
+  l2_model_backend_map <- reassign_unrunnable_models(l2_model_backend_map, level = 2L, fallback_backends = l3_dependency_backends)
+  l1_models_by_backend <- group_models_by_backend(l1_model_backend_map)
+  l2_models_by_backend <- group_models_by_backend(l2_model_backend_map)
+  requested_l1_backend_names <- names(l1_models_by_backend)
+  requested_l2_backend_names <- names(l2_models_by_backend)
+
+  execution_level_backends <- list(
+    l1 = requested_l1_backend_names,
+    l2 = requested_l2_backend_names,
+    l3 = requested_l3_backend_names
+  )
+  for (backend_name in l3_dependency_backends) {
+    backend <- resolved_backends[[backend_name]]
+    if (is.null(backend)) next
+    if (backend_runs_level(backend, 1L)) {
+      execution_level_backends$l1 <- normalize_backend_strings(c(execution_level_backends$l1, backend_name))
+    }
+    if (backend_runs_level(backend, 2L)) {
+      execution_level_backends$l2 <- normalize_backend_strings(c(execution_level_backends$l2, backend_name))
+    }
+  }
+  execution_backend_names <- normalize_backend_strings(unlist(execution_level_backends, use.names = FALSE))
+  missing_execution_backends <- setdiff(execution_backend_names, names(resolved_backends))
+  if (length(missing_execution_backends) > 0L) {
+    stop(
+      sprintf(
+        "Missing backend specs for required execution backends: %s",
+        paste(missing_execution_backends, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  gpa$level_backends <- execution_level_backends
+  gpa$glm_software <- execution_backend_names
+  gpa$backend_preflight_report <- build_backend_preflight_report(
+    gpa = gpa,
+    l1_model_backend_map = l1_model_backend_map,
+    l2_model_backend_map = l2_model_backend_map,
+    l3_model_backend_map = l3_model_backend_map,
+    l3_requirement_df = l3_requirement_df
+  )
+  log_backend_preflight_report(gpa$backend_preflight_report, lg)
 
   batch_id <- uuid::UUIDgenerate()
   if (is.null(gpa$batch_run)) gpa$batch_run <- list()
@@ -54,17 +200,41 @@ l3_model_names = "prompt", glm_software = NULL) {
   }
 
   # initialize batch sequence elements as NULL so that they are ignored in R_batch_sequence if not used
-  l1_setup_batch <- split_cache_batch <- l2_batch <- NULL
+  l1_setup_batch <- split_cache_batch <- NULL
   l1_execute_batches <- list()
   l3_execute_batches <- list()
-  glm_backends <- get_glm_backends(gpa, must_exist = FALSE)
-  backend_specs <- gpa$glm_backend_specs
-  if (is.null(backend_specs)) backend_specs <- default_glm_backend_specs()
-  backend_names <- names(glm_backends)
-  use_fsl <- "fsl" %in% backend_names
+  l1_backend_names <- execution_level_backends$l1
+  l2_backend_names <- execution_level_backends$l2
+  l3_backend_names <- execution_level_backends$l3
+  l3_glm_backends <- resolved_backends[intersect(l3_backend_names, names(resolved_backends))]
+  execution_glm_backends <- resolved_backends[execution_backend_names]
+  l3_level2_requirements <- if (nrow(l3_requirement_df) > 0L) {
+    unique(l3_requirement_df[l3_requirement_df$producer_level == 2L, c("execution_backend", "producer_backend", "producer_level"), drop = FALSE])
+  } else {
+    data.frame(
+      execution_backend = character(0),
+      producer_backend = character(0),
+      producer_level = integer(0),
+      stringsAsFactors = FALSE
+    )
+  }
+  l3_cross_backend_requirements <- if (nrow(l3_requirement_df) > 0L) {
+    unique(l3_requirement_df[
+      l3_requirement_df$producer_backend != l3_requirement_df$execution_backend,
+      c("execution_backend", "producer_backend", "producer_level"),
+      drop = FALSE
+    ])
+  } else {
+    data.frame(
+      execution_backend = character(0),
+      producer_backend = character(0),
+      producer_level = integer(0),
+      stringsAsFactors = FALSE
+    )
+  }
   backend_cache_map <- setNames(
-    file.path(batch_directory, paste0("run_pipeline_cache_", backend_names, ".RData")),
-    backend_names
+    file.path(batch_directory, paste0("run_pipeline_cache_", execution_backend_names, ".RData")),
+    execution_backend_names
   )
 
   # Note: one tricky job dependency problem occurs when a job spawns multiple child jobs.
@@ -80,13 +250,13 @@ l3_model_names = "prompt", glm_software = NULL) {
       job_name = "setup_l1", n_cpus = gpa$parallel$l1_setup_cores,
       wall_time = gpa$parallel$l1_setup_time, mem_total = gpa$parallel$l1_setup_memgb,
       r_code = sprintf(
-        "gpa <- setup_l1_models(gpa, l1_model_names=%s)", paste(deparse(model_list$l1_model_name), collapse = "")
+        "gpa <- setup_l1_models(gpa, l1_model_names=%s)", paste(deparse(model_list$l1_model_names), collapse = "")
       )
     )
 
     l1_setup_batch$depends_on_parents <- "finalize_configuration"
 
-    if (length(backend_names) > 0L) {
+    if (length(execution_backend_names) > 0L) {
       split_cache_batch <- f_batch$copy(
         job_name = "split_backend_caches", n_cpus = 1,
         wall_time = "0:10:00",
@@ -122,7 +292,7 @@ l3_model_names = "prompt", glm_software = NULL) {
       stop(sprintf("No L1 execution time configured for backend '%s'.", backend_name))
     }
 
-    for (backend_name in backend_names) {
+    for (backend_name in names(l1_models_by_backend)) {
       spec <- backend_specs[[backend_name]]
       run_fn_name <- if (is.null(spec)) NULL else spec$l1_run
       if (is.null(run_fn_name) || identical(run_fn_name, "__not_implemented__")) next
@@ -130,8 +300,8 @@ l3_model_names = "prompt", glm_software = NULL) {
         lg$warn("Skipping backend '%s' L1 runner because l1_run is not a character function name.", backend_name)
         next
       }
-      if (!is.null(glm_backends[[backend_name]]$l1_run) &&
-        isTRUE(attr(glm_backends[[backend_name]]$l1_run, "glm_backend_not_implemented"))) {
+      if (!is.null(execution_glm_backends[[backend_name]]$l1_run) &&
+        isTRUE(attr(execution_glm_backends[[backend_name]]$l1_run, "glm_backend_not_implemented"))) {
         next
       }
 
@@ -140,7 +310,10 @@ l3_model_names = "prompt", glm_software = NULL) {
         wall_time = backend_l1_exec_time(backend_name),
         r_code = c(
           "child_job_ids <- c()",
-          sprintf("child_job_ids <- c(child_job_ids, %s(gpa, level = 1L))", run_fn_name)
+          sprintf(
+            "child_job_ids <- c(child_job_ids, %s(gpa, level = 1L, model_names=%s))",
+            run_fn_name, paste(deparse(l1_models_by_backend[[backend_name]]), collapse = "")
+          )
         ),
         post_children_r_code = c(
           sprintf("gpa <- refresh_glm_status(gpa, level = 1L, glm_software = '%s')", backend_name)
@@ -162,7 +335,7 @@ l3_model_names = "prompt", glm_software = NULL) {
   }
 
   # If L1 is skipped but later levels will run, split the shared cache for each backend.
-  if (isFALSE(run_l1) && is.null(split_cache_batch) && length(backend_names) > 0L &&
+  if (isFALSE(run_l1) && is.null(split_cache_batch) && length(execution_backend_names) > 0L &&
       (!is.null(model_list$l2_model_names) || !is.null(model_list$l3_model_names))) {
     split_cache_batch <- f_batch$copy(
       job_name = "split_backend_caches", n_cpus = 1,
@@ -191,51 +364,147 @@ l3_model_names = "prompt", glm_software = NULL) {
   # todo
   # gpa <- verify_lv1_runs(gpa)
 
-  # only run level 2 if this is a multi-run dataset, FSL backend is enabled, and user requests l2 model estimation
-  requires_l2 <- isTRUE(gpa$multi_run) && isTRUE(use_fsl)
-  if (!is.null(model_list$l2_model_names) && isFALSE(requires_l2)) {
+  # Standalone L2 execution is only needed when a resolved producer emits the required
+  # subject/session contrasts at level 2.
+  l2_execution_backends <- l2_backend_names[vapply(
+    l2_backend_names,
+    function(backend_name) {
+      backend <- resolved_backends[[backend_name]]
+      !is.null(backend) && backend_runs_level(backend, 2L)
+    },
+    logical(1)
+  )]
+  can_run_l2 <- isTRUE(gpa$multi_run) && length(l2_execution_backends) > 0L
+  if (!is.null(model_list$l2_model_names) && isFALSE(can_run_l2)) {
     reasons <- c()
     if (!isTRUE(gpa$multi_run)) reasons <- c(reasons, "dataset is not multi-run")
-    if (!isTRUE(use_fsl)) reasons <- c(reasons, "FSL backend is not enabled")
+    if (length(l2_execution_backends) == 0L) reasons <- c(reasons, "no configured backend provides standalone level 2 execution")
+    spm_note <- if ("spm" %in% execution_backend_names) {
+      "SPM does not run standalone L2 jobs; its L2 model spec is projected during SPM L1 setup."
+    } else {
+      NULL
+    }
     lg$warn(
-      "L2 models were requested but cannot be run: %s.",
-      if (length(reasons) > 0L) paste(reasons, collapse = "; ") else "unknown reason"
+      "L2 models were requested but cannot be run as standalone jobs: %s%s",
+      if (length(reasons) > 0L) paste(reasons, collapse = "; ") else "unknown reason",
+      if (!is.null(spm_note)) paste0(". ", spm_note) else "."
     )
   }
-  if (isTRUE(requires_l2) && !is.null(model_list$l2_model_names)) {
-    # setup of l2 models (should follow l1)
-    l2_batch <- f_batch$copy(
-      job_name = "setup_run_l2", n_cpus = gpa$parallel$l2_setup_cores,
-      wall_time = gpa$parallel$l2_setup_run_time,
-      r_code = c(
-        "gpa <- setup_l2_models(gpa, backend = 'fsl')",
-        "child_job_ids <- run_feat_sepjobs(gpa, level = 2L)"
-      )
-    )
+  l2_execute_batches <- list()
+  if (isTRUE(can_run_l2) && (!is.null(model_list$l2_model_names) || nrow(l3_level2_requirements) > 0L)) {
 
-    if (isTRUE(run_l1)) {
-      l2_batch$depends_on_parents <- "run_l1_fsl"
-    } else if (!is.null(split_cache_batch)) {
-      l2_batch$depends_on_parents <- "split_backend_caches"
-    } else if (isTRUE(run_finalize)) {
-      l2_batch$depends_on_parents <- "finalize_configuration"
-    } else {
-      l2_batch$depends_on_parents <- NULL
+    for (backend_name in l2_execution_backends) {
+      spec <- backend_specs[[backend_name]]
+      run_fn_name <- if (is.null(spec)) NULL else spec$l2_run
+      if (is.null(run_fn_name) || identical(run_fn_name, "__not_implemented__")) next
+      if (!is.character(run_fn_name)) {
+        lg$warn("Skipping backend '%s' L2 runner because l2_run is not a character function name.", backend_name)
+        next
+      }
+
+      l2_model_subset <- l2_models_by_backend[[backend_name]] %||% model_list$l2_model_names
+
+      l2_batch <- f_batch$copy(
+        job_name = paste0("setup_run_l2_", backend_name), n_cpus = gpa$parallel$l2_setup_cores,
+        wall_time = gpa$parallel$l2_setup_run_time,
+        r_code = c(
+          sprintf(
+            "gpa <- setup_l2_models(gpa, l1_model_names=%s, l2_model_names=%s, backend = '%s')",
+            paste(deparse(model_list$l1_model_names), collapse = ""),
+            paste(deparse(l2_model_subset), collapse = ""),
+            backend_name
+          ),
+          sprintf(
+            "child_job_ids <- %s(gpa, level = 2L, model_names=%s)",
+            run_fn_name, paste(deparse(l2_model_subset), collapse = "")
+          )
+        )
+      )
+
+      if (isTRUE(run_l1)) {
+        l2_batch$depends_on_parents <- paste0("run_l1_", backend_name)
+      } else if (!is.null(split_cache_batch)) {
+        l2_batch$depends_on_parents <- "split_backend_caches"
+      } else if (isTRUE(run_finalize)) {
+        l2_batch$depends_on_parents <- "finalize_configuration"
+      } else {
+        l2_batch$depends_on_parents <- NULL
+      }
+      l2_batch$wait_for_children <- TRUE # need to wait for l2 jobs to complete before moving to l3
+      if (!is.null(backend_cache_map[[backend_name]])) {
+        l2_batch$input_rdata_file <- backend_cache_map[[backend_name]]
+        l2_batch$output_rdata_file <- backend_cache_map[[backend_name]]
+      }
+      l2_execute_batches[[backend_name]] <- l2_batch
     }
-    l2_batch$wait_for_children <- TRUE # need to wait for l2 feat jobs to complete before moving to l3
-    if (!is.null(backend_cache_map[["fsl"]])) {
-      l2_batch$input_rdata_file <- backend_cache_map[["fsl"]]
-      l2_batch$output_rdata_file <- backend_cache_map[["fsl"]]
-    }
-    
+
     run_l2 <- TRUE
   } else {
     run_l2 <- FALSE
   }
 
+  sync_backend_caches_batches <- list()
+  if (nrow(l3_cross_backend_requirements) > 0L) {
+    for (producer_level in sort(unique(l3_cross_backend_requirements$producer_level))) {
+      sync_req <- unique(l3_cross_backend_requirements[
+        l3_cross_backend_requirements$producer_level == producer_level,
+        ,
+        drop = FALSE
+      ])
+      if (nrow(sync_req) == 0L) next
+
+      sync_lines <- c()
+      for (ii in seq_len(nrow(sync_req))) {
+        source_backend <- sync_req$producer_backend[ii]
+        dest_backend <- sync_req$execution_backend[ii]
+        if (is.null(backend_cache_map[[source_backend]]) || is.null(backend_cache_map[[dest_backend]])) next
+        sync_lines <- c(
+          sync_lines,
+          sprintf("src <- %s", shQuote(backend_cache_map[[source_backend]])),
+          sprintf("dest <- %s", shQuote(backend_cache_map[[dest_backend]])),
+          "if (!file.exists(src)) stop('Required backend cache not found: ', src)",
+          "success <- file.copy(src, dest, overwrite = TRUE)",
+          "if (!isTRUE(success)) stop('Failed to sync backend cache from ', src, ' to ', dest)"
+        )
+      }
+      if (length(sync_lines) == 0L) next
+
+      job_name <- paste0("sync_l", producer_level, "_backend_caches")
+      sync_job <- f_batch$copy(
+        job_name = job_name,
+        n_cpus = 1,
+        wall_time = "0:10:00",
+        r_code = sync_lines
+      )
+
+      if (producer_level == 1L) {
+        parent_jobs <- unique(vapply(sync_req$producer_backend, function(source_backend) {
+          if (!is.null(l1_execute_batches[[source_backend]])) {
+            paste0("run_l1_", source_backend)
+          } else if (!is.null(split_cache_batch)) {
+            "split_backend_caches"
+          } else if (!is.null(l1_setup_batch)) {
+            "setup_l1"
+          } else if (isTRUE(run_finalize)) {
+            "finalize_configuration"
+          } else {
+            NA_character_
+          }
+        }, character(1)))
+        parent_jobs <- parent_jobs[!is.na(parent_jobs) & nzchar(parent_jobs)]
+        sync_job$depends_on_parents <- if (length(parent_jobs) > 0L) parent_jobs else NULL
+      } else if (producer_level == 2L) {
+        l2_job_names <- paste0("setup_run_l2_", names(l2_execute_batches))
+        sync_job$depends_on_parents <- if (length(l2_job_names) > 0L) l2_job_names else NULL
+      }
+
+      sync_backend_caches_batches[[as.character(producer_level)]] <- sync_job
+    }
+  }
+
   
   if (!is.null(model_list$l3_model_names)) {
-    for (backend_name in backend_names) {
+    for (backend_name in l3_backend_names) {
       spec <- backend_specs[[backend_name]]
       run_fn_name <- if (is.null(spec)) NULL else spec$l3_run
       if (is.null(run_fn_name) || identical(run_fn_name, "__not_implemented__")) next
@@ -243,8 +512,8 @@ l3_model_names = "prompt", glm_software = NULL) {
         lg$warn("Skipping backend '%s' L3 runner because l3_run is not a character function name.", backend_name)
         next
       }
-      if (!is.null(glm_backends[[backend_name]]$l3_run) &&
-        isTRUE(attr(glm_backends[[backend_name]]$l3_run, "glm_backend_not_implemented"))) {
+      if (!is.null(l3_glm_backends[[backend_name]]$l3_run) &&
+        isTRUE(attr(l3_glm_backends[[backend_name]]$l3_run, "glm_backend_not_implemented"))) {
         next
       }
 
@@ -260,24 +529,66 @@ l3_model_names = "prompt", glm_software = NULL) {
         NULL
       }
 
+      producer_reqs <- if (nrow(l3_requirement_df) > 0L) {
+        unique(l3_requirement_df[
+          l3_requirement_df$execution_backend == backend_name,
+          c("producer_backend", "producer_level"),
+          drop = FALSE
+        ])
+      } else {
+        data.frame(
+          producer_backend = character(0),
+          producer_level = integer(0),
+          stringsAsFactors = FALSE
+        )
+      }
+
       l3_exec <- f_batch$copy(
         job_name = paste0("setup_run_l3_", backend_name), n_cpus = gpa$parallel$l2_setup_cores,
         wall_time = gpa$parallel$l3_setup_run_time,
         r_code = c(
           sprintf(
-            "gpa <- setup_l3_models(gpa, l3_model_names=%s, backend = '%s')",
-            paste(deparse(model_list$l3_model_name), collapse = ""), backend_name
+            "gpa <- setup_l3_models(gpa, l1_model_names=%s, l2_model_names=%s, l3_model_names=%s, backend = '%s')",
+            paste(deparse(model_list$l1_model_names), collapse = ""),
+            paste(deparse(model_list$l2_model_names), collapse = ""),
+            paste(deparse(l3_models_by_backend[[backend_name]]), collapse = ""),
+            backend_name
           ),
           "child_job_ids <- c()",
-          sprintf("child_job_ids <- c(child_job_ids, %s(gpa, level = 3L))", run_fn_name)
+          sprintf(
+            "child_job_ids <- c(child_job_ids, %s(gpa, level = 3L, model_names=%s))",
+            run_fn_name, paste(deparse(l3_models_by_backend[[backend_name]]), collapse = "")
+          )
         ),
         post_children_r_code = c(
           sprintf("gpa <- refresh_glm_status(gpa, level = 3L, glm_software = '%s')", backend_name)
         )
       )
 
-      if (backend_name == "fsl" && isTRUE(requires_l2)) {
-        l3_exec$depends_on_parents <- "setup_run_l2"
+      if (nrow(producer_reqs) > 0L) {
+        producer_parents <- c()
+        for (ii in seq_len(nrow(producer_reqs))) {
+          producer_backend <- producer_reqs$producer_backend[ii]
+          producer_level <- producer_reqs$producer_level[ii]
+          sync_job <- sync_backend_caches_batches[[as.character(producer_level)]]
+
+          if (!is.null(sync_job) && !identical(producer_backend, backend_name)) {
+            producer_parents <- c(producer_parents, sync_job$job_name)
+            next
+          }
+
+          if (producer_level == 2L) {
+            if (isTRUE(run_l2)) producer_parents <- c(producer_parents, "setup_run_l2")
+          } else if (producer_level == 1L) {
+            if (!is.null(l1_execute_batches[[producer_backend]])) {
+              producer_parents <- c(producer_parents, paste0("run_l1_", producer_backend))
+            } else {
+              producer_parents <- c(producer_parents, l1_parent)
+            }
+          }
+        }
+        producer_parents <- unique(producer_parents[!is.na(producer_parents) & nzchar(producer_parents)])
+        l3_exec$depends_on_parents <- if (length(producer_parents) > 0L) producer_parents else l1_parent
       } else {
         l3_exec$depends_on_parents <- l1_parent
       }
@@ -319,8 +630,8 @@ l3_model_names = "prompt", glm_software = NULL) {
 
   if (length(l3_execute_batches) > 0L) {
     cleanup_batch$depends_on_parents <- vapply(l3_execute_batches, function(x) x$job_name, character(1))
-  } else if (!is.null(l2_batch)) {
-    cleanup_batch$depends_on_parents <- "setup_run_l2"
+  } else if (length(l2_execute_batches) > 0L) {
+    cleanup_batch$depends_on_parents <- vapply(l2_execute_batches, function(x) x$job_name, character(1))
   } else if (length(l1_execute_batches) > 0L) {
     cleanup_batch$depends_on_parents <- vapply(l1_execute_batches, function(x) x$job_name, character(1))
   } else {
@@ -334,7 +645,8 @@ l3_model_names = "prompt", glm_software = NULL) {
       joblist = c(
         list(f_batch, l1_setup_batch, split_cache_batch),
         l1_execute_batches,
-        list(l2_batch),
+        l2_execute_batches,
+        sync_backend_caches_batches,
         l3_execute_batches,
         list(cleanup_batch)
       ),
@@ -345,7 +657,8 @@ l3_model_names = "prompt", glm_software = NULL) {
       joblist = c(
         list(l1_setup_batch, split_cache_batch),
         l1_execute_batches,
-        list(l2_batch),
+        l2_execute_batches,
+        sync_backend_caches_batches,
         l3_execute_batches,
         list(cleanup_batch)
       ),

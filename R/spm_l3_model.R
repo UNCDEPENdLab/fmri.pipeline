@@ -23,8 +23,33 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
   lg <- lgr::get_logger("glm_pipeline/l3_setup")
   lg$set_threshold(gpa$lgr_threshold)
 
-  if (length(unique(l3_df$session)) > 1L) {
-    msg <- "spm_l3_model is designed for execution on a single session data.frame"
+  if (length(unique(l3_df$l3_model)) > 1L) {
+    msg <- "spm_l3_model is designed for execution on a single l3 model"
+    lg$error(msg)
+    stop(msg)
+  }
+
+  l3_model <- l3_df$l3_model[1L]
+
+  l3_input_mode <- NULL
+  if ("l3_input_mode" %in% names(l3_df)) {
+    modes <- unique(stats::na.omit(l3_df$l3_input_mode))
+    if (length(modes) > 1L) {
+      msg <- "spm_l3_model requires a single l3_input_mode within each input data.frame"
+      lg$error(msg)
+      stop(msg)
+    }
+    if (length(modes) == 1L) l3_input_mode <- modes[1L]
+  }
+  if (is.null(l3_input_mode)) {
+    l3_input_mode <- gpa$l3_models$models[[l3_model]]$l3_input_mode
+  }
+  l3_input_mode <- normalize_l3_input_mode(l3_input_mode)
+  checkmate::assert_subset(l3_input_mode, longitudinal_l3_input_modes())
+
+  n_sessions_input <- length(unique(l3_df$session))
+  if (identical(l3_input_mode, "per_session") && n_sessions_input > 1L) {
+    msg <- "spm_l3_model with l3_input_mode='per_session' requires a single-session input data.frame"
     lg$error(msg)
     stop(msg)
   }
@@ -35,16 +60,9 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
     stop(msg)
   }
 
-  if (length(unique(l3_df$l3_model)) > 1L) {
-    msg <- "spm_l3_model is designed for execution on a single l3 model"
-    lg$error(msg)
-    stop(msg)
-  }
-
   # metadata
-  session <- l3_df$session[1L]
+  session <- if (n_sessions_input == 1L) l3_df$session[1L] else 0L
   l1_model <- l3_df$l1_model[1L]
-  l3_model <- l3_df$l3_model[1L]
   l1_cope_name <- l1_contrast <- l3_df$l1_cope_name[1L]
 
   spm_defaults <- list(
@@ -82,7 +100,7 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
   # tracking data frame for this model (column names should follow variable names)
   spm_l3_df <- data.frame(
     l1_model = l1_model, l1_cope_name = l1_cope_name,
-    l3_model = l3_model
+    l3_model = l3_model, session = session, l3_input_mode = l3_input_mode
   )
 
   # respecify model based on available subjects
@@ -110,6 +128,14 @@ spm_l3_model <- function(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NU
     l1_contrast = l1_contrast, l1_model = l1_model,
     l3_model = l3_model, gpa = gpa, what = "l3", glm_software = "spm"
   )
+
+  n_global_sessions <- n_sessions_input
+  if (!is.null(gpa$run_data) && "session" %in% names(gpa$run_data)) {
+    n_global_sessions <- length(unique(gpa$run_data$session))
+  }
+  if (identical(l3_input_mode, "per_session") && n_global_sessions > 1L) {
+    spm_l3_output_dir <- file.path(spm_l3_output_dir, paste0("ses-", session))
+  }
 
   if (!dir.exists(spm_l3_output_dir)) {
     lg$debug("Creating SPM L3 output directory: %s", spm_l3_output_dir)

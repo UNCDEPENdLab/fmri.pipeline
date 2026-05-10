@@ -12,6 +12,10 @@ spm_l1_model(
   gpa,
   model_name = NULL,
   run_nifti = NULL,
+  run_numbers = NULL,
+  run_sessions = NULL,
+  source_run_numbers = NULL,
+  l1_session_mode = NULL,
   execute_spm = FALSE
 )
 }
@@ -28,6 +32,8 @@ you wish to setup multiple models, this is handled upstream in setup_l1_models.R
 
 \item{run_nifti}{optional character vector of NIfTI filenames used in l1 analysis.
 Prefer to pass these via the build_design_matrix object in $run_nifti}
+
+\item{run_numbers}{optional integer vector of run numbers corresponding to \code{run_nifti}}
 
 \item{execute_spm}{whether to execute SPM setup/estimation immediately. Default: FALSE}
 }

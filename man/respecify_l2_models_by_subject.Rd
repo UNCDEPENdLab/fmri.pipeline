@@ -2,27 +2,39 @@
 % Please edit documentation in R/glm_helper_functions.R
 \name{respecify_l2_models_by_subject}
 \alias{respecify_l2_models_by_subject}
-\title{Helper function to run the requested GLM model for each subject+session separately}
+\title{Recalculate an L2 model by grouping units derived from available run data}
 \usage{
-respecify_l2_models_by_subject(mobj, data)
+respecify_l2_models_by_subject(
+  mobj,
+  data,
+  split_on = c("id", "session"),
+  aggregated_session = 0L
+)
 }
 \arguments{
 \item{mobj}{an \code{l1_model_spec} or \code{hi_model_spec} object containing the GLM model to run}
 
-\item{data}{The run-level data frame containing data for all ids and sessions. This will be split into individual chunks}
+\item{data}{The run-level data frame containing data for all ids and sessions. This is split into chunks by \code{split_on}.}
+
+\item{split_on}{Character vector defining grouping columns used to respecify the model. Must include \code{"id"} and may include
+\code{"session"} (default: \code{c("id", "session")}).}
+
+\item{aggregated_session}{Integer session value assigned when grouping across sessions (i.e., when \code{split_on = "id"}). This keeps
+output schemas consistent for downstream joins and cope metadata. Default is \code{0L}.}
 }
 \value{
-a modified copy of \code{mobj} where the $by_subject field has been added
+a modified copy of \code{mobj} where the \code{$by_subject} field has been added
 }
 \description{
-Helper function to run the requested GLM model for each subject+session separately
+Recalculate an L2 model by grouping units derived from available run data
 }
 \details{
-The function adds the $by_subject field, which contains the design matrices and contrasts
-  for each subject and session in \code{data} based on the available data for that session. For example, if
-  a subject is missing a few runs (or these are dropped from analysis), then some contrasts may change or drop out of the model.
+The function adds the \code{$by_subject} field, which contains the design matrices and contrasts
+  for each grouping unit in \code{data}, based on the runs that remain available for that unit. For example, if
+  a subject is missing runs (or they are dropped from analysis), some contrasts may change or drop out of the model.
 
-The $by_subject field is a keyed data.table object containing list elements for the cope_list (mapping cope numbers to contrast names),
-  the contrasts, and the design matrix for each session.
+The \code{$by_subject} field is a keyed data.table containing list elements for \code{cope_list}
+  (mapping cope numbers to contrast names), \code{contrasts}, and the design matrix for each unit.
+  It also includes \code{grouping_scope} (\code{"id_session"} or \code{"id"}).
 }
 \keyword{internal}

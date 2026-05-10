@@ -8,6 +8,14 @@
 \description{
 Setup of GLM and deconvolution analyses for large-scale fMRI analyses of fMRI data.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://uncdependlab.github.io/fmri.pipeline/}
+  \item Report bugs at \url{https://github.com/UNCDEPENdLab/fmri.pipeline/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Michael Hallquist \email{michael.hallquist@gmail.com}
 

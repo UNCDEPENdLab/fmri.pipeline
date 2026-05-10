@@ -38,6 +38,9 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
+# pkgdown site
+docs/
+
 #slurm outputs
 slurm-*.out
 
@@ -59,3 +62,7 @@ tests/testthat/testdata/gpa_base.rds
 
 # Test space
 tmp/
+
+# local vscode and codex
+.vscode/
+.codex

@@ -12,7 +12,14 @@ test_that("run_glm_pipeline tolerates l1 none selection", {
     fsl = list(l1_feat_alljobs_time = "0:10:00")
   ))
   gpa$glm_backend_specs <- list(
-    fsl = list(l1_run = "run_feat_sepjobs", l3_run = "run_feat_sepjobs")
+    fsl = list(
+      name = "fsl",
+      runs_l1 = TRUE, runs_l2 = TRUE, runs_l3 = TRUE,
+      multi_run_strategy = "explicit_l2",
+      produced_artifacts = c("run_level_contrasts", "subject_session_contrasts", "group_level_stats"),
+      l1_run = "run_feat_sepjobs",
+      l3_run = "run_feat_sepjobs"
+    )
   )
 
   mock_job <- function(...) {

@@ -218,6 +218,7 @@ get_l1_config <- function(gpa) {
   for (mm in l1m$models) {
     mobj <- list()
     mobj$signals <- mm$signals
+    if (!is.null(mm$execution_backend)) mobj$execution_backend <- mm$execution_backend
     mobj$contrasts <- list(
       diagonal = mm$contrast_spec$diagonal,
       cell_means = mm$contrast_spec$cell_means,
@@ -296,10 +297,14 @@ get_l2_config <- function(gpa) {
     mobj$level <- mm$level
     mobj$model_formula <- as.character(mm$model_formula)
     mobj$num2fac <- mm$num2fac # variables that should be converted from numbers to factors before contrasts are setup
+    if (!is.null(mm$execution_backend)) mobj$execution_backend <- mm$execution_backend
     
     # convert named vectors for covariate transformation and reference levels to lists for YAML to capture the key:value pairs
     if (!is.null(mm$covariate_transform)) mobj$covariate_transform <- as.list(mm$covariate_transform) # settings for covariate transformation
     if (!is.null(mm$reference_level)) mobj$reference_level <- as.list(mm$reference_level) # settings for covariate transformation
+    if (level == 2L && !is.null(mm$l2_scope)) mobj$l2_scope <- mm$l2_scope
+    if (level == 3L && !is.null(mm$l3_input_mode)) mobj$l3_input_mode <- mm$l3_input_mode
+    if (level == 3L && !is.null(mm$producer_backend)) mobj$producer_backend <- mm$producer_backend
 
     mobj$contrasts <- list(
       diagonal = mm$contrast_spec$diagonal,
@@ -316,6 +321,15 @@ get_l2_config <- function(gpa) {
 
     if (level == 3L) {
       mobj$fsl_outlier_deweighting <- mm$fsl_outlier_deweighting
+      
+      # 3dLMEr-specific fields
+      if (identical(mm$l3_input_mode, "3dlmer")) {
+        mobj$random_effects <- mm$random_effects
+        mobj$lmer_formula <- mm$lmer_formula
+        mobj$lmer_mask <- mm$lmer_mask
+        mobj$lmer_njobs <- mm$lmer_njobs
+        mobj$lmer_glt_codes <- mm$lmer_glt_codes
+      }
     }
 
     str_out[[mm$name]] <- mobj

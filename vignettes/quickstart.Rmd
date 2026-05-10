@@ -648,6 +648,10 @@ l3_models:
 
 <br><br>
 
+## Step 3b (optional): Choose GLM software backends
+
+By default, `fmri.pipeline` uses `gpa$glm_software` (typically `"fsl"`) as the estimation backend at every level. If you need different software at different levels—for example, FSL for Levels 1–2 and AFNI `3dLMEr` for Level 3—you can set `gpa$level_backends` or attach `execution_backend` / `producer_backend` fields to individual models. See the **Choosing model backends** section of `vignette("design")` for the full precedence rules, worked examples, and current limitations.
+
 ## Step 4: Run the Pipeline
 To run the pipeline, you can use the `run_glm_pipeline()` function. This function will execute all specified models across levels, scheduling jobs as needed.
 ```{r, eval=FALSE}
@@ -688,15 +692,17 @@ The output directory structure is as follows:
   * feat_l2: Second-level analysis outputs
     * sub-{id}: Subject-specific directory
       * ses-{session}: Session-specific directory (if applicable)
-        * {l1_model}: Directory for the Level 1 model feeding into L2
-          * FEAT_LVL2_{l2_model_name}.gfeat: Subject-level FEAT directory for the L2 model
-          * FEAT_LVL2_{l2_model_name}.fsf: FSL Feat design file for the L2 model
+        * L1m-{l1_model}: Directory for the Level 1 model feeding into L2
+          * l1c-{l1_contrast}: Directory for the Level 1 contrast feeding into L2
+            * L2m-{l2_model_name}.fsf: Subject-level FEAT design file for the L2 model
+            * L2m-{l2_model_name}.gfeat: Subject-level FEAT output directory for the L2 model
 
   * feat_l3: Third-level analysis outputs
-    * {l1_model}: Directory for the specific Level 1 model
-      * L2m-{l2_model_name}_l2c-{l2_contrast}: Directory for the specific Level 2 model
-      * L2m-{l2_model_name}_l2c-overall: generated if in L2 building step you say "yes" to do you want to get the overall response (averaging over all the covariates in the level 2 model).
-        * L3m-{l3_model_name}: Directory for the specific Level 3 model. If you want to look at a specific regressor for a level 1 model and look at a specific contrast, you will look into these directories.
+    * L3m-{l3_model_name}: Directory for the specific Level 3 model
+      * L1m-{l1_model}: Directory for the specific Level 1 model
+        * L2m-{l2_model_name}: Directory for the specific Level 2 model
+          * l2c-{l2_contrast}: Directory for the Level 2 contrast
+            * FEAT_l1c-{l1_contrast}.gfeat: Group-level FEAT directory for the Level 1 contrast
 
   * scheduler_scripts: Directory containing job submission scripts for the scheduler (e.g., SLURM, Torque)
     * batch_{batch_id}: Directory for a specific batch of jobs. Everytime `run_glm_pipeline()` is called, a new batch directory is created.
@@ -710,7 +716,96 @@ The output directory structure is as follows:
 
   * .sqlite: SQLite database for tracking analysis progress and results
 
-`fmri.pipeline` also gives considerable flexibility in how you want to structure your outputs by changing the contents of `gpa$output_locations` object. The output location can be a dynamic expression (based on `glue` R package) that gets evaluated when the package is run. This is the default expresson for first-level FEAT directories: `"{gpa$output_directory}/feat_l1/sub-{id}/ses-{session}/{l1_model}"`. The contents inside the curly brackets are evaluated at runtime, so you can use any variable in the `gpa` object to specify the output location. The default for second-level FEAT directories is `"{gpa$output_directory}/feat_l2/sub-{id}/ses-{session}/{l1_model}"`.
+`fmri.pipeline` also gives considerable flexibility in how you want to structure your outputs by changing the contents of `gpa$output_locations` object. The output location can be a dynamic expression (based on `glue` R package) that gets evaluated when the package is run. This is the default expresson for first-level FEAT directories: `"{gpa$output_directory}/feat_l1/sub-{id}/ses-{session}/{l1_model}"`. The contents inside the curly brackets are evaluated at runtime, so you can use any variable in the `gpa` object to specify the output location. The default for second-level FEAT outputs is `"{gpa$output_directory}/feat_l2/sub-{id}/ses-{session}/L1m-{l1_model}/l1c-{l1_cope_label}/L2m-{l2_model}"`, which is used as the basename for the `.fsf` file and `.gfeat` directory.
+
+## Reviewing pipeline run success and status
+
+Each call to `run_glm_pipeline()` creates a new run-specific batch directory under `scheduler_scripts`, for example `scheduler_scripts/batch_14e992e1-b995-41ad-ac70-8b7f91630130`. Treat this directory as the primary execution record for that pipeline run. It contains the generated submission scripts, R wrapper scripts, `.Rout` files, scheduler `.out` files, and cached `gpa` objects used by the run.
+
+A good review workflow is:
+
+1. Identify the batch directory for the run.
+   If you have the saved `gpa` object, the active run directory is usually recorded in `project_config.json` and in `gpa$output_locations$scheduler_scripts`. If you are reviewing from the filesystem, sort `scheduler_scripts/batch_*` by modification time and choose the batch corresponding to the run you launched.
+
+2. Check the SQLite job tracker.
+   The analysis directory contains a `.sqlite` file with one row per tracked scheduler job. A successful run should have all relevant jobs marked `COMPLETED`, with no `FAILED` or `FAILED_BY_EXT` statuses.
+
+```{r, eval=FALSE}
+status <- get_tracked_job_status(
+  sequence_id = "14e992e1-b995-41ad-ac70-8b7f91630130",
+  sqlite_db = "/path/to/analysis/my_analysis.sqlite"
+)
+
+table(status$status)
+status[order(status$time_submitted), c("job_id", "job_name", "status", "time_started", "time_ended")]
+```
+
+3. Inspect the saved `gpa` object for model and artifact status.
+   The batch directory contains cached `gpa` objects, typically `run_pipeline_cache.RData` plus backend-specific caches such as `run_pipeline_cache_fsl.RData` or `run_pipeline_cache_afni.RData`. Load the latest relevant cache and inspect the setup/status tables for each level. The exact columns vary by backend, but the status tables commonly include fields such as `to_run`, `feat_complete`, `feat_failed`, `afni_complete`, and `afni_failed`.
+
+```{r, eval=FALSE}
+load("/path/to/analysis/scheduler_scripts/batch_<batch_id>/run_pipeline_cache.RData")
+
+# FSL level 1 run-level outputs
+gpa$l1_model_setup$fsl |>
+  dplyr::count(feat_complete, feat_failed, to_run)
+
+gpa$l1_model_setup$fsl |>
+  dplyr::filter(feat_failed | !feat_complete) |>
+  dplyr::select(id, session, run_number, l1_model, feat_dir, feat_fsf, feat_complete, feat_failed)
+
+# FSL level 2 subject/session outputs
+gpa$l2_model_setup$fsl |>
+  dplyr::filter(feat_failed | !feat_complete) |>
+  dplyr::select(id, session, l1_model, l1_cope_name, l2_model, feat_dir, feat_complete, feat_failed)
+
+# AFNI 3dLMEr level 3 outputs, when AFNI is used at L3
+gpa$l3_model_setup$afni |>
+  dplyr::filter(afni_failed | !afni_complete) |>
+  dplyr::select(l3_model, l1_cope_name, l2_cope_name, afni_dir, afni_script, afni_complete, afni_failed)
+```
+
+   If a backend-specific cache is present, it can be more informative for that backend because it is saved immediately after that backend's jobs finish:
+
+```{r, eval=FALSE}
+load("/path/to/analysis/scheduler_scripts/batch_<batch_id>/run_pipeline_cache_fsl.RData")
+gpa$l2_model_setup$fsl |> dplyr::filter(feat_failed | !feat_complete)
+
+load("/path/to/analysis/scheduler_scripts/batch_<batch_id>/run_pipeline_cache_afni.RData")
+gpa$l3_model_setup$afni |> dplyr::filter(afni_failed | !afni_complete)
+```
+
+   These `dplyr::filter()` calls are the fastest way to find specific failed or incomplete runs, subjects, contrasts, or model combinations. If they return zero rows and the SQLite job tracker is all `COMPLETED`, the pipeline's internal status agrees that execution finished successfully.
+
+4. If using SLURM or Torque/PBS, confirm scheduler exit codes.
+   On SLURM, `sacct` should show `COMPLETED` and `0:0` exit codes for each job id. Scheduler records are especially useful when a job was killed for time or memory before R or FSL/AFNI could write a complete log.
+
+```bash
+sacct -j 49616891,49616892 --format=JobID,JobName%45,State,ExitCode,Elapsed,MaxRSS
+```
+
+5. Review the batch-level `.Rout` files in order.
+   The parent batch jobs correspond to conceptual pipeline steps such as `finalize_configuration`, `setup_l1`, `run_l1_fsl`, `setup_run_l2_fsl`, `setup_run_l3_afni`, and `cleanup_glm`. The `.Rout` files show what the pipeline submitted, which child jobs it waited for, and whether the final status update was `COMPLETED`.
+
+6. Review scheduler `.out` files in the batch directory.
+   Scheduler output files are run-scoped logs and are intentionally collected in the batch directory. Newer runs name these files with the scheduler, job id, job name or step, and a submission token, for example `slurm-49624400-3dlmer_l3_3dlmer_session_EV_house_overall-3dlmer_l3_3dlmer_session_6cbb62610636.out`. This makes it possible to inspect all logs for a run in one place while still knowing which model or step each log represents.
+
+7. Check artifact-local manifests.
+   Runs produced by current versions of `fmri.pipeline` write a `job_manifest.tsv` file into each completed or failed artifact directory. This file records the artifact path, artifact type, status, job id, job name, scheduler log path, batch directory, batch file, source file, and timestamp. Use it when you are inspecting one FEAT, SPM, or AFNI result directory and want to jump back to the exact scheduler log that produced it.
+
+```{r, eval=FALSE}
+manifest <- read.delim(
+  "/path/to/analysis/feat_l2/sub-01/ses-1/L1m-task/l1c-EV_face/L2m-l2_model.gfeat/job_manifest.tsv",
+  stringsAsFactors = FALSE
+)
+
+manifest[, c("status", "job_id", "job_name", "scheduler_log", "batch_file")]
+```
+
+8. Check expected output markers and model logs.
+   For FSL FEAT outputs, look for `.feat_complete` inside `.feat` or `.gfeat` directories and absence of `.feat_fail`. For AFNI `3dLMEr`, check that each model directory has the expected `+HEAD` and `+BRIK` output pair and review the `*_LMEr_log.txt` plus the scheduler `.out` named in `job_manifest.tsv`. Warnings such as singular mixed-model fits should be treated as model-review issues rather than scheduler failures if the job status and output files are complete.
+
+When these checks agree--all tracked jobs are complete, scheduler exit codes are clean, expected output markers exist, and artifact manifests point to the expected batch logs--the run can be treated as successful from an execution and output-structure perspective. Any remaining warnings should be evaluated statistically or scientifically for the specific model.
 
 
 ---

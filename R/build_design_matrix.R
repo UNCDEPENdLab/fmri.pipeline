@@ -31,6 +31,9 @@
 #' @param run_data a data.frame containing metadata about the runs for which we want to model the task design. This
 #'           data.frame should contain the columns run_number, run_volumes, run_nifti, and drop_volumes. If run_nifti
 #'           is provided, but run_volumes is not, then the number of volumes is looked up from the NIfTI header.
+#' @param run_nifti_drop_applied Logical indicating whether the NIfTI inputs in \code{run_data$run_nifti}
+#'           already have \code{drop_volumes} removed. If \code{TRUE} (default), reported NIfTI lengths are treated
+#'           as post-drop lengths; if \code{FALSE}, \code{drop_volumes} are subtracted when deriving modeled volumes.
 #' @param drop_volumes By default, all volumes are retained. If specified, this can be a vector of the number of volumes
 #'           that will be removed from the \emph{beginning} of each convolved regressor. If you pass a single number (e.g., 3),
 #'           this number of volumes will be dropped from each run. This is useful if you have dropped the first n volumes
@@ -238,7 +241,6 @@
 #' @importFrom data.table as.data.table
 #' @importFrom dplyr filter select slice bind_rows arrange "%>%"
 #' @importFrom orthopolynom legendre.polynomials polynomial.values
-#' @importFrom oro.nifti readNIfTI
 #' @importFrom ggplot2 ggplot
 #' @importFrom car vif
 #' @importFrom stats as.formula cor lm residuals rnorm
@@ -426,9 +428,36 @@ build_design_matrix <- function(
     })
   }))
 
-  # enforce that run subsetting depends on having the runs present in the run_data object
-  stopifnot(all(runs_to_output %in% run_data$run_number))
+  missing_run_data <- setdiff(runs_to_output, run_data$run_number)
+  if (length(missing_run_data) > 0L) {
+    stop(
+      sprintf(
+        paste(
+          "Requested runs_to_output are not present in run_data: %s.",
+          "Available run_data runs: %s."
+        ),
+        paste(missing_run_data, collapse = ", "),
+        paste(unique(run_data$run_number), collapse = ", ")
+      )
+    )
+  }
   run_data <- run_data %>% dplyr::filter(run_number %in% !!runs_to_output)
+
+  available_dmat_runs <- sub("^run_number", "", rownames(dmat))
+  missing_dmat_runs <- setdiff(as.character(runs_to_output), available_dmat_runs)
+  if (length(missing_dmat_runs) > 0L) {
+    stop(
+      sprintf(
+        paste(
+          "Requested runs_to_output could not be built for run(s): %s.",
+          "This usually means event data are missing for those runs.",
+          "Available design-matrix runs: %s."
+        ),
+        paste(missing_dmat_runs, collapse = ", "),
+        paste(available_dmat_runs, collapse = ", ")
+      )
+    )
+  }
 
   # use row names, rather than numeric positions, to enforce subsetting (e.g., noncontiguous runs in dmat)
   dmat <- dmat[paste0("run_number", runs_to_output), , drop = FALSE]
@@ -470,6 +499,7 @@ build_design_matrix <- function(
   
   # if volumes are being dropped (and shift-timing is TRUE), subtract the dropped volumes from the onset times.
   dmat <- shift_dmat_timing(dmat, tr, drop_volumes, shift_timing)
+  validate_shifted_dmat_onsets(dmat, tr = tr, drop_volumes = drop_volumes, lg = lg)
 
   # concatenate regressors across runs by adding timing from MR files.
   run_timing <- cumsum(run_volumes) * tr # timing in seconds of the start of successive runs
@@ -621,6 +651,59 @@ shift_dmat_timing <- function(dmat, tr, drop_volumes = 0, shift_timing = TRUE) {
   return(dmat)
 }
 
+# helper to stop early when shifting event timing for dropped volumes makes an onset invalid
+validate_shifted_dmat_onsets <- function(dmat, tr, drop_volumes = 0, lg = NULL) {
+  if (is.null(lg)) lg <- lgr::get_logger()
+  if (all(drop_volumes == 0L)) return(invisible(dmat))
+
+  offenders <- character(0)
+  max_examples <- 5L
+  run_labels <- dimnames(dmat)[[1L]]
+  reg_labels <- dimnames(dmat)[[2L]]
+
+  for (i in seq_len(dim(dmat)[1L])) {
+    for (j in seq_len(dim(dmat)[2L])) {
+      df <- dmat[[i, j]]
+      if (nrow(df) == 0L) next
+
+      neg_idx <- which(df[, "onset"] < 0)
+      if (length(neg_idx) == 0L) next
+
+      original_onsets <- df[neg_idx, "onset"] + (tr * drop_volumes[i])
+      offenders <- c(
+        offenders,
+        sprintf(
+          "%s/%s: %d event(s), min shifted onset=%.3fs, earliest original onset=%.3fs",
+          run_labels[i], reg_labels[j], length(neg_idx), min(df[neg_idx, "onset"]), min(original_onsets)
+        )
+      )
+    }
+  }
+
+  if (length(offenders) == 0L) {
+    return(invisible(dmat))
+  }
+
+  if (length(unique(drop_volumes)) == 1L) {
+    offset_desc <- sprintf("%.3fs", tr * drop_volumes[1L])
+  } else {
+    offset_desc <- sprintf("run-specific offsets (%s)", paste(sprintf("%.3f", tr * drop_volumes), collapse = ", "))
+  }
+
+  shown <- utils::head(offenders, max_examples)
+  remaining <- length(offenders) - length(shown)
+  suffix <- if (remaining > 0L) sprintf(" (%d additional run/regressor combinations omitted)", remaining) else ""
+  msg <- paste0(
+    "Negative post-drop onsets detected after subtracting ", offset_desc,
+    " from event timings. This usually means `drop_volumes` is too large for these event timings ",
+    "or the event onsets already reflect a truncated NIfTI. Offending run/regressor combinations: ",
+    paste(shown, collapse = "; "), suffix, "."
+  )
+
+  lg$error(msg)
+  stop(msg, call. = FALSE)
+}
+
 # helper to lookup number of volumes in each run based on whether NIfTIs are passed in versus run_volumes vector
 determine_run_volumes <- function(run_data = NULL, nruns = NULL, run_nifti_drop_applied=TRUE, tr = NULL, signals_aligned, lg = NULL) {
   checkmate::assert_data_frame(run_data)
@@ -629,7 +712,8 @@ determine_run_volumes <- function(run_data = NULL, nruns = NULL, run_nifti_drop_
   if (!is.null(run_data$run_nifti)) {
     lg$info("Using NIfTI images to determine run lengths.")
     run_volumes_detected <- sapply(run_data$run_nifti, function(xx) {
-      oro.nifti::readNIfTI(xx, read_data = FALSE)@dim_[5L]
+      hdr <- RNifti::niftiHeader(xx)
+      hdr$dim[5L]
     }, USE.NAMES=FALSE)
 
     # if user specified the number of volumes, check that this matches detected volumes

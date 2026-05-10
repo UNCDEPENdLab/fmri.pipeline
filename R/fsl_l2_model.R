@@ -8,9 +8,26 @@
 #' @importFrom dplyr mutate filter select right_join pull
 #' @author Michael Hallquist
 #' @keywords internal
+is_l2_passthrough_estimable <- function(dmat, cmat, tol = sqrt(.Machine$double.eps)) {
+  if (checkmate::test_data_frame(dmat)) dmat <- as.matrix(dmat)
+  if (checkmate::test_data_frame(cmat)) cmat <- as.matrix(cmat)
+  if (!is.null(cmat) && !is.matrix(cmat)) {
+    cmat <- matrix(as.numeric(cmat), nrow = 1L)
+  }
+
+  is.matrix(dmat) &&
+    nrow(dmat) == 1L &&
+    ncol(dmat) == 1L &&
+    isTRUE(abs(as.numeric(dmat[1L, 1L]) - 1) <= tol) &&
+    is.matrix(cmat) &&
+    nrow(cmat) == 1L &&
+    ncol(cmat) == 1L &&
+    isTRUE(abs(as.numeric(cmat[1L, 1L]) - 1) <= tol)
+}
+
 fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
   checkmate::assert_data_frame(l1_df)
-  checkmate::assert_subset(c("id", "session", "l1_model"), names(l1_df))
+  checkmate::assert_subset(c("id", "session", "l1_model", "l1_cope_name", "l1_cope_number", "cope_file"), names(l1_df))
   checkmate::assert_string(l2_model) # single l2 model
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
 
@@ -23,8 +40,14 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
     stop(msg)
   }
 
-  if (length(unique(l1_df$session)) > 1L) {
-    msg <- "fsl_l2_model is designed for execution on a single session data.frame"
+  l2_scope <- gpa$l2_models$models[[l2_model]]$l2_scope
+  if (is.null(l2_scope) || !is.character(l2_scope) || length(l2_scope) != 1L || !nzchar(l2_scope)) {
+    l2_scope <- "id_session"
+  }
+  checkmate::assert_subset(l2_scope, longitudinal_l2_scopes())
+
+  if (identical(l2_scope, "id_session") && length(unique(l1_df$session)) > 1L) {
+    msg <- "fsl_l2_model with l2_scope='id_session' requires a single-session input data.frame"
     lg$error(msg)
     stop(msg)
   }
@@ -37,109 +60,127 @@ fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
 
   # elements of metadata for l2
   id <- l1_df$id[1L]
-  session <- l1_df$session[1L]
+  session <- if (identical(l2_scope, "id")) 0L else l1_df$session[1L]
   l1_model <- l1_df$l1_model[1L]
-  l1_feat_dirs <- l1_df$feat_dir
-  n_l1_copes <- gpa$l1_models$n_contrasts[l1_model] # number of lvl1 copes to combine for this model
+  l1_cope_name <- l1_df$l1_cope_name[1L]
+  l1_cope_number <- l1_df$l1_cope_number[1L]
+  l1_cope_files <- l1_df$cope_file
 
-  #regressor_names <- gpa$l2_models$models[[l2_model]]$regressors # names of regressors in design matrix for this model
+  if (length(unique(l1_df$l1_cope_name)) > 1L || length(unique(l1_df$l1_cope_number)) > 1L) {
+    msg <- "fsl_l2_model is designed for execution on a single L1 cope at a time"
+    lg$error(msg)
+    stop(msg)
+  }
 
-  if (!is.null(gpa$l2_models$models[[l2_model]]$by_subject)) {
-    lg$info("Using per-subject l2 model specification for model: %s", l2_model)
+  l2_data <- compose_l2_model_data(gpa, lg = lg)
+  l2_keys <- unique(l1_df[, c("id", "session", "run_number")])
+  l2_data <- dplyr::semi_join(l2_data, l2_keys, by = c("id", "session", "run_number"))
 
-    # get subject-specific model and contrast matrices
-    ss_df <- gpa$l2_models$models[[l2_model]]$by_subject %>%
-      dplyr::filter(id == !!id & session == !!session)
+  split_on <- if (identical(l2_scope, "id")) "id" else c("id", "session")
+  refit_mobj <- respecify_l2_models_by_subject(
+    gpa$l2_models$models[[l2_model]],
+    l2_data,
+    split_on = split_on,
+    aggregated_session = 0L
+  )
 
-    n_l2_copes <- ss_df$n_l2_copes
-
-    if (nrow(ss_df) == 0L) {
-      lg$error("Unable to locate a subject-specific entry for id %s, session %s", id, session)
-      return(NULL)
-    } else if (nrow(ss_df) > 1L) {
-      lg$error("More than one subject-specific entry for id %s, session %s", id, session)
-      return(NULL)
-    } else {
-      dmat <- ss_df$model_matrix[[1L]]
-      cmat <- ss_df$contrasts[[1L]]
-    }
-
+  if (identical(l2_scope, "id")) {
+    ss_df <- refit_mobj$by_subject %>% dplyr::filter(id == !!id)
   } else {
-    n_l2_copes <- gpa$l2_models$n_contrasts[l2_model] # number of lvl1 copes to combine for this model
+    ss_df <- refit_mobj$by_subject %>% dplyr::filter(id == !!id & session == !!session)
+  }
 
-    #find rows in run_data that match this subject
-    dmat_rows <- gpa$run_data %>%
-      dplyr::mutate(rownum = 1:n()) %>%
-      dplyr::filter(id == !!id & session == !!session) %>%
-      dplyr::filter(exclude_run == FALSE) %>%
-      dplyr::pull(rownum)
+  if (nrow(ss_df) == 0L) {
+    lg$warn(
+      "No valid L2 design rows remain for id %s, session %s, l1 model %s, l1 cope %s, l2 model %s",
+      id, session, l1_model, l1_cope_name, l2_model
+    )
+    return(NULL)
+  }
+  if (nrow(ss_df) > 1L) {
+    lg$error("More than one subject-specific entry for id %s, session %s", id, session)
+    return(NULL)
+  }
 
-    if (length(dmat_rows) != nrow(l1_df)) {
-      msg <- "Number of rows in gpa$run_data does not match l1_df in fsl_l2_model"
-      lg$error(msg)
-      stop(msg)
+  dmat <- ss_df$model_matrix[[1L]]
+  cmat <- ss_df$contrasts[[1L]]
+  if (checkmate::test_data_frame(cmat)) cmat <- as.matrix(cmat)
+  if (!is.null(cmat) && !is.matrix(cmat)) {
+    cmat <- matrix(as.numeric(cmat), nrow = 1L)
+  }
+  cope_list <- ss_df$cope_list[[1L]]
+  n_l2_copes <- if (is.null(cope_list)) 0L else nrow(cope_list)
+  if (is.null(cmat) || nrow(cmat) == 0L) {
+    lg$warn(
+      "No estimable L2 contrasts remain after refitting design for id %s, session %s, l1 model %s, l1 cope %s, l2 model %s",
+      id, session, l1_model, l1_cope_name, l2_model
+    )
+    return(NULL)
+  }
+
+  if (nrow(l1_df) == 1L) {
+    if (is_l2_passthrough_estimable(dmat, cmat) ||
+        is_strict_intercept_only_l2_model(gpa$l2_models$models[[l2_model]])) {
+      return(make_l2_passthrough_row(l1_df = l1_df, l2_model = l2_model, gpa = gpa, lg = lg))
     }
 
-    # should never happen, but sanity check the model matrix against the run data
-    stopifnot(nrow(gpa$run_data) == nrow(gpa$l2_models$models[[l2_model]]$model_matrix))
-
-    # obtain rows of design for this subject
-    dmat <- gpa$l2_models$models[[l2_model]]$model_matrix[dmat_rows, , drop=FALSE]
-
-    # obtain contrasts for this L2 model
-    cmat <- gpa$l2_models$models[[l2_model]]$contrasts # l2 model contrasts
+    lg$warn(
+      paste(
+        "Only one valid run remains for subject %s session %s, L1 model %s, L1 cope %s, L2 model %s,",
+        "but the refit L2 design is not pass-through-estimable. Skipping this L2 analysis."
+      ),
+      id, session, l1_model, l1_cope_name, l2_model
+    )
+    return(NULL)
   }
 
   # tracking data frame for this model
   feat_l2_df <- data.frame(
     id = id, session = session,
-    l1_model = l1_model, l2_model = l2_model, n_l2_copes = n_l2_copes
+    l1_model = l1_model,
+    l1_cope_number = l1_cope_number,
+    l1_cope_name = l1_cope_name,
+    l2_model = l2_model,
+    l2_scope = l2_scope,
+    l2_input_mode = "cope_files",
+    l2_passthrough = FALSE,
+    n_l2_copes = n_l2_copes,
+    n_input_files = nrow(l1_df),
+    passthrough_cope_file = NA_character_,
+    stringsAsFactors = FALSE
   )
+  feat_l2_df$cope_list <- list(cope_list)
 
   # generate FSL EV syntax for these regressors
-  ev_syntax <- fsl_generate_fsf_ev_syntax(inputs = l1_feat_dirs, dmat = dmat)
+  ev_syntax <- fsl_generate_fsf_ev_syntax(inputs = l1_cope_files, dmat = dmat)
 
   # generate FSF contrast syntax for this setup
   contrast_syntax <- fsl_generate_fsf_contrast_syntax(cmat)
 
   l2_fsf_syntax <- readLines(system.file("feat_lvl2_nparam_template.fsf", package = "fmri.pipeline"))
+  l2_fsf_syntax <- gsub("set fmri\\(inputtype\\) 1", "set fmri(inputtype) 2", l2_fsf_syntax)
 
   # Add EVs and contrasts into FSF
   l2_fsf_syntax <- c(l2_fsf_syntax, ev_syntax, contrast_syntax)
 
-  # need to determine number of copes (contrasts) at level 1, which depends on the model being fit
-  # FSL usually reads this from the .feat directories itself, but for batch processing, better to insert into the FSF ourselves
-  # Need to put this just after the high pass filter cutoff line for Feat to digest it happily
-
-  l2_fsf_syntax <- c(
-    l2_fsf_syntax,
-    "# Number of lower-level copes feeding into higher-level analysis",
-    paste0("set fmri(ncopeinputs) ", n_l1_copes)
-  )
-
-  # tell FSL to analyze all lower-level copes in LVL2
-  for (n in seq_len(n_l1_copes)) {
-    l2_fsf_syntax <- c(
-      l2_fsf_syntax,
-      paste0("# Use lower-level cope ", n, " for higher-level analysis"),
-      paste0("set fmri(copeinput.", n, ") 1"), ""
-    )
-  }
-
-  # Get L2 output directory using the configured feat_l2_directory location
-  fsl_l2_output_dir <- get_output_directory(
+  # Get L2 output basename using the configured feat_l2_directory location
+  l1_cope_path_name <- fs::path_sanitize(l1_cope_name, replacement = "_")
+  fsl_l2_output_base <- get_output_directory(
     id = id, session = session,
     l1_model = l1_model, l2_model = l2_model,
+    l1_cope_number = l1_cope_number, l1_contrast = l1_cope_path_name,
     gpa = gpa, glm_software = "fsl", what = "l2"
   )
 
-  if (!dir.exists(fsl_l2_output_dir)) {
-    lg$debug("Creating L2 output directory: %s", fsl_l2_output_dir)
-    dir.create(fsl_l2_output_dir, recursive = TRUE)
-  }
+  feat_l2_fsf <- paste0(sub("\\.fsf$", "", fsl_l2_output_base), ".fsf")
+  l2_feat_fsf <- feat_l2_fsf
+  l2_feat_dir <- sub("\\.fsf$", ".gfeat", l2_feat_fsf)
 
-  l2_feat_dir <- file.path(fsl_l2_output_dir, paste0("FEAT_LVL2_", l2_model, ".gfeat"))
-  l2_feat_fsf <- file.path(fsl_l2_output_dir, paste0("FEAT_LVL2_", l2_model, ".fsf"))
+  l2_feat_parent_dir <- dirname(l2_feat_fsf)
+  if (!dir.exists(l2_feat_parent_dir)) {
+    lg$debug("Creating L2 output directory: %s", l2_feat_parent_dir)
+    dir.create(l2_feat_parent_dir, recursive = TRUE)
+  }
 
   # add columns regarding whether inputs already exist and FEAT is already complete
   feat_l2_df <- feat_l2_df %>%
