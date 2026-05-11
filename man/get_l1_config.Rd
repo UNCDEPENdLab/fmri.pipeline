@@ -25,7 +25,7 @@ This function exports the configuration of level 1 (run-level) GLM settings
 \dontrun{
   gpa <- setup_glm_pipeline(analysis_name="flanker_test",
     output_directory="/proj/mnhallqlab/no_backup/flanker_gnomes",
-    n_expected_runs = 2, tr = 2.0
+    n_expected_runs = 2, tr = 2.0,
     run_data = run_df, subject_data = subject_df, trial_data = trial_df,
     l1_models=NULL, l2_models=NULL, l3_models=NULL
   )

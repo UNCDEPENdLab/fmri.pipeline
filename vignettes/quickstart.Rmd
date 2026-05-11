@@ -49,7 +49,7 @@ If there is only one run of a task per subject, only Level 1 and Level 3 models 
   * Level 2 = Within-subject run combination
   * Level 3 = Across-subject analysis
 
----
+***
 
 # Setting Up Your Data
 
@@ -159,7 +159,7 @@ Example of subject level dataframe:
 | 10717 | 15.7290 | 0     | 1      | 2014-08-13 |
 | 10767 | 15.4524 | 0     | 1      | 2014-08-14 |
 
----
+***
 
 # Guide to Creating a `gpa` Object in `fmri.pipeline`
 
@@ -673,7 +673,7 @@ This steps will create separate jobs for each conceptually separate steps: final
 ## Step 5: Monitor Progress
 You can monitor the progress of the pipeline by checking the output directories specified in `gpa$output_locations`. The pipeline will create a structured output directory for each analysis, including directories for Level 1, Level 2, and Level 3 analyses, as well as job submission scripts and logs.
 
----
+***
 <br><br>
 
 # Output directory structure
@@ -808,4 +808,4 @@ manifest[, c("status", "job_id", "job_name", "scheduler_log", "batch_file")]
 When these checks agree--all tracked jobs are complete, scheduler exit codes are clean, expected output markers exist, and artifact manifests point to the expected batch logs--the run can be treated as successful from an execution and output-structure perspective. Any remaining warnings should be evaluated statistically or scientifically for the specific model.
 
 
----
+***
