@@ -1,0 +1,1299 @@
+# Interactive model builder in fmri.pipeline
+
+## Purpose
+
+`fmri.pipeline` can build Level 1, Level 2, and Level 3 model
+specifications interactively. The interactive builder is useful when you
+are learning the package, translating a conceptual model into pipeline
+objects, or creating a first version of a model specification that you
+will later export to YAML.
+
+The recommended workflow is:
+
+1.  Create a `gpa` object with
+    [`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md).
+2.  Run the interactive builders once.
+3.  Export the resulting model specification with
+    [`export_glm_config()`](https://uncdependlab.github.io/fmri.pipeline/reference/export_glm_config.md).
+4.  Review and edit the YAML file.
+5.  Use the YAML file for future reproducible runs.
+
+``` r
+
+gpa <- setup_glm_pipeline(
+  analysis_name = "clock_glm",
+  scheduler = "slurm",
+  output_directory = "/proj/lab/analysis",
+  trial_data = trial_df,
+  run_data = run_df,
+  subject_data = subject_df,
+  tr = 0.9,
+  l1_models = NULL,
+  l2_models = NULL,
+  l3_models = NULL
+)
+
+gpa <- build_l1_models(gpa)
+gpa <- build_l2_models(gpa)
+gpa <- build_l3_models(gpa)
+
+export_glm_config(gpa, file = "clock_glm_spec.yaml")
+```
+
+You can also request prompts during setup:
+
+``` r
+
+gpa <- setup_glm_pipeline(
+  analysis_name = "clock_glm",
+  trial_data = trial_df,
+  run_data = run_df,
+  subject_data = subject_df,
+  tr = 0.9,
+  l1_models = "prompt",
+  l2_models = "prompt",
+  l3_models = "prompt"
+)
+```
+
+For long-term use, prefer the first pattern because it separates
+data/setup choices from model construction and makes the resulting model
+file easier to version-control.
+
+## Before Starting
+
+The builders rely on the input data stored in `gpa`:
+
+- [`build_l1_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l1_models.md)
+  uses `gpa$trial_data`, and optionally `gpa$ppi_data`.
+- [`build_l2_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l2_models.md)
+  uses a Level 2 modeling frame composed from run-level and
+  session-level information.
+- [`build_l3_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l3_models.md)
+  uses `gpa$subject_data`.
+
+Before entering the builder, check that the relevant columns are present
+and have the intended type:
+
+``` r
+
+names(gpa$trial_data)
+names(gpa$run_data)
+names(gpa$subject_data)
+
+summary(gpa$trial_data[, c("cue_onset", "cue_duration", "condition", "prediction_error")])
+summary(gpa$run_data[, c("id", "session", "run_number")])
+summary(gpa$subject_data[, c("id", "session", "age", "group")])
+```
+
+Pay particular attention to these issues:
+
+- Onsets and durations should be in seconds from the start of each run.
+- Trial-level parametric modulators should be numeric.
+- Categorical variables should be character or factor if they are truly
+  categorical.
+- Integer variables at higher levels may be offered for factor
+  conversion. Convert them when values are category labels rather than
+  numeric trends.
+- `subject_data` should have one row per `id` and `session`.
+
+## Level 1 Builder
+
+Level 1 models define run-level regressors. The builder has eight
+stages:
+
+1.  Choose possible onset columns.
+2.  Choose possible duration columns.
+3.  Choose possible ISI/ITI columns.
+4.  Choose possible parametric value columns.
+5.  Choose possible within-subject factor columns.
+6.  Build events from onset, duration, and optional ISI/ITI.
+7.  Build signals from events, amplitudes, HRF normalization, and
+    advanced regressor settings.
+8.  Build models from signals and contrasts.
+
+Run it with:
+
+``` r
+
+gpa <- build_l1_models(gpa)
+```
+
+You can pre-seed column detection if your names are unusual:
+
+``` r
+
+gpa <- build_l1_models(
+  gpa,
+  onset_cols = c("cue_time", "feedback_time"),
+  duration_cols = c("cue_dur", "feedback_dur"),
+  value_cols = c("prediction_error", "value"),
+  isi_cols = "iti"
+)
+```
+
+### Stage 1: Onset Columns
+
+The builder first looks for likely event onset columns using the default
+regex `.*(onset|time).*`. It asks:
+
+``` text
+Do you want to add these columns to possible onsets?
+```
+
+Answer **Yes** if the detected columns are valid event onsets. Answer
+**No** if the regex captured unrelated time variables, then use the
+follow-up menu to add or remove columns manually.
+
+Decision points:
+
+- Include columns that mark the start of task events you may want to
+  model.
+- Do not include scan metadata, response time columns, or absolute clock
+  timestamps unless they are true event onsets relative to scan start.
+- It is fine to include extra onset columns here. You choose which ones
+  become events later.
+
+Example columns:
+
+``` text
+cue_onset
+choice_onset
+feedback_onset
+```
+
+### Stage 2: Duration Columns
+
+The builder searches for likely duration columns using the default regex
+`.*duration.*`. It asks whether to add detected duration columns, then
+allows manual editing.
+
+Use duration columns when duration varies by trial:
+
+``` text
+cue_duration
+choice_duration
+feedback_duration
+```
+
+If an event has a fixed duration, you do not need a duration column.
+During event setup, you can choose **Specify fixed duration** and enter
+a value in seconds.
+
+Decision points:
+
+- Use `0` for impulse-like events if that is scientifically intended.
+- Use a fixed value for constant-duration events.
+- Use a column for reaction-time or event-duration models.
+- Values above 50 seconds trigger a warning because they often indicate
+  milliseconds were provided by mistake.
+
+### Stage 3: ISI/ITI Columns
+
+The builder searches for likely interstimulus or intertrial interval
+columns using the default regex `^(iti|isi).*`. ISI/ITI columns are
+optional.
+
+The prompt is:
+
+``` text
+Do you want to add these columns to possible ISI/ITIs?
+```
+
+Use ISI/ITI columns when you want the event object to know what interval
+follows the event. This can be useful for run truncation logic and for
+keeping event definitions explicit.
+
+Decision points:
+
+- Include columns such as `iti_duration`, `isi`, or `jitter`.
+- Do not include event onset columns here.
+- If you do not need ISI/ITI information, leave this set empty.
+
+### Stage 4: Parametric Value Columns
+
+Parametric value columns are continuous amplitudes that can modulate a
+signal before convolution. The builder restricts choices to numeric or
+integer-like columns and asks whether to add selected columns.
+
+Examples:
+
+``` text
+prediction_error
+expected_value
+reaction_time
+uncertainty
+```
+
+Decision points:
+
+- Include only columns that should be interpretable as continuous
+  trial-level amplitudes.
+- Avoid categorical variables here. Use within-subject factors for
+  categorical trial conditions.
+- By default, design-matrix generation centers parametric values
+  (`additional$bdm_args$center_values = TRUE`). This usually helps
+  interpret parametric effects alongside unit-height event regressors.
+
+### Stage 5: Within-Subject Factor Columns
+
+Within-subject factors are trial-level categorical or discrete
+predictors that can modulate a signal. Examples include condition
+labels, feedback type, stimulus category, or drug condition within
+subject.
+
+Examples:
+
+``` text
+condition
+feedback_type
+stimulus_category
+```
+
+Decision points:
+
+- Choose variables that define trial classes within a run.
+- Use within-subject factors when you want separate regressors or
+  contrasts for categories of the same event.
+- Do not use subject-level predictors here; those belong in Level 3.
+
+### Stage 6: Events
+
+Events define when something happened. Each event has:
+
+- an event name
+- one onset column
+- a duration, either fixed or from a column
+- optional ISI/ITI, either fixed or from a column
+
+The event menu offers:
+
+``` text
+Add event
+Delete event
+Done with event specification
+```
+
+When adding an event, the builder asks:
+
+``` text
+Enter the event name:
+Choose event onset
+Choose event duration
+Do you want to specify an ITI or ISI that follows this event?
+```
+
+Example event choices:
+
+``` text
+Event name: cue
+Onset: cue_onset
+Duration: cue_duration
+ISI/ITI: iti_duration
+
+Event name: feedback
+Onset: feedback_onset
+Duration: 0.9
+ISI/ITI: none
+```
+
+Decision points:
+
+- Use short, stable event names. These names appear later in YAML and
+  signal definitions.
+- Multiple events can come from the same trial row.
+- Event names and signal names can be the same, but they represent
+  different concepts: events are timing definitions; signals are
+  regressors.
+
+Equivalent YAML:
+
+``` yaml
+events:
+  cue:
+    onset: cue_onset
+    duration: cue_duration
+    isi: iti_duration
+
+  feedback:
+    onset: feedback_onset
+    duration: 0.9
+```
+
+### Stage 7: Signals
+
+Signals define regressors. A signal combines an event, a pre-convolution
+amplitude, HRF normalization, and advanced options.
+
+The signal menu offers:
+
+``` text
+Add signal
+Modify signal
+Delete signal
+Done with signal setup
+```
+
+When adding a signal, the builder asks about:
+
+1.  Signal name
+2.  Event alignment
+3.  Trial subsetting
+4.  Regressor value before convolution
+5.  Within-subject factor modulation
+6.  HRF normalization
+7.  Advanced options
+
+#### Signal Name
+
+The signal name is the user-facing label for the regressor or regressor
+family.
+
+Examples:
+
+``` text
+cue
+feedback
+pe_feedback
+feedback_by_condition
+```
+
+Use names that communicate both the event and the effect being
+estimated.
+
+#### Event Alignment
+
+The builder asks:
+
+``` text
+With which event is this signal aligned?
+```
+
+Choose the event whose onset and duration should be used for this
+signal.
+
+Example:
+
+- A unit-height feedback regressor aligns with the `feedback` event.
+- A prediction-error regressor at feedback also aligns with the
+  `feedback` event.
+
+#### Trial Subsetting
+
+The builder asks:
+
+``` text
+Only model this signal for specific trials?
+```
+
+If you answer **Yes**, you enter an R expression evaluated against
+`trial_data`. The expression must return `TRUE` or `FALSE` for each
+trial row.
+
+Examples:
+
+``` r
+
+reaction_time < 4
+accuracy == 1
+condition == "reward"
+reaction_time < 4 & accuracy == 1
+```
+
+Decision points:
+
+- Use trial subsetting when a regressor should only exist for a subset
+  of trials.
+- The builder rejects expressions that retain zero trials.
+- Keep the expression simple enough to audit later in exported YAML.
+
+Equivalent YAML:
+
+``` yaml
+signals:
+  correct_feedback:
+    event: feedback
+    trial_subset_expression: accuracy == 1
+    value_fixed: 1
+    normalization: none
+```
+
+#### Regressor Value
+
+The builder asks:
+
+``` text
+What should be the value of regressor (pre-convolution)?
+```
+
+Options:
+
+- **Unit height (1.0)**: a standard event occurrence regressor.
+- **Other fixed value**: a constant amplitude other than 1.
+- **Parametric modulator**: a trial-level numeric column selected
+  earlier.
+
+Decision points:
+
+- Use unit height for event occurrence.
+- Use a parametric modulator for trialwise continuous effects such as
+  prediction error.
+- For a parametric effect, usually include the corresponding unit-height
+  event signal in the same model so the parametric regressor is
+  interpreted as modulation around event occurrence.
+
+Equivalent YAML:
+
+``` yaml
+signals:
+  feedback:
+    event: feedback
+    value_fixed: 1
+    normalization: none
+
+  pe_feedback:
+    event: feedback
+    parametric_modulator: prediction_error
+    normalization: evtmax_1
+```
+
+#### Within-Subject Factor Modulation
+
+If within-subject factor columns were selected earlier, the builder
+asks:
+
+``` text
+Is this signal modulated by one or more within-subject factors?
+```
+
+If you answer **Yes**, you enter an R model formula using selected
+within-subject factors:
+
+``` r
+
+~ condition
+~ feedback_type
+~ condition + feedback_type
+~ condition * feedback_type
+```
+
+The pipeline removes the intercept internally for the within-subject
+model so that category-specific signal columns are easier to contrast.
+
+Decision points:
+
+- Use a within-subject factor when you need separate regressors by
+  condition for the same event.
+- Use `~ condition` for one factor.
+- Use `~ condition * feedback_type` when interaction cells are
+  scientifically meaningful and sufficiently populated.
+- Avoid very sparse factorial models; empty or rare cells can lead to
+  aliased regressors and fragile contrasts.
+
+Equivalent YAML:
+
+``` yaml
+signals:
+  feedback_by_condition:
+    event: feedback
+    value_fixed: 1
+    normalization: none
+    wi_factors:
+      - condition
+    wi_formula: ~ condition - 1
+```
+
+#### HRF Normalization
+
+The builder asks:
+
+``` text
+How should the HRF be normalized in convolution?
+```
+
+Options:
+
+- `none`: no HRF rescaling before convolution.
+- `evtmax_1`: event-wise normalization so each event’s HRF peak is 1.0
+  regardless of duration.
+- `durmax_1`: duration-sensitive normalization that approaches a peak of
+  1.0 for long events.
+
+Practical guidance:
+
+- Use `none` for ordinary unit-height event regressors when the default
+  scaling is desired.
+- Use `evtmax_1` for many parametric modulators so the amplitude column
+  has a more direct interpretation.
+- Use `durmax_1` when duration is itself part of the modeled response
+  magnitude.
+
+#### Advanced Signal Options
+
+For a new signal, the builder prints the defaults:
+
+``` text
+No temporal derivative
+Demean convolved signal
+No beta series
+No time series multiplier (PPI)
+```
+
+It then asks:
+
+``` text
+Accept default advanced options for this signal?
+```
+
+If you answer **No**, it asks:
+
+- `Add temporal derivative?`
+- `Demean signal post-convolution?`
+- `Generate beta series for this signal (one regressor per trial)?`
+- `Multiply this signal against a physiological regressor for PPI analysis?`
+
+Decision points:
+
+- Temporal derivatives can help absorb modest HRF timing differences,
+  but add columns and complicate contrasts.
+- Post-convolution demeaning is the default and is usually appropriate.
+- Beta series creates one regressor per trial and should be used only
+  when you need trialwise estimates, such as some connectivity
+  workflows.
+- PPI multiplication requires `ppi_data`; otherwise the option is
+  disabled.
+
+### Common L1 Signal Patterns
+
+These patterns cover most first-pass task models. They assume that
+`events:` already contains timing definitions such as `cue` and
+`feedback`.
+
+#### Event Occurrence
+
+Use a unit-height signal when the question is whether BOLD activity
+differs from baseline during an event.
+
+``` yaml
+signals:
+  cue:
+    event: cue
+    value_fixed: 1
+    normalization: none
+```
+
+This creates one convolved regressor for cue occurrence. It is the
+safest starting point for most events.
+
+#### Event Plus Parametric Modulator
+
+Use paired occurrence and parametric signals when a trialwise continuous
+value should explain variation around the event response.
+
+``` yaml
+signals:
+  feedback:
+    event: feedback
+    value_fixed: 1
+    normalization: none
+
+  pe_feedback:
+    event: feedback
+    parametric_modulator: prediction_error
+    normalization: evtmax_1
+
+l1_models:
+  feedback_pe:
+    signals:
+      - feedback
+      - pe_feedback
+    contrasts:
+      diagonal: yes
+```
+
+The unit-height `feedback` signal captures the average feedback
+response. The `pe_feedback` signal captures whether the response varies
+with `prediction_error`. Omitting the occurrence signal can make the
+parametric effect absorb the event mean, which is usually not what you
+want.
+
+#### Condition-Specific Event Regressors
+
+Use within-subject factor modulation when each condition should have its
+own event regressor.
+
+``` yaml
+signals:
+  feedback_by_condition:
+    event: feedback
+    value_fixed: 1
+    normalization: none
+    wi_factors:
+      - condition
+    wi_formula: ~ condition - 1
+
+l1_models:
+  feedback_condition:
+    signals:
+      - feedback_by_condition
+    contrasts:
+      diagonal: yes
+      wi_contrasts:
+        feedback_by_condition:
+          diagonal: yes
+          pairwise_diffs: condition
+```
+
+This is appropriate for categorical trial conditions such as
+reward/loss, correct/error, or stimulus type. Check that every run has
+enough trials in each modeled condition; sparse cells can create
+unstable or aliased regressors.
+
+#### Trial-Subset Regressor
+
+Use a trial subset when a regressor should only be present for trials
+satisfying a clear rule.
+
+``` yaml
+signals:
+  fast_correct_feedback:
+    event: feedback
+    trial_subset_expression: reaction_time < 1.5 & accuracy == 1
+    value_fixed: 1
+    normalization: none
+```
+
+This creates a feedback occurrence regressor only for fast correct
+trials. Keep subset expressions simple and inspect the number of
+retained trials by subject/run before trusting the model.
+
+#### Beta-Series Signal
+
+Use beta series only when trialwise estimates are needed.
+
+``` yaml
+signals:
+  feedback_beta_series:
+    event: feedback
+    value_fixed: 1
+    normalization: none
+    beta_series: yes
+```
+
+This creates one regressor per trial for the signal. It can be useful
+for trialwise connectivity or prediction workflows, but it greatly
+increases model size and is not a default choice for ordinary activation
+GLMs.
+
+### Stage 8: L1 Models and Contrasts
+
+An L1 model selects a set of signals and creates contrasts over the
+resulting run-level regressors.
+
+The L1 model menu offers:
+
+``` text
+Add model
+Modify model
+Delete model
+Done with l1 model setup
+```
+
+When adding a model, the builder asks:
+
+``` text
+Enter the model name:
+Choose all signals to include in this model
+```
+
+Then it calls the contrast builder.
+
+Decision points:
+
+- Start with one simple L1 model before adding variants.
+- Include unit-height event regressors alongside parametric modulators.
+- Do not include redundant signals unless you have a clear reason;
+  collinearity will propagate upward.
+
+Equivalent YAML:
+
+``` yaml
+l1_models:
+  task:
+    signals:
+      - cue
+      - feedback
+      - pe_feedback
+    contrasts:
+      diagonal: yes
+```
+
+## Contrast Builder
+
+The contrast builder is shared by L1, L2, L3, and within-subject factor
+submodels. It creates the contrast matrix stored in the model object.
+
+### Diagonal Contrasts
+
+For ordinary L1 models without within-subject factor contrasts, diagonal
+contrasts are added automatically. For L2 and L3 models, the builder
+asks:
+
+``` text
+Do you want to include diagonal contrasts for each regressor?
+```
+
+Diagonal contrasts create one contrast per design-matrix column. In FSL
+terms, these become COPEs for individual explanatory variables.
+
+Decision points:
+
+- Usually answer **Yes**.
+- For intercept-only L2/L3 models, the pipeline automatically adds the
+  intercept contrast.
+- You may delete unwanted diagonal contrasts in the contrast editor.
+
+### Emmeans Weighting
+
+For models with a fitted `lm` object, usually L2, L3, or L1
+within-subject factor models, the builder asks:
+
+``` text
+How should contrasts be computed by emmeans?
+```
+
+Options:
+
+- `equal`: all cells weighted equally.
+- `cells`: weights use observed cell frequencies. This is the package’s
+  usual recommendation for unbalanced designs.
+- `proportional`: weights use frequencies of factor combinations.
+- `flat`: weights observed cells while ignoring empty cells.
+
+Decision points:
+
+- Use `cells` for most unbalanced fMRI designs.
+- Use `equal` when each condition should contribute equally by design,
+  regardless of observed frequencies.
+- Be cautious with empty cells; they can make some emmeans contrasts
+  non-estimable.
+
+### Condition Means
+
+For each categorical predictor, the builder asks:
+
+``` text
+Do you want to include model-predicted means for <factor>?
+```
+
+Condition means estimate marginal means for each factor level.
+
+Use them when you want maps for each category, such as `groupcontrol`
+and `grouppatient`, or each session label.
+
+### Pairwise Differences
+
+For categorical predictors and categorical interactions, the builder
+asks:
+
+``` text
+Do you want to include pairwise differences for <factor>?
+```
+
+Pairwise differences estimate contrasts between factor levels, such as
+`patient - control` or `followup - baseline`.
+
+Use them when the scientific question is a category comparison rather
+than a category mean.
+
+### Cell Means
+
+When a model has more than one categorical factor, the builder asks
+whether to include cell means across the factors.
+
+Use cell means when the full factorial combinations are meaningful, such
+as `group` by `session_label`.
+
+### Overall Response
+
+The builder asks:
+
+``` text
+Do you want to include the overall average response?
+```
+
+This creates a contrast for the model-predicted average response across
+predictors. It is often useful for group-level summaries and quality
+checks.
+
+### Simple Slopes
+
+If the model includes interactions between continuous and categorical
+predictors, the builder may ask whether to include model-predicted
+simple slopes across factor levels.
+
+Use this when the model includes terms such as:
+
+``` r
+
+~ age * group
+```
+
+and you want an age slope estimated separately within each group.
+
+### Custom Contrast Editor
+
+After automatic contrasts are generated, the contrast editor offers:
+
+``` text
+Add contrast
+Show contrasts
+Delete contrast
+Done with contrast setup
+```
+
+For custom contrasts, you can enter either a numeric vector:
+
+``` text
+1 0 -1 0
+```
+
+or named coefficients:
+
+``` text
+condition_reward = 1 condition_loss = -1
+```
+
+Named coefficients are safer because they do not depend on remembering
+column order.
+
+## Level 2 Builder
+
+Level 2 models combine run-level estimates within subject or within
+subject-session.
+
+Run it with:
+
+``` r
+
+gpa <- build_l2_models(gpa)
+```
+
+The L2 menu offers:
+
+``` text
+Add model
+Modify model
+Delete model
+Done with second-level (subject) model setup
+```
+
+When adding a model, the builder asks about:
+
+1.  Model name
+2.  Formula entry versus model-builder walkthrough
+3.  Variable transformations and factor reference levels
+4.  Session-combination scope
+5.  Contrasts
+
+### Formula or Model Builder
+
+The builder asks:
+
+``` text
+Do you want to specify the model formula or walk through the model builder?
+```
+
+Choose **Specify formula** when you know the R formula:
+
+``` r
+
+~ 1
+~ condition
+~ difficulty + run_number
+~ condition * difficulty
+```
+
+Choose **Model builder** for a simple additive model. The walkthrough
+lets you select variables and creates a formula like:
+
+``` r
+
+~ condition + difficulty
+```
+
+Decision points:
+
+- Use `~ 1` for a simple run-average model.
+- Use formula entry for interactions.
+- Use the model-builder walkthrough for additive models only.
+
+### Continuous Covariate Transformations
+
+For continuous variables, the builder asks:
+
+``` text
+Transform <variable>?
+```
+
+Options:
+
+- Mean center
+- Standardize/z-score
+- Subtract minimum
+- Subtract maximum
+- No transformation
+
+Decision points:
+
+- Mean-center most continuous covariates unless zero is already
+  meaningful.
+- Standardize when effect sizes per standard deviation are easier to
+  interpret.
+- Subtract minimum or maximum when a boundary value is scientifically
+  meaningful.
+- Transformations are recomputed after dropped runs or subjects are
+  removed.
+
+### Factor Reference Levels
+
+For factor variables, the builder asks:
+
+``` text
+Choose the reference level for the <factor> factor.
+```
+
+The default is the most frequent level. The reference level affects
+treatment-coded regressors and the interpretation of intercepts and some
+contrasts.
+
+Decision points:
+
+- Use the control or baseline category as reference when available.
+- For session factors, baseline is usually the clearest reference.
+- Pairwise differences from `emmeans` are less dependent on the
+  reference level than raw model coefficients.
+
+### L2 Session Scope
+
+If the data contain multiple sessions, the L2 builder asks:
+
+``` text
+How should this L2 model combine sessions?
+```
+
+Options:
+
+- **Within-session**: `l2_scope = "id_session"`. Runs are combined
+  separately within each subject-session.
+- **Across-session**: `l2_scope = "id"`. Runs from all sessions are
+  stacked into one subject-level model.
+
+Decision points:
+
+- Use `id_session` for most longitudinal analyses. It preserves
+  session-level outputs for Level 3.
+- Use `id` only when pooling sessions within subject is scientifically
+  intended.
+- If you need AFNI `3dLMEr` at Level 3, use `id_session`.
+- Between-session contrasts at L2 require `id`, but that choice pools
+  sessions in a way that is not appropriate for many longitudinal
+  designs.
+
+Equivalent YAML:
+
+``` yaml
+l2_models:
+  run_average:
+    level: 2
+    model_formula: ~ 1
+    l2_scope: id_session
+    contrasts:
+      diagonal: yes
+      overall_response: yes
+```
+
+## Level 3 Builder
+
+Level 3 models define group/sample-level inference. The implementation
+uses the same builder as Level 2, with Level 3-specific questions.
+
+Run it with:
+
+``` r
+
+gpa <- build_l3_models(gpa)
+```
+
+The L3 menu offers:
+
+``` text
+Add model
+Modify model
+Delete model
+Done with third-level (sample) model setup
+```
+
+When adding a model, the builder asks about:
+
+1.  Model name
+2.  Formula entry versus model-builder walkthrough
+3.  Variable transformations and factor reference levels
+4.  L3 session input mode
+5.  `3dLMEr` random effects, when applicable
+6.  Contrasts
+7.  FSL outlier deweighting
+
+### L3 Formula
+
+Common L3 formulas:
+
+``` r
+
+~ 1
+~ group
+~ age
+~ group + age
+~ group * session_label
+```
+
+Decision points:
+
+- Use `~ 1` for the sample mean of lower-level contrasts.
+- Add covariates such as `age` or motion summaries when they are part of
+  the planned group model.
+- Use interaction terms only when the design and sample size support
+  them.
+
+### L3 Session Input Mode
+
+If there are multiple sessions, the builder asks:
+
+``` text
+How should this L3 model use sessions?
+```
+
+Options:
+
+- `per_session`: fit separate per-session L3 inputs. Requires
+  `l2_scope = "id_session"`.
+- `pooled_sessions_subject_ev`: pool sessions in FSL with subject
+  indicator EVs. Requires `l2_scope = "id_session"`.
+- `subject_rows`: use one row per subject input. Requires
+  `l2_scope = "id"`.
+- `3dlmer`: use AFNI `3dLMEr` for a longitudinal mixed-effects L3 model.
+  Requires `l2_scope = "id_session"`.
+
+Decision points:
+
+- Use `per_session` for separate baseline/follow-up group maps.
+- Use `pooled_sessions_subject_ev` for FSL-native longitudinal models
+  with subject EVs.
+- Use `3dlmer` when you need mixed-effects longitudinal modeling, uneven
+  visit spacing, missing sessions, continuous time, or random effects.
+- Avoid `subject_rows` unless the L2 model intentionally pooled sessions
+  with `l2_scope = "id"`.
+
+Equivalent YAML for an FSL per-session group model:
+
+``` yaml
+l3_models:
+  group_mean:
+    level: 3
+    model_formula: ~ 1
+    l3_input_mode: per_session
+    contrasts:
+      diagonal: yes
+      overall_response: yes
+    fsl_outlier_deweighting: no
+```
+
+### AFNI 3dLMEr Random Effects
+
+If you choose `l3_input_mode = "3dlmer"`, the builder asks:
+
+``` text
+Enter the random-effects specification:
+```
+
+Examples:
+
+``` r
+
+(1 | Subj)
+(1 + session_label | Subj)
+```
+
+The grouping variable `Subj` is recommended for AFNI compatibility. The
+builder combines your fixed-effects formula and random-effects
+specification into a full `3dLMEr` formula.
+
+Equivalent YAML:
+
+``` yaml
+l3_models:
+  longitudinal_lmer:
+    level: 3
+    model_formula: ~ session_label
+    l3_input_mode: 3dlmer
+    execution_backend: afni
+    producer_backend: fsl
+    random_effects: "(1 | Subj)"
+    contrasts:
+      cond_means: session_label
+      pairwise_diffs: session_label
+      overall_response: yes
+```
+
+### FSL Outlier Deweighting
+
+For L3 models, the builder asks:
+
+``` text
+Turn on outlier deweighting?
+```
+
+This controls FSL robust outlier deweighting for mixed-effects Level 3
+analyses.
+
+Decision points:
+
+- Outlier deweighting is often helpful for group analyses.
+- Disable it if FLAME reports excessive outliers for otherwise
+  legitimate inputs.
+- This setting is FSL-specific; AFNI `3dLMEr` uses AFNI’s modeling path.
+
+## Modifying Existing Models
+
+Each builder can modify an existing model set. If `gpa$l1_models`,
+`gpa$l2_models`, or `gpa$l3_models` already exists, the menu offers
+options to modify or delete components.
+
+Use modification carefully:
+
+- Deleting an onset, duration, event, or signal does not always
+  cascade-delete dependent objects.
+- If you substantially change early L1 pieces, inspect later events,
+  signals, models, and contrasts.
+- For major changes, it is often cleaner to edit the exported YAML and
+  rebuild from the spec file.
+
+Example rebuild:
+
+``` r
+
+gpa$l1_models <- NULL
+gpa$l2_models <- NULL
+gpa$l3_models <- NULL
+
+gpa <- build_l1_models(gpa, from_spec_file = "clock_glm_spec.yaml")
+gpa <- build_l2_models(gpa, from_spec_file = "clock_glm_spec.yaml")
+gpa <- build_l3_models(gpa, from_spec_file = "clock_glm_spec.yaml")
+```
+
+## Practical Patterns
+
+### Simple Multi-Run Task
+
+Use this pattern for a standard task with multiple runs per subject:
+
+``` yaml
+l2_models:
+  run_average:
+    level: 2
+    model_formula: ~ 1
+    l2_scope: id_session
+    contrasts:
+      diagonal: yes
+      overall_response: yes
+
+l3_models:
+  group_mean:
+    level: 3
+    model_formula: ~ 1
+    l3_input_mode: per_session
+    contrasts:
+      diagonal: yes
+      overall_response: yes
+    fsl_outlier_deweighting: no
+```
+
+### Group Difference at L3
+
+Use this when a subject/session-level variable defines groups:
+
+``` yaml
+l3_models:
+  group_difference:
+    level: 3
+    model_formula: ~ group
+    reference_level:
+      group: control
+    l3_input_mode: per_session
+    contrasts:
+      diagonal: yes
+      cond_means: group
+      pairwise_diffs: group
+      overall_response: yes
+    fsl_outlier_deweighting: no
+```
+
+### Trial Condition at L1
+
+Use within-subject factor modulation when the same event should produce
+condition-specific regressors:
+
+``` yaml
+signals:
+  feedback_by_condition:
+    event: feedback
+    value_fixed: 1
+    normalization: none
+    wi_factors:
+      - condition
+    wi_formula: ~ condition - 1
+
+l1_models:
+  feedback_condition:
+    signals:
+      - feedback_by_condition
+    contrasts:
+      diagonal: yes
+      wi_contrasts:
+        feedback_by_condition:
+          diagonal: yes
+          pairwise_diffs: condition
+```
+
+## Final Checks
+
+After using the builders, inspect and export the model object:
+
+``` r
+
+summary(gpa)
+
+names(gpa$l1_models$events)
+names(gpa$l1_models$signals)
+names(gpa$l1_models$models)
+names(gpa$l2_models$models)
+names(gpa$l3_models$models)
+
+export_glm_config(gpa, file = "glm_spec.yaml")
+```
+
+Then rebuild from the exported file in a clean R session:
+
+``` r
+
+gpa$l1_models <- NULL
+gpa$l2_models <- NULL
+gpa$l3_models <- NULL
+
+gpa <- build_l1_models(gpa, from_spec_file = "glm_spec.yaml")
+gpa <- build_l2_models(gpa, from_spec_file = "glm_spec.yaml")
+gpa <- build_l3_models(gpa, from_spec_file = "glm_spec.yaml")
+```
+
+This verifies that your interactive choices can be reproduced
+non-interactively before you submit a full pipeline run.
