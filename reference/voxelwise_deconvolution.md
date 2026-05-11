@@ -1,0 +1,136 @@
+# Function to perform voxelwise deconvolution on an fMRI dataset using the fMRI model arguments object
+
+Function to perform voxelwise deconvolution on an fMRI dataset using the
+fMRI model arguments object
+
+## Usage
+
+``` r
+voxelwise_deconvolution(
+  niftis,
+  add_metadata = NULL,
+  out_dir = getwd(),
+  out_file_expression = NULL,
+  log_file = file.path(out_dir, "deconvolve_errors"),
+  TR = NULL,
+  time_offset = 0,
+  atlas_files = NULL,
+  mask = NULL,
+  nprocs = 20,
+  save_original_ts = TRUE,
+  algorithm = "bush2011",
+  decon_settings = list(nev_lr = 0.01, epsilon = 0.005, beta = 60, kernel =
+    spm_hrf(TR)$hrf, n_resample = 25),
+  afni_dir = NULL
+)
+```
+
+## Arguments
+
+- niftis:
+
+  A vector of processed fMRI timeseries images (4D files) to be
+  deconvolved
+
+- add_metadata:
+
+  A data.frame with one row per value of `niftis`. Columns of this
+  data.frame are added to the output file for identification.
+
+- out_dir:
+
+  Base output directory for deconvolved time series files. Default is
+  [`getwd()`](https://rdrr.io/r/base/getwd.html).
+
+- out_file_expression:
+
+  Expression evaluated to resolve the filename for the deconvolved csv
+  files. Default is to convert the `niftis` value for a given subject
+  into a filename by replacing slashes with periods and adding the atlas
+  image name. Note that the suffix `_deconvolved.csv.gz` or
+  `_original.csv.gz` will be added to the expression, so don't pass this
+  piece.
+
+- log_file:
+
+  Name (and path) of log file for any deconvolution errors or messages
+
+- TR:
+
+  the repetition time of the sequence in seconds. Required
+
+- time_offset:
+
+  The number of seconds that will be subtracted or added to the time
+  field. Default: 0. Useful if some number of volumes have been dropped
+  from the NIfTI data prior to deconvolution.
+
+- mask:
+
+  an optional character string specifying a mask that should be used to
+  constrain bounds of deconvolution.
+
+- nprocs:
+
+  The number of processors to use simultaneously for deconvolution
+
+- save_original_ts:
+
+  Whether to save the voxelwise BOLD data prior to deconvolution (for
+  comparison/diagnosis). Default: TRUE
+
+- algorithm:
+
+  Which deconvolution algorithm to use for deconvolving voxelwise time
+  series. Default: "bush2011". Alternative is "bush2015", which
+  implements a resampling approach as well. If you use "bush2011", the
+  function will try to call on a fast compiled version of the algorithm
+  to support whole-brain processing.
+
+- decon_settings:
+
+  A list of settings passed to the deconvolution algorithm. If you have
+  a compiled deconvolvefilter binary, pass it as `bush2011_binary`,
+  which will be used in deconvolution.
+
+- afni_dir:
+
+  Full path to directory containing AFNI binaries (this function uses
+  3dMaskdump).
+
+- atlas:
+
+  an optional character vector specifying voxels used in deconvolution.
+  If omitted, perform whole-brain deconvolution
+
+## Value
+
+Nothing (invisible NULL).
+
+## Details
+
+The Bush 2011 algorithm is implemented in a compiled binary called
+deconvolvefilter
+(https://github.com/UNCDEPENdLab/deconvolution-filtering) that is much
+faster than the pure R (or original MATLAB) version. We recommend using
+this for whole-brain deconvolution. The package includes a binary for
+the Linux x86_64 architecture.
+
+If you want to use subject metadata to name the output file, use
+`this_subj` in your `out_file_expression`, which will give you access to
+a one-row data.frame containing the metadata for the current subject in
+the loop.
+
+## Examples
+
+``` r
+  if (FALSE) { # \dontrun{
+
+    #name outputs according to subject metadata
+    xx <- voxelwise_deconvolution(
+      niftis="/proj/mnhallqlab/user/michael/test_nifti.nii.gz",
+      out_dir="/proj/mnhallqlab/user/michael/decon_outputs",
+      out_file_expression=expression(paste0(this_subj$subid, "_run", this_subj$run_num, "_", atlas_img_name))
+    )
+  } # }
+```

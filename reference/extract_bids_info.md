@@ -1,0 +1,34 @@
+# Function for extracting fields from BIDS filenames (mostly generated correctly by ChatGPT)
+
+Function for extracting fields from BIDS filenames (mostly generated
+correctly by ChatGPT)
+
+## Usage
+
+``` r
+extract_bids_info(filenames, drop_unused = FALSE)
+```
+
+## Arguments
+
+- filenames:
+
+  a character vector of BIDS filenames
+
+## Value
+
+a \`data.frame\` containing the fields extraced from \`filenames\`
+
+## Examples
+
+``` r
+ filenames <- c(
+    "/proj/fmap-phase/task-memory_sub-01_ses-02_run-1_space-MNI2009c_acq-highres_desc-preproc_bold.nii.gz",
+    "acq-lowres_desc-smoothed_sub-02_task-attention_run-2_bold.nii.gz",
+   "sub-03_space-MNI152NLin6Asym_task-motor_desc-raw_echo-2_dir-PA_bold.nii.gz",
+   "hemi-L_desc-denoised_task-vision_rec-magnitude_fmap-phase_sub-04_bold.nii.gz"
+ )
+
+extract_bids_info(filenames)
+#> Error in extract_bids_info(filenames): could not find function "extract_bids_info"
+```

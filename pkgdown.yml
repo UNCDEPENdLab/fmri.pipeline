@@ -1,0 +1,13 @@
+pandoc: 3.8.3
+pkgdown: 2.2.0
+pkgdown_sha: ~
+articles:
+  design: design.html
+  diagnosis: diagnosis.html
+  fwe: fwe.html
+  longitudinal: longitudinal.html
+  quickstart: quickstart.html
+last_built: 2026-05-11T16:11Z
+urls:
+  reference: https://uncdependlab.github.io/fmri.pipeline/reference
+  article: https://uncdependlab.github.io/fmri.pipeline/articles
