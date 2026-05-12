@@ -65,7 +65,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">2026-05-11</h4>
+            <h4 data-toc-skip class="date">2026-05-12</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/fmri.pipeline/blob/master/vignettes/longitudinal.Rmd" class="external-link"><code>vignettes/longitudinal.Rmd</code></a></small>
       <div class="d-none name"><code>longitudinal.Rmd</code></div>
@@ -101,6 +101,31 @@ documentation describes it as the more flexible successor to
 <strong>session-level longitudinal modeler</strong> on top of
 FSL-derived L2 inputs rather than as a single end-to-end replacement for
 all lower-level FSL estimation.</p>
+<div class="section level3">
+<h3 id="recommended-defaults-at-a-glance">Recommended Defaults at a Glance<a class="anchor" aria-label="anchor" href="#recommended-defaults-at-a-glance"></a>
+</h3>
+<p>For most longitudinal studies, the practical decision is:</p>
+<ul>
+<li>
+<strong>Separate Sessions:</strong> Use
+<code>l2_scope = "id_session"</code> rather than pooling all runs for a
+subject across visits.</li>
+<li>
+<strong>FSL Categorical Comparison:</strong> Use
+<code>l3_input_mode = "pooled_sessions_subject_ev"</code> when the visit
+structure is balanced and the main goal is an FSL-native categorical
+session comparison.</li>
+<li>
+<strong>Flexible Mixed-Effects:</strong> Use
+<code>l3_input_mode = "3dlmer"</code> when visits are irregular,
+follow-up is incomplete, time is continuous, or the scientific model
+needs subject-specific random slopes.</li>
+<li>
+<strong>Contiguous Pseudo-Runs:</strong> Reserve
+<code>l2_scope = "id"</code> for cases where sessions are effectively
+pseudo-runs and no longitudinal change parameter is of interest.</li>
+</ul>
+</div>
 </div>
 <div class="section level2">
 <h2 id="statistical-framework-the-hierarchical-fmri-model">Statistical Framework: The Hierarchical fMRI Model<a class="anchor" aria-label="anchor" href="#statistical-framework-the-hierarchical-fmri-model"></a>
@@ -175,7 +200,7 @@ subject
 and session
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>j</mi><annotation encoding="application/x-tex">j</annotation></semantics></math>
 (when using <code>l2_scope = "id_session"</code>), the model is:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo>=</mo><msub><mi>Z</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><msub><mi>α</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>+</mo><msub><mi>η</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo>+</mo><msub><mi>e</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\hat{\gamma}_{ijr} = Z_{ij} \alpha_{ij} + \eta_{ijr} + e_{ijr}</annotation></semantics></math></p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo>=</mo><msubsup><mi>z</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow><mi>T</mi></msubsup><msub><mi>α</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>+</mo><msub><mi>η</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo>+</mo><msub><mi>e</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\hat{\gamma}_{ijr} = z_{ijr}^T \alpha_{ij} + \eta_{ijr} + e_{ijr}</annotation></semantics></math></p>
 <p>where:</p>
 <ul>
 <li>
@@ -184,12 +209,14 @@ is the L1 COPE for run
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>r</mi><annotation encoding="application/x-tex">r</annotation></semantics></math>
 (treated as the “observed data” at L2),</li>
 <li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>Z</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><annotation encoding="application/x-tex">Z_{ij}</annotation></semantics></math>
-is the L2 design matrix (often simply a column of ones for averaging, or
-a run-specific contrast),</li>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>z</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><annotation encoding="application/x-tex">z_{ijr}</annotation></semantics></math>
+is the L2 design row for run
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>r</mi><annotation encoding="application/x-tex">r</annotation></semantics></math>
+(often simply a 1 for averaging, or a run-specific contrast
+weight),</li>
 <li>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>α</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><annotation encoding="application/x-tex">\alpha_{ij}</annotation></semantics></math>
-is the L2 parameter of interest (e.g., the session-level mean
+is the L2 parameter vector of interest (e.g., the session-level mean
 activation),</li>
 <li>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>η</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo>∼</mo><mi>𝒩</mi><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">runs</mtext><mo stretchy="false" form="prefix">|</mo><mi>i</mi><mi>j</mi></mrow><mn>2</mn></msubsup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\eta_{ijr} \sim \mathcal{N}(0, \sigma^2_{\text{runs}|ij})</annotation></semantics></math>
@@ -201,8 +228,8 @@ has <strong>known</strong> variance
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\text{Var}(\hat{\gamma}_{ijr})</annotation></semantics></math>,
 i.e., the L1 VARCOPE propagated upward.</li>
 </ul>
-<p>Under FSL’s <strong>fixed effects</strong> (FE) approach—the default
-at Level 2—the between-run variance
+<p>Under FSL’s <strong>fixed effects</strong> (FE) approach, the default
+at Level 2, the between-run variance
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>σ</mi><mtext mathvariant="normal">runs</mtext><mn>2</mn></msubsup><annotation encoding="application/x-tex">\sigma^2_{\text{runs}}</annotation></semantics></math>
 is forced to zero, and the combination reduces to inverse-variance
 weighted averaging:</p>
@@ -211,12 +238,12 @@ weighted averaging:</p>
 \qquad
 w_{ijr} = \frac{1}{\text{Var}(\hat{\gamma}_{ijr})}</annotation></semantics></math></p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msubsup><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi></mrow><mtext mathvariant="normal">FE</mtext></msubsup><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mfrac><mn>1</mn><mrow><munder><mo>∑</mo><mi>r</mi></munder><msub><mi>w</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub></mrow></mfrac></mrow><annotation encoding="application/x-tex">\text{Var}(\hat{\alpha}_{ij}^{\text{FE}}) = \frac{1}{\sum_r w_{ijr}}</annotation></semantics></math></p>
-<p>The critical assumption here is that <strong>runs are
-exchangeable</strong>—each run provides an equally informative,
-independent replicate of the same underlying signal, differing only in
-measurement noise. The output VARCOPE from L2 reflects only
-<strong>propagated L1 uncertainty</strong>, not genuine between-run
-variability.</p>
+<p>The critical assumption here is that <strong>runs are exchangeable
+conditional on their measurement variance</strong>: each run is treated
+as an independent replicate of the same underlying signal, and
+differences in precision are represented by the L1 VARCOPEs. The output
+VARCOPE from L2 reflects only <strong>propagated L1
+uncertainty</strong>, not genuine between-run variability.</p>
 <p>Under FSL’s <strong>mixed effects</strong> (FLAME) approach, the
 total variance for each run’s COPE becomes:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mtext mathvariant="normal">Var</mtext><mtext mathvariant="normal">total</mtext></msub><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">runs</mtext><mo stretchy="false" form="prefix">|</mo><mi>i</mi><mi>j</mi></mrow><mn>2</mn></msubsup><mo>+</mo><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\text{Var}_{\text{total}}(\hat{\gamma}_{ijr}) = \sigma^2_{\text{runs}|ij} + \text{Var}(\hat{\gamma}_{ijr})</annotation></semantics></math></p>
@@ -342,8 +369,8 @@ to stay inside FEAT/FLAME</td>
 <code>l2_scope = "id_session"</code> +
 <code>l3_input_mode = "pooled_sessions_subject_ev"</code>
 </td>
-<td>Keeps the analysis fully within FSL and properly models subject
-means at L3</td>
+<td>Keeps the analysis fully within FSL and includes subject mean EVs at
+L3</td>
 </tr>
 <tr class="even">
 <td>Need separate session-specific group maps rather than an explicit
@@ -377,6 +404,353 @@ unimportant</td>
 </table>
 </div>
 <div class="section level2">
+<h2 id="worked-setup-example">Worked Setup Example<a class="anchor" aria-label="anchor" href="#worked-setup-example"></a>
+</h2>
+<p>This example shows the pieces needed to set up a longitudinal
+analysis in the pipeline. It follows the same structure as the
+face/house deep-dive integration test: multiple subjects, three sessions
+per subject, multiple runs per session, FSL at L1/L2, and either FSL or
+AFNI at L3.</p>
+<div class="section level3">
+<h3 id="required-input-tables">Required input tables<a class="anchor" aria-label="anchor" href="#required-input-tables"></a>
+</h3>
+<p>The pipeline needs three aligned tables. The default column names are
+<code>id</code>, <code>session</code>, and <code>run_number</code>;
+these can be remapped with <code>vm</code>, but using the defaults is
+easiest.</p>
+<table class="table">
+<colgroup>
+<col width="10%">
+<col width="19%">
+<col width="26%">
+<col width="43%">
+</colgroup>
+<thead><tr class="header">
+<th>Table</th>
+<th>One row per</th>
+<th>Required columns</th>
+<th>Common longitudinal columns</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>subject_data</code></td>
+<td>Subject-session</td>
+<td>
+<code>id</code>, <code>session</code>
+</td>
+<td>
+<code>session_label</code>, <code>days_since_baseline</code>,
+<code>group</code>, <code>age_baseline</code>,
+<code>exclude_subject</code>
+</td>
+</tr>
+<tr class="even">
+<td><code>run_data</code></td>
+<td>Subject-session-run</td>
+<td>
+<code>id</code>, <code>session</code>, <code>run_number</code>, path
+columns for the run image</td>
+<td>
+<code>session_label</code>, run condition labels,
+<code>run_nifti</code>, <code>l1_confound_file</code>,
+<code>exclude_run</code>
+</td>
+</tr>
+<tr class="odd">
+<td><code>trial_data</code></td>
+<td>Event/trial</td>
+<td>
+<code>id</code>, <code>session</code>, <code>run_number</code>,
+onset/duration/event columns used by L1</td>
+<td>Trial condition columns used by L1 signals</td>
+</tr>
+</tbody>
+</table>
+<p>For L3 longitudinal predictors, put one value per subject-session in
+<code>subject_data</code> whenever possible. The setup code also derives
+<code>session_data</code> from columns that are constant within each
+<code>id</code>/<code>session</code> in <code>run_data</code>, but an
+explicit <code>subject_data</code> row per visit is clearer and easier
+to audit.</p>
+<p>A minimal shape looks like this:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">subject_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  id <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"01"</span>, <span class="st">"01"</span>, <span class="st">"01"</span>, <span class="st">"02"</span>, <span class="st">"02"</span>, <span class="st">"02"</span><span class="op">)</span>,</span>
+<span>  session <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fl">2L</span>, <span class="fl">3L</span>, <span class="fl">1L</span>, <span class="fl">2L</span>, <span class="fl">3L</span><span class="op">)</span>,</span>
+<span>  session_label <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"baseline"</span>, <span class="st">"month6"</span>, <span class="st">"month12"</span>,</span>
+<span>                    <span class="st">"baseline"</span>, <span class="st">"month6"</span>, <span class="st">"month12"</span><span class="op">)</span>,</span>
+<span>  days_since_baseline <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">183</span>, <span class="fl">365</span>, <span class="fl">0</span>, <span class="fl">190</span>, <span class="fl">372</span><span class="op">)</span>,</span>
+<span>  group <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"control"</span>, <span class="st">"control"</span>, <span class="st">"control"</span>, <span class="st">"patient"</span>, <span class="st">"patient"</span>, <span class="st">"patient"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">run_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  id <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"01"</span>, <span class="st">"02"</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">6</span><span class="op">)</span>,</span>
+<span>  session <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, each <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>, times <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>,</span>
+<span>  run_number <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span>, times <span class="op">=</span> <span class="fl">6</span><span class="op">)</span>,</span>
+<span>  session_label <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"baseline"</span>, <span class="st">"month6"</span>, <span class="st">"month12"</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">2</span>, times <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>,</span>
+<span>  run_nifti <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"/path/to/sub-%s_ses-%d_run-%d_bold.nii.gz"</span>,</span>
+<span>                      <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"01"</span>, <span class="st">"02"</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">6</span><span class="op">)</span>,</span>
+<span>                      <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, each <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>, times <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>,</span>
+<span>                      <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span>, times <span class="op">=</span> <span class="fl">6</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">trial_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  id <span class="op">=</span> <span class="st">"01"</span>,</span>
+<span>  session <span class="op">=</span> <span class="fl">1L</span>,</span>
+<span>  run_number <span class="op">=</span> <span class="fl">1L</span>,</span>
+<span>  onset <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">12</span>, <span class="fl">28</span>, <span class="fl">45</span><span class="op">)</span>,</span>
+<span>  duration <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">2</span>, <span class="fl">2</span><span class="op">)</span>,</span>
+<span>  condition <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"face"</span>, <span class="st">"house"</span>, <span class="st">"face"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>In a real project, <code>trial_data</code> contains rows for every
+run. The face/house deep-dive also includes columns such as
+<code>stress_label</code>, <code>l1_confound_file</code>,
+<code>tr</code>, and <code>nT</code>; those are not longitudinally
+special, but they illustrate a useful pattern: run-level information
+goes in <code>run_data</code>, while visit-level predictors such as
+<code>session_label</code> are repeated in <code>run_data</code> only
+when they are constant within <code>id</code>/<code>session</code>.</p>
+</div>
+<div class="section level3">
+<h3 id="model-specification">Model specification<a class="anchor" aria-label="anchor" href="#model-specification"></a>
+</h3>
+<p>At L1, define the run-level task model in the usual way. For example,
+a simple face/house model has two task signals and diagonal L1
+contrasts:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">onsets</span><span class="kw">:</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> onset</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="fu">durations</span><span class="kw">:</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> duration</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="fu">events</span><span class="kw">:</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="at">  </span><span class="fu">stim</span><span class="kw">:</span></span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a><span class="at">    </span><span class="fu">onset</span><span class="kw">:</span><span class="at"> onset</span></span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a><span class="at">    </span><span class="fu">duration</span><span class="kw">:</span><span class="at"> duration</span></span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="fu">signals</span><span class="kw">:</span></span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a><span class="at">  </span><span class="fu">face</span><span class="kw">:</span></span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="at">    </span><span class="fu">event</span><span class="kw">:</span><span class="at"> stim</span></span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="at">    </span><span class="fu">trial_subset_expression</span><span class="kw">:</span><span class="at"> condition == 'face'</span></span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="at">    </span><span class="fu">normalization</span><span class="kw">:</span><span class="at"> none</span></span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a><span class="at">    </span><span class="fu">value_fixed</span><span class="kw">:</span><span class="at"> </span><span class="dv">1</span></span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a></span>
+<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a><span class="at">  </span><span class="fu">house</span><span class="kw">:</span></span>
+<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a><span class="at">    </span><span class="fu">event</span><span class="kw">:</span><span class="at"> stim</span></span>
+<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a><span class="at">    </span><span class="fu">trial_subset_expression</span><span class="kw">:</span><span class="at"> condition == 'house'</span></span>
+<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a><span class="at">    </span><span class="fu">normalization</span><span class="kw">:</span><span class="at"> none</span></span>
+<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a><span class="at">    </span><span class="fu">value_fixed</span><span class="kw">:</span><span class="at"> </span><span class="dv">1</span></span>
+<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a></span>
+<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a><span class="fu">l1_models</span><span class="kw">:</span></span>
+<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a><span class="at">  </span><span class="fu">facehouse</span><span class="kw">:</span></span>
+<span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a><span class="at">    </span><span class="fu">signals</span><span class="kw">:</span></span>
+<span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> face</span></span>
+<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> house</span></span>
+<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb2-31"><a href="#cb2-31" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span></code></pre></div>
+<p>At L2, the important longitudinal choice is
+<code>l2_scope: id_session</code>. This creates one L2 model per
+subject-session, so each visit contributes one session-level COPE for
+each requested L2 contrast.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">l2_models</span><span class="kw">:</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="at">  </span><span class="fu">session_summary</span><span class="kw">:</span></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="at">    </span><span class="fu">l2_scope</span><span class="kw">:</span><span class="at"> id_session</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ 1</span></span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span></code></pre></div>
+<p>If runs within a session encode a run-level factor, the L2 model can
+estimate that effect within each subject-session before L3. This is the
+pattern used by the face/house deep-dive for
+<code>stress_label</code>:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">l2_models</span><span class="kw">:</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="at">  </span><span class="fu">session_stress_effect</span><span class="kw">:</span></span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="at">    </span><span class="fu">l2_scope</span><span class="kw">:</span><span class="at"> id_session</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ stress_label</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="at">    </span><span class="fu">reference_level</span><span class="kw">:</span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="at">      </span><span class="fu">stress_label</span><span class="kw">:</span><span class="at"> stress</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="at">      </span><span class="fu">cond_means</span><span class="kw">:</span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="at">        </span><span class="kw">-</span><span class="at"> stress_label</span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="at">      </span><span class="fu">pairwise_diffs</span><span class="kw">:</span></span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="at">        </span><span class="kw">-</span><span class="at"> stress_label</span></span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a><span class="at">      </span><span class="fu">weights</span><span class="kw">:</span><span class="at"> cells</span></span></code></pre></div>
+<p>At L3, choose the route that matches the longitudinal question. For a
+balanced FSL-native visit comparison:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">l3_models</span><span class="kw">:</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="at">  </span><span class="fu">visit_effect_fsl</span><span class="kw">:</span></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> pooled_sessions_subject_ev</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ session_label</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="at">    </span><span class="fu">reference_level</span><span class="kw">:</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="at">      </span><span class="fu">session_label</span><span class="kw">:</span><span class="at"> baseline</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="at">      </span><span class="fu">cond_means</span><span class="kw">:</span></span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="at">        </span><span class="kw">-</span><span class="at"> session_label</span></span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a><span class="at">      </span><span class="fu">pairwise_diffs</span><span class="kw">:</span></span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="at">        </span><span class="kw">-</span><span class="at"> session_label</span></span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a><span class="at">    </span><span class="fu">fsl_outlier_deweighting</span><span class="kw">:</span><span class="at"> </span><span class="ch">false</span></span></code></pre></div>
+<p>For AFNI <code>3dLMEr</code>, keep FSL as the L1/L2 producer and use
+AFNI only for the L3 model:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">glm_software</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">fsl</span><span class="kw">,</span><span class="at"> afni</span><span class="kw">]</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="fu">l3_models</span><span class="kw">:</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="at">  </span><span class="fu">visit_effect_3dlmer</span><span class="kw">:</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> 3dlmer</span></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="at">    </span><span class="fu">execution_backend</span><span class="kw">:</span><span class="at"> afni</span></span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="at">    </span><span class="fu">producer_backend</span><span class="kw">:</span><span class="at"> fsl</span></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ session_label</span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="at">    </span><span class="fu">random_effects</span><span class="kw">:</span><span class="at"> (1 | Subj)</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="at">    </span><span class="fu">reference_level</span><span class="kw">:</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="at">      </span><span class="fu">session_label</span><span class="kw">:</span><span class="at"> baseline</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a><span class="at">      </span><span class="fu">cond_means</span><span class="kw">:</span></span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a><span class="at">        </span><span class="kw">-</span><span class="at"> session_label</span></span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a><span class="at">      </span><span class="fu">pairwise_diffs</span><span class="kw">:</span></span>
+<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a><span class="at">        </span><span class="kw">-</span><span class="at"> session_label</span></span>
+<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a><span class="at">    </span><span class="fu">fsl_outlier_deweighting</span><span class="kw">:</span><span class="at"> </span><span class="ch">false</span></span></code></pre></div>
+<p>For continuous time, replace <code>session_label</code> with a
+numeric predictor from <code>subject_data</code>, and use a random slope
+only when the data support it:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">l3_models</span><span class="kw">:</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="at">  </span><span class="fu">time_effect_3dlmer</span><span class="kw">:</span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> 3dlmer</span></span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="at">    </span><span class="fu">execution_backend</span><span class="kw">:</span><span class="at"> afni</span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="at">    </span><span class="fu">producer_backend</span><span class="kw">:</span><span class="at"> fsl</span></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ days_since_baseline * group</span></span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a><span class="at">    </span><span class="fu">random_effects</span><span class="kw">:</span><span class="at"> (1 + days_since_baseline | Subj)</span></span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span></code></pre></div>
+<p>Numeric predictors such as <code>days_since_baseline</code> are
+automatically written to AFNI <code>-qVars</code>. In
+<code>3dLMEr</code> random-effects terms, use <code>Subj</code>, not
+<code>id</code>, because the AFNI data table renames the subject column
+to <code>Subj</code>.</p>
+</div>
+<div class="section level3">
+<h3 id="setup-and-execution-steps">Setup and execution steps<a class="anchor" aria-label="anchor" href="#setup-and-execution-steps"></a>
+</h3>
+<p>For a normal analysis, build the pipeline object and model specs,
+then let <code><a href="../reference/run_glm_pipeline.html">run_glm_pipeline()</a></code> handle the staged setup and
+execution:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/fmri.pipeline/">fmri.pipeline</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/setup_glm_pipeline.html">setup_glm_pipeline</a></span><span class="op">(</span></span>
+<span>  analysis_name <span class="op">=</span> <span class="st">"my_longitudinal_study"</span>,</span>
+<span>  scheduler <span class="op">=</span> <span class="st">"slurm"</span>,</span>
+<span>  output_directory <span class="op">=</span> <span class="st">"/path/to/analysis_output"</span>,</span>
+<span>  subject_data <span class="op">=</span> <span class="va">subject_data</span>,</span>
+<span>  run_data <span class="op">=</span> <span class="va">run_data</span>,</span>
+<span>  trial_data <span class="op">=</span> <span class="va">trial_data</span>,</span>
+<span>  glm_software <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"fsl"</span>, <span class="st">"afni"</span><span class="op">)</span>,  <span class="co"># use "fsl" only for the FSL-native route</span></span>
+<span>  n_expected_runs <span class="op">=</span> <span class="fl">2L</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_l1_models.html">build_l1_models</a></span><span class="op">(</span><span class="va">gpa</span>, from_spec_file <span class="op">=</span> <span class="st">"l1_models.yaml"</span><span class="op">)</span></span>
+<span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_l2_models.html">build_l2_models</a></span><span class="op">(</span><span class="va">gpa</span>, from_spec_file <span class="op">=</span> <span class="st">"l2_models.yaml"</span><span class="op">)</span></span>
+<span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/build_l3_models.html">build_l3_models</a></span><span class="op">(</span><span class="va">gpa</span>, from_spec_file <span class="op">=</span> <span class="st">"l3_models.yaml"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/run_glm_pipeline.html">run_glm_pipeline</a></span><span class="op">(</span></span>
+<span>  <span class="va">gpa</span>,</span>
+<span>  l1_model_names <span class="op">=</span> <span class="st">"facehouse"</span>,</span>
+<span>  l2_model_names <span class="op">=</span> <span class="st">"session_summary"</span>,</span>
+<span>  l3_model_names <span class="op">=</span> <span class="st">"visit_effect_3dlmer"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>For a FSL-native L3 model, set <code>glm_software = "fsl"</code> and
+pass the FSL L3 model name, for example
+<code>l3_model_names = "visit_effect_fsl"</code>. For an AFNI
+<code>3dLMEr</code> model, the L1 and L2 stages still run through FSL;
+AFNI begins only after the FSL L2 subject-session COPEs exist.</p>
+<p>For a setup preview or debugging session, run the setup functions
+explicitly and inspect the generated setup tables. In this explicit
+workflow, each level depends on outputs from the previous level: L3
+setup needs complete L2 inputs, and AFNI <code>3dLMEr</code> setup
+harvests FSL L2 subject-session COPEs.</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/setup_l1_models.html">setup_l1_models</a></span><span class="op">(</span><span class="va">gpa</span>, l1_model_names <span class="op">=</span> <span class="st">"facehouse"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Run L1, or refresh status after L1 outputs already exist.</span></span>
+<span><span class="co"># Then prepare the per-subject-session L2 models.</span></span>
+<span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/setup_l2_models.html">setup_l2_models</a></span><span class="op">(</span></span>
+<span>  <span class="va">gpa</span>,</span>
+<span>  l1_model_names <span class="op">=</span> <span class="st">"facehouse"</span>,</span>
+<span>  l2_model_names <span class="op">=</span> <span class="st">"session_summary"</span>,</span>
+<span>  backend <span class="op">=</span> <span class="st">"fsl"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Run L2, or refresh status after L2 outputs already exist.</span></span>
+<span><span class="co"># Then prepare L3 from the completed FSL L2 subject-session COPEs.</span></span>
+<span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/setup_l3_models.html">setup_l3_models</a></span><span class="op">(</span></span>
+<span>  <span class="va">gpa</span>,</span>
+<span>  l1_model_names <span class="op">=</span> <span class="st">"facehouse"</span>,</span>
+<span>  l2_model_names <span class="op">=</span> <span class="st">"session_summary"</span>,</span>
+<span>  l3_model_names <span class="op">=</span> <span class="st">"visit_effect_3dlmer"</span>,</span>
+<span>  backend <span class="op">=</span> <span class="st">"afni"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>The face/house deep-dive integration tests use this explicit
+setup-preview style, with mocked upstream completions, to check paths,
+model pairing, and generated scripts before submitting a full cluster
+run.</p>
+</div>
+<div class="section level3">
+<h3 id="expected-outputs">Expected outputs<a class="anchor" aria-label="anchor" href="#expected-outputs"></a>
+</h3>
+<p>For <code>l2_scope = "id_session"</code>, the output tree should make
+the subject/session split visible:</p>
+<pre class="text"><code>&lt;output_directory&gt;/
+  feat_l1/
+    sub-01/ses-1/facehouse/FEAT_LVL1_run1.fsf
+    sub-01/ses-1/facehouse/FEAT_LVL1_run1.feat/
+  feat_l2/
+    sub-01/ses-1/L1m-facehouse/l1c-01_EV_face/L2m-session_summary/FEAT_L2.fsf
+    sub-01/ses-1/L1m-facehouse/l1c-01_EV_face/L2m-session_summary/FEAT_L2.gfeat/</code></pre>
+<p>For <code>l3_input_mode = "pooled_sessions_subject_ev"</code>, FSL L3
+writes pooled multi-session FEAT setup and output under
+<code>feat_l3/</code>, with the L1/L2/L3 model names and contrast names
+embedded in the path.</p>
+<p>For <code>l3_input_mode = "3dlmer"</code>, setup writes one AFNI
+directory per L1/L2 contrast:</p>
+<pre class="text"><code>&lt;output_directory&gt;/
+  afni_3dlmer/
+    L3m-visit_effect_3dlmer/
+      L1m-facehouse/
+        L2m-session_summary/
+          l1c-EV_face/
+            l2c-EV_Intercept/
+              dataTable.txt
+              run_3dlmer.sh
+              intersection_mask.nii.gz
+              visit_effect_3dlmer_LMEr+orig.HEAD
+              visit_effect_3dlmer_LMEr+orig.BRIK.gz</code></pre>
+<p>The <code>dataTable.txt</code> should have one row per
+subject-session input map. For the face/house deep-dive, the table
+starts with columns like:</p>
+<pre class="text"><code>Subj  session  session_label  InputFile
+01    1        analgesic      .../feat_l2/sub-01/ses-1/.../cope1.nii.gz
+01    2        placebo        .../feat_l2/sub-01/ses-2/.../cope1.nii.gz
+01    3        opioid         .../feat_l2/sub-01/ses-3/.../cope1.nii.gz</code></pre>
+<p>The generated <code>run_3dlmer.sh</code> should include the
+fixed-effects formula, random-effects term, optional
+<code>-qVars</code>, generated <code>-gltCode</code> contrasts, and
+<code>-dataTable '@dataTable.txt'</code>. If setup fails before these
+files are written, the most common causes are an incompatible L2/L3
+pairing, missing subject-session rows in <code>subject_data</code>, or a
+predictor referenced in the L3 formula that is not available for every
+modeled subject-session.</p>
+</div>
+</div>
+<div class="section level2">
 <h2 id="the-challenge-of-variance-in-fsl">The Challenge of Variance in FSL<a class="anchor" aria-label="anchor" href="#the-challenge-of-variance-in-fsl"></a>
 </h2>
 <p>FSL’s standard higher-level analysis tool, FLAME (FMRIB’s Local
@@ -388,11 +762,11 @@ pipeline is: 1. <strong>Level 1 (Run):</strong> General Linear Model
 Fixed-effects combination of multiple runs. 3. <strong>Level 3
 (Group):</strong> Mixed-effects (FLAME 1/2) combination across
 subjects.</p>
-<p>When an additional level—session or wave—is introduced, researchers
+<p>When an additional level, session or wave, is introduced, researchers
 must decide how to fold the extra temporal dimension into FSL’s rigid
 3-level structure. FSL generally struggles with true repeated-measures
-modeling (where observations are non-independent due to within-subject
-clustering).</p>
+modeling, where observations are non-independent due to within-subject
+clustering.</p>
 <p>To mitigate this, <code>fmri.pipeline</code> offers a few
 workarounds.</p>
 <hr>
@@ -400,6 +774,66 @@ workarounds.</p>
 <div class="section level2">
 <h2 id="existing-approaches-in-fmri-pipeline">Existing Approaches in <code>fmri.pipeline</code><a class="anchor" aria-label="anchor" href="#existing-approaches-in-fmri-pipeline"></a>
 </h2>
+<p>The key data objects are easier to track if they are named by the
+level that produces them:</p>
+<table class="table">
+<colgroup>
+<col width="20%">
+<col width="28%">
+<col width="26%">
+<col width="26%">
+</colgroup>
+<thead><tr class="header">
+<th>Quantity</th>
+<th>Typical rows</th>
+<th>Produced by</th>
+<th>Consumed by</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>Run time series
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>Y</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><annotation encoding="application/x-tex">Y_{ijr}</annotation></semantics></math>
+</td>
+<td>One vector per subject, session, and run</td>
+<td>Preprocessing</td>
+<td>FSL L1</td>
+</tr>
+<tr class="even">
+<td>Run COPE
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><annotation encoding="application/x-tex">\hat{\gamma}_{ijr}</annotation></semantics></math>
+</td>
+<td>One map per subject, session, run, and L1 contrast</td>
+<td>FSL L1</td>
+<td>FSL L2</td>
+</tr>
+<tr class="odd">
+<td>Session COPE
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi></mrow></msub><annotation encoding="application/x-tex">\hat{\alpha}_{ij}</annotation></semantics></math>
+</td>
+<td>One map per subject, session, and contrast</td>
+<td>FSL L2 with <code>l2_scope = "id_session"</code>
+</td>
+<td>FSL L3 or AFNI <code>3dLMEr</code>
+</td>
+</tr>
+<tr class="even">
+<td>Subject pooled COPE
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mi>i</mi></msub><annotation encoding="application/x-tex">\hat{\alpha}_{i}</annotation></semantics></math>
+</td>
+<td>One map per subject and contrast</td>
+<td>FSL L2 with <code>l2_scope = "id"</code>
+</td>
+<td>L3 <code>subject_rows</code> workflows</td>
+</tr>
+<tr class="odd">
+<td>Group/statistical map</td>
+<td>One map per L3 model and contrast</td>
+<td>FSL L3 or AFNI <code>3dLMEr</code>
+</td>
+<td>Inference and reporting</td>
+</tr>
+</tbody>
+</table>
 <div class="section level3">
 <h3 id="the-id-pooling-approach-l2_scope-id">1. The “Id” Pooling Approach (<code>l2_scope = "id"</code>)<a class="anchor" aria-label="anchor" href="#the-id-pooling-approach-l2_scope-id"></a>
 </h3>
@@ -445,27 +879,43 @@ In either case, the model treats all runs as
 <strong>exchangeable</strong>, irrespective of which session they came
 from.</p>
 <p>In reality, the variance structure is <strong>heterogeneous and
-hierarchical</strong>:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Cov</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>r</mi></mrow></msub><mo>,</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><msup><mi>r</mi><mo>′</mo></msup></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mrow><mo stretchy="true" form="prefix">{</mo><mtable><mtr><mtd columnalign="left" style="text-align: left"><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">runs</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">session</mtext></mrow><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">sessions</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">subject</mtext></mrow><mn>2</mn></msubsup></mtd><mtd columnalign="left" style="text-align: left"><mrow><mtext mathvariant="normal">if </mtext><mspace width="0.333em"></mspace></mrow><mi>r</mi><mo>,</mo><msup><mi>r</mi><mo>′</mo></msup><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> are in different sessions</mtext></mrow></mtd></mtr><mtr><mtd columnalign="left" style="text-align: left"><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">runs</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">session</mtext></mrow><mn>2</mn></msubsup></mtd><mtd columnalign="left" style="text-align: left"><mrow><mtext mathvariant="normal">if </mtext><mspace width="0.333em"></mspace></mrow><mi>r</mi><mo>,</mo><msup><mi>r</mi><mo>′</mo></msup><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> are in the same session</mtext></mrow></mtd></mtr><mtr><mtd columnalign="left" style="text-align: left"><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">runs</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">session</mtext></mrow><mn>2</mn></msubsup><mo>+</mo><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>r</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="left" style="text-align: left"><mrow><mtext mathvariant="normal">if </mtext><mspace width="0.333em"></mspace></mrow><mi>r</mi><mo>=</mo><msup><mi>r</mi><mo>′</mo></msup></mtd></mtr></mtable></mrow></mrow><annotation encoding="application/x-tex">\text{Cov}(\hat{\gamma}_{ir}, \hat{\gamma}_{ir'}) = 
+hierarchical</strong>. A simple marginal model for the run-level COPEs
+is:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo>=</mo><msub><mi>θ</mi><mi>i</mi></msub><mo>+</mo><msub><mi>s</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>+</mo><msub><mi>q</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo>+</mo><msub><mi>e</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\hat{\gamma}_{ijr} = \theta_i + s_{ij} + q_{ijr} + e_{ijr}</annotation></semantics></math></p>
+<p>where
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>θ</mi><mi>i</mi></msub><mo>∼</mo><mi>𝒩</mi><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><msubsup><mi>σ</mi><mtext mathvariant="normal">subjects</mtext><mn>2</mn></msubsup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\theta_i \sim \mathcal{N}(0, \sigma^2_{\text{subjects}})</annotation></semantics></math>
+is the subject-level tendency,
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>∼</mo><mi>𝒩</mi><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">sessions</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">subject</mtext></mrow><mn>2</mn></msubsup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">s_{ij} \sim \mathcal{N}(0, \sigma^2_{\text{sessions}|\text{subject}})</annotation></semantics></math>
+is the session-specific deviation within subject,
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>q</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo>∼</mo><mi>𝒩</mi><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">runs</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">session</mtext></mrow><mn>2</mn></msubsup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">q_{ijr} \sim \mathcal{N}(0, \sigma^2_{\text{runs}|\text{session}})</annotation></semantics></math>
+is the run-specific deviation within session, and
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>e</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><annotation encoding="application/x-tex">e_{ijr}</annotation></semantics></math>
+is the independent L1 measurement error. Under this model, the
+covariance between two run-level COPEs from the same subject is:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Cov</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo>,</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><msup><mi>j</mi><mo>′</mo></msup><msup><mi>r</mi><mo>′</mo></msup></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mrow><mo stretchy="true" form="prefix">{</mo><mtable><mtr><mtd columnalign="left" style="text-align: left"><msubsup><mi>σ</mi><mtext mathvariant="normal">subjects</mtext><mn>2</mn></msubsup></mtd><mtd columnalign="left" style="text-align: left"><mrow><mtext mathvariant="normal">if </mtext><mspace width="0.333em"></mspace></mrow><mi>j</mi><mo>≠</mo><msup><mi>j</mi><mo>′</mo></msup></mtd></mtr><mtr><mtd columnalign="left" style="text-align: left"><msubsup><mi>σ</mi><mtext mathvariant="normal">subjects</mtext><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">sessions</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">subject</mtext></mrow><mn>2</mn></msubsup></mtd><mtd columnalign="left" style="text-align: left"><mrow><mtext mathvariant="normal">if </mtext><mspace width="0.333em"></mspace></mrow><mi>j</mi><mo>=</mo><msup><mi>j</mi><mo>′</mo></msup><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> and </mtext><mspace width="0.333em"></mspace></mrow><mi>r</mi><mo>≠</mo><msup><mi>r</mi><mo>′</mo></msup></mtd></mtr><mtr><mtd columnalign="left" style="text-align: left"><msubsup><mi>σ</mi><mtext mathvariant="normal">subjects</mtext><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">sessions</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">subject</mtext></mrow><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">runs</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">session</mtext></mrow><mn>2</mn></msubsup><mo>+</mo><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mi>e</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo></mtd><mtd columnalign="left" style="text-align: left"><mrow><mtext mathvariant="normal">if </mtext><mspace width="0.333em"></mspace></mrow><mi>j</mi><mo>=</mo><msup><mi>j</mi><mo>′</mo></msup><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> and </mtext><mspace width="0.333em"></mspace></mrow><mi>r</mi><mo>=</mo><msup><mi>r</mi><mo>′</mo></msup></mtd></mtr></mtable></mrow></mrow><annotation encoding="application/x-tex">\text{Cov}(\hat{\gamma}_{ijr}, \hat{\gamma}_{ij'r'}) =
 \begin{cases}
-\sigma^2_{\text{runs}|\text{session}} + \sigma^2_{\text{sessions}|\text{subject}} &amp; \text{if } r, r' \text{ are in different sessions} \\
-\sigma^2_{\text{runs}|\text{session}} &amp; \text{if } r, r' \text{ are in the same session} \\
-\sigma^2_{\text{runs}|\text{session}} + \text{Var}(\hat{\gamma}_{ir}) &amp; \text{if } r = r'
+\sigma^2_{\text{subjects}} &amp; \text{if } j \neq j' \\
+\sigma^2_{\text{subjects}} + \sigma^2_{\text{sessions}|\text{subject}} &amp; \text{if } j = j' \text{ and } r \neq r' \\
+\sigma^2_{\text{subjects}} + \sigma^2_{\text{sessions}|\text{subject}} + \sigma^2_{\text{runs}|\text{session}} + \text{Var}(e_{ijr}) &amp; \text{if } j = j' \text{ and } r = r'
 \end{cases}</annotation></semantics></math></p>
-<p>The pooled model conflates
+<p>For a within-subject L2 model,
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>θ</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\theta_i</annotation></semantics></math>
+is common to all runs for that subject, so the practical problem is the
+failure to distinguish session-level deviations from run-level
+deviations. The pooled model either omits these components under fixed
+effects or conflates
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">runs</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">session</mtext></mrow><mn>2</mn></msubsup><annotation encoding="application/x-tex">\sigma^2_{\text{runs}|\text{session}}</annotation></semantics></math>
 and
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">sessions</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">subject</mtext></mrow><mn>2</mn></msubsup><annotation encoding="application/x-tex">\sigma^2_{\text{sessions}|\text{subject}}</annotation></semantics></math>
-into a single parameter. When
+into a single residual/random-effects term under mixed effects. When
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>σ</mi><mtext mathvariant="normal">sessions</mtext><mn>2</mn></msubsup><mo>≫</mo><msubsup><mi>σ</mi><mtext mathvariant="normal">runs</mtext><mn>2</mn></msubsup></mrow><annotation encoding="application/x-tex">\sigma^2_{\text{sessions}} \gg \sigma^2_{\text{runs}}</annotation></semantics></math>
-(often the case in longitudinal studies spanning months or years), the
-pooled model will:</p>
+(often plausible in longitudinal studies spanning months or years), the
+pooled model can:</p>
 <ol style="list-style-type: decimal">
 <li>
 <strong>Underestimate standard errors</strong> for session-level
-contrasts (Session 2 − Session 1), because the between-session variance
-inflates the residual variance rather than being modeled as a distinct
-component.</li>
+contrasts (Session 2 - Session 1) under fixed-effects pooling, because
+the session component is not represented in the contrast variance.</li>
 <li>
 <strong>Overweight</strong> runs from sessions with lower L1
 measurement noise, implicitly assuming this reflects higher
@@ -516,8 +966,10 @@ clusters.</li>
 (<code>l2_scope = "id_session"</code>)<a class="anchor" aria-label="anchor" href="#the-hierarchical-session-approach-l2_scope-id_session"></a>
 </h3>
 <p>In this widely recommended FSL approach, runs are collapsed within
-sessions via fixed-effects, followed by a cross-session mixed-effects or
-repeated measures setup.</p>
+sessions via fixed effects, followed by a cross-session group model.
+This does not make FSL a full longitudinal mixed-model engine, but it
+does keep run-level and session-level quantities from being mixed at
+L2.</p>
 <div class="section level4">
 <h4 id="how-it-works-1">How it works:<a class="anchor" aria-label="anchor" href="#how-it-works-1"></a>
 </h4>
@@ -540,19 +992,19 @@ FSL, you must use a subject-mean approach.</li>
 <div class="section level4">
 <h4 id="variance-decomposition-under-this-approach">Variance Decomposition Under This Approach<a class="anchor" aria-label="anchor" href="#variance-decomposition-under-this-approach"></a>
 </h4>
-<p>This approach correctly separates within-session and between-session
-variance:</p>
+<p>This approach better separates within-session precision from
+between-session comparisons:</p>
 <p><strong>At L2</strong> (within-session, fixed effects), for subject
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>i</mi><annotation encoding="application/x-tex">i</annotation></semantics></math>,
 session
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>j</mi><annotation encoding="application/x-tex">j</annotation></semantics></math>:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>=</mo><mfrac><mrow><munder><mo>∑</mo><mi>r</mi></munder><msub><mi>w</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub></mrow><mrow><munder><mo>∑</mo><mi>r</mi></munder><msub><mi>w</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub></mrow></mfrac><mo>,</mo><mspace width="2.0em"></mspace><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mfrac><mn>1</mn><mrow><munder><mo>∑</mo><mi>r</mi></munder><msub><mi>w</mi><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub></mrow></mfrac></mrow><annotation encoding="application/x-tex">\hat{\alpha}_{ij} = \frac{\sum_r w_{ijr} \hat{\gamma}_{ijr}}{\sum_r w_{ijr}}, \qquad \text{Var}(\hat{\alpha}_{ij}) = \frac{1}{\sum_r w_{ijr}}</annotation></semantics></math></p>
 <p>The L2 VARCOPE reflects <strong>only</strong> within-session
-measurement precision—runs from different sessions do not contaminate
+measurement precision; runs from different sessions do not contaminate
 this estimate.</p>
-<p><strong>At L3</strong> (between-session, mixed effects via the
-subject-mean approach):</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>=</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>+</mo><mi>τ</mi><mspace width="0.167em"></mspace><msub><mi>t</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>+</mo><msub><mi>ξ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>+</mo><msub><mi>u</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\hat{\alpha}_{ij} = \mu_i + \tau \, t_{ij} + \xi_{ij} + u_{ij}</annotation></semantics></math></p>
+<p><strong>At L3</strong> (session comparison via the subject-mean
+approach):</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>=</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>+</mo><mi>τ</mi><mspace width="0.167em"></mspace><msub><mi>t</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>+</mo><msub><mi>ε</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>+</mo><msub><mi>u</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\hat{\alpha}_{ij} = \mu_i + \tau \, t_{ij} + \varepsilon_{ij} + u_{ij}</annotation></semantics></math></p>
 <p>where:</p>
 <ul>
 <li>
@@ -570,16 +1022,19 @@ is the session indicator or time variable for subject
 session
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>j</mi><annotation encoding="application/x-tex">j</annotation></semantics></math>,</li>
 <li>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ξ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>∼</mo><mi>𝒩</mi><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">sessions</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">subject</mtext></mrow><mn>2</mn></msubsup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\xi_{ij} \sim \mathcal{N}(0, \sigma^2_{\text{sessions}|\text{subject}})</annotation></semantics></math>
-is the between-session, within-subject random variation, and</li>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ε</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>∼</mo><mi>𝒩</mi><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><msubsup><mi>σ</mi><mtext mathvariant="normal">resid</mtext><mn>2</mn></msubsup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\varepsilon_{ij} \sim \mathcal{N}(0, \sigma^2_{\text{resid}})</annotation></semantics></math>
+is the remaining session-level variation after controlling for subject
+means and modeled session effects (conceptually mapping to
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">sessions</mtext><mo stretchy="false" form="prefix">|</mo><mtext mathvariant="normal">subject</mtext></mrow><mn>2</mn></msubsup><annotation encoding="application/x-tex">\sigma^2_{\text{sessions}|\text{subject}}</annotation></semantics></math>
+from the complete hierarchical decomposition), and</li>
 <li>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>u</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><annotation encoding="application/x-tex">u_{ij}</annotation></semantics></math>
 has known variance
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\text{Var}(\hat{\alpha}_{ij})</annotation></semantics></math>,
 the L2 VARCOPE.</li>
 </ul>
-<p>This formulation cleanly isolates the three estimable variance
-components:</p>
+<p>This formulation separates the estimable quantities available to the
+FSL-native workflow:</p>
 <table class="table">
 <colgroup>
 <col width="26%">
@@ -603,8 +1058,9 @@ components:</p>
 <td>Inverse-variance weighting at L2</td>
 </tr>
 <tr class="odd">
-<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">sessions</mtext><mo stretchy="false" form="postfix">∥</mo><mtext mathvariant="normal">subject</mtext></mrow><mn>2</mn></msubsup><annotation encoding="application/x-tex">\sigma^2_{\text{sessions}\|\text{subject}}</annotation></semantics></math></td>
-<td>True between-session variability</td>
+<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>σ</mi><mtext mathvariant="normal">resid</mtext><mn>2</mn></msubsup><annotation encoding="application/x-tex">\sigma^2_{\text{resid}}</annotation></semantics></math></td>
+<td>Remaining session-level variability after subject EVs and fixed
+effects</td>
 <td>FLAME at L3</td>
 </tr>
 </tbody>
@@ -623,9 +1079,9 @@ sessions, the L3 design matrix has the form:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>W</mi><mo>=</mo><mrow><mo stretchy="true" form="prefix">[</mo><mtable><mtr><mtd columnalign="center" style="text-align: center"><msub><mi>I</mi><mi>N</mi></msub><mo>⊗</mo><msub><mn>𝟏</mn><mi>J</mi></msub></mtd><mtd columnalign="center" style="text-align: center"><mi>t</mi></mtd></mtr></mtable><mo stretchy="true" form="postfix">]</mo></mrow></mrow><annotation encoding="application/x-tex">W = \begin{bmatrix} I_N \otimes \mathbf{1}_J &amp; t \end{bmatrix}</annotation></semantics></math></p>
 <p>where
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>I</mi><mi>N</mi></msub><mo>⊗</mo><msub><mn>𝟏</mn><mi>J</mi></msub></mrow><annotation encoding="application/x-tex">I_N \otimes \mathbf{1}_J</annotation></semantics></math>
-generates a block-diagonal structure of
+generates a stacked subject-indicator matrix with
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>N</mi><annotation encoding="application/x-tex">N</annotation></semantics></math>
-indicator columns (one per subject), and
+columns (one per subject), and
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>t</mi><annotation encoding="application/x-tex">t</annotation></semantics></math>
 is the session/time covariate of interest.</p>
 <p>For a study with
@@ -642,8 +1098,8 @@ practical limits.</p>
 </h4>
 <ul>
 <li>
-<strong>Statistical Validity:</strong> Properly isolates
-within-session variance from between-session variance.</li>
+<strong>Better Level Separation:</strong> Keeps within-session run
+aggregation separate from between-session comparisons.</li>
 <li>
 <strong>Modularity:</strong> Re-computing one session’s data does
 not mandate re-computing another session.</li>
@@ -830,9 +1286,18 @@ has known variance
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ℓ</mi><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\ell-1</annotation></semantics></math>).
 The marginal variance of each input is:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>θ</mi><mo accent="true">̂</mo></mover><mi>k</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>σ</mi><mrow><mo stretchy="false" form="prefix">(</mo><mi>ℓ</mi><mo stretchy="false" form="postfix">)</mo></mrow><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>s</mi><mi>k</mi><mn>2</mn></msubsup></mrow><annotation encoding="application/x-tex">\text{Var}(\hat{\theta}_k) = \sigma^2_{(\ell)} + s^2_k</annotation></semantics></math></p>
-<p>The resulting estimate and its variance are:</p>
+<p>For the intercept-only weighted-average case, the resulting estimate
+and its variance are:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mover><mi>δ</mi><mo accent="true">̂</mo></mover><mrow><mo stretchy="false" form="prefix">(</mo><mi>ℓ</mi><mo stretchy="false" form="postfix">)</mo></mrow></msup><mo>=</mo><mfrac><mrow><munder><mo>∑</mo><mi>k</mi></munder><msub><mover><mi>w</mi><mo accent="true">̃</mo></mover><mi>k</mi></msub><msub><mover><mi>θ</mi><mo accent="true">̂</mo></mover><mi>k</mi></msub></mrow><mrow><munder><mo>∑</mo><mi>k</mi></munder><msub><mover><mi>w</mi><mo accent="true">̃</mo></mover><mi>k</mi></msub></mrow></mfrac><mo>,</mo><mspace width="2.0em"></mspace><msub><mover><mi>w</mi><mo accent="true">̃</mo></mover><mi>k</mi></msub><mo>=</mo><mfrac><mn>1</mn><mrow><msubsup><mi>σ</mi><mrow><mo stretchy="false" form="prefix">(</mo><mi>ℓ</mi><mo stretchy="false" form="postfix">)</mo></mrow><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>s</mi><mi>k</mi><mn>2</mn></msubsup></mrow></mfrac></mrow><annotation encoding="application/x-tex">\hat{\delta}^{(\ell)} = \frac{\sum_k \tilde{w}_k \hat{\theta}_k}{\sum_k \tilde{w}_k}, \qquad \tilde{w}_k = \frac{1}{\sigma^2_{(\ell)} + s^2_k}</annotation></semantics></math></p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msup><mover><mi>δ</mi><mo accent="true">̂</mo></mover><mrow><mo stretchy="false" form="prefix">(</mo><mi>ℓ</mi><mo stretchy="false" form="postfix">)</mo></mrow></msup><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mfrac><mn>1</mn><mrow><munder><mo>∑</mo><mi>k</mi></munder><msub><mover><mi>w</mi><mo accent="true">̃</mo></mover><mi>k</mi></msub></mrow></mfrac></mrow><annotation encoding="application/x-tex">\text{Var}(\hat{\delta}^{(\ell)}) = \frac{1}{\sum_k \tilde{w}_k}</annotation></semantics></math></p>
+<p>For a multi-column design matrix, this generalizes to the usual
+weighted GLM expression
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><msup><mi>W</mi><mi>T</mi></msup><msup><mi mathvariant="normal">Σ</mi><mrow><mi>−</mi><mn>1</mn></mrow></msup><mi>W</mi><msup><mo stretchy="false" form="postfix">)</mo><mrow><mi>−</mi><mn>1</mn></mrow></msup></mrow><annotation encoding="application/x-tex">(W^T \Sigma^{-1} W)^{-1}</annotation></semantics></math>,
+where the diagonal entries of
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi mathvariant="normal">Σ</mi><annotation encoding="application/x-tex">\Sigma</annotation></semantics></math>
+contain
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>σ</mi><mrow><mo stretchy="false" form="prefix">(</mo><mi>ℓ</mi><mo stretchy="false" form="postfix">)</mo></mrow><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>s</mi><mi>k</mi><mn>2</mn></msubsup></mrow><annotation encoding="application/x-tex">\sigma^2_{(\ell)} + s^2_k</annotation></semantics></math>
+under this simplified independent-input representation.</p>
 </div>
 <div class="section level3">
 <h3 id="consequences-of-misspecification">Consequences of Misspecification<a class="anchor" aria-label="anchor" href="#consequences-of-misspecification"></a>
@@ -847,15 +1312,16 @@ inference.</p></li>
 <li><p><strong>Collapsed variance components</strong> (e.g., the “id”
 pooling approach): When
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>σ</mi><mtext mathvariant="normal">sessions</mtext><mn>2</mn></msubsup><annotation encoding="application/x-tex">\sigma^2_{\text{sessions}}</annotation></semantics></math>
-is not explicitly modeled, the between-session variance inflates
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>σ</mi><mrow><mo stretchy="false" form="prefix">(</mo><mi>ℓ</mi><mo stretchy="false" form="postfix">)</mo></mrow><mn>2</mn></msubsup><annotation encoding="application/x-tex">\sigma^2_{(\ell)}</annotation></semantics></math>
-at the pooled level (or is absorbed into the residual). Session-level
-contrasts then have <strong>incorrect standard errors</strong>, since
-FLAME’s single random-effects variance cannot simultaneously capture
-both between-run and between-session variability.</p></li>
+is not explicitly modeled, fixed-effects pooling leaves the session
+component out of the contrast variance. A mixed-effects pooled model can
+only represent a single residual/random-effects term, which cannot
+simultaneously capture both between-run and between-session variability.
+Session-level contrasts then have <strong>incorrect standard
+errors</strong>.</p></li>
 <li><p><strong>Compounding bias across levels</strong>: If variance is
 systematically misestimated at L1 (e.g., due to scanner artifact at one
-session), the error propagates multiplicatively:</p></li>
+session), the error propagates through the higher-level
+weights:</p></li>
 </ol>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>δ</mi><mo accent="true">̂</mo></mover><mtext mathvariant="normal">group</mtext></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mfrac><mn>1</mn><mrow><munder><mo>∑</mo><mi>i</mi></munder><mfrac><mn>1</mn><mrow><msubsup><mover><mi>σ</mi><mo accent="true">̂</mo></mover><mtext mathvariant="normal">subj</mtext><mn>2</mn></msubsup><mo>+</mo><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo></mrow></mfrac></mrow></mfrac></mrow><annotation encoding="application/x-tex">\text{Var}(\hat{\delta}_{\text{group}}) = \frac{1}{\sum_i \frac{1}{\hat{\sigma}^2_{\text{subj}} + \text{Var}(\hat{\alpha}_i)}}</annotation></semantics></math></p>
 <p>where
@@ -877,22 +1343,25 @@ runs per session. The complete data vector for subject
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>i</mi><annotation encoding="application/x-tex">i</annotation></semantics></math>
 is
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">{</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>11</mn></mrow></msub><mo>,</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>12</mn></mrow></msub><mo>,</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>21</mn></mrow></msub><mo>,</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>22</mn></mrow></msub><mo stretchy="false" form="postfix">}</mo></mrow><annotation encoding="application/x-tex">\{\hat{\gamma}_{i11}, \hat{\gamma}_{i12}, \hat{\gamma}_{i21}, \hat{\gamma}_{i22}\}</annotation></semantics></math>.</p>
-<p><strong>Under id_session (correct decomposition):</strong></p>
+<p><strong>Under id_session (separated session route):</strong></p>
 <ul>
 <li>L2 produces two session-level COPEs:
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>1</mn></mrow></msub><annotation encoding="application/x-tex">\hat{\alpha}_{i1}</annotation></semantics></math>
 and
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>2</mn></mrow></msub><annotation encoding="application/x-tex">\hat{\alpha}_{i2}</annotation></semantics></math>,
 each with VARCOPEs reflecting only within-session run variability.</li>
-<li>L3 can estimate
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">sessions</mtext><mo stretchy="false" form="prefix">|</mo><mi>i</mi></mrow><mn>2</mn></msubsup><annotation encoding="application/x-tex">\sigma^2_{\text{sessions}|i}</annotation></semantics></math>
-from the two session COPEs, correctly attributing between-session
-variance.</li>
-<li>A session contrast
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>2</mn></mrow></msub><mo>−</mo><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>1</mn></mrow></msub></mrow><annotation encoding="application/x-tex">\hat{\alpha}_{i2} - \hat{\alpha}_{i1}</annotation></semantics></math>
-has variance:</li>
+<li>L3 estimates the session effect across subjects while accounting for
+subject means or, in <code>3dLMEr</code>, subject-level random
+effects.</li>
+<li>Under a simple subject-mean model with independent session
+residuals, a within-subject session contrast has approximate
+variance:</li>
 </ul>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>2</mn></mrow></msub><mo>−</mo><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>1</mn></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mn>2</mn><msubsup><mi>σ</mi><mrow><mtext mathvariant="normal">sessions</mtext><mo stretchy="false" form="prefix">|</mo><mi>i</mi></mrow><mn>2</mn></msubsup><mo>+</mo><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>1</mn></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>+</mo><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>2</mn></mrow></msub><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\text{Var}(\hat{\alpha}_{i2} - \hat{\alpha}_{i1}) = 2 \sigma^2_{\text{sessions}|i} + \text{Var}(\hat{\alpha}_{i1}) + \text{Var}(\hat{\alpha}_{i2})</annotation></semantics></math></p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>2</mn></mrow></msub><mo>−</mo><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>1</mn></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>≈</mo><mn>2</mn><msubsup><mi>σ</mi><mtext mathvariant="normal">resid</mtext><mn>2</mn></msubsup><mo>+</mo><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>1</mn></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>+</mo><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>α</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>2</mn></mrow></msub><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\text{Var}(\hat{\alpha}_{i2} - \hat{\alpha}_{i1}) \approx 2 \sigma^2_{\text{resid}} + \text{Var}(\hat{\alpha}_{i1}) + \text{Var}(\hat{\alpha}_{i2})</annotation></semantics></math></p>
+<p>The subject intercept does not appear in this expression because it
+cancels in the within-subject difference. More complex
+<code>3dLMEr</code> models, such as models with random slopes, imply a
+different contrast variance.</p>
 <p><strong>Under id pooling (conflated variance):</strong></p>
 <ul>
 <li>L2 pools all four runs. Under fixed effects, the session contrast
@@ -900,18 +1369,18 @@ is:</li>
 </ul>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mover><mi mathvariant="normal">Δ</mi><mo accent="true">̂</mo></mover><mi>i</mi><mtext mathvariant="normal">pool</mtext></msubsup><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>21</mn></mrow></msub><mo>+</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>22</mn></mrow></msub><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo><mo>−</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo minsize="120%" maxsize="120%" stretchy="true" form="prefix">(</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>11</mn></mrow></msub><mo>+</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mn>12</mn></mrow></msub><mo minsize="120%" maxsize="120%" stretchy="true" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\hat{\Delta}_i^{\text{pool}} = \frac{1}{2}\bigl(\hat{\gamma}_{i21} + \hat{\gamma}_{i22}\bigr) - \frac{1}{2}\bigl(\hat{\gamma}_{i11} + \hat{\gamma}_{i12}\bigr)</annotation></semantics></math></p>
 <p>with variance:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msubsup><mover><mi mathvariant="normal">Δ</mi><mo accent="true">̂</mo></mover><mi>i</mi><mtext mathvariant="normal">pool</mtext></msubsup><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mfrac><mn>1</mn><mn>4</mn></mfrac><munder><mo>∑</mo><mrow><mi>j</mi><mo>,</mo><mi>r</mi></mrow></munder><msubsup><mi>c</mi><mrow><mi>j</mi><mi>r</mi></mrow><mn>2</mn></msubsup><mspace width="0.167em"></mspace><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\text{Var}(\hat{\Delta}_i^{\text{pool}}) = \frac{1}{4} \sum_{j,r} c_{jr}^2 \, \text{Var}(\hat{\gamma}_{ijr})</annotation></semantics></math></p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msubsup><mover><mi mathvariant="normal">Δ</mi><mo accent="true">̂</mo></mover><mi>i</mi><mtext mathvariant="normal">pool</mtext></msubsup><mo stretchy="false" form="postfix">)</mo><mo>=</mo><munder><mo>∑</mo><mrow><mi>j</mi><mo>,</mo><mi>r</mi></mrow></munder><msubsup><mi>c</mi><mrow><mi>j</mi><mi>r</mi></mrow><mn>2</mn></msubsup><mspace width="0.167em"></mspace><mtext mathvariant="normal">Var</mtext><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>γ</mi><mo accent="true">̂</mo></mover><mrow><mi>i</mi><mi>j</mi><mi>r</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\text{Var}(\hat{\Delta}_i^{\text{pool}}) = \sum_{j,r} c_{jr}^2 \, \text{Var}(\hat{\gamma}_{ijr})</annotation></semantics></math></p>
 <p>where
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>c</mi><mrow><mi>j</mi><mi>r</mi></mrow></msub><annotation encoding="application/x-tex">c_{jr}</annotation></semantics></math>
 are the L2 contrast weights
 (<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>+</mi><mn>1</mn><mi>/</mi><mn>2</mn></mrow><annotation encoding="application/x-tex">+1/2</annotation></semantics></math>
 for Session 2 runs,
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>−</mi><mn>1</mn><mi>/</mi><mn>2</mn></mrow><annotation encoding="application/x-tex">-1/2</annotation></semantics></math>
-for Session 1 runs). This expression <strong>ignores</strong>
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msubsup><mi>σ</mi><mtext mathvariant="normal">sessions</mtext><mn>2</mn></msubsup><annotation encoding="application/x-tex">\sigma^2_{\text{sessions}}</annotation></semantics></math>
-entirely—it treats the session difference as solely a function of L1
-measurement noise, producing standard errors that can be dramatically
-too small.</p>
+for Session 1 runs). With equal L1 variances, this reduces to one
+quarter of the sum of the four run-level variances. This expression
+<strong>ignores</strong> session-level variability entirely; it treats
+the session difference as solely a function of L1 measurement noise,
+producing standard errors that can be dramatically too small.</p>
 <hr>
 </div>
 </div>
@@ -927,9 +1396,12 @@ longitudinal structure of your study.</p>
 <h3 id="a--the-subject-mean-approach-l3_input_mode-pooled_sessions_subject_ev">A. The Subject-Mean Approach
 (<code>l3_input_mode = "pooled_sessions_subject_ev"</code>)<a class="anchor" aria-label="anchor" href="#a--the-subject-mean-approach-l3_input_mode-pooled_sessions_subject_ev"></a>
 </h3>
-<p>This is the statistically preferred FSL-native approach for pooled
-session analysis. It separates the session effect from the
-subject-specific baseline.</p>
+<p>This is the preferred FSL-native approach for pooled session analysis
+when the design is balanced and the session effect can be represented
+with fixed effects. It separates the session effect from
+subject-specific baseline differences, but it is still a subject-EV GLM
+rather than a full longitudinal mixed model with arbitrary
+random-effects structures.</p>
 <div class="section level4">
 <h4 id="how-it-works-3">How it works:<a class="anchor" aria-label="anchor" href="#how-it-works-3"></a>
 </h4>
@@ -946,13 +1418,15 @@ subject.</li>
 <li>
 <strong>Statistical Benefit:</strong> This models a separate
 intercept for every subject, allowing FSL to estimate the session effect
-while controlling for subject-level means. It effectively performs the
-standard longitudinal partitioning of variance within the FSL
-model.</li>
+while controlling for subject-level means. It addresses the largest
+repeated-measures dependence problem in a balanced FSL design, but it
+does not estimate subject-specific random slopes or an unstructured
+longitudinal covariance matrix.</li>
 </ul>
-<p><strong>Why use this over Id Pooling?</strong> It correctly treats
-sessions as repeated observations within subjects and models the
-individual differences in baseline activation levels.</p>
+<p><strong>Why use this over Id Pooling?</strong> It treats sessions as
+repeated observations within subjects at L3 and models individual
+differences in baseline activation levels, rather than mixing all
+sessions into one subject-level L2 model.</p>
 <p><strong>Best fit:</strong> Balanced designs with a modest number of
 sessions, categorical visit indicators, and a strong preference to keep
 the entire analysis inside FEAT/FLAME.</p>
@@ -960,31 +1434,32 @@ the entire analysis inside FEAT/FLAME.</p>
 <div class="section level4">
 <h4 id="example-configuration">Example configuration<a class="anchor" aria-label="anchor" href="#example-configuration"></a>
 </h4>
-<div class="sourceCode" id="cb1"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">l2_models</span><span class="kw">:</span></span>
-<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="at">  </span><span class="fu">session_summary</span><span class="kw">:</span></span>
-<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
-<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="at">    </span><span class="fu">l2_scope</span><span class="kw">:</span><span class="at"> id_session</span></span>
-<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ 1</span></span>
-<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
-<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
-<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a></span>
-<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="fu">l3_models</span><span class="kw">:</span></span>
-<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="at">  </span><span class="fu">longitudinal_fsl</span><span class="kw">:</span></span>
-<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
-<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> pooled_sessions_subject_ev</span></span>
-<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ session_label</span></span>
-<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a><span class="at">    </span><span class="fu">reference_level</span><span class="kw">:</span></span>
-<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a><span class="at">      </span><span class="fu">session_label</span><span class="kw">:</span><span class="at"> baseline</span></span>
-<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
-<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
-<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a><span class="at">      </span><span class="fu">cond_means</span><span class="kw">:</span><span class="at"> session_label</span></span>
-<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a><span class="at">      </span><span class="fu">pairwise_diffs</span><span class="kw">:</span><span class="at"> session_label</span></span>
-<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
-<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a><span class="at">    </span><span class="fu">fsl_outlier_deweighting</span><span class="kw">:</span><span class="at"> </span><span class="ch">no</span></span></code></pre></div>
-<p><strong>Why PALM?</strong> PALM explicitly supports multi-level
-exchangeability blocks (EBs), allowing you to tell the permutation test
-exactly which runs belong to which sessions, and which sessions belong
-to which subjects.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="fu">l2_models</span><span class="kw">:</span></span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a><span class="at">  </span><span class="fu">session_summary</span><span class="kw">:</span></span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a><span class="at">    </span><span class="fu">l2_scope</span><span class="kw">:</span><span class="at"> id_session</span></span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ 1</span></span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a></span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a><span class="fu">l3_models</span><span class="kw">:</span></span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a><span class="at">  </span><span class="fu">longitudinal_fsl</span><span class="kw">:</span></span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> pooled_sessions_subject_ev</span></span>
+<span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ session_label</span></span>
+<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a><span class="at">    </span><span class="fu">reference_level</span><span class="kw">:</span></span>
+<span id="cb13-15"><a href="#cb13-15" tabindex="-1"></a><span class="at">      </span><span class="fu">session_label</span><span class="kw">:</span><span class="at"> baseline</span></span>
+<span id="cb13-16"><a href="#cb13-16" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb13-17"><a href="#cb13-17" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
+<span id="cb13-18"><a href="#cb13-18" tabindex="-1"></a><span class="at">      </span><span class="fu">cond_means</span><span class="kw">:</span><span class="at"> session_label</span></span>
+<span id="cb13-19"><a href="#cb13-19" tabindex="-1"></a><span class="at">      </span><span class="fu">pairwise_diffs</span><span class="kw">:</span><span class="at"> session_label</span></span>
+<span id="cb13-20"><a href="#cb13-20" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
+<span id="cb13-21"><a href="#cb13-21" tabindex="-1"></a><span class="at">    </span><span class="fu">fsl_outlier_deweighting</span><span class="kw">:</span><span class="at"> </span><span class="ch">no</span></span></code></pre></div>
+<p>If a project requires permutation inference with explicit multi-level
+exchangeability blocks, PALM may be a better external inference tool
+than FEAT/FLAME alone. That is outside the workflow implemented by this
+vignette, but it is worth considering for complex repeated-measures
+designs.</p>
 </div>
 </div>
 <div class="section level3">
@@ -1007,32 +1482,32 @@ EVs.</p>
 <div class="section level4">
 <h4 id="example-1-categorical-visit-effect-with-random-intercepts">Example 1: Categorical visit effect with random intercepts<a class="anchor" aria-label="anchor" href="#example-1-categorical-visit-effect-with-random-intercepts"></a>
 </h4>
-<div class="sourceCode" id="cb2"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">glm_software</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">fsl</span><span class="kw">,</span><span class="at"> afni</span><span class="kw">]</span></span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="fu">l2_models</span><span class="kw">:</span></span>
-<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="at">  </span><span class="fu">session_summary</span><span class="kw">:</span></span>
-<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
-<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="at">    </span><span class="fu">l2_scope</span><span class="kw">:</span><span class="at"> id_session</span></span>
-<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ 1</span></span>
-<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
-<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
-<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a></span>
-<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a><span class="fu">l3_models</span><span class="kw">:</span></span>
-<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="at">  </span><span class="fu">longitudinal_3dlmer</span><span class="kw">:</span></span>
-<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
-<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> 3dlmer</span></span>
-<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="at">    </span><span class="fu">execution_backend</span><span class="kw">:</span><span class="at"> afni</span></span>
-<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="at">    </span><span class="fu">producer_backend</span><span class="kw">:</span><span class="at"> fsl</span></span>
-<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ session_label</span></span>
-<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a><span class="at">    </span><span class="fu">random_effects</span><span class="kw">:</span><span class="at"> (1 | Subj)</span></span>
-<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a><span class="at">    </span><span class="fu">reference_level</span><span class="kw">:</span></span>
-<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a><span class="at">      </span><span class="fu">session_label</span><span class="kw">:</span><span class="at"> baseline</span></span>
-<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
-<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
-<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a><span class="at">      </span><span class="fu">cond_means</span><span class="kw">:</span><span class="at"> session_label</span></span>
-<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a><span class="at">      </span><span class="fu">pairwise_diffs</span><span class="kw">:</span><span class="at"> session_label</span></span>
-<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
-<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a><span class="at">    </span><span class="fu">fsl_outlier_deweighting</span><span class="kw">:</span><span class="at"> </span><span class="ch">no</span></span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="fu">glm_software</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">fsl</span><span class="kw">,</span><span class="at"> afni</span><span class="kw">]</span></span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a><span class="fu">l2_models</span><span class="kw">:</span></span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a><span class="at">  </span><span class="fu">session_summary</span><span class="kw">:</span></span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a><span class="at">    </span><span class="fu">l2_scope</span><span class="kw">:</span><span class="at"> id_session</span></span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ 1</span></span>
+<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a></span>
+<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a><span class="fu">l3_models</span><span class="kw">:</span></span>
+<span id="cb14-12"><a href="#cb14-12" tabindex="-1"></a><span class="at">  </span><span class="fu">longitudinal_3dlmer</span><span class="kw">:</span></span>
+<span id="cb14-13"><a href="#cb14-13" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb14-14"><a href="#cb14-14" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> 3dlmer</span></span>
+<span id="cb14-15"><a href="#cb14-15" tabindex="-1"></a><span class="at">    </span><span class="fu">execution_backend</span><span class="kw">:</span><span class="at"> afni</span></span>
+<span id="cb14-16"><a href="#cb14-16" tabindex="-1"></a><span class="at">    </span><span class="fu">producer_backend</span><span class="kw">:</span><span class="at"> fsl</span></span>
+<span id="cb14-17"><a href="#cb14-17" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ session_label</span></span>
+<span id="cb14-18"><a href="#cb14-18" tabindex="-1"></a><span class="at">    </span><span class="fu">random_effects</span><span class="kw">:</span><span class="at"> (1 | Subj)</span></span>
+<span id="cb14-19"><a href="#cb14-19" tabindex="-1"></a><span class="at">    </span><span class="fu">reference_level</span><span class="kw">:</span></span>
+<span id="cb14-20"><a href="#cb14-20" tabindex="-1"></a><span class="at">      </span><span class="fu">session_label</span><span class="kw">:</span><span class="at"> baseline</span></span>
+<span id="cb14-21"><a href="#cb14-21" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb14-22"><a href="#cb14-22" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
+<span id="cb14-23"><a href="#cb14-23" tabindex="-1"></a><span class="at">      </span><span class="fu">cond_means</span><span class="kw">:</span><span class="at"> session_label</span></span>
+<span id="cb14-24"><a href="#cb14-24" tabindex="-1"></a><span class="at">      </span><span class="fu">pairwise_diffs</span><span class="kw">:</span><span class="at"> session_label</span></span>
+<span id="cb14-25"><a href="#cb14-25" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
+<span id="cb14-26"><a href="#cb14-26" tabindex="-1"></a><span class="at">    </span><span class="fu">fsl_outlier_deweighting</span><span class="kw">:</span><span class="at"> </span><span class="ch">no</span></span></code></pre></div>
 <p>Here, <code>execution_backend: afni</code> tells the pipeline that
 this model is estimated by AFNI <code>3dLMEr</code>, and
 <code>producer_backend: fsl</code> indicates that the Level 2 inputs it
@@ -1044,26 +1519,26 @@ programmatically on the <code>gpa</code> object (see the
 <div class="section level4">
 <h4 id="example-2-unequally-spaced-visits-with-a-random-slope-for-time">Example 2: Unequally spaced visits with a random slope for time<a class="anchor" aria-label="anchor" href="#example-2-unequally-spaced-visits-with-a-random-slope-for-time"></a>
 </h4>
-<div class="sourceCode" id="cb3"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">glm_software</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">fsl</span><span class="kw">,</span><span class="at"> afni</span><span class="kw">]</span></span>
-<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="fu">l2_models</span><span class="kw">:</span></span>
-<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="at">  </span><span class="fu">session_summary</span><span class="kw">:</span></span>
-<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
-<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="at">    </span><span class="fu">l2_scope</span><span class="kw">:</span><span class="at"> id_session</span></span>
-<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ 1</span></span>
-<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
-<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
-<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a></span>
-<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a><span class="fu">l3_models</span><span class="kw">:</span></span>
-<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a><span class="at">  </span><span class="fu">longitudinal_time_slope</span><span class="kw">:</span></span>
-<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
-<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> 3dlmer</span></span>
-<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ days_since_baseline + group + age_baseline</span></span>
-<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a><span class="at">    </span><span class="fu">random_effects</span><span class="kw">:</span><span class="at"> (1 + days_since_baseline | Subj)</span></span>
-<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
-<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
-<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
-<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a><span class="at">    </span><span class="fu">fsl_outlier_deweighting</span><span class="kw">:</span><span class="at"> </span><span class="ch">no</span></span></code></pre></div>
+<div class="sourceCode" id="cb15"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="fu">glm_software</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">fsl</span><span class="kw">,</span><span class="at"> afni</span><span class="kw">]</span></span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a><span class="fu">l2_models</span><span class="kw">:</span></span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a><span class="at">  </span><span class="fu">session_summary</span><span class="kw">:</span></span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a><span class="at">    </span><span class="fu">l2_scope</span><span class="kw">:</span><span class="at"> id_session</span></span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ 1</span></span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
+<span id="cb15-10"><a href="#cb15-10" tabindex="-1"></a></span>
+<span id="cb15-11"><a href="#cb15-11" tabindex="-1"></a><span class="fu">l3_models</span><span class="kw">:</span></span>
+<span id="cb15-12"><a href="#cb15-12" tabindex="-1"></a><span class="at">  </span><span class="fu">longitudinal_time_slope</span><span class="kw">:</span></span>
+<span id="cb15-13"><a href="#cb15-13" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb15-14"><a href="#cb15-14" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> 3dlmer</span></span>
+<span id="cb15-15"><a href="#cb15-15" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ days_since_baseline + group + age_baseline</span></span>
+<span id="cb15-16"><a href="#cb15-16" tabindex="-1"></a><span class="at">    </span><span class="fu">random_effects</span><span class="kw">:</span><span class="at"> (1 + days_since_baseline | Subj)</span></span>
+<span id="cb15-17"><a href="#cb15-17" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb15-18"><a href="#cb15-18" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
+<span id="cb15-19"><a href="#cb15-19" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
+<span id="cb15-20"><a href="#cb15-20" tabindex="-1"></a><span class="at">    </span><span class="fu">fsl_outlier_deweighting</span><span class="kw">:</span><span class="at"> </span><span class="ch">no</span></span></code></pre></div>
 <p>In this second pattern, <code>days_since_baseline</code> and
 <code>age_baseline</code> are numeric covariates.
 <code>fmri.pipeline</code> will emit them as AFNI <code>-qVars</code>
@@ -1074,26 +1549,26 @@ meaningful visit is often preferable.</p>
 <div class="section level4">
 <h4 id="example-3-treatment-by-time-interaction">Example 3: Treatment-by-time interaction<a class="anchor" aria-label="anchor" href="#example-3-treatment-by-time-interaction"></a>
 </h4>
-<div class="sourceCode" id="cb4"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">glm_software</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">fsl</span><span class="kw">,</span><span class="at"> afni</span><span class="kw">]</span></span>
-<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a></span>
-<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="fu">l2_models</span><span class="kw">:</span></span>
-<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="at">  </span><span class="fu">session_summary</span><span class="kw">:</span></span>
-<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
-<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="at">    </span><span class="fu">l2_scope</span><span class="kw">:</span><span class="at"> id_session</span></span>
-<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ 1</span></span>
-<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
-<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
-<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a></span>
-<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="fu">l3_models</span><span class="kw">:</span></span>
-<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="at">  </span><span class="fu">treatment_time_interaction</span><span class="kw">:</span></span>
-<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
-<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> 3dlmer</span></span>
-<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ days_since_baseline * treatment_group</span></span>
-<span id="cb4-16"><a href="#cb4-16" tabindex="-1"></a><span class="at">    </span><span class="fu">random_effects</span><span class="kw">:</span><span class="at"> (1 + days_since_baseline | Subj)</span></span>
-<span id="cb4-17"><a href="#cb4-17" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
-<span id="cb4-18"><a href="#cb4-18" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
-<span id="cb4-19"><a href="#cb4-19" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
-<span id="cb4-20"><a href="#cb4-20" tabindex="-1"></a><span class="at">    </span><span class="fu">fsl_outlier_deweighting</span><span class="kw">:</span><span class="at"> </span><span class="ch">no</span></span></code></pre></div>
+<div class="sourceCode" id="cb16"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a><span class="fu">glm_software</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">fsl</span><span class="kw">,</span><span class="at"> afni</span><span class="kw">]</span></span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a></span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a><span class="fu">l2_models</span><span class="kw">:</span></span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a><span class="at">  </span><span class="fu">session_summary</span><span class="kw">:</span></span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a><span class="at">    </span><span class="fu">l2_scope</span><span class="kw">:</span><span class="at"> id_session</span></span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ 1</span></span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
+<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a></span>
+<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a><span class="fu">l3_models</span><span class="kw">:</span></span>
+<span id="cb16-12"><a href="#cb16-12" tabindex="-1"></a><span class="at">  </span><span class="fu">treatment_time_interaction</span><span class="kw">:</span></span>
+<span id="cb16-13"><a href="#cb16-13" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb16-14"><a href="#cb16-14" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> 3dlmer</span></span>
+<span id="cb16-15"><a href="#cb16-15" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ days_since_baseline * treatment_group</span></span>
+<span id="cb16-16"><a href="#cb16-16" tabindex="-1"></a><span class="at">    </span><span class="fu">random_effects</span><span class="kw">:</span><span class="at"> (1 + days_since_baseline | Subj)</span></span>
+<span id="cb16-17"><a href="#cb16-17" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb16-18"><a href="#cb16-18" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
+<span id="cb16-19"><a href="#cb16-19" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">yes</span></span>
+<span id="cb16-20"><a href="#cb16-20" tabindex="-1"></a><span class="at">    </span><span class="fu">fsl_outlier_deweighting</span><span class="kw">:</span><span class="at"> </span><span class="ch">no</span></span></code></pre></div>
 <p>This is precisely the kind of model that becomes awkward inside FSL’s
 subject-EV framework but is natural in <code>3dLMEr</code>.</p>
 </div>
@@ -1101,10 +1576,10 @@ subject-EV framework but is natural in <code>3dLMEr</code>.</p>
 <div class="section level3">
 <h3 id="c--restrict-id-pooling-to-specific-use-cases">C. Restrict “Id” Pooling to Specific Use Cases<a class="anchor" aria-label="anchor" href="#c--restrict-id-pooling-to-specific-use-cases"></a>
 </h3>
-<p>The <code>"id"</code> pooling approach should generally be deprecated
-as a default option for long-term longitudinal fMRI studies, as the
-statistical tradeoff is severe. It should only be used when: - Sessions
-are spaced by merely hours or minutes (essentially making them
+<p>The <code>"id"</code> pooling approach should generally be
+discouraged as a default option for long-term longitudinal fMRI studies,
+as the statistical tradeoff is severe. It should only be used when: -
+Sessions are spaced by merely hours or minutes (essentially making them
 contiguous pseudo-runs). - The researcher explicitly wishes to compute a
 grand average across all data for a subject with no interest in temporal
 dynamics.</p>
@@ -1114,10 +1589,11 @@ dynamics.</p>
 <h2 id="conclusion">Conclusion<a class="anchor" aria-label="anchor" href="#conclusion"></a>
 </h2>
 <p>While <code>fmri.pipeline</code> can mathematically construct the
-<code>"id"</code> pooling approach, it sacrifices statistical validity
-and computational modularity. In most real longitudinal studies, the
-package should prioritize <code>l2_scope = "id_session"</code> and then
-choose between two downstream paths:</p>
+<code>"id"</code> pooling approach, that route can sacrifice statistical
+validity and computational modularity. In most real longitudinal
+studies, the package should prioritize
+<code>l2_scope = "id_session"</code> and then choose between two
+downstream paths:</p>
 <ul>
 <li>FSL subject-EV modeling when the design is balanced and relatively
 simple.</li>

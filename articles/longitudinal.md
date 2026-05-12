@@ -26,6 +26,23 @@ is used as a **session-level longitudinal modeler** on top of
 FSL-derived L2 inputs rather than as a single end-to-end replacement for
 all lower-level FSL estimation.
 
+### Recommended Defaults at a Glance
+
+For most longitudinal studies, the practical decision is:
+
+- **Separate Sessions:** Use `l2_scope = "id_session"` rather than
+  pooling all runs for a subject across visits.
+- **FSL Categorical Comparison:** Use
+  `l3_input_mode = "pooled_sessions_subject_ev"` when the visit
+  structure is balanced and the main goal is an FSL-native categorical
+  session comparison.
+- **Flexible Mixed-Effects:** Use `l3_input_mode = "3dlmer"` when visits
+  are irregular, follow-up is incomplete, time is continuous, or the
+  scientific model needs subject-specific random slopes.
+- **Contiguous Pseudo-Runs:** Reserve `l2_scope = "id"` for cases where
+  sessions are effectively pseudo-runs and no longitudinal change
+  parameter is of interest.
+
 ## Statistical Framework: The Hierarchical fMRI Model
 
 Before examining specific implementations, it is useful to formalize the
@@ -82,16 +99,16 @@ subject $`i`$ and session $`j`$ (when using `l2_scope = "id_session"`),
 the model is:
 
 ``` math
-\hat{\gamma}_{ijr} = Z_{ij} \alpha_{ij} + \eta_{ijr} + e_{ijr}
+\hat{\gamma}_{ijr} = z_{ijr}^T \alpha_{ij} + \eta_{ijr} + e_{ijr}
 ```
 
 where:
 
 - $`\hat{\gamma}_{ijr}`$ is the L1 COPE for run $`r`$ (treated as the
   “observed data” at L2),
-- $`Z_{ij}`$ is the L2 design matrix (often simply a column of ones for
-  averaging, or a run-specific contrast),
-- $`\alpha_{ij}`$ is the L2 parameter of interest (e.g., the
+- $`z_{ijr}`$ is the L2 design row for run $`r`$ (often simply a 1 for
+  averaging, or a run-specific contrast weight),
+- $`\alpha_{ij}`$ is the L2 parameter vector of interest (e.g., the
   session-level mean activation),
 - $`\eta_{ijr} \sim \mathcal{N}(0, \sigma^2_{\text{runs}|ij})`$ is the
   **between-run** random effect (present only if using mixed effects;
@@ -99,7 +116,7 @@ where:
 - $`e_{ijr}`$ has **known** variance $`\text{Var}(\hat{\gamma}_{ijr})`$,
   i.e., the L1 VARCOPE propagated upward.
 
-Under FSL’s **fixed effects** (FE) approach—the default at Level 2—the
+Under FSL’s **fixed effects** (FE) approach, the default at Level 2, the
 between-run variance $`\sigma^2_{\text{runs}}`$ is forced to zero, and
 the combination reduces to inverse-variance weighted averaging:
 
@@ -114,11 +131,11 @@ w_{ijr} = \frac{1}{\text{Var}(\hat{\gamma}_{ijr})}
 \text{Var}(\hat{\alpha}_{ij}^{\text{FE}}) = \frac{1}{\sum_r w_{ijr}}
 ```
 
-The critical assumption here is that **runs are exchangeable**—each run
-provides an equally informative, independent replicate of the same
-underlying signal, differing only in measurement noise. The output
-VARCOPE from L2 reflects only **propagated L1 uncertainty**, not genuine
-between-run variability.
+The critical assumption here is that **runs are exchangeable conditional
+on their measurement variance**: each run is treated as an independent
+replicate of the same underlying signal, and differences in precision
+are represented by the L1 VARCOPEs. The output VARCOPE from L2 reflects
+only **propagated L1 uncertainty**, not genuine between-run variability.
 
 Under FSL’s **mixed effects** (FLAME) approach, the total variance for
 each run’s COPE becomes:
@@ -190,10 +207,352 @@ primary.
 
 | Use case | Recommended path | Why |
 |----|----|----|
-| Balanced baseline/follow-up study, categorical session effect, want to stay inside FEAT/FLAME | `l2_scope = "id_session"` + `l3_input_mode = "pooled_sessions_subject_ev"` | Keeps the analysis fully within FSL and properly models subject means at L3 |
+| Balanced baseline/follow-up study, categorical session effect, want to stay inside FEAT/FLAME | `l2_scope = "id_session"` + `l3_input_mode = "pooled_sessions_subject_ev"` | Keeps the analysis fully within FSL and includes subject mean EVs at L3 |
 | Need separate session-specific group maps rather than an explicit longitudinal slope | `l2_scope = "id_session"` + `l3_input_mode = "per_session"` | Straightforward per-session inference with modular recomputation |
 | Unequal spacing between visits, missing follow-up sessions, continuous time covariates, treatment-by-time interactions, or subject-specific random slopes | `l2_scope = "id_session"` + `l3_input_mode = "3dlmer"` | Uses AFNI `3dLMEr` for a more flexible longitudinal mixed-effects model |
 | Near-contiguous acquisitions where “sessions” are essentially pseudo-runs and only a grand subject average is needed | `l2_scope = "id"` | Acceptable only when between-session structure is scientifically unimportant |
+
+## Worked Setup Example
+
+This example shows the pieces needed to set up a longitudinal analysis
+in the pipeline. It follows the same structure as the face/house
+deep-dive integration test: multiple subjects, three sessions per
+subject, multiple runs per session, FSL at L1/L2, and either FSL or AFNI
+at L3.
+
+### Required input tables
+
+The pipeline needs three aligned tables. The default column names are
+`id`, `session`, and `run_number`; these can be remapped with `vm`, but
+using the defaults is easiest.
+
+| Table | One row per | Required columns | Common longitudinal columns |
+|----|----|----|----|
+| `subject_data` | Subject-session | `id`, `session` | `session_label`, `days_since_baseline`, `group`, `age_baseline`, `exclude_subject` |
+| `run_data` | Subject-session-run | `id`, `session`, `run_number`, path columns for the run image | `session_label`, run condition labels, `run_nifti`, `l1_confound_file`, `exclude_run` |
+| `trial_data` | Event/trial | `id`, `session`, `run_number`, onset/duration/event columns used by L1 | Trial condition columns used by L1 signals |
+
+For L3 longitudinal predictors, put one value per subject-session in
+`subject_data` whenever possible. The setup code also derives
+`session_data` from columns that are constant within each `id`/`session`
+in `run_data`, but an explicit `subject_data` row per visit is clearer
+and easier to audit.
+
+A minimal shape looks like this:
+
+``` r
+
+subject_data <- data.frame(
+  id = c("01", "01", "01", "02", "02", "02"),
+  session = c(1L, 2L, 3L, 1L, 2L, 3L),
+  session_label = c("baseline", "month6", "month12",
+                    "baseline", "month6", "month12"),
+  days_since_baseline = c(0, 183, 365, 0, 190, 372),
+  group = c("control", "control", "control", "patient", "patient", "patient")
+)
+
+run_data <- data.frame(
+  id = rep(c("01", "02"), each = 6),
+  session = rep(rep(1:3, each = 2), times = 2),
+  run_number = rep(1:2, times = 6),
+  session_label = rep(c("baseline", "month6", "month12"), each = 2, times = 2),
+  run_nifti = sprintf("/path/to/sub-%s_ses-%d_run-%d_bold.nii.gz",
+                      rep(c("01", "02"), each = 6),
+                      rep(rep(1:3, each = 2), times = 2),
+                      rep(1:2, times = 6))
+)
+
+trial_data <- data.frame(
+  id = "01",
+  session = 1L,
+  run_number = 1L,
+  onset = c(12, 28, 45),
+  duration = c(2, 2, 2),
+  condition = c("face", "house", "face")
+)
+```
+
+In a real project, `trial_data` contains rows for every run. The
+face/house deep-dive also includes columns such as `stress_label`,
+`l1_confound_file`, `tr`, and `nT`; those are not longitudinally
+special, but they illustrate a useful pattern: run-level information
+goes in `run_data`, while visit-level predictors such as `session_label`
+are repeated in `run_data` only when they are constant within
+`id`/`session`.
+
+### Model specification
+
+At L1, define the run-level task model in the usual way. For example, a
+simple face/house model has two task signals and diagonal L1 contrasts:
+
+``` yaml
+onsets:
+  - onset
+
+durations:
+  - duration
+
+events:
+  stim:
+    onset: onset
+    duration: duration
+
+signals:
+  face:
+    event: stim
+    trial_subset_expression: condition == 'face'
+    normalization: none
+    value_fixed: 1
+
+  house:
+    event: stim
+    trial_subset_expression: condition == 'house'
+    normalization: none
+    value_fixed: 1
+
+l1_models:
+  facehouse:
+    signals:
+      - face
+      - house
+    contrasts:
+      diagonal: true
+```
+
+At L2, the important longitudinal choice is `l2_scope: id_session`. This
+creates one L2 model per subject-session, so each visit contributes one
+session-level COPE for each requested L2 contrast.
+
+``` yaml
+l2_models:
+  session_summary:
+    level: 2
+    l2_scope: id_session
+    model_formula: ~ 1
+    contrasts:
+      diagonal: true
+```
+
+If runs within a session encode a run-level factor, the L2 model can
+estimate that effect within each subject-session before L3. This is the
+pattern used by the face/house deep-dive for `stress_label`:
+
+``` yaml
+l2_models:
+  session_stress_effect:
+    level: 2
+    l2_scope: id_session
+    model_formula: ~ stress_label
+    reference_level:
+      stress_label: stress
+    contrasts:
+      diagonal: true
+      cond_means:
+        - stress_label
+      pairwise_diffs:
+        - stress_label
+      overall_response: true
+      weights: cells
+```
+
+At L3, choose the route that matches the longitudinal question. For a
+balanced FSL-native visit comparison:
+
+``` yaml
+l3_models:
+  visit_effect_fsl:
+    level: 3
+    l3_input_mode: pooled_sessions_subject_ev
+    model_formula: ~ session_label
+    reference_level:
+      session_label: baseline
+    contrasts:
+      diagonal: true
+      cond_means:
+        - session_label
+      pairwise_diffs:
+        - session_label
+      overall_response: true
+    fsl_outlier_deweighting: false
+```
+
+For AFNI `3dLMEr`, keep FSL as the L1/L2 producer and use AFNI only for
+the L3 model:
+
+``` yaml
+glm_software: [fsl, afni]
+
+l3_models:
+  visit_effect_3dlmer:
+    level: 3
+    l3_input_mode: 3dlmer
+    execution_backend: afni
+    producer_backend: fsl
+    model_formula: ~ session_label
+    random_effects: (1 | Subj)
+    reference_level:
+      session_label: baseline
+    contrasts:
+      diagonal: true
+      cond_means:
+        - session_label
+      pairwise_diffs:
+        - session_label
+      overall_response: true
+    fsl_outlier_deweighting: false
+```
+
+For continuous time, replace `session_label` with a numeric predictor
+from `subject_data`, and use a random slope only when the data support
+it:
+
+``` yaml
+l3_models:
+  time_effect_3dlmer:
+    level: 3
+    l3_input_mode: 3dlmer
+    execution_backend: afni
+    producer_backend: fsl
+    model_formula: ~ days_since_baseline * group
+    random_effects: (1 + days_since_baseline | Subj)
+    contrasts:
+      diagonal: true
+      overall_response: true
+```
+
+Numeric predictors such as `days_since_baseline` are automatically
+written to AFNI `-qVars`. In `3dLMEr` random-effects terms, use `Subj`,
+not `id`, because the AFNI data table renames the subject column to
+`Subj`.
+
+### Setup and execution steps
+
+For a normal analysis, build the pipeline object and model specs, then
+let
+[`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
+handle the staged setup and execution:
+
+``` r
+
+library(fmri.pipeline)
+
+gpa <- setup_glm_pipeline(
+  analysis_name = "my_longitudinal_study",
+  scheduler = "slurm",
+  output_directory = "/path/to/analysis_output",
+  subject_data = subject_data,
+  run_data = run_data,
+  trial_data = trial_data,
+  glm_software = c("fsl", "afni"),  # use "fsl" only for the FSL-native route
+  n_expected_runs = 2L
+)
+
+gpa <- build_l1_models(gpa, from_spec_file = "l1_models.yaml")
+gpa <- build_l2_models(gpa, from_spec_file = "l2_models.yaml")
+gpa <- build_l3_models(gpa, from_spec_file = "l3_models.yaml")
+
+run_glm_pipeline(
+  gpa,
+  l1_model_names = "facehouse",
+  l2_model_names = "session_summary",
+  l3_model_names = "visit_effect_3dlmer"
+)
+```
+
+For a FSL-native L3 model, set `glm_software = "fsl"` and pass the FSL
+L3 model name, for example `l3_model_names = "visit_effect_fsl"`. For an
+AFNI `3dLMEr` model, the L1 and L2 stages still run through FSL; AFNI
+begins only after the FSL L2 subject-session COPEs exist.
+
+For a setup preview or debugging session, run the setup functions
+explicitly and inspect the generated setup tables. In this explicit
+workflow, each level depends on outputs from the previous level: L3
+setup needs complete L2 inputs, and AFNI `3dLMEr` setup harvests FSL L2
+subject-session COPEs.
+
+``` r
+
+gpa <- setup_l1_models(gpa, l1_model_names = "facehouse")
+
+# Run L1, or refresh status after L1 outputs already exist.
+# Then prepare the per-subject-session L2 models.
+gpa <- setup_l2_models(
+  gpa,
+  l1_model_names = "facehouse",
+  l2_model_names = "session_summary",
+  backend = "fsl"
+)
+
+# Run L2, or refresh status after L2 outputs already exist.
+# Then prepare L3 from the completed FSL L2 subject-session COPEs.
+gpa <- setup_l3_models(
+  gpa,
+  l1_model_names = "facehouse",
+  l2_model_names = "session_summary",
+  l3_model_names = "visit_effect_3dlmer",
+  backend = "afni"
+)
+```
+
+The face/house deep-dive integration tests use this explicit
+setup-preview style, with mocked upstream completions, to check paths,
+model pairing, and generated scripts before submitting a full cluster
+run.
+
+### Expected outputs
+
+For `l2_scope = "id_session"`, the output tree should make the
+subject/session split visible:
+
+``` text
+<output_directory>/
+  feat_l1/
+    sub-01/ses-1/facehouse/FEAT_LVL1_run1.fsf
+    sub-01/ses-1/facehouse/FEAT_LVL1_run1.feat/
+  feat_l2/
+    sub-01/ses-1/L1m-facehouse/l1c-01_EV_face/L2m-session_summary/FEAT_L2.fsf
+    sub-01/ses-1/L1m-facehouse/l1c-01_EV_face/L2m-session_summary/FEAT_L2.gfeat/
+```
+
+For `l3_input_mode = "pooled_sessions_subject_ev"`, FSL L3 writes pooled
+multi-session FEAT setup and output under `feat_l3/`, with the L1/L2/L3
+model names and contrast names embedded in the path.
+
+For `l3_input_mode = "3dlmer"`, setup writes one AFNI directory per
+L1/L2 contrast:
+
+``` text
+<output_directory>/
+  afni_3dlmer/
+    L3m-visit_effect_3dlmer/
+      L1m-facehouse/
+        L2m-session_summary/
+          l1c-EV_face/
+            l2c-EV_Intercept/
+              dataTable.txt
+              run_3dlmer.sh
+              intersection_mask.nii.gz
+              visit_effect_3dlmer_LMEr+orig.HEAD
+              visit_effect_3dlmer_LMEr+orig.BRIK.gz
+```
+
+The `dataTable.txt` should have one row per subject-session input map.
+For the face/house deep-dive, the table starts with columns like:
+
+``` text
+Subj  session  session_label  InputFile
+01    1        analgesic      .../feat_l2/sub-01/ses-1/.../cope1.nii.gz
+01    2        placebo        .../feat_l2/sub-01/ses-2/.../cope1.nii.gz
+01    3        opioid         .../feat_l2/sub-01/ses-3/.../cope1.nii.gz
+```
+
+The generated `run_3dlmer.sh` should include the fixed-effects formula,
+random-effects term, optional `-qVars`, generated `-gltCode` contrasts,
+and `-dataTable '@dataTable.txt'`. If setup fails before these files are
+written, the most common causes are an incompatible L2/L3 pairing,
+missing subject-session rows in `subject_data`, or a predictor
+referenced in the L3 formula that is not available for every modeled
+subject-session.
 
 ## The Challenge of Variance in FSL
 
@@ -205,17 +564,28 @@ multiple runs per subject, the standard pipeline is: 1. **Level 1
 (Subject):** Fixed-effects combination of multiple runs. 3. **Level 3
 (Group):** Mixed-effects (FLAME 1/2) combination across subjects.
 
-When an additional level—session or wave—is introduced, researchers must
-decide how to fold the extra temporal dimension into FSL’s rigid 3-level
-structure. FSL generally struggles with true repeated-measures modeling
-(where observations are non-independent due to within-subject
-clustering).
+When an additional level, session or wave, is introduced, researchers
+must decide how to fold the extra temporal dimension into FSL’s rigid
+3-level structure. FSL generally struggles with true repeated-measures
+modeling, where observations are non-independent due to within-subject
+clustering.
 
 To mitigate this, `fmri.pipeline` offers a few workarounds.
 
 ------------------------------------------------------------------------
 
 ## Existing Approaches in `fmri.pipeline`
+
+The key data objects are easier to track if they are named by the level
+that produces them:
+
+| Quantity | Typical rows | Produced by | Consumed by |
+|----|----|----|----|
+| Run time series $`Y_{ijr}`$ | One vector per subject, session, and run | Preprocessing | FSL L1 |
+| Run COPE $`\hat{\gamma}_{ijr}`$ | One map per subject, session, run, and L1 contrast | FSL L1 | FSL L2 |
+| Session COPE $`\hat{\alpha}_{ij}`$ | One map per subject, session, and contrast | FSL L2 with `l2_scope = "id_session"` | FSL L3 or AFNI `3dLMEr` |
+| Subject pooled COPE $`\hat{\alpha}_{i}`$ | One map per subject and contrast | FSL L2 with `l2_scope = "id"` | L3 `subject_rows` workflows |
+| Group/statistical map | One map per L3 model and contrast | FSL L3 or AFNI `3dLMEr` | Inference and reporting |
 
 ### 1. The “Id” Pooling Approach (`l2_scope = "id"`)
 
@@ -254,27 +624,44 @@ $`\sigma^2_{\text{pool}}`$. In either case, the model treats all runs as
 **exchangeable**, irrespective of which session they came from.
 
 In reality, the variance structure is **heterogeneous and
-hierarchical**:
+hierarchical**. A simple marginal model for the run-level COPEs is:
 
 ``` math
-\text{Cov}(\hat{\gamma}_{ir}, \hat{\gamma}_{ir'}) = 
+\hat{\gamma}_{ijr} = \theta_i + s_{ij} + q_{ijr} + e_{ijr}
+```
+
+where $`\theta_i \sim \mathcal{N}(0, \sigma^2_{\text{subjects}})`$ is
+the subject-level tendency,
+$`s_{ij} \sim \mathcal{N}(0, \sigma^2_{\text{sessions}|\text{subject}})`$
+is the session-specific deviation within subject,
+$`q_{ijr} \sim \mathcal{N}(0, \sigma^2_{\text{runs}|\text{session}})`$
+is the run-specific deviation within session, and $`e_{ijr}`$ is the
+independent L1 measurement error. Under this model, the covariance
+between two run-level COPEs from the same subject is:
+
+``` math
+\text{Cov}(\hat{\gamma}_{ijr}, \hat{\gamma}_{ij'r'}) =
 \begin{cases}
-\sigma^2_{\text{runs}|\text{session}} + \sigma^2_{\text{sessions}|\text{subject}} & \text{if } r, r' \text{ are in different sessions} \\
-\sigma^2_{\text{runs}|\text{session}} & \text{if } r, r' \text{ are in the same session} \\
-\sigma^2_{\text{runs}|\text{session}} + \text{Var}(\hat{\gamma}_{ir}) & \text{if } r = r'
+\sigma^2_{\text{subjects}} & \text{if } j \neq j' \\
+\sigma^2_{\text{subjects}} + \sigma^2_{\text{sessions}|\text{subject}} & \text{if } j = j' \text{ and } r \neq r' \\
+\sigma^2_{\text{subjects}} + \sigma^2_{\text{sessions}|\text{subject}} + \sigma^2_{\text{runs}|\text{session}} + \text{Var}(e_{ijr}) & \text{if } j = j' \text{ and } r = r'
 \end{cases}
 ```
 
-The pooled model conflates $`\sigma^2_{\text{runs}|\text{session}}`$ and
-$`\sigma^2_{\text{sessions}|\text{subject}}`$ into a single parameter.
-When $`\sigma^2_{\text{sessions}} \gg \sigma^2_{\text{runs}}`$ (often
-the case in longitudinal studies spanning months or years), the pooled
-model will:
+For a within-subject L2 model, $`\theta_i`$ is common to all runs for
+that subject, so the practical problem is the failure to distinguish
+session-level deviations from run-level deviations. The pooled model
+either omits these components under fixed effects or conflates
+$`\sigma^2_{\text{runs}|\text{session}}`$ and
+$`\sigma^2_{\text{sessions}|\text{subject}}`$ into a single
+residual/random-effects term under mixed effects. When
+$`\sigma^2_{\text{sessions}} \gg \sigma^2_{\text{runs}}`$ (often
+plausible in longitudinal studies spanning months or years), the pooled
+model can:
 
 1.  **Underestimate standard errors** for session-level contrasts
-    (Session 2 − Session 1), because the between-session variance
-    inflates the residual variance rather than being modeled as a
-    distinct component.
+    (Session 2 - Session 1) under fixed-effects pooling, because the
+    session component is not represented in the contrast variance.
 2.  **Overweight** runs from sessions with lower L1 measurement noise,
     implicitly assuming this reflects higher signal-to-noise for the
     session-level effect when it may simply reflect scanner stability
@@ -307,8 +694,9 @@ model will:
 ### 2. The Hierarchical “Session” Approach (`l2_scope = "id_session"`)
 
 In this widely recommended FSL approach, runs are collapsed within
-sessions via fixed-effects, followed by a cross-session mixed-effects or
-repeated measures setup.
+sessions via fixed effects, followed by a cross-session group model.
+This does not make FSL a full longitudinal mixed-model engine, but it
+does keep run-level and session-level quantities from being mixed at L2.
 
 #### How it works:
 
@@ -323,8 +711,8 @@ repeated measures setup.
 
 #### Variance Decomposition Under This Approach
 
-This approach correctly separates within-session and between-session
-variance:
+This approach better separates within-session precision from
+between-session comparisons:
 
 **At L2** (within-session, fixed effects), for subject $`i`$, session
 $`j`$:
@@ -333,14 +721,13 @@ $`j`$:
 \hat{\alpha}_{ij} = \frac{\sum_r w_{ijr} \hat{\gamma}_{ijr}}{\sum_r w_{ijr}}, \qquad \text{Var}(\hat{\alpha}_{ij}) = \frac{1}{\sum_r w_{ijr}}
 ```
 
-The L2 VARCOPE reflects **only** within-session measurement
-precision—runs from different sessions do not contaminate this estimate.
+The L2 VARCOPE reflects **only** within-session measurement precision;
+runs from different sessions do not contaminate this estimate.
 
-**At L3** (between-session, mixed effects via the subject-mean
-approach):
+**At L3** (session comparison via the subject-mean approach):
 
 ``` math
-\hat{\alpha}_{ij} = \mu_i + \tau \, t_{ij} + \xi_{ij} + u_{ij}
+\hat{\alpha}_{ij} = \mu_i + \tau \, t_{ij} + \varepsilon_{ij} + u_{ij}
 ```
 
 where:
@@ -351,19 +738,22 @@ where:
   time, wave),
 - $`t_{ij}`$ is the session indicator or time variable for subject
   $`i`$, session $`j`$,
-- $`\xi_{ij} \sim \mathcal{N}(0, \sigma^2_{\text{sessions}|\text{subject}})`$
-  is the between-session, within-subject random variation, and
+- $`\varepsilon_{ij} \sim \mathcal{N}(0, \sigma^2_{\text{resid}})`$ is
+  the remaining session-level variation after controlling for subject
+  means and modeled session effects (conceptually mapping to
+  $`\sigma^2_{\text{sessions}|\text{subject}}`$ from the complete
+  hierarchical decomposition), and
 - $`u_{ij}`$ has known variance $`\text{Var}(\hat{\alpha}_{ij})`$, the
   L2 VARCOPE.
 
-This formulation cleanly isolates the three estimable variance
-components:
+This formulation separates the estimable quantities available to the
+FSL-native workflow:
 
 | Component | Interpretation | How Estimated |
 |----|----|----|
 | $`\text{Var}(\hat{\gamma}_{ijr})`$ | L1 measurement noise | FILM + OLS at L1 |
 | $`\text{Var}(\hat{\alpha}_{ij})`$ | Propagated L1 noise, averaged over runs | Inverse-variance weighting at L2 |
-| $`\sigma^2_{\text{sessions}\|\text{subject}}`$ | True between-session variability | FLAME at L3 |
+| $`\sigma^2_{\text{resid}}`$ | Remaining session-level variability after subject EVs and fixed effects | FLAME at L3 |
 
 #### The Subject-Mean EV Design Matrix
 
@@ -376,8 +766,8 @@ contributing $`J`$ sessions, the L3 design matrix has the form:
 W = \begin{bmatrix} I_N \otimes \mathbf{1}_J & t \end{bmatrix}
 ```
 
-where $`I_N \otimes \mathbf{1}_J`$ generates a block-diagonal structure
-of $`N`$ indicator columns (one per subject), and $`t`$ is the
+where $`I_N \otimes \mathbf{1}_J`$ generates a stacked subject-indicator
+matrix with $`N`$ columns (one per subject), and $`t`$ is the
 session/time covariate of interest.
 
 For a study with $`N = 100`$ subjects and $`J = 3`$ sessions, this
@@ -386,8 +776,8 @@ unwieldy and pushes against FEAT’s practical limits.
 
 #### Pros:
 
-- **Statistical Validity:** Properly isolates within-session variance
-  from between-session variance.
+- **Better Level Separation:** Keeps within-session run aggregation
+  separate from between-session comparisons.
 - **Modularity:** Re-computing one session’s data does not mandate
   re-computing another session.
 
@@ -511,7 +901,8 @@ marginal variance of each input is:
 \text{Var}(\hat{\theta}_k) = \sigma^2_{(\ell)} + s^2_k
 ```
 
-The resulting estimate and its variance are:
+For the intercept-only weighted-average case, the resulting estimate and
+its variance are:
 
 ``` math
 \hat{\delta}^{(\ell)} = \frac{\sum_k \tilde{w}_k \hat{\theta}_k}{\sum_k \tilde{w}_k}, \qquad \tilde{w}_k = \frac{1}{\sigma^2_{(\ell)} + s^2_k}
@@ -521,6 +912,11 @@ The resulting estimate and its variance are:
 \text{Var}(\hat{\delta}^{(\ell)}) = \frac{1}{\sum_k \tilde{w}_k}
 ```
 
+For a multi-column design matrix, this generalizes to the usual weighted
+GLM expression $`(W^T \Sigma^{-1} W)^{-1}`$, where the diagonal entries
+of $`\Sigma`$ contain $`\sigma^2_{(\ell)} + s^2_k`$ under this
+simplified independent-input representation.
+
 ### Consequences of Misspecification
 
 1.  **Underestimated L1 VARCOPEs** (e.g., from inadequate
@@ -529,16 +925,16 @@ The resulting estimate and its variance are:
     **anti-conservative** group-level inference.
 
 2.  **Collapsed variance components** (e.g., the “id” pooling approach):
-    When $`\sigma^2_{\text{sessions}}`$ is not explicitly modeled, the
-    between-session variance inflates $`\sigma^2_{(\ell)}`$ at the
-    pooled level (or is absorbed into the residual). Session-level
-    contrasts then have **incorrect standard errors**, since FLAME’s
-    single random-effects variance cannot simultaneously capture both
-    between-run and between-session variability.
+    When $`\sigma^2_{\text{sessions}}`$ is not explicitly modeled,
+    fixed-effects pooling leaves the session component out of the
+    contrast variance. A mixed-effects pooled model can only represent a
+    single residual/random-effects term, which cannot simultaneously
+    capture both between-run and between-session variability.
+    Session-level contrasts then have **incorrect standard errors**.
 
 3.  **Compounding bias across levels**: If variance is systematically
     misestimated at L1 (e.g., due to scanner artifact at one session),
-    the error propagates multiplicatively:
+    the error propagates through the higher-level weights:
 
 ``` math
 \text{Var}(\hat{\delta}_{\text{group}}) = \frac{1}{\sum_i \frac{1}{\hat{\sigma}^2_{\text{subj}} + \text{Var}(\hat{\alpha}_i)}}
@@ -555,19 +951,23 @@ Consider a simple design with $`J = 2`$ sessions and $`R = 2`$ runs per
 session. The complete data vector for subject $`i`$ is
 $`\{\hat{\gamma}_{i11}, \hat{\gamma}_{i12}, \hat{\gamma}_{i21}, \hat{\gamma}_{i22}\}`$.
 
-**Under id_session (correct decomposition):**
+**Under id_session (separated session route):**
 
 - L2 produces two session-level COPEs: $`\hat{\alpha}_{i1}`$ and
   $`\hat{\alpha}_{i2}`$, each with VARCOPEs reflecting only
   within-session run variability.
-- L3 can estimate $`\sigma^2_{\text{sessions}|i}`$ from the two session
-  COPEs, correctly attributing between-session variance.
-- A session contrast $`\hat{\alpha}_{i2} - \hat{\alpha}_{i1}`$ has
-  variance:
+- L3 estimates the session effect across subjects while accounting for
+  subject means or, in `3dLMEr`, subject-level random effects.
+- Under a simple subject-mean model with independent session residuals,
+  a within-subject session contrast has approximate variance:
 
 ``` math
-\text{Var}(\hat{\alpha}_{i2} - \hat{\alpha}_{i1}) = 2 \sigma^2_{\text{sessions}|i} + \text{Var}(\hat{\alpha}_{i1}) + \text{Var}(\hat{\alpha}_{i2})
+\text{Var}(\hat{\alpha}_{i2} - \hat{\alpha}_{i1}) \approx 2 \sigma^2_{\text{resid}} + \text{Var}(\hat{\alpha}_{i1}) + \text{Var}(\hat{\alpha}_{i2})
 ```
+
+The subject intercept does not appear in this expression because it
+cancels in the within-subject difference. More complex `3dLMEr` models,
+such as models with random slopes, imply a different contrast variance.
 
 **Under id pooling (conflated variance):**
 
@@ -580,14 +980,15 @@ $`\{\hat{\gamma}_{i11}, \hat{\gamma}_{i12}, \hat{\gamma}_{i21}, \hat{\gamma}_{i2
 with variance:
 
 ``` math
-\text{Var}(\hat{\Delta}_i^{\text{pool}}) = \frac{1}{4} \sum_{j,r} c_{jr}^2 \, \text{Var}(\hat{\gamma}_{ijr})
+\text{Var}(\hat{\Delta}_i^{\text{pool}}) = \sum_{j,r} c_{jr}^2 \, \text{Var}(\hat{\gamma}_{ijr})
 ```
 
 where $`c_{jr}`$ are the L2 contrast weights ($`+1/2`$ for Session 2
-runs, $`-1/2`$ for Session 1 runs). This expression **ignores**
-$`\sigma^2_{\text{sessions}}`$ entirely—it treats the session difference
-as solely a function of L1 measurement noise, producing standard errors
-that can be dramatically too small.
+runs, $`-1/2`$ for Session 1 runs). With equal L1 variances, this
+reduces to one quarter of the sum of the four run-level variances. This
+expression **ignores** session-level variability entirely; it treats the
+session difference as solely a function of L1 measurement noise,
+producing standard errors that can be dramatically too small.
 
 ------------------------------------------------------------------------
 
@@ -601,9 +1002,12 @@ longitudinal structure of your study.
 
 ### A. The Subject-Mean Approach (`l3_input_mode = "pooled_sessions_subject_ev"`)
 
-This is the statistically preferred FSL-native approach for pooled
-session analysis. It separates the session effect from the
-subject-specific baseline.
+This is the preferred FSL-native approach for pooled session analysis
+when the design is balanced and the session effect can be represented
+with fixed effects. It separates the session effect from
+subject-specific baseline differences, but it is still a subject-EV GLM
+rather than a full longitudinal mixed model with arbitrary
+random-effects structures.
 
 #### How it works:
 
@@ -614,12 +1018,15 @@ subject-specific baseline.
   transformed to `~ 0 + id + session`.
 - **Statistical Benefit:** This models a separate intercept for every
   subject, allowing FSL to estimate the session effect while controlling
-  for subject-level means. It effectively performs the standard
-  longitudinal partitioning of variance within the FSL model.
+  for subject-level means. It addresses the largest repeated-measures
+  dependence problem in a balanced FSL design, but it does not estimate
+  subject-specific random slopes or an unstructured longitudinal
+  covariance matrix.
 
-**Why use this over Id Pooling?** It correctly treats sessions as
-repeated observations within subjects and models the individual
-differences in baseline activation levels.
+**Why use this over Id Pooling?** It treats sessions as repeated
+observations within subjects at L3 and models individual differences in
+baseline activation levels, rather than mixing all sessions into one
+subject-level L2 model.
 
 **Best fit:** Balanced designs with a modest number of sessions,
 categorical visit indicators, and a strong preference to keep the entire
@@ -651,10 +1058,11 @@ l3_models:
     fsl_outlier_deweighting: no
 ```
 
-**Why PALM?** PALM explicitly supports multi-level exchangeability
-blocks (EBs), allowing you to tell the permutation test exactly which
-runs belong to which sessions, and which sessions belong to which
-subjects.
+If a project requires permutation inference with explicit multi-level
+exchangeability blocks, PALM may be a better external inference tool
+than FEAT/FLAME alone. That is outside the workflow implemented by this
+vignette, but it is worth considering for complex repeated-measures
+designs.
 
 ### B. Route into AFNI’s `3dLMEr`
 
@@ -772,7 +1180,7 @@ subject-EV framework but is natural in `3dLMEr`.
 
 ### C. Restrict “Id” Pooling to Specific Use Cases
 
-The `"id"` pooling approach should generally be deprecated as a default
+The `"id"` pooling approach should generally be discouraged as a default
 option for long-term longitudinal fMRI studies, as the statistical
 tradeoff is severe. It should only be used when: - Sessions are spaced
 by merely hours or minutes (essentially making them contiguous
@@ -783,9 +1191,9 @@ dynamics.
 ## Conclusion
 
 While `fmri.pipeline` can mathematically construct the `"id"` pooling
-approach, it sacrifices statistical validity and computational
-modularity. In most real longitudinal studies, the package should
-prioritize `l2_scope = "id_session"` and then choose between two
+approach, that route can sacrifice statistical validity and
+computational modularity. In most real longitudinal studies, the package
+should prioritize `l2_scope = "id_session"` and then choose between two
 downstream paths:
 
 - FSL subject-EV modeling when the design is balanced and relatively

@@ -1,1386 +1,812 @@
 # fmri.pipeline quick start guide
 
-## Overview
+## Purpose
 
-**`fmri.pipeline`** is an R package for running full fMRI GLM analyses
-in FSL and other software. It allows users to specify the models they
-want to run at the trial-level (Level 1), run-level (Level 2), and
-subject-level (Level 3). `fmri.pipeline` sets up the timing files,
-design files, etc., and runs all the specified models in an automated
-way. Each job is scheduled with specific dependencies—for example, the
-Level 2 analysis will only begin once the Level 1 analysis successfully
-completes.
+`fmri.pipeline` is an R package for setting up, submitting, and tracking
+fMRI GLM analyses on HPC systems. The package is built around a single
+analysis object, usually called `gpa`, that stores the input data, model
+specifications, output locations, compute settings, and job-tracking
+state for one task analysis.
 
-`fmri.pipeline` allows users to interactively build their Level 1–3
-models, making it easy to set up contrasts and models of interest. It is
-ideal for users with a clear conceptual understanding of what they want
-to do but who may not know how to execute these ideas in FSL (e.g.,
-Feat).
+The most mature end-to-end backend is FSL FEAT/FLAME. Current pipeline
+engineering also supports backend selection, including hybrid workflows
+such as FSL at Levels 1-2 and AFNI `3dLMEr` at Level 3 for longitudinal
+models. The backend system performs a preflight check before submission
+so that model/back-end combinations and upstream artifact requirements
+are resolved before jobs are launched.
 
-A major asset of using `fmri.pipeline` is that it handles model
-estimation for any combination of models across levels. The pipeline
-fits all combinations of Level 1, Level 2, and Level 3 models for a
-given dataset.
+This guide is meant to get a new user from input tables to a submitted
+pipeline run. More detailed conceptual material is in
+[`vignette("design")`](https://uncdependlab.github.io/fmri.pipeline/articles/design.md),
+longitudinal guidance is in
+[`vignette("longitudinal")`](https://uncdependlab.github.io/fmri.pipeline/articles/longitudinal.md),
+and run diagnosis is in
+[`vignette("diagnosis")`](https://uncdependlab.github.io/fmri.pipeline/articles/diagnosis.md).
 
-**Example:**
+## Model Combinations
 
-Consider the following scenario:
+The pipeline treats Level 1, Level 2, and Level 3 model sets as a grid
+of model combinations. For example, suppose you define:
 
-- **Level 1**: One model includes a parametric modulator for working
-  memory load, another includes only onsets for encoding and retrieval.
-- **Level 2**: One model includes average task difficulty as a
-  continuous covariate, another treats it as a categorical variable.
-- **Level 3**: One model includes nonverbal intelligence, another
-  includes both age and nonverbal intelligence.
+- two Level 1 models: one with a prediction-error modulator and one with
+  only event onsets
+- two Level 2 models: one run-average model and one model with a
+  run-level condition predictor
+- two Level 3 models: one intercept-only group model and one model with
+  age as a covariate
 
-In this case, `fmri.pipeline` will fit eight model combinations (2 × 2 ×
-2) and provide labeled outputs for each.
+If you run all of them, `fmri.pipeline` will set up and estimate all
+eight combinations: 2 Level 1 x 2 Level 2 x 2 Level 3. This is useful
+for systematic model comparison, but it can also create many jobs
+quickly. Start with one model at each level, verify that the pipeline
+runs cleanly, and then add additional model variants.
 
-`fmri.pipeline` adopts the following three-level structure for fMRI
-analysis:
+## Analysis Levels
 
-- **Level 1**: Run-level analysis of the BOLD time series. Design matrix
-  includes convolved regressors for task-related events.
-- **Level 2**: Subject-level analysis that integrates Level 1 effects
-  across all runs. Can include between-run manipulations or covariates.
-- **Level 3**: Sample-level analysis estimating effects acr qoss all
-  subjects. Design matrix includes between-subjects predictors (e.g.,
-  age, trait anxiety).
+`fmri.pipeline` uses a fixed three-level vocabulary:
 
-If there is only one run of a task per subject, only Level 1 and Level 3
-models are built and fit. There is no Level 2 analysis that combines
-parameter estimates from multiple runs.
+- **Level 1**: Run-level time-series GLM. Events and parametric
+  modulators are convolved with the HRF and estimated separately for
+  each run.
+- **Level 2**: Within-subject run combination. Multiple Level 1 COPEs
+  are combined within a subject or subject-session.
+- **Level 3**: Sample-level or group-level model. Subject/session maps
+  are modeled across participants.
 
-`fmri.pipeline` follows this nomenclature:
+For a single-run task, there is no standalone Level 2 run-combination
+step. The pipeline still calls the group model Level 3 so the
+nomenclature is stable across single-run and multi-run analyses.
 
-- Level 1 = Runs
-- Level 2 = Within-subject run combination
-- Level 3 = Across-subject analysis
+## Input Tables
 
-------------------------------------------------------------------------
-
-## Setting Up Your Data
-
-`fmri.pipeline` expects three dataframes:
-
-1.  Trial-level
-2.  Run-level
-3.  Subject-level
-
-### Required Columns
-
-There are a few columns that are expected in these dataframes and should
-be named as followed:
-
-- `id`: A character string or number that uniquely identifies a single
-  subject in the dataset.
-- `trial`: The sequential order in which tasks were presented in a run,
-  spanning across blocks. For example, if you have a run of fMRI data
-  where participants play 4 runs of a block and each block has 15
-  trials, the trial number may originally be listed as 1-15 for each
-  block. Before giving your trial-level data to fmri.pipeline, the trial
-  column should be changed to 1-60, disregarding the trial as it
-  pertains to block. The trial number should always be in reference to
-  the run of fMRI data.
-- `run_number`: An integer referring to the fMRI acquisition number of a
-  task run for a single subject. For example, if a participant played a
-  task twice in two separate fMRI acquisitions, the run_number would be
-  1 for the first task and 2 for the second task. If they played a task
-  twice within one single fMRI acquisition, the run_number would be 1
-  for both. This is only relevant if you have multiple fMRI runs of a
-  task. If you do not provide run_number in your input data,
-  fmri.pipeline will add a run_number value of 1 to all subjects.
-- `session`: A character string or number or number that refers to the
-  occasion on which the data were acquired. This is only relevant to
-  datasets where you scan subjects in multiple sessions such as a
-  longitudinal study. If you do not provide session in your input data,
-  fmri.pipeline will add a session value of 1 to all subjects.
-- `run_nifti`: The pathway to the preprocessed nifti file for the run to
-  be included in analysis.
-
-### Trial-Level Dataframe
-
-The trial-level dataframe should include trial-varying factors such as
-trial onset times, durations, and any parametric modulators that should
-be convolved with the HRF.
-
-This data frame should stack data for all runs and subjects (i.e., long
-form) using the id, session, run_number, and trial columns to uniquely
-identify each row. Any variables in this data frame can be introduced as
-onset, duration, or value components of a given HRF-convolved regressor.
-
-Any parametric modulators that should be convolved with the HRF (Note
-that all parametric modulators will automatically be mean-centered by
-run)
-
-Each row must be one trial of data, and multiple events can be included
-in a single trial. For example, you can include onset and duration
-columns for a choice event and a feedback event in the same trial row.
-When you build your level 1 models, you will be able to specify
-different events with this information. Any variables in this data frame
-can be introduced as onset, duration, or value components of a given
-HRF-convolved regressor.
-
-*Required Columns*:
-
-- `id`: A character string or number that uniquely identifies a single
-  subject in the dataset.
-- `trial`: The sequential order in which tasks were presented in a run,
-  spanning across blocks.
-- `run_number`: An integer referring to the fMRI acquisition number of a
-  task run for a single subject. Add this column, if multiple runs
-  exists.
-- `session`: A character string or number or number that refers to the
-  occasion on which the data were acquired. Add this column, if multiple
-  sessions.
-- `Onset times and durations`: that you would like to use in your
-  analysis, for each event you wish to include in analysis (in seconds
-  relative to the start of the scan). Note that if a duration is fixed
-  for an event across all trials, you can forego having a duration
-  column; when building your level-1 model, you can enter a fixed number
-  rather than a column of this dataframe.
-
-*Optional columns*:
-
-- Interstimulus intervals
-- Intertrial intervals
-- Parametric modulators (automatically mean-centered by run)
-- Within-run condition factors (for example, if some trials participants
-  receive positive feedback and others they receive negative feedback,
-  you may wish to include a contrast that just looks at brain activity
-  when someone receives a certain type of feedback)
-
-Example of trial level dataframe:
-
-| id | run_number | trial | emotion | clock_onset | clock_dur | feedback_onset | feedback_dur | iti_onset | iti_dur | v_entropy | pe_max |
-|----|----|----|----|----|----|----|----|----|----|----|----|
-| 10637 | 1 | 1 | fear | 8.0685 | 1.051 | 9.1857 | 0.9 | 10.0851 | 5.1 | NA | 26.27952 |
-| 10637 | 1 | 2 | fear | 15.2016 | 2.451 | 17.7182 | 0.9 | 18.6181 | 1.1 | 0.5849534 | 54.04684 |
-| 10637 | 1 | 3 | fear | 19.7348 | 2.251 | 22.0513 | 0.9 | 22.9512 | 2.1 | 0.8419403 | 33.34110 |
-| 10637 | 1 | 4 | fear | 25.0678 | 2.784 | 27.9178 | 0.9 | 28.8176 | 0.1 | 0.8309496 | 59.23074 |
-| 10637 | 1 | 5 | fear | 28.9177 | 3.001 | 31.9842 | 0.9 | 32.8841 | 1.1 | 0.8880351 | -11.77906 |
-
-### Run-Level Dataframe
-
-The run-level dataframe should include any run-varying factors and the
-location of the nifti files you wish to include in analysis. Each row of
-data will be an fMRI acquisition for a specific task.
-
-*Required columns*:
-
-- `id`: A character string or number that uniquely identifies a single
-  subject in the dataset.
-- `run_nifti`: To inform the pipeline the location of the nifti file for
-  a run
-- `run_number`: An integer referring to the fMRI acquisition number of a
-  task run for a single subject. Add this column, if multiple runs
-  exists.
-- `session`: A character string or number or number that refers to the
-  occasion on which the data were acquired. Add this column, if multiple
-  sessions.
-
-Similar to the trial-level dataframe, you can include any within-subject
-factors you want to include in analysis (for example, if there is a run
-where participants receive predominantly happy faces and another run
-where participants receive predominantly negative feedback in your task
-design, you may wish to include them as contrasts in your Level 2
-analysis).
-
-*Optional columns*:
-
-- `mr_dir`: Path to the directory containing fMRI data for each run.
-- `tr`: temporal resolution of the run. This is only necessary if the
-  temporal resolution changed during the study and certain fMRI
-  acquisitions have differing temporal resolution. This is not needed if
-  the temporal resolution is the same for all runs of data to be
-  included in analysis, as the TR will be specified when you set up the
-  analysis (see gpa object setup section).
-- Within-subject condition factors for contrasts in Level 2 (e.g.,
-  `emotion`, `stim_type`).
-- `confound_input_file`: Path to nuisance regressors
-
-Example of run level dataframe:
-
-| id | mr_dir | run_number | emotion | run_nifti | confound_input_file |
-|----|----|----|----|----|----|
-| 10637 | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock1 | 1 | fear | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock1/nfaswuktm_clock1_5.nii.gz | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock1/nuisance_regressors.txt |
-| 10637 | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock2 | 2 | scram | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock2/nfaswuktm_clock2_5.nii.gz | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock2/nuisance_regressors.txt |
-| 10637 | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock3 | 3 | fear | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock3/nfaswuktm_clock3_5.nii.gz | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock3/nuisance_regressors.txt |
-| 10637 | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock4 | 4 | scram | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock4/nfaswuktm_clock4_5.nii.gz | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock4/nuisance_regressors.txt |
-| 10637 | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock5 | 5 | happy | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock5/nfaswuktm_clock5_5.nii.gz | /proj/lab/fmri.data/10637_20140304/mni_5mm_aroma/clock5/nuisance_regressors.txt |
-
-### Subject-Level Dataframe
-
-The subject-level dataframe should include any subject-varying factors
-you wish to include in analysis. Each row of data will be a specific
-subject’s information.
-
-*Required columns*:
-
-- `id`: A character string or number that uniquely identifies a single
-  subject in the dataset.
-- `session`: A character string or number or number that refers to the
-  occasion on which the data were acquired. Add this column, if multiple
-  sessions.
-
-*Optional columns*:
-
-- `Subject-varying factors`: group, age, sex, scores, etc., for Level 3
-  analysis.
-
-If you want to use the pipeline in manual mode, you need to provide
-these three dataframes as input and the pipeline can walk you through
-the rest of the process of building the models.
-
-Example of subject level dataframe:
-
-| id    | age     | adult | female | scandate   |
-|-------|---------|-------|--------|------------|
-| 10637 | 16.7009 | 0     | 0      | 2014-03-04 |
-| 10638 | 16.2136 | 0     | 0      | 2014-05-07 |
-| 10711 | 18.3190 | 1     | 0      | 2014-08-26 |
-| 10717 | 15.7290 | 0     | 1      | 2014-08-13 |
-| 10767 | 15.4524 | 0     | 1      | 2014-08-14 |
-
-------------------------------------------------------------------------
-
-## Guide to Creating a `gpa` Object in `fmri.pipeline`
-
-This guide describes how to create a `gpa` object for your dataset using
-the `fmri.pipeline` R package. The `gpa` object (short for **GLM
-Pipeline Arguments**) stores configuration for single- and multi-level
-GLM analysis including subject, run, and trial data, model
-specifications, and compute environment settings.
-
-### Prerequisites
-
-- Trial level data (could be loaded from a csv file)
-- Run level data (could be loaded from a csv file)
-- Subject level data (could be loaded from a csv file)
-- L1 model specification yaml file (e.g., `my_spec.yaml`) describing the
-  first-level model structure.
-
-  
-  
-
-### Step 1: Prepare the Data
-
-Use the helper functions from `fmri.pipeline` to generate the CSVs, or
-load and preprocess them manually.
-
-``` r
-
-trial_df <- read.csv("sample_trial_data.csv.gz")
-run_df <- read.csv("sample_run_data.csv")
-subj_df <- read.csv("sample_subject_data.csv")
-```
-
-  
-  
-
-### Step 2: Use `setup_glm_pipeline()` to setup GLM models for each level of analysis
-
+The preferred setup is to provide three long-form data frames:
+`trial_data`, `run_data`, and `subject_data`.
 [`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
-is the main function to create a `gpa` object. It initializes the
-pipeline with the necessary parameters and data. If you would like to
-build the models in manual mode, this function requires the trial, run,
-and subject dataframes as inputs.
+can derive `run_data` and `subject_data` from `trial_data` when needed,
+but explicit tables are easier to audit and usually clearer for new
+analyses.
 
-For fmri.pipeline to setup and run GLM models, the user has to specify
-which models to fit at each level of analysis. The first level mostly
-might consist of convolved regressors for task events, parametric
-modulators. Level 2 could consist of covariates that capture variation
-beytween runs. Level 3 could consist of sample/group level analysis. You
-could pass `l1_model_set` object containing all level 1 (run) models to
-be included in GLM pipeline. The object needs to be in a specific format
-acceptable by the pipeline, so we do not recommend doing this. You can
-also pass `"prompt"` for any of the L1, L2 or L3 model inputs, which
-will call the interactive model-building functions
-[`build_l1_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l1_models.md),
-[`build_l2_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l2_models.md),
-and
-[`build_l3_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l3_models.md)
-respectively. This allows you to specify the models interactively at
-this step itself. Alternatively, you can pass `NULL` for the
-`l1_models`, `l2_models`, and `l3_models` arguments, which will allow
-you to create a `gpa` object, though this object will not be functional
-within the pipeline until l1 models are provided. You can build the
-models later by calling the functions
-[`build_l1_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l1_models.md),
-[`build_l2_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l2_models.md),
-and
-[`build_l3_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l3_models.md).
-When calling these functions later, you can either specify the
-`from_spec_file` argument to read the model specifications from a YAML
-file, or you can build the models interactively by not specifying the
-`from_spec_file` argument.
+### Required Identifiers
+
+All input tables must contain an `id` column. `session` is recommended
+and is required for longitudinal studies; if missing, the pipeline adds
+`session = 1`. Trial- and run-level data should contain `run_number`; if
+missing, the pipeline adds `run_number = 1`.
+
+The default identifier names are:
+
+| Concept                           | Default column |
+|-----------------------------------|----------------|
+| Subject identifier                | `id`           |
+| Session or visit                  | `session`      |
+| Run number within subject/session | `run_number`   |
+| Trial number within run           | `trial`        |
+| Run NIfTI path                    | `run_nifti`    |
+| Run data directory                | `mr_dir`       |
+
+If your data use different names, pass a named `vm` vector to
+[`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md):
 
 ``` r
-# first example
+
 gpa <- setup_glm_pipeline(
-  analysis_name = "my_manual_analysis",
-  scheduler = "slurm",
-  output_directory = "/your/output/path",
+  analysis_name = "memory_task",
   trial_data = trial_df,
   run_data = run_df,
-  subject_data = subj_df,
-  
-  tr = 1.0, 
+  subject_data = subject_df,
+  tr = 0.9,
+  vm = c(
+    id = "participant_id",
+    session = "visit",
+    run_number = "run",
+    trial = "trial_index",
+    run_nifti = "bold_file"
+  )
+)
+```
+
+After validation, the pipeline converts these names to its internal
+conventions, so downstream examples in this guide use `id`, `session`,
+and `run_number`.
+
+### Trial Data
+
+`trial_data` has one row per trial per run. It provides the event timing
+and trial-varying variables used to build Level 1 regressors.
+
+Typical columns include:
+
+- `id`, `session`, `run_number`, and `trial`
+- onset columns, in seconds from the start of the run, such as
+  `cue_onset` or `feedback_onset`
+- duration columns, in seconds, such as `cue_duration` or
+  `feedback_duration`
+- intertrial/interstimulus interval columns used by truncation logic or
+  model specification
+- parametric modulators, such as prediction error, reaction time, value,
+  or uncertainty
+- within-run condition factors, such as `condition` or `feedback_type`
+
+Example:
+
+``` r
+
+trial_df <- tibble::tibble(
+  id = c("10637", "10637", "10637"),
+  session = 1,
+  run_number = 1,
+  trial = 1:3,
+  cue_onset = c(8.07, 15.20, 19.73),
+  cue_duration = c(1.05, 2.45, 2.25),
+  feedback_onset = c(9.19, 17.72, 22.05),
+  feedback_duration = 0.9,
+  iti_duration = c(5.1, 1.1, 2.1),
+  condition = c("fear", "fear", "happy"),
+  prediction_error = c(26.28, 54.05, 33.34)
+)
+```
+
+Onsets and durations should be in seconds. If an event has a constant
+duration, you can either include a constant duration column or specify
+the fixed duration in the model specification.
+
+### Run Data
+
+`run_data` has one row per fMRI acquisition. It connects the task design
+to the preprocessed BOLD files and any run-level covariates.
+
+The most robust approach is to provide `run_nifti` directly. If
+`run_nifti` is absent, the pipeline can search under
+`subject_data$mr_dir` using `fmri_file_regex`, `fmri_path_regex`, and
+`run_number_regex`, but explicit paths are easier to debug.
+
+Typical columns include:
+
+- `id`, `session`, and `run_number`
+- `run_nifti`, the path to the preprocessed 4D NIfTI for that run
+- `confound_input_file`, the path to a confound TSV/TXT file, often from
+  fMRIPrep or postprocessing
+- `tr`, only when TR varies across runs
+- run-level predictors for Level 2 models, such as `condition`,
+  `difficulty`, or `scanner`
+
+Example:
+
+``` r
+
+run_df <- tibble::tibble(
+  id = c("10637", "10637"),
+  session = 1,
+  run_number = c(1, 2),
+  condition = c("fear", "happy"),
+  run_nifti = c(
+    "/proj/lab/derivatives/sub-10637/func/sub-10637_task-clock_run-1_desc-preproc_bold.nii.gz",
+    "/proj/lab/derivatives/sub-10637/func/sub-10637_task-clock_run-2_desc-preproc_bold.nii.gz"
+  ),
+  confound_input_file = c(
+    "/proj/lab/derivatives/sub-10637/func/sub-10637_task-clock_run-1_desc-confounds_timeseries.tsv",
+    "/proj/lab/derivatives/sub-10637/func/sub-10637_task-clock_run-2_desc-confounds_timeseries.tsv"
+  )
+)
+```
+
+### Subject Data
+
+`subject_data` has one row per subject-session. It provides Level 3
+covariates and subject/session metadata.
+
+Typical columns include:
+
+- `id` and `session`
+- group indicators, demographics, clinical variables, or behavioral
+  scores
+- session-level variables for longitudinal analyses, such as visit label
+  or days since baseline
+
+Example:
+
+``` r
+
+subject_df <- tibble::tibble(
+  id = c("10637", "10638", "10711"),
+  session = 1,
+  age = c(16.70, 16.21, 18.32),
+  sex = c("M", "M", "F"),
+  group = c("control", "control", "patient")
+)
+```
+
+For longitudinal designs, store one row per `id` and `session`, not one
+row per subject:
+
+``` r
+
+subject_df <- tibble::tibble(
+  id = c("10637", "10637", "10638", "10638"),
+  session = c(1, 2, 1, 2),
+  session_label = c("baseline", "followup", "baseline", "followup"),
+  days_since_baseline = c(0, 365, 0, 391),
+  age_baseline = c(16.70, 16.70, 16.21, 16.21)
+)
+```
+
+### BIDS Helpers
+
+If your derivatives are close to BIDS/fMRIPrep layout, helper functions
+can create starter tables:
+
+``` r
+
+run_df <- generate_run_data_from_bids(
+  bids_dir = "/proj/lab/derivatives/fmriprep",
+  task_name = "clock",
+  desc = "preproc",
+  suffix = "bold",
+  space = "MNI152NLin2009cAsym"
+)
+
+subject_df <- generate_subject_data_from_bids(
+  bids_dir = "/proj/lab/derivatives/fmriprep"
+)
+
+trial_df <- generate_trial_data_from_bids(
+  bids_dir = "/proj/lab/derivatives/fmriprep",
+  task_name = "clock"
+)
+```
+
+Treat these as a starting point. Always inspect the result and join in
+any analysis-specific task variables before running the pipeline.
+
+## Create the `gpa` Object
+
+[`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
+validates inputs, normalizes column names, sets output locations,
+records scheduler and compute settings, and stores model specifications.
+If models are not available yet, pass `NULL` and build them afterward.
+
+``` r
+
+library(fmri.pipeline)
+library(dplyr)
+
+trial_df <- readr::read_csv("inputs/clock_trials.csv")
+run_df <- readr::read_csv("inputs/clock_runs.csv")
+subject_df <- readr::read_csv("inputs/clock_subjects.csv")
+
+gpa <- setup_glm_pipeline(
+  analysis_name = "clock_glm_2026_05_11",
+  scheduler = "slurm",
+  output_directory = "/proj/lab/analysis/clock",
+  trial_data = trial_df,
+  run_data = run_df,
+  subject_data = subject_df,
+  tr = 0.9,
   drop_volumes = 2,
+  n_expected_runs = 2,
   l1_models = NULL,
   l2_models = NULL,
   l3_models = NULL,
+  glm_software = "fsl",
   confound_settings = list(
-    l1_confound_regressors = c("csf", "dcsf", "wm", "dwm"),
-    exclude_run = "max(framewise_displacement) > 5 | sum(framewise_displacement > .9)/length(framewise_displacement) > .10",
-    exclude_subject = "n_good_runs < 4",
+    confound_input_colnames = NULL,
+    l1_confound_regressors = c(
+      "csf", "csf_derivative1",
+      "white_matter", "white_matter_derivative1"
+    ),
+    na_strings = c("NA", "n/a", ""),
+    spike_volumes = "framewise_displacement > 0.9",
+    exclude_run = "max(framewise_displacement, na.rm = TRUE) > 5 || mean(framewise_displacement > 0.9, na.rm = TRUE) > 0.10",
+    exclude_subject = "n_good_runs < 1",
     truncate_run = "(framewise_displacement > 0.9 & time > last_offset) | (time > last_offset + last_isi)"
   ),
   parallel = list(
-    finalize_time = "10:00:00",
-    fsl = list(l2_feat_time = "4:00:00", l3_feat_time = "50:00:00")
-  )
-)
-
-# second example
-gpa <- setup_glm_pipeline(analysis_name="12may2025", 
-                          scheduler="slurm",
-                          output_directory = "/proj/mnhallqlab/no_backup/nmap/analysis_output/pit",
-                          trial_data=trial_df, subject_data = subject_df, run_data=run_df,
-                          tr=.9, drop_volumes = 2,
-                          l1_models=NULL, l2_models=NULL, l3_models=NULL,
-                          n_expected_runs=1,
-                          confound_settings=list(
-                            confound_input_colnames = c("csf", "csf_derivative1", "white_matter", "white_matter_derivative1"), # assumption
-                            l1_confound_regressors = c("csf", "csf_derivative1", "white_matter", "white_matter_derivative1"),
-                            na_strings=c("NA", "n/a"), #weird fmriprep-ism for confound files
-                            exclude_run = "max(framewise_displacement) > 5 | sum(framewise_displacement > .5)/length(framewise_displacement) > .15", #this must evaluate to a scalar per run
-                            exclude_subject = "n_good_runs < 2",
-                            truncate_run = "framewise_displacement > 2 & (time > last_offset + )" # 2 seconds after last offset
-                            truncate_run = "(framewise_displacement > 0.9) & (time > last_offset) | (time > last_offset + last_isi)"
-                            spike_volumes = "framewise_displacement > 0.9"
-                          ),
-                          parallel=list(
-                            fsl=list(l1_feat_alljobs_time="72:00:00"),
-                            finalize_time <- "10:00:00"
-                          ), lgr_threshold="debug"
+    l1_setup_cores = 4L,
+    pipeline_cores = "default",
+    finalize_time = "2:00:00",
+    fsl = list(
+      l1_feat_alljobs_time = "72:00:00",
+      l2_feat_time = "4:00:00",
+      l3_feat_time = "24:00:00"
+    )
+  ),
+  lgr_threshold = "info"
 )
 ```
 
-**Common Input Parameters**
+Key setup arguments:
 
-- `analysis_name`: a character string that uniquely names your analysis,
-  and is used in output folder names and saved `.RData` or `.rds` files;
-  for example, `"emotion_analysis_march2025"`.
-- `scheduler`: a character string that indicates which job scheduling
-  system to use; typically `"slurm"` on HPC clusters, or `"local"` for
-  local analysis. Possible options are `"slurm"`, `"torque"`, `"local"`.
-- `output_directory`: a character string that specifies the folder where
-  the pipeline output (e.g., FSF scripts, design matrices, submission
-  scripts) will be stored. If not specified, defaults to the current
-  working directory ([`getwd()`](https://rdrr.io/r/base/getwd.html)).
-- `trial_data`: a data frame containing trial-level data with one row
-  per trial per subject. This is required and must include identifying
-  variables (e.g., `id`, `trial`, `run_number`) and timing (e.g.,
-  `onset`, `duration` in seconds with respect to the start of the scan).
-- `run_data`: a data frame containing run-level data. This is required
-  if not embedded in `trial_data`. It should include identifying
-  variables (e.g., `id`, `run_number`, `mr_dir`, `run_nifti`) and can
-  also include run-level covariates (e.g., `emotion`).
-- `subject_data`: a data frame containing subject-level covariates. This
-  is required for Level 3 analyses and should include identifying
-  variables (e.g., `id`) and demographic variables (e.g., `age`, `sex`).
-- `block_data`: an optional data frame containing block-level task
-  information (e.g., task periods spanning multiple trials). Blocks are
-  superordinate to trials and subordinate to runs. Useful for block
-  designs or hybrid paradigms. Data should be stacked in long form.
+- `analysis_name`: a stable name for this analysis. If
+  `output_directory` does not already end with this name, the pipeline
+  appends it.
+- `scheduler`: `"slurm"`, `"torque"`, or `"local"`. Use `"local"` only
+  for small tests.
+- `tr`: repetition time in seconds. If TR differs by run, provide a `tr`
+  column in `run_data` instead.
+- `drop_volumes`: number of leading volumes to remove from
+  timing/confound alignment.
+- `n_expected_runs`: used for warnings and subject/run completeness
+  checks.
+- `confound_settings`: tells the pipeline which nuisance regressors to
+  include, which volumes to spike, and how to exclude or truncate runs.
+- `parallel`: controls setup cores and scheduler time/memory settings.
 
-**Optional Inputs**
+The confound expressions are evaluated in run-level confound data after
+motion regressors and `framewise_displacement` have been prepared.
+Expressions can refer to confound columns plus helper variables such as
+`time`, `volume`, `last_onset`, `last_offset`, and `last_isi`.
 
-- `vm`: a named character vector specifying the key identifying
-  variables (e.g., `id`, `run_number`, `session`, `run_number`,
-  `block_number`, `trial`, `run_trial`, `subtrial`, `mr_dir`,
-  `run_nifti`,`exclude_subject`). This is rarely changed and only
-  modified if your column names differ from the defaults.
-- `bad_ids`: a character vector of IDs to exclude from all levels of
-  analysis. This is optional and can be used to filter out specific
-  subjects.
-- `mr_dir_column`: a character string specifying the column name in
-  `run_data` that contains the directory path to the fMRI data for each
-  run. This is optional and defaults to `"mr_dir"`.
-- `fmri_file_regex`: a character string specifying the regular
-  expression to match fMRI file names in `run_data`. This is optional
-  and defaults to `"nifti"`.
-- `run_number_regex`: a character string specifying the regular
-  expression to match run numbers in `run_data`. This is optional and
-  defaults to `"run_number"`.
-- `tr`: a numeric value for the repetition time of the scanning sequence
-  in seconds. Used for setting up design matrices. If this is NULL, the
-  function will look for a `tr` field in the `run_data` object, which
-  specifies TR at run level.
-- `drop_volumes`: an integer number of volumes to drop from the fMRI
-  data and convolved regressors prior to analysis. Default setting is 0.
-- `l1_models`: An `l1_model_set` object containing all level 1 (run)
-  models to be included in GLM pipeline. If `prompt` is passed,
-  `setup_glm_pipeline` will call `build_l1_models` to setup l1 models
-  interactively. Optionally, this argument can be `NULL` if you want to
-  setup l1 models later, though the resulting object will not be
-  functional within the pipeline until l1 models are provided.
-- `l2_models`:An `hi_model_set` object containing all level 2 (subject)
-  models to be included in GLM pipeline.
-- `l3_models`:An `hi_model_set` object containing all level 3 (sample)
-  models to be included in GLM pipeline.
-- `confound_settings`: A list containing settings for confound
-  regressors, such as:
-  - `motion_params_file`: Path to motion parameters file (e.g.,
-    `"motion.par"`).
-  - `confound_input_file`: Path to nuisance regressors file (e.g.,
-    `"nuisance_regressors.txt"`).
-  - `l1_confound_regressors`: List of columns to use as nuisance
-    regressors.
-  - `exclude_run`, `exclude_subject`, `truncate_run`: Expressions used
-    to exclude runs or subjects based on motion. If you have exclude_run
-    and/or exclude_subject as columns in your run_data or subject_data,
-    the pipeline will use that in complement with these expressions.
-    truncate_run can be possible to use data for a particiapnt for the
-    timepoints when the framewise displacement was not high enough to be
-    excluded. When an expression is provided, which returns a vector of
-    TRUE or FALSE for each volume, then it takes one timepoint before
-    the first TRUE value in a series and starts truncating the run from
-    that timepoint onwards. You can also specify an expression which
-    returns a volume number to be excluded. In addition to any columns
-    in your confound file and `framewise_displacement` calculated by the
-    pipeline, you can also use `time`, `volume`, `last_onset`,
-    `last_offset` (time of last event offset in seconds) in your
-    expressions.
-- `parallel`: A list containing parallelization settings, such as SLURM
-  job parameters like `finalize_time`, `fsl$l2_feat_time`, etc. These
-  options are useful for changing the maximum time and memory for each
-  step of the analysis as to avoid out of time and out of memory errors;
-  for example, if you expect your L1 analysis will take several days,
-  you can increase the maximum time (e.g.,
-  fsl$`l1_feat_time <- “48:00:00) and memory (e.g., fsl`$l1_feat_memgb
-  \<- “24”) as needed.
-- `glm_settings`: A list of additional settings for GLM software, such
-  as FSL or AFNI. This is typically left at default.
-- `additional`: A list of additional settings for GLM software, such as
-  FSL or AFNI. This is typically left at default.
-- `output_locations`: A list of output directories for different levels
-  of analysis, such as `feat_l1_directory`, `feat_l2_directory`,
-  `feat_l3_directory`, and `sqlite_db`. These are used to specify where
-  the results will be stored.
-- `group_output_directory`: A character string specifying the directory
-  where group-level results will be stored. This is optional and
-  defaults to the `output_directory`.
-- `lgr_threshold`: A character string specifying the logging level for
-  the pipeline. Options include `"info"`, `"warn"`, `"error"`,
-  `"debug"`, etc. Default is `"info"`.
+## Define Models
 
-  
-  
+Models can be built interactively or read from YAML/JSON. For
+reproducible analysis, the recommended workflow is:
 
-### Step 3: build each level of models
+1.  Build a model interactively once, if useful.
+2.  Export it with
+    [`export_glm_config()`](https://uncdependlab.github.io/fmri.pipeline/reference/export_glm_config.md).
+3.  Edit the YAML into a project-owned specification.
+4.  Rebuild future `gpa` objects from that specification.
 
-**Building the models can be done in two ways: using a YAML
-specification file or interactively. We will discuss both methods
-here.**
-
-  
-  
-
-#### Setting up the L1, L2, and L3 models interactively
-
-If you run the
-[`build_l1_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l1_models.md),
-[`build_l2_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l2_models.md)
-and
-[`build_l3_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l3_models.md)
-functions without specifying `from_spec_file` input, you will get to
-build the models interactively.
+### Interactive Model Builder
 
 ``` r
 
 gpa <- build_l1_models(gpa)
 gpa <- build_l2_models(gpa)
 gpa <- build_l3_models(gpa)
+
+export_glm_config(gpa, file = "clock_glm_spec.yaml")
 ```
 
-  
-  
-
-##### Building level 1 models interactively
-
-One way to build Level 1 models interactively is the specify
-`l1_models = "prompt"` in the
+You can also ask
 [`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
-function. This will call the
-[`build_l1_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l1_models.md)
-function, which allows you to build Level 1 models interactively.
-Another way is to call the
-[`build_l1_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l1_models.md)
-function directly after creating the `gpa` object using
-[`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md).
+to prompt immediately by using `l1_models = "prompt"`,
+`l2_models = "prompt"`, or `l3_models = "prompt"`.
+
+### YAML Model Specification
+
+The same YAML file can contain L1, L2, and L3 model definitions:
 
 ``` r
 
-gpa <- build_l1_models(gpa)
+gpa <- build_l1_models(gpa, from_spec_file = "clock_glm_spec.yaml")
+gpa <- build_l2_models(gpa, from_spec_file = "clock_glm_spec.yaml")
+gpa <- build_l3_models(gpa, from_spec_file = "clock_glm_spec.yaml")
 ```
 
-The
-[`build_l1_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l1_models.md)
-function will walk you through the process of building the model you
-want to run at the run level.
-
-When defining a new level 1 model you will be prompted to enter the
-following:
-
-1.  Do you want to add these columns to possible onsets?  
-    This prompt will help you select event onset columns. It will show
-    you a set of event columns that have the word ‘onset’ in their name.
-    You can select columns from the trial-level data frame that will be
-    used as event onsets in the model. These columns must contain onset
-    times in seconds relative to the start of the scan. You can select
-    multiple columns, and the pipeline will create separate regressors
-    for each selected column. Note that event onsets must be in seconds
-    relative to the scan start time.  
-    If you select “No”, the pipeline will ask if you would like to
-    modify the event onset columns. You can:
-
-    1.  add new onset columns  
-    2.  delete existing onset columns  
-    3.  complete the onset selection  
-        If you choose to add new onset columns, it will present you with
-        a list of all columns in the trial-level data frame to select as
-        the onset columns. Note that it is acceptable that there are
-        additional columns selected in these steps which are eventually
-        unused in the model.
-
-2.  Would you like to modify the event duration columns?  
-    This prompt will help you select event duration columns. You can
-    select columns from the trial-level data frame that will be used as
-    event durations in the model. These columns must contain durations
-    in seconds relative to the start of the scan.  
-    If you select “No”, the pipeline will ask if you would like to
-    modify the event duration columns. You can:
-
-    1.  add new duration columns  
-    2.  delete existing duration columns  
-    3.  complete the duration selection  
-        Note that event durations must be in seconds relative to the
-        scan start time. If you choose to add new duration columns, it
-        will present you with a list of all columns in the trial-level
-        data frame to select as the duration columns. The duration
-        column is optional if an event has a fixed duration, because
-        when building your events, you can specify a fixed number of
-        seconds as the duration of an event.
-
-3.  Do you want to add these columns to possible ISI/ITIs?  
-    This prompt will help you select interstimulus/intertrial interval
-    columns. You can select columns from the trial-level data frame that
-    will be used as ISI/ITI durations in the model. These columns must
-    contain ISI/ITI durations in seconds. If you select “No”, the
-    pipeline will ask if you would like to modify the ISI/ITI columns.
-    You can:
-
-    1.  add new ISI/ITI columns  
-    2.  delete existing ISI/ITI columns  
-    3.  complete the ISI/ITI selection If you say “Yes” to the
-        automatically detected columns, it will ask if you would like to
-        modify the event ISI/ITI columns. If you choose to add new
-        ISI/ITI columns, it will present you with a list of all columns
-        in the trial-level data frame to select as the ISI/ITI columns.
-        ISI can be used in `truncate_runs`.
-
-4.  Would you like to modify the event parametric value columns?  
-    This prompt will help you select continuous parametric modulator
-    event values columns. You can select columns from the trial-level
-    data frame that will be used as parametric modulators in the model.
-    These columns must contain continuous values that will be convolved
-    with the HRF.  
-    If you select “No”, the pipeline will ask if you would like to
-    modify the event parametric value columns. You can:
-
-    1.  add new parametric value columns  
-    2.  delete existing parametric value columns  
-    3.  complete the parametric value selection  
-        If you choose to add new parametric value columns, it will
-        present you with a list of all columns in the trial-level data
-        frame to select as the parametric value columns.
-
-5.  Would you like to modify the event within-subject factor columns?  
-    This prompt will help you select within-subject factor columns that
-    can be used in specifying signals. You can select columns from the
-    trial-level data frame that will be used as within-subject factors
-    in the model. These columns can be used to specify signals that are
-    convolved with the HRF.  
-    If you select “No”, the pipeline will ask if you would like to
-    modify the event within-subject factor columns. You can:
-
-    1.  add new within-subject factor columns  
-    2.  delete existing within-subject factor columns  
-    3.  complete the within-subject factor selection  
-        If you choose to add new within-subject factor columns, it will
-        present you with a list of all columns in the trial-level data
-        frame to select as the within-subject factor columns.
-
-6.  Specify all events that can be added to a GLM model.  
-    This builds ‘events’ which consist of onset times, durations, and
-    optional ITI/ISI. This prompt will present options to:
-
-    1.  add new events  
-    2.  delete existing events  
-    3.  complete the event selection  
-        If you press (1) to add an event, it will first ask you for the
-        event name and then provide options from the preselected event
-        onset columns. Then it will ask you to choose the event
-        duration. You can select a fixed duration or select a column
-        from the previously chosen duration columns.  
-        Lastly, it will ask you to select the ITI/ISI column or specify
-        a fixed ITI/ISI value. If you do not want to add an ITI/ISI
-        column, you can select “No”. If you select a column, it will use
-        that column as the ITI/ISI for the event.
-
-7.  Signal setup menu to build a set of signals that can be included as
-    regressors in the level 1 model.  
-    This builds signals, which consist of an event, an event value
-    (amplitude), and convolution and regressor settings.
-
-    1.  This prompt will present options to:
-
-        1.  Add signal  
-        2.  Modify existing signal  
-        3.  Delete existing signals  
-        4.  Complete the signal setup If you press **1** to add a
-            signal, it will ask you to specify the signal name.  
-            It will provide a list of previously defined events and ask
-            you with which event this signal is aligned.  
-            Once you select an event, it will ask you if the signal
-            should be modelled only for specific trials.
-
-    2.  Next it will ask you what should be the pre-convolution value of
-        the regressor.  
-        You will have the option to select:
-
-        1.  Unit height (1.0)  
-        2.  Specify fixed value  
-        3.  Select a parametric modulator  
-            **Note:** If signals are not specified, it will default to
-            unit height regressors with no HRF normalization.
-
-    3.  If you specify a parametric modulator, it will ask you if this
-        signal is modulated by one or more within-subject factors.  
-        If yes, then you will need to specify which within-subject
-        factor(s) modulate this signal and whether there is an
-        interaction between the factors.
-
-    4.  It will also ask how the HRF should be normalized in
-        convolution:
-
-        1.  **none** – no rescaling of HRF.  
-        2.  **evtmax_1** – HRF max of 1.0 for each event, regardless of
-            duration.  
-        3.  **durmax_1** – HRF height varies with duration, capped at
-            1.0 for long events.  
-            *Recommendation:* For unit height regression choose `none`.
-            For parametric signals choose `evtmax_1`.
-
-    5.  Next it will ask if you want to change any of the advanced
-        options:
-
-        1.  *No temporal derivative*: Temporal gradient is the
-            difference between assumed HRF shape (canonical) and
-            no-assumed shape (basis set).  
-            It adds the first time difference of the convolved regressor
-            for better fit when actual BOLD response deviates from the
-            canonical HRF. Default: No.
-        2.  *Demean convolved signal*: Ensures intercept represents the
-            mean of the other regressors. Default: No.
-        3.  *No beta series*: If Yes, generates a regressor per trial
-            (used in functional connectivity). Default: No.
-        4.  *No time series multiplier (PPI)*
-
-8.  Model setup menu to build a set of models.
-
-    1.  This prompt will present options to:
-
-        1.  Add model  
-        2.  Modify model  
-        3.  Delete model  
-        4.  Done with L1 model setup
-
-    2.  If you press **1** to add a model, it will first ask you for the
-        model name and then provide a list of predefined signals that
-        can be added to the model.  
-        You can add from the signals list by entering the corresponding
-        numbers separated by a space.
-
-    3.  Next it will ask you if you want to include diagonal contrasts
-        for each regressor.  
-        **Note:** If you have a parametric modulator in the model, make
-        sure to include its occurrence regressor in the model as well.
-
-    4.  Next, the contrast setup menu will appear. You will have the
-        option to:
-
-        1.  Add contrast  
-        2.  Show contrast  
-        3.  Delete contrast  
-        4.  Done with contrast setup
-
-        Based on your answers to the previous prompts, a series of
-        contrasts will already be generated.  
-        You can choose **(2)** *Show contrast* to view these
-        contrasts.  
-        If there are any contrasts you wish to delete or add, you can do
-        so here.  
-        If you add any contrasts, you can either:
-
-        1.  Enter a vector of numeric values, one for each regressor in
-            the order they are displayed (e.g., `1 0 -1 0 0`), or  
-        2.  Enter name=value pairs for relevant coefficients (e.g.,
-            `pos_feedback = 1 neg_feedback = -1`).
-
-    5.  You can continue adding models by choosing **(1) Add model**.  
-        After you are done with model setup, choose **(4) Done with L1
-        model setup**.
-
-  
-  
-
-##### Building level 2 models interactively
-
-[`build_l2_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l2_models.md)
-function walks you through the process of building the model you want to
-run at the subject level.
-
-``` r
-
-gpa <- build_l2_models(gpa)
-```
-
-When defining a new level 2 model you will be prompted to enter the
-following:
-
-1.  Model name A model name which will be used in folder names and
-    output.
-
-2.  You can specify a model formula or walk through the model builder?
-    If you choose to specify a model formula, you can enter the formula
-    directly. R regression model syntax is used to specify the model
-    formula. For example: `~ emotion * wmload + run_number`.
-    Implicitely, the model always adds the intercept term (1+) to the
-    model if other regressors are mentioned in the specify model option.
-    If you choose to walk through the model builder, it will prompt you
-    to specify the model formula interactively.
-
-3.  Choose the reference level for the each factor used in the model
-    formula. After adding the model formula, it will ask you to choose
-    the reference level for dummy coding factors in the model. This
-    affects how contrasts are coded by emmeans and it controls how you
-    interpret the Intercept maps at levels 2 and 3, if you look at
-    these. In general, this choice should not make a big difference, but
-    we default to the factor level that is most frequent in the dataset.
-
-4.  Do you want to include diagonal contrasts for each regressor?
-    Diagonal contrasts give one coefficient for the explanatory
-    variable, i.e., one per column of the design matrix. In FSL terms,
-    this corresponds to the contrast of parameter estimates (COPE)
-    parameter. Generally, you would answer “yes” to this question.
-
-5.  How should contrasts be computed by emmeans? This is regarding how
-    model-predicted means or contrasts should handle unbalanced designs.
-    In many fMRI tasks, the number of trials or runs per condition is
-    unbalanced. For example, a task might have 4 runs of scrambled
-    faces, 2 runs of fearful faces, and 2 runs of happy faces. In this
-    case, if you choose “Equal”, the contrasts will treat all levels of
-    a factor equally, regardless of how many observations there are for
-    each level. If you choose “Cell”, the contrasts will weight the
-    levels according to their sample sizes.
-
-6.  Do you want to include model-predicted means for each level of the
-    regressor? If you want the mean-activation pattern of a regressor,
-    you can specify so here. Emmeans will figure out how to marginalize
-    over the other covariates to give you the mean pattern of activation
-    for each regressor.
-
-7.  Do you want to include pairwise differences for each level of the
-    regressor? The pipeline will only ask you this if you specify any
-    within-subject factor columns as part of your model. For example, if
-    one run of your task has a happy face shown to a participant and
-    another run of your task has a fearful face shown to them, you may
-    have a column in your run data frame that specifies what emotional
-    face was shown to a participant in each run of the task they
-    completed. If you wish to compare how their brain activity may
-    differ depending on the emotional face presented to them in
-    different runs, you should include pairwise differences for each
-    level of the emotional face regressor. Emmeans will then specify
-    different contrasts that show brain activity for each level (e.g.,
-    brain maps for when participants are shown happy faces) and
-    differences in brain activity depending on which level of regressor
-    they are shown (e.g., brain activity that responds more strongly to
-    happy faces than fearful faces). Contrasts that compare between
-    levels will be named level1_M_level2 (e.g., happy_M_fearful), with
-    the M meaning minus. There will be pairwise comparison contrasts for
-    each potential level combination.
-
-8.  Do you want to include the overall average response? This asks if
-    you want the overall brain map at the average of all covariates.
-    There could be duplicate contrasts in your matrix. This can occur
-    for many benign reasons, but you need to specify what you want to
-    call these contrasts in the output so that it is clear.
-
-  
-  
-
-##### Building level 3 models interactively
-
-[`build_l3_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l3_models.md)
-function walks you through the process of building the model you want to
-run at the sample level.
-
-``` r
-
-gpa <- build_l3_models(gpa)
-```
-
-You can specify multiple Level 3 models — for example, one with only an
-intercept, and one with covariates such as age, gender, or interactions
-between them. This allows you to test whether effects of interest are
-robust across different model specifications (e.g., with or without
-certain covariates). Running
-[`build_l3_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l3_models.md)
-launches an interactive process where you can iteratively define and
-edit models. It will continue prompting you to: add new models, modify
-existing models, delete models, until you are satisfied with your Level
-3 model set.
-
-When defining a new model you will be prompted to enter the
-following: 1) Model name A model name which will be used in folder names
-and output.
-
-2.  Do you want to specific the model formula or walk through the model
-    builder? You can specify a model formula. You need to supply the
-    right hand side of a regression model. Syntax is similar to
-    [`lm()`](https://rdrr.io/r/stats/lm.html) function in R formula
-    syntax. e.g. ~ 1 (intercept only), ~ age_at_scan, ~ age_at_scan +
-    gender, ~ age_at_scan \* gender. Use ~1 for intercept only model.
-    Implicitely, the model always adds the intercept term (1+) to the
-    model if other regressors are mentioned in the specify model option.
-
-3.  Include diagonal contrasts for each regressor? Diagnoal contrasts
-    gives one coefficient for the explanatory variable i.e. one per
-    coulumn of the design matrix. In FSL terms this corresponds to the
-    contrast of parameter estimates (COPX) parameter. Generally say yes.
-
-4.  How should contrasts be computed by emmeans? This is about how
-    model-predicted means or contrasts should handle unbalanced designs.
-    In many fMRI tasks, the number of trials or runs per condition is
-    unbalanced. For example a task might have 4 runs of scrambled faces,
-    2 runs of fearful faces, 2 runs of happy faces. In this case, if you
-    choose “Equal”, the contrasts will treat all levels of a factor
-    equally, regardless of how many observations there are for each
-    level. If you choose “Cell”, the contrasts will weight the levels
-    according to their sample sizes.
-
-If you have a factor variable, it detects that it is categorical and
-asks you the following questions: 5) Do you want model-predicted means
-for each level of the factor? 6) Do you want pairwise differences
-between levels of the factor?
-
-7.  Include overall average response? Generates a map for the average
-    subject (marginalized over covariates). Generally you would answer
-    yes.
-
-8.  For categorical variables it will ask you: Do you want to include
-    model-predicted simple slopes of covariates across levels of the
-    factor? For example, predicted age effect for a particular gender
-    regardless if you have an interaction in the model.
-
-9.  Based on these input the pipeline will generate some contrasts for
-    you to review. A contrast editor menu will appear. If you choose
-    “show contrast”, you will see the automatically generated contrasts.
-    If you do not want to modify any contrasts setup, you can click
-    “Done with contrast setup”.
-
-Back in the main build_l3_models() menu, you will see a list of all
-models you’ve defined so far and you would have the option to add
-another model, modify an existing model, delete a model and finish with
-building level 3 models. If you would like to see the model saved in the
-gpa object, you can call `str(gpa$l3_models)` to see the list of models
-you have defined so far.
-
-  
-  
-
-#### Setting up the L1, L2, and L3 models using a YAML specification file
-
-You can also specify the models using a YAML specification file and
-passing it to the `from_spec_file` input parameter to the
-`build_l1_models`, `build_l2_models` and `build_l3_models` functions.
-The YAML file can contain the model specifications for Level 1, Level 2,
-and Level 3 models.
-
-``` r
-
-gpa <- build_l1_models(gpa, from_spec_file = "my_spec.yaml")
-gpa <- build_l2_models(gpa, from_spec_file = "my_spec.yaml")
-gpa <- build_l3_models(gpa, from_spec_file = "my_spec.yaml")
-```
-
-1.  First set of outer layer options are the different columns that can
-    be used in the model specification. You will need to add which
-    columns in your dataframe pertains to the concept of event onsets,
-    event durations, ISI/ITI, values (parametric modulator event), and
-    within subject factors. The first set of outer later options can be
-    structured as follows. The hyphen creates an unorder list:
+This compact example defines two events, two unit-height signals, one
+parametric signal, a run-average Level 2 model, and an intercept-only
+Level 3 model:
 
 ``` yaml
-onsets: # event onset columns
-  - clock_onset
+onsets:
+  - cue_onset
   - feedback_onset
-  
-durations: # event duration columns
-  - rt_csv
 
-isis: # ISI/ITI columns
-  - iti_ideal
+durations:
+  - cue_duration
+  - feedback_duration
 
-values: # continuous parametric modulator event columns
-  - v_entropy
-  - pe_max
+isis:
+  - iti_duration
 
-wi_factors: # within subject factors
-  - emotion
-```
+values:
+  - prediction_error
 
-2.  The second set of outer layer options are the events that can be
-    used in the model specification. Each event will have a name, an
-    onset column, a duration column, and an ISI/ITI column (optional).
-    The duration column can be a fixed value or a column from the
-    `durations` list. The ISI/ITI column can be a fixed value or a
-    column from the `isis` list. The events can be structured as
-    follows: The events can be structured as follows:
+wi_factors:
+  - condition
 
-``` yaml
 events:
-  clock:
-    onset: clock_onset
-    duration: rt_csv
+  cue:
+    onset: cue_onset
+    duration: cue_duration
+    isi: iti_duration
 
   feedback:
     onset: feedback_onset
-    duration: 0.9
-    isi: iti_ideal
-```
+    duration: feedback_duration
+    isi: iti_duration
 
-3.  The third set of outer layer options are the signals that can be
-    used in the model specification. Each signal will have a name for
-    the signal, event with which the signal is alligned, which HRF
-    normalization do you want to apply, how to handle the value, and .
-    For setting up pre-convolution value of the regressor `value_fixed`
-    can be used. When it is set to a constant value of 1.0 will create a
-    unit height regressor for the signal. If `value_fixed` is not
-    specified, it defaults to 1.0. If you want to use a parametric
-    modulator, you can specify the `parametric_modulator` field with the
-    name of the column from the `values` list. If you specify a
-    parametric modulator, you can also specify if this signal is
-    modulated by one or more within-subject factors using the
-    `wi_factors` field. These can be specified as a model formula in the
-    format used in `lm` package eg. `wi_formula: ~ outcome - 1`. You can
-    also specify a `trial_subset_expression` to filter trials for this
-    signal. Next you can specify how the HRF convolution be normalized
-    by using the `normalization` field with the option `none`,
-    `evtmax_1`, or `durmax_1`. Please refer notes above for more details
-    on these options. Note that events and signals can have the same
-    name. Events are the start and end timiings of events happening
-    during the task and signals represent convolved regressors that
-    relate to those events. The signals can be structured as follows:
-
-``` yaml
 signals:
-  clock:
-    event: clock
-    normalization: none
+  cue:
+    event: cue
     value_fixed: 1
+    normalization: none
 
   feedback:
     event: feedback
-    normalization: none
     value_fixed: 1
-
-  entropy_clock:
-    event: clock
-    trial_subset_expression: rt_csv < 4
-    normalization: evtmax_1
-    parametric_modulator: v_entropy
-    wi_factors: emotion
-    wi_formula: ~ outcome - 1
+    normalization: none
 
   pe_feedback:
     event: feedback
-    trial_subset_expression: rt_csv < 4
+    parametric_modulator: prediction_error
     normalization: evtmax_1
-    parametric_modulator: pe_max
 
-  NF_inf_interaction_wifactor: 
-    event: feedback 
-    normalization: none 
-    value_fixed: 1 
-    wi_factors: [InfusionType, Feedback] 
-    wi_formula: ~ InfusionType*Feedback - 1 
-```
-
-4.  The fourth set of outer layer options are the l1 models that can be
-    used in the model specification. Each model will have a name, a list
-    of signals, and contrast settings. Each model can include a set of
-    signals predefined in the signals section of the yaml file and added
-    with dashes on new lines. Contrast options can be specified either
-    at the top level of the model block or nested under a `contrasts:`
-    key. Both are supported, but we recommend using `contrasts:` because
-    exported configs use that structure. You can specify whether
-    diagonal contrasts should be included using `diagonal` (or legacy
-    `include_diagonal`) with `yes`/`no`.
-
-The l1 models can be structured as follows:
-
-``` yaml
 l1_models:
-  entropy:
+  task:
     signals:
-      - clock
-      - feedback
-      - entropy_clock
-    contrasts:
-      diagonal: yes
-      cell_means: no
-      overall_response: no
-      weights: cells
-  pe:
-    signals:
-      - clock
+      - cue
       - feedback
       - pe_feedback
     contrasts:
       diagonal: yes
-```
 
-5.  The fifth set of outer layer options are the l2 models that can be
-    used in the model specification. As with L1, contrast settings can
-    be top-level or under `contrasts:`; we show the recommended nested
-    form. The l2 models can be structured as follows:
-
-``` yaml
 l2_models:
-  l2emotion:
+  run_average:
     level: 2
-    model_formula: ~emotion
-    reference_level:
-      emotion: 'scram'
+    model_formula: ~ 1
+    l2_scope: id_session
     contrasts:
       diagonal: yes
-      cell_means: yes
-      cond_means: emotion
-      pairwise_diffs: emotion
       overall_response: yes
-      weights: cells
-      delete: EV_Intercept
-```
 
-6.  The sixth set of outer layer options are the l3 models that can be
-    used in the model specification. Contrast settings can be top-level
-    or under `contrasts:`; we show the recommended nested form. The
-    `fsl_outlier_deweighting` field is **not** a contrast and must be
-    specified at the model’s top level. The l3 models can be structured
-    as follows:
-
-``` yaml
 l3_models:
-  l3age:
+  group_mean:
     level: 3
-    model_formula: ~age
-    covariate_transform:
-        age: mean
+    model_formula: ~ 1
+    l3_input_mode: per_session
     contrasts:
       diagonal: yes
-      cell_means: no
       overall_response: yes
-      weights: cells
-      delete: EV_Intercept
     fsl_outlier_deweighting: no
 ```
 
-  
-  
+Model concepts:
 
-### Step 3b (optional): Choose GLM software backends
+- **Events** define when something happened: onset, duration, and
+  optional ISI/ITI.
+- **Signals** define regressors to estimate: an event plus
+  amplitude/modulation and HRF normalization.
+- **Parametric modulators** are continuous signal amplitudes. By
+  default, design-matrix generation centers these values
+  (`additional$bdm_args$center_values = TRUE`), which makes unit-height
+  event regressors and parametric effects easier to interpret together.
+- **L1 models** choose which signals enter the run-level GLM and which
+  L1 contrasts are created.
+- **L2 models** combine runs within subject or subject-session. Use
+  `l2_scope: id_session` for ordinary within-session run combination and
+  most longitudinal workflows. Use `l2_scope: id` only when pooling
+  sessions inside subject is scientifically intended.
+- **L3 models** define group inference. For multi-session data,
+  `l3_input_mode` controls how session-level maps feed Level 3.
+- **Contrasts** under `contrasts:` control diagonal COPEs, condition
+  means, pairwise differences, cell means, and overall responses.
+  Keeping contrast settings nested under `contrasts:` matches exported
+  configs.
 
-By default, `fmri.pipeline` uses `gpa$glm_software` (typically `"fsl"`)
-as the estimation backend at every level. If you need different software
-at different levels—for example, FSL for Levels 1–2 and AFNI `3dLMEr`
-for Level 3—you can set `gpa$level_backends` or attach
-`execution_backend` / `producer_backend` fields to individual models.
-See the **Choosing model backends** section of
-[`vignette("design")`](https://uncdependlab.github.io/fmri.pipeline/articles/design.md)
-for the full precedence rules, worked examples, and current limitations.
+This guide shows minimal contrast settings. For a full explanation of
+diagonal contrasts, condition means, pairwise differences, cell means,
+overall response, simple slopes, emmeans weighting, and custom contrast
+entry, see
+[`vignette("interactive-model-builder")`](https://uncdependlab.github.io/fmri.pipeline/articles/interactive-model-builder.md).
 
-### Step 4: Run the Pipeline
+For categorical predictors at Level 2 or Level 3, include reference
+levels when interpretation matters:
 
-To run the pipeline, you can use the
+``` yaml
+l3_models:
+  group_by_age:
+    level: 3
+    model_formula: ~ group + age
+    reference_level:
+      group: control
+    covariate_transform:
+      age: mean
+    contrasts:
+      diagonal: yes
+      cond_means: group
+      pairwise_diffs: group
+      overall_response: yes
+    fsl_outlier_deweighting: no
+```
+
+`covariate_transform: age: mean` mean-centers `age` for model
+construction. Centering continuous covariates usually makes the
+intercept and condition means easier to interpret.
+
+## Backend Selection
+
+For a standard FSL analysis, no special backend configuration is needed:
+
+``` r
+
+gpa$glm_software <- "fsl"
+```
+
+For different software at different levels, use `gpa$level_backends`:
+
+``` r
+
+gpa$glm_software <- "fsl"
+gpa$level_backends <- list(
+  l1 = "fsl",
+  l2 = "fsl",
+  l3 = "afni"
+)
+```
+
+For model-specific control, set backend fields on the model object or in
+YAML. This is the current recommended pattern for AFNI `3dLMEr` Level 3
+models that consume FSL-produced Level 2 inputs:
+
+``` yaml
+l2_models:
+  session_average:
+    level: 2
+    model_formula: ~ 1
+    l2_scope: id_session
+    contrasts:
+      diagonal: yes
+      overall_response: yes
+
+l3_models:
+  longitudinal_lmer:
+    level: 3
+    model_formula: ~ session_label
+    l3_input_mode: 3dlmer
+    execution_backend: afni
+    producer_backend: fsl
+    random_effects: "(1 | Subj)"
+    contrasts:
+      cond_means: session_label
+      pairwise_diffs: session_label
+      overall_response: yes
+```
+
+Current limitations are important:
+
+- FSL supports separate Level 1, Level 2, and Level 3 execution.
+- SPM support uses SPM-style run/session handling and does not run a
+  standalone Level 2 FEAT-style step.
+- AFNI `3dLMEr` is currently supported as a Level 3 execution backend.
+- Level 3 producer inputs are currently implemented only for FSL. In
+  practice, AFNI Level 3 should usually specify `producer_backend: fsl`.
+
+When
 [`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
-function. This function will execute all specified models across levels,
-scheduling jobs as needed.
+starts, it resolves backend selection, validates producer requirements,
+and logs a backend preflight report. If you see a backend or producer
+error, read that report first.
+
+## Run the Pipeline
+
+Submit the full selected analysis with:
 
 ``` r
 
 run_glm_pipeline(gpa)
 ```
 
-This function will: 1) Validate the `gpa` object. 2) Create output
-directories based on the `gpa$output_locations` settings. 3) Generate
-job submission scripts for each model. 4) Submit jobs to the specified
-scheduler (e.g., SLURM, Torque).
-
-Note: If you are running the pipeline on a local machine, you can set
-`scheduler = "local"` in the `gpa` object.
-
-When you run `run_glm_pipeline(gpa)`, it will prompt you to choose the
-level 1 models to run. You can select one or more models from the list
-of defined Level 1 models. Similarly, you can choose Level 2 and Level 3
-models to run. This steps will create separate jobs for each
-conceptually separate steps: finalize, setup_l1, run_l1, setup_l2,
-run_l2, setup_l3, run_l3. Each job will be submitted to the scheduler
-with the appropriate job dependencies.
-
-  
-  
-
-### Step 5: Monitor Progress
-
-You can monitor the progress of the pipeline by checking the output
-directories specified in `gpa$output_locations`. The pipeline will
-create a structured output directory for each analysis, including
-directories for Level 1, Level 2, and Level 3 analyses, as well as job
-submission scripts and logs.
-
-------------------------------------------------------------------------
-
-  
-  
-
-## Output directory structure
-
-`fmri.pipeline` organizes outputs in a structured way similar to Brain
-Imaging Data Structure (BIDS) format. The output directory structure is
-as follows: \* name of the analysis \* feat_l1: First-level analysis
-outputs \* sub-{id}: Subject-specific directory \* ses-{session}:
-Session-specific directory (if applicable) \* {l1_model}: Directory for
-the specific Level 1 model \* FEAT_LVL1_run{run_number}.feat: FSL Feat
-folders for each run being executed by the scheduler \*
-FEAT_LVL1_run{run_number}.fsf: FSL Feat design file containing the model
-specification in FSL syntax \* {model}\_bdm_setup.RData: ?? \*
-timing_files: folder ??
-
-- feat_l2: Second-level analysis outputs
-
-  - sub-{id}: Subject-specific directory
-    - ses-{session}: Session-specific directory (if applicable)
-      - L1m-{l1_model}: Directory for the Level 1 model feeding into L2
-        - l1c-{l1_contrast}: Directory for the Level 1 contrast feeding
-          into L2
-          - L2m-{l2_model_name}.fsf: Subject-level FEAT design file for
-            the L2 model
-          - L2m-{l2_model_name}.gfeat: Subject-level FEAT output
-            directory for the L2 model
-
-- feat_l3: Third-level analysis outputs
-
-  - L3m-{l3_model_name}: Directory for the specific Level 3 model
-    - L1m-{l1_model}: Directory for the specific Level 1 model
-      - L2m-{l2_model_name}: Directory for the specific Level 2 model
-        - l2c-{l2_contrast}: Directory for the Level 2 contrast
-          - FEAT_l1c-{l1_contrast}.gfeat: Group-level FEAT directory for
-            the Level 1 contrast
-
-- scheduler_scripts: Directory containing job submission scripts for the
-  scheduler (e.g., SLURM, Torque)
-
-  - batch\_{batch_id}: Directory for a specific batch of jobs. Everytime
-    [`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
-    is called, a new batch directory is created.
-    - Rscripts for each step that fmri.pipeline runs
-    - Rout files providing comments on each steps run by each Rsciript.
-      To determine how far the pipeline progressed, check the latest
-      .Rout file in the batch directory.
-    - RData file containing the `gpa` object with updated information
-      about the analysis.
-    - {job_name}.sh: Job submission script for the specific job
-    - {job_name}.out: Output file for the job run
-
-- setup_l{model_level}\_models.txt: log files. For example,
-  `setup_l3_models.txt` contains information about which runs for which
-  subjects are excluded due to excessive head motion.
-
-- .sqlite: SQLite database for tracking analysis progress and results
-
-`fmri.pipeline` also gives considerable flexibility in how you want to
-structure your outputs by changing the contents of
-`gpa$output_locations` object. The output location can be a dynamic
-expression (based on `glue` R package) that gets evaluated when the
-package is run. This is the default expresson for first-level FEAT
-directories:
-`"{gpa$output_directory}/feat_l1/sub-{id}/ses-{session}/{l1_model}"`.
-The contents inside the curly brackets are evaluated at runtime, so you
-can use any variable in the `gpa` object to specify the output location.
-The default for second-level FEAT outputs is
-`"{gpa$output_directory}/feat_l2/sub-{id}/ses-{session}/L1m-{l1_model}/l1c-{l1_cope_label}/L2m-{l2_model}"`,
-which is used as the basename for the `.fsf` file and `.gfeat`
-directory.
-
-### Reviewing pipeline run success and status
-
-Each call to
+By default,
 [`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
-creates a new run-specific batch directory under `scheduler_scripts`,
-for example
-`scheduler_scripts/batch_14e992e1-b995-41ad-ac70-8b7f91630130`. Treat
-this directory as the primary execution record for that pipeline run. It
-contains the generated submission scripts, R wrapper scripts, `.Rout`
-files, scheduler `.out` files, and cached `gpa` objects used by the run.
-
-A good review workflow is:
-
-1.  Identify the batch directory for the run. If you have the saved
-    `gpa` object, the active run directory is usually recorded in
-    `project_config.json` and in
-    `gpa$output_locations$scheduler_scripts`. If you are reviewing from
-    the filesystem, sort `scheduler_scripts/batch_*` by modification
-    time and choose the batch corresponding to the run you launched.
-
-2.  Check the SQLite job tracker. The analysis directory contains a
-    `.sqlite` file with one row per tracked scheduler job. A successful
-    run should have all relevant jobs marked `COMPLETED`, with no
-    `FAILED` or `FAILED_BY_EXT` statuses.
+prompts you to choose L1, L2, and L3 models. For scripted runs, pass
+model names explicitly:
 
 ``` r
 
-status <- get_tracked_job_status(
-  sequence_id = "14e992e1-b995-41ad-ac70-8b7f91630130",
-  sqlite_db = "/path/to/analysis/my_analysis.sqlite"
+run_glm_pipeline(
+  gpa,
+  l1_model_names = "task",
+  l2_model_names = "run_average",
+  l3_model_names = "group_mean"
 )
-
-table(status$status)
-status[order(status$time_submitted), c("job_id", "job_name", "status", "time_started", "time_ended")]
 ```
 
-3.  Inspect the saved `gpa` object for model and artifact status. The
-    batch directory contains cached `gpa` objects, typically
-    `run_pipeline_cache.RData` plus backend-specific caches such as
-    `run_pipeline_cache_fsl.RData` or `run_pipeline_cache_afni.RData`.
-    Load the latest relevant cache and inspect the setup/status tables
-    for each level. The exact columns vary by backend, but the status
-    tables commonly include fields such as `to_run`, `feat_complete`,
-    `feat_failed`, `afni_complete`, and `afni_failed`.
+You can also apply temporary backend overrides at run time:
 
 ``` r
 
-load("/path/to/analysis/scheduler_scripts/batch_<batch_id>/run_pipeline_cache.RData")
+run_glm_pipeline(
+  gpa,
+  l1_model_names = "task",
+  l2_model_names = "session_average",
+  l3_model_names = "longitudinal_lmer",
+  level_backends = list(l3 = "afni")
+)
+```
 
-# FSL level 1 run-level outputs
-gpa$l1_model_setup$fsl |>
-  dplyr::count(feat_complete, feat_failed, to_run)
+The submitted job sequence is usually:
 
-gpa$l1_model_setup$fsl |>
-  dplyr::filter(feat_failed | !feat_complete) |>
-  dplyr::select(id, session, run_number, l1_model, feat_dir, feat_fsf, feat_complete, feat_failed)
+1.  `finalize_configuration`: checks the compute environment, validates
+    models, initializes the SQLite tracker, looks up NIfTI metadata, and
+    finalizes defaults.
+2.  `setup_l1`: creates Level 1 design matrices, timing files, and
+    backend-specific setup files such as FSL `.fsf` files.
+3.  `run_l1_<backend>`: submits and waits for run-level model jobs.
+4.  `setup_run_l2_<backend>`: sets up and runs Level 2 jobs when a
+    standalone Level 2 step is needed.
+5.  `setup_run_l3_<backend>`: sets up and runs Level 3 jobs.
+6.  `cleanup_glm`: refreshes status tables and reconciles
+    backend-specific caches.
 
-# FSL level 2 subject/session outputs
+The exact steps depend on selected models, whether the task is
+single-run or multi-run, and which backends are requested.
+
+## Output Layout
+
+Each analysis has a top-level output directory, usually:
+
+``` text
+<output_directory>/<analysis_name>/
+```
+
+Important contents include:
+
+``` text
+feat_l1/                 # FSL Level 1 setup files and .feat outputs
+feat_l2/                 # FSL Level 2 .fsf files and .gfeat outputs
+feat_l3/                 # FSL Level 3 .fsf files and .gfeat outputs
+afni_3dlmer/             # AFNI 3dLMEr scripts and outputs, when AFNI is used
+logs/                    # text and JSON logs from setup functions
+scheduler_scripts/       # one batch_<uuid>/ directory per run_glm_pipeline() call
+project_config.json      # analysis metadata and batch history
+*.sqlite                 # SQLite job-tracking database
+```
+
+Default FEAT paths include model and contrast labels to avoid
+collisions:
+
+``` text
+feat_l1/sub-<id>/ses-<session>/<l1_model>/FEAT_LVL1_run<run_number>.feat
+feat_l2/sub-<id>/ses-<session>/L1m-<l1_model>/l1c-<l1_cope_label>/L2m-<l2_model>.gfeat
+feat_l3/L3m-<l3_model>/L1m-<l1_model>/L2m-<l2_model>/l2c-<l2_contrast>/FEAT_l1c-<l1_contrast>.gfeat
+```
+
+The output templates are stored in `gpa$output_locations` and use `glue`
+syntax. Advanced users can override them before running the pipeline,
+but new users should start with the defaults.
+
+## Check Status
+
+The easiest interactive route is:
+
+``` r
+
+diagnose_pipeline(gpa)
+```
+
+For scripted checks, inspect the latest batch directory and SQLite job
+tracker.
+
+``` r
+
+batch_dirs <- list.dirs(
+  gpa$output_locations$scheduler_scripts,
+  recursive = FALSE,
+  full.names = TRUE
+)
+latest_batch <- batch_dirs[which.max(file.info(batch_dirs)$mtime)]
+latest_batch
+```
+
+Load the run cache to inspect model status:
+
+``` r
+
+load(file.path(latest_batch, "run_pipeline_cache.RData"))
+
+if (!is.null(gpa$l1_model_setup$fsl)) {
+  gpa$l1_model_setup$fsl |>
+    dplyr::count(feat_complete, feat_failed, to_run)
+}
+
+if (!is.null(gpa$l2_model_setup$fsl)) {
+  gpa$l2_model_setup$fsl |>
+    dplyr::filter(feat_failed | !feat_complete) |>
+    dplyr::select(id, session, l1_model, l1_cope_name, l2_model, feat_dir, feat_fsf)
+}
+
+if (!is.null(gpa$l3_model_setup$fsl)) {
+  gpa$l3_model_setup$fsl |>
+    dplyr::filter(feat_failed | !feat_complete) |>
+    dplyr::select(l1_model, l2_model, l3_model, feat_dir, feat_fsf)
+}
+
+if (!is.null(gpa$l3_model_setup$afni)) {
+  gpa$l3_model_setup$afni |>
+    dplyr::filter(afni_failed | !afni_complete) |>
+    dplyr::select(l3_model, l1_cope_name, l2_cope_name, output_file, afni_script)
+}
+```
+
+Backend-specific caches, such as `run_pipeline_cache_fsl.RData` or
+`run_pipeline_cache_afni.RData`, can be more informative because they
+are saved immediately after backend-specific jobs finish:
+
+``` r
+
+load(file.path(latest_batch, "run_pipeline_cache_fsl.RData"))
 gpa$l2_model_setup$fsl |>
-  dplyr::filter(feat_failed | !feat_complete) |>
-  dplyr::select(id, session, l1_model, l1_cope_name, l2_model, feat_dir, feat_complete, feat_failed)
-
-# AFNI 3dLMEr level 3 outputs, when AFNI is used at L3
-gpa$l3_model_setup$afni |>
-  dplyr::filter(afni_failed | !afni_complete) |>
-  dplyr::select(l3_model, l1_cope_name, l2_cope_name, afni_dir, afni_script, afni_complete, afni_failed)
+  dplyr::filter(feat_failed | !feat_complete)
 ```
 
-If a backend-specific cache is present, it can be more informative for
-that backend because it is saved immediately after that backend’s jobs
-finish:
-
-``` r
-
-load("/path/to/analysis/scheduler_scripts/batch_<batch_id>/run_pipeline_cache_fsl.RData")
-gpa$l2_model_setup$fsl |> dplyr::filter(feat_failed | !feat_complete)
-
-load("/path/to/analysis/scheduler_scripts/batch_<batch_id>/run_pipeline_cache_afni.RData")
-gpa$l3_model_setup$afni |> dplyr::filter(afni_failed | !afni_complete)
-```
-
-These
-[`dplyr::filter()`](https://dplyr.tidyverse.org/reference/filter.html)
-calls are the fastest way to find specific failed or incomplete runs,
-subjects, contrasts, or model combinations. If they return zero rows and
-the SQLite job tracker is all `COMPLETED`, the pipeline’s internal
-status agrees that execution finished successfully.
-
-4.  If using SLURM or Torque/PBS, confirm scheduler exit codes. On
-    SLURM, `sacct` should show `COMPLETED` and `0:0` exit codes for each
-    job id. Scheduler records are especially useful when a job was
-    killed for time or memory before R or FSL/AFNI could write a
-    complete log.
+On SLURM, scheduler exit codes are often the fastest way to distinguish
+model errors from time or memory kills:
 
 ``` bash
 sacct -j 49616891,49616892 --format=JobID,JobName%45,State,ExitCode,Elapsed,MaxRSS
 ```
 
-5.  Review the batch-level `.Rout` files in order. The parent batch jobs
-    correspond to conceptual pipeline steps such as
-    `finalize_configuration`, `setup_l1`, `run_l1_fsl`,
-    `setup_run_l2_fsl`, `setup_run_l3_afni`, and `cleanup_glm`. The
-    `.Rout` files show what the pipeline submitted, which child jobs it
-    waited for, and whether the final status update was `COMPLETED`.
-
-6.  Review scheduler `.out` files in the batch directory. Scheduler
-    output files are run-scoped logs and are intentionally collected in
-    the batch directory. Newer runs name these files with the scheduler,
-    job id, job name or step, and a submission token, for example
-    `slurm-49624400-3dlmer_l3_3dlmer_session_EV_house_overall-3dlmer_l3_3dlmer_session_6cbb62610636.out`.
-    This makes it possible to inspect all logs for a run in one place
-    while still knowing which model or step each log represents.
-
-7.  Check artifact-local manifests. Runs produced by current versions of
-    `fmri.pipeline` write a `job_manifest.tsv` file into each completed
-    or failed artifact directory. This file records the artifact path,
-    artifact type, status, job id, job name, scheduler log path, batch
-    directory, batch file, source file, and timestamp. Use it when you
-    are inspecting one FEAT, SPM, or AFNI result directory and want to
-    jump back to the exact scheduler log that produced it.
+For FSL outputs, successful artifacts should contain `.feat_complete`
+and should not contain `.feat_fail`. Current pipeline runs also write
+`job_manifest.tsv` into artifact directories, linking each result back
+to the scheduler job, batch script, and scheduler log that produced it:
 
 ``` r
 
 manifest <- read.delim(
-  "/path/to/analysis/feat_l2/sub-01/ses-1/L1m-task/l1c-EV_face/L2m-l2_model.gfeat/job_manifest.tsv",
+  "/path/to/analysis/feat_l2/sub-10637/ses-1/L1m-task/l1c-EV_feedback/L2m-run_average.gfeat/job_manifest.tsv",
   stringsAsFactors = FALSE
 )
 
 manifest[, c("status", "job_id", "job_name", "scheduler_log", "batch_file")]
 ```
 
-8.  Check expected output markers and model logs. For FSL FEAT outputs,
-    look for `.feat_complete` inside `.feat` or `.gfeat` directories and
-    absence of `.feat_fail`. For AFNI `3dLMEr`, check that each model
-    directory has the expected `+HEAD` and `+BRIK` output pair and
-    review the `*_LMEr_log.txt` plus the scheduler `.out` named in
-    `job_manifest.tsv`. Warnings such as singular mixed-model fits
-    should be treated as model-review issues rather than scheduler
-    failures if the job status and output files are complete.
+## Common Early Failures
 
-When these checks agree–all tracked jobs are complete, scheduler exit
-codes are clean, expected output markers exist, and artifact manifests
-point to the expected batch logs–the run can be treated as successful
-from an execution and output-structure perspective. Any remaining
-warnings should be evaluated statistically or scientifically for the
-specific model.
+- **No overlapping IDs across tables**: check that `id` has the same
+  coding in `trial_data`, `run_data`, and `subject_data`. The pipeline
+  coerces `id` to character, but it cannot fix inconsistent IDs.
+- **Duplicated subject rows**: `subject_data` must have at most one row
+  per `id` and `session`.
+- **Missing run files**: prefer explicit `run_nifti` paths and verify
+  `file.exists(run_df$run_nifti)` before setup.
+- **TR not provided**: provide either `tr = <seconds>` in
+  [`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
+  or a numeric `tr` column in `run_data`.
+- **Model specs not finalized**:
+  [`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
+  requires a valid `l1_model_set`. Build L1 models before submission.
+- **Confound column mismatch**: if confound files have no header, set
+  `confound_input_colnames`. If they use fMRIPrep-style missing values,
+  set `na_strings` inside `confound_settings`.
+- **Backend mismatch**: AFNI Level 3 currently expects
+  `l3_input_mode: 3dlmer` and FSL-produced upstream inputs.
 
-------------------------------------------------------------------------
+## Minimal End-to-End Skeleton
+
+``` r
+
+library(fmri.pipeline)
+
+trial_df <- readr::read_csv("inputs/trials.csv")
+run_df <- readr::read_csv("inputs/runs.csv")
+subject_df <- readr::read_csv("inputs/subjects.csv")
+
+stopifnot(all(file.exists(run_df$run_nifti)))
+
+gpa <- setup_glm_pipeline(
+  analysis_name = "task_glm",
+  scheduler = "slurm",
+  output_directory = "/proj/lab/analysis",
+  trial_data = trial_df,
+  run_data = run_df,
+  subject_data = subject_df,
+  tr = 0.9,
+  drop_volumes = 2,
+  n_expected_runs = 2,
+  l1_models = NULL,
+  l2_models = NULL,
+  l3_models = NULL,
+  glm_software = "fsl"
+)
+
+gpa <- build_l1_models(gpa, from_spec_file = "task_glm_spec.yaml")
+gpa <- build_l2_models(gpa, from_spec_file = "task_glm_spec.yaml")
+gpa <- build_l3_models(gpa, from_spec_file = "task_glm_spec.yaml")
+
+run_glm_pipeline(
+  gpa,
+  l1_model_names = "task",
+  l2_model_names = "run_average",
+  l3_model_names = "group_mean"
+)
+
+diagnose_pipeline(gpa)
+```
+
+For a first real project, start with one L1 model, one L2 model, and one
+intercept-only L3 model. Once that path submits and status checks are
+clean, add scientific contrasts, covariates, and alternate backend
+models.
