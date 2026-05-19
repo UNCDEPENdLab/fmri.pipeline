@@ -38,6 +38,24 @@
 * `harvest_l3_inputs()` replaces the former `harvest_fsl_copes()` with a dispatcher that routes to backend-specific harvesters based on the declared `producer_backend`
 * Run-time backend overrides via `level_backends` and `backend_overrides` arguments to `run_glm_pipeline()`
 
+## FSL/FLAME backend reliability
+
+* **Fix: FSL L3 jobs now wait on the backend-specific L2 producer job.** FSL L3 setup/run jobs now
+  depend on `setup_run_l2_fsl` when they consume FSL L2 outputs, avoiding races where L3 setup could
+  start before the FSL L2 cache and FEAT outputs were ready.
+
+* **Improved slice-parallel FLAME1+2 recovery.** The local `flame_runner` keeps FSL's default
+  z-slice FLAME parallelization, but no longer fails the full model immediately when one FLAME12
+  slice crashes. Failed `--runmode=flame12` slice commands are retried as `--runmode=flame1`, with
+  FLAME12-only MCMC options removed from the retry command.
+
+* **Surfaced FLAME12 slice fallbacks in logs.** When a slice is recovered by FLAME1, the failed
+  FLAME12 slice log directory is moved aside as `statsNNNN.flame12_failed.*`, and the FEAT directory
+  receives a `flame_runner_fallbacks.tsv` audit file. These records are also promoted into the
+  level-specific `lgr` model-estimation logs (`logs/l1_estimation.*`, `logs/l2_estimation.*`, or
+  `logs/l3_estimation.*`) as warnings so users can see that estimation recovered by falling back to
+  FLAME1 for one or more slices.
+
 ## Level 1 setup refactor
 
 * Refactor `setup_l1_models` into smaller helper functions (`setup_l1_subject`, `load_cached_l1_bdm`, `drop_runs_without_events`)

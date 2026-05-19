@@ -26,6 +26,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   tracking_sqlite_db <- gpa$output_locations$sqlite_db
   # retrieve cmd line update function
   upd_job_status_path <- system.file("bin/upd_job_status.R", package = "fmri.pipeline")
+  log_flame_fallbacks_path <- system.file("bin/log_flame_runner_fallbacks.R", package = "fmri.pipeline")
 
   # TODO: support named subsetting in model_names, like list(l1_model="pe_only", l2_model=c("l2_1", "l2_2"))
   # level-specific copy-paste is a bit clunky here, but at least it's clear...
@@ -220,6 +221,22 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     dir.create(feat_output_directory, recursive = TRUE)
   }
 
+  estimation_log_dir <- gpa$output_locations$log_directory
+  if (is.null(estimation_log_dir) || !nzchar(estimation_log_dir)) {
+    estimation_log_dir <- file.path(gpa$output_directory, "logs")
+  }
+  dir.create(estimation_log_dir, recursive = TRUE, showWarnings = FALSE)
+  estimation_log_txt <- if (isTRUE(gpa$log_txt)) {
+    file.path(estimation_log_dir, sprintf("l%d_estimation.txt", level))
+  } else {
+    "NULL"
+  }
+  estimation_log_json <- if (isTRUE(gpa$log_json)) {
+    file.path(estimation_log_dir, sprintf("l%d_estimation.json", level))
+  } else {
+    "NULL"
+  }
+
   auto_retry_l3_excessive_outliers <- isTRUE(gpa$glm_settings$fsl$auto_retry_l3_excessive_outliers) ||
     is.null(gpa$glm_settings$fsl$auto_retry_l3_excessive_outliers)
 
@@ -289,6 +306,15 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "  fi",
       "  exit_code=$?",
       "  end_time=$( date )",
+      paste(
+        "  Rscript", shQuote(log_flame_fallbacks_path),
+        "--feat_dir", "\"${odir}\"",
+        "--level", level,
+        "--log_txt", shQuote(estimation_log_txt),
+        "--log_json", shQuote(estimation_log_json),
+        "--threshold", shQuote(as.character(gpa$lgr_threshold)),
+        "|| true"
+      ),
       "  if [ $exit_code -eq 0 ]; then",
       "    status_file=\"${odir}/.feat_complete\"",
       "    artifact_status=\"COMPLETED\"",

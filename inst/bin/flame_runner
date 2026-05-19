@@ -1,4 +1,129 @@
 #!/bin/bash
+build_flame1_command() {
+    local cmd="$1"
+    local token out skip_next
+    local -a tokens
+
+    cmd="${cmd/--runmode=flame12/--runmode=flame1}"
+    out=""
+    skip_next=0
+
+    # FEAT-generated flameo commands are whitespace-delimited. Keep this simple
+    # so the fallback does not evaluate command text while rewriting options.
+    read -r -a tokens <<< "$cmd"
+    for token in "${tokens[@]}"; do
+        if [ "$skip_next" -eq 1 ]; then
+            skip_next=0
+            continue
+        fi
+        case "$token" in
+            --nj|--bi|--se|--zlt|--zut)
+                skip_next=1
+                ;;
+            --nj=*|--bi=*|--se=*|--zlt=*|--zut=*|--fm)
+                ;;
+            *)
+                out="${out}${out:+ }${token}"
+                ;;
+        esac
+    done
+
+    printf '%s\n' "$out"
+}
+
+extract_ld_dir() {
+    local cmd="$1"
+    local token next_is_ld
+    local -a tokens
+
+    next_is_ld=0
+    read -r -a tokens <<< "$cmd"
+    for token in "${tokens[@]}"; do
+        if [ "$next_is_ld" -eq 1 ]; then
+            printf '%s\n' "$token"
+            return 0
+        fi
+        case "$token" in
+            --ld)
+                next_is_ld=1
+                ;;
+            --ld=*)
+                printf '%s\n' "${token#--ld=}"
+                return 0
+                ;;
+        esac
+    done
+    return 1
+}
+
+move_failed_ld_dir() {
+    local cmd="$1"
+    local ld failed_ld
+
+    ld="$(extract_ld_dir "$cmd")" || return 0
+    if [ -z "$ld" ] || [ ! -d "$ld" ]; then
+        return 0
+    fi
+
+    failed_ld="${ld}.flame12_failed.$$"
+    if /bin/mv "$ld" "$failed_ld" 2>/dev/null; then
+        echo "flame_runner: moved failed FLAME12 log directory to ${failed_ld}" >&2
+        printf '%s\n' "$failed_ld"
+    else
+        /bin/rm -rf "$ld"
+        printf '%s\n' "$ld"
+    fi
+}
+
+log_flame12_fallback() {
+    local status="$1"
+    local ld="$2"
+    local failed_ld="$3"
+    local fallback="$4"
+    local log_file="${FLAME_RUNNER_FALLBACK_LOG:-flame_runner_fallbacks.tsv}"
+    local timestamp
+
+    if [ ! -s "$log_file" ]; then
+        printf 'timestamp_utc\tpid\tflame12_status\tld_dir\tfailed_ld_dir\tfallback_command\n' > "$log_file"
+    fi
+    timestamp="$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$timestamp" "$$" "$status" "${ld:-NA}" "${failed_ld:-NA}" "$fallback" >> "$log_file"
+}
+
+run_flame_command() {
+    local cmd="$1"
+    local status fallback ld failed_ld
+
+    sh -c "$cmd"
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        return 0
+    fi
+
+    if [[ "$cmd" == *"--runmode=flame12"* ]]; then
+        fallback="$(build_flame1_command "$cmd")"
+        echo "flame_runner: FLAME12 slice command failed with status ${status}; retrying with FLAME1: ${fallback}" >&2
+        ld="$(extract_ld_dir "$cmd")"
+        failed_ld="$(move_failed_ld_dir "$cmd")"
+        log_flame12_fallback "$status" "$ld" "$failed_ld" "$fallback"
+        sh -c "$fallback"
+        return $?
+    fi
+
+    return "$status"
+}
+
+if [ "${1:-}" = "--run-command" ]; then
+    shift
+    if [ $# -ne 1 ]; then
+        echo "flame_runner: --run-command expects one command string" >&2
+        exit 1
+    fi
+    run_flame_command "$1"
+    exit $?
+fi
+
 if [ $# -ne 2 ]; then
     echo "flame_runner expects two arguments: <list of flame commands> <max jobs>"
     exit 1
@@ -45,6 +170,9 @@ if [ "$njobs" -le 0 ]; then
     njobs=1
 fi
 
+fallback_log="${FLAME_RUNNER_FALLBACK_LOG:-flame_runner_fallbacks.tsv}"
+export FLAME_RUNNER_FALLBACK_LOG="$fallback_log"
+
 cmd_parallel=$(command -v parallel)
 cmd_xargs=$(command -v xargs)
 
@@ -62,10 +190,10 @@ if [ "$has_xargs" -eq 1 ]; then
 fi
 
 if [ "$has_parallel" -eq 1 ]; then
-    "$cmd_parallel" --jobs "$njobs" --halt now,fail=1 < "$flame_list"
+    "$cmd_parallel" --jobs "$njobs" "$0" --run-command {} < "$flame_list"
     exit $?
 elif [ "$has_xargs" -eq 1 ] && [ "$xargs_supports_d" -eq 1 ]; then
-    "$cmd_xargs" -d '\n' -n 1 -P "$njobs" -I '{}' sh -c '{}' < "$flame_list"
+    "$cmd_xargs" -d '\n' -n 1 -P "$njobs" "$0" --run-command < "$flame_list"
     exit $?
 else
     running=0
@@ -88,7 +216,7 @@ else
         while [ "$running" -ge "$njobs" ]; do
             wait_one
         done
-        sh -c "$line" &
+        run_flame_command "$line" &
         running=$((running + 1))
     done < "$flame_list"
 

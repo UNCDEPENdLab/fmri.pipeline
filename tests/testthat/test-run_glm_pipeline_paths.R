@@ -142,6 +142,45 @@ test_that("L1 none + L2 requested waits for split_backend_caches", {
   expect_equal(l2_job[[1]]$depends_on_parents, "split_backend_caches")
 })
 
+test_that("FSL L3 waits for backend-specific FSL L2 producer job", {
+  gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
+  gpa$glm_software <- "fsl"
+  gpa$multi_run <- TRUE
+  gpa$output_locations$sqlite_db <- NULL
+  gpa$parallel <- modifyList(gpa$parallel, list(
+    finalize_time = "0:10:00",
+    l1_setup_time = "0:10:00",
+    l1_setup_memgb = "1G",
+    l2_setup_cores = 1L,
+    l2_setup_run_time = "0:10:00",
+    l3_setup_run_time = "0:10:00",
+    fsl = list(l1_feat_alljobs_time = "0:10:00")
+  ))
+  gpa$glm_backend_specs <- make_test_backend_specs()
+
+  store <- new.env(parent = emptyenv())
+  result <- testthat::with_mocked_bindings(
+    fmri.pipeline:::run_glm_pipeline(
+      gpa,
+      l1_model_names = "none",
+      l2_model_names = "l2_model1",
+      l3_model_names = "l3_model1"
+    ),
+    R_batch_job = list(new = make_mock_job_new()),
+    R_batch_sequence = list(new = make_mock_sequence_new(store)),
+    .package = "fmri.pipeline"
+  )
+
+  jobs <- flatten_jobs(store$joblist)
+  l2_job <- jobs[vapply(jobs, function(j) j$job_name == "setup_run_l2_fsl", logical(1))]
+  l3_job <- jobs[vapply(jobs, function(j) j$job_name == "setup_run_l3_fsl", logical(1))]
+
+  expect_null(result)
+  expect_length(l2_job, 1L)
+  expect_length(l3_job, 1L)
+  expect_equal(l3_job[[1]]$depends_on_parents, "setup_run_l2_fsl")
+})
+
 test_that("L2 requested but cannot run completes without L2 job", {
   gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
   gpa$glm_software <- "fsl"

@@ -26,13 +26,26 @@ test_that("flame_runner uses parallel and clamps to allocation", {
     "while [[ $# -gt 0 ]]; do",
     "  case \"$1\" in",
     "    --jobs|-j) jobs=\"$2\"; shift 2;;",
-    "    *) shift;;",
+    "    *) break;;",
     "  esac",
     "done",
     "echo \"$jobs\" > \"$PARALLEL_LOG\"",
+    "cmd=(\"$@\")",
     "while IFS= read -r line; do",
     "  if [ -n \"${line//[[:space:]]/}\" ]; then",
-    "    sh -c \"$line\"",
+    "    run=(\"${cmd[@]}\")",
+    "    replaced=0",
+    "    for i in \"${!run[@]}\"; do",
+    "      if [[ \"${run[$i]}\" == \"{}\" ]]; then",
+    "        run[$i]=\"$line\"",
+    "        replaced=1",
+    "      fi",
+    "    done",
+    "    if [[ \"$replaced\" -eq 1 ]]; then",
+    "      \"${run[@]}\"",
+    "    else",
+    "      \"${run[@]}\" \"$line\"",
+    "    fi",
     "  fi",
     "done"
   ))
@@ -98,14 +111,14 @@ test_that("flame_runner uses xargs when parallel is unavailable", {
     "    -P) p=\"$2\"; shift 2;;",
     "    -d) shift 2;;",
     "    -n) shift 2;;",
-    "    -I) shift 2;;",
-    "    *) shift;;",
+    "    *) break;;",
     "  esac",
     "done",
     "echo \"$p\" > \"$XARGS_LOG\"",
+    "cmd=(\"$@\")",
     "while IFS= read -r line; do",
     "  if [ -n \"${line//[[:space:]]/}\" ]; then",
-    "    sh -c \"$line\"",
+    "    \"${cmd[@]}\" \"$line\"",
     "  fi",
     "done"
   ))
@@ -128,6 +141,133 @@ test_that("flame_runner uses xargs when parallel is unavailable", {
   expect_equal(readLines(xargs_log), "2")
   expect_true(file.exists(out_file))
   expect_equal(length(readLines(out_file)), 2)
+})
+
+test_that("flame_runner retries failed FLAME12 slices with FLAME1", {
+  tmp <- withr::local_tempdir()
+  stub_dir <- file.path(tmp, "stubs_flame1_retry")
+  dir.create(stub_dir, recursive = TRUE, showWarnings = FALSE)
+
+  make_stub <- function(name, lines) {
+    path <- file.path(stub_dir, name)
+    writeLines(lines, path)
+    Sys.chmod(path, "0755")
+    path
+  }
+
+  make_stub("grep", c(
+    "#!/bin/bash",
+    "exec /bin/grep \"$@\""
+  ))
+  make_stub("sh", c(
+    "#!/bin/bash",
+    "exec /bin/sh \"$@\""
+  ))
+  make_stub("xargs", c(
+    "#!/bin/bash",
+    "if [[ \"$1\" == \"--help\" ]]; then",
+    "  echo \"xargs help\"",
+    "  exit 0",
+    "fi",
+    "exit 1"
+  ))
+
+  fake_flameo <- file.path(tmp, "fake_flameo")
+  attempt_log <- file.path(tmp, "attempts.log")
+  fallback_log <- file.path(tmp, "fallbacks.tsv")
+  writeLines(c(
+    "#!/bin/bash",
+    "printf '%s\\n' \"$*\" >> \"$FAKE_FLAMEO_LOG\"",
+    "case \" $* \" in",
+    "  *' --runmode=flame12 '*) exit 42;;",
+    "  *' --runmode=flame1 '*)",
+    "    case \" $* \" in",
+    "      *' --nj='*|*' --bi='*|*' --se='*|*' --zlt='*|*' --zut='*|*' --fm'*) exit 43;;",
+    "    esac",
+    "    exit 0;;",
+    "esac",
+    "exit 44"
+  ), fake_flameo)
+  Sys.chmod(fake_flameo, "0755")
+
+  flame_list <- file.path(tmp, "flame.list")
+  writeLines(
+    paste(
+      fake_flameo,
+      "--cope=tmpcope0007 --vc=tmpvarcope0007 --mask=tmpmask0007",
+      "--ld=stats0007 --dm=design.mat --cs=design.grp --tc=design.con",
+      "--runmode=flame12 --nj=10000 --bi=500 --se=1 --fm --zlt=3.05 --zut=3.45"
+    ),
+    flame_list
+  )
+
+  withr::local_envvar(c(
+    PATH = stub_dir,
+    FAKE_FLAMEO_LOG = attempt_log,
+    FLAME_RUNNER_FALLBACK_LOG = fallback_log
+  ))
+
+  flame_runner <- normalizePath(file.path(pkg_root, "inst/bin/flame_runner"), mustWork = TRUE)
+  status <- system2(flame_runner, c(flame_list, "1"), stdout = TRUE, stderr = TRUE)
+
+  expect_false(inherits(status, "status"))
+  attempts <- readLines(attempt_log)
+  expect_length(attempts, 2)
+  expect_true(grepl("--runmode=flame12", attempts[[1]], fixed = TRUE))
+  expect_true(grepl("--runmode=flame1", attempts[[2]], fixed = TRUE))
+  expect_false(grepl("--nj=|--bi=|--se=|--fm|--zlt=|--zut=", attempts[[2]]))
+
+  fallback_records <- readLines(fallback_log)
+  expect_length(fallback_records, 2)
+  expect_equal(
+    fallback_records[[1]],
+    "timestamp_utc\tpid\tflame12_status\tld_dir\tfailed_ld_dir\tfallback_command"
+  )
+  expect_true(grepl("\t42\tstats0007\t", fallback_records[[2]], fixed = TRUE))
+  expect_true(grepl("--runmode=flame1", fallback_records[[2]], fixed = TRUE))
+})
+
+test_that("flame_runner reports unrecovered non-FLAME12 failures", {
+  tmp <- withr::local_tempdir()
+  stub_dir <- file.path(tmp, "stubs_failure")
+  dir.create(stub_dir, recursive = TRUE, showWarnings = FALSE)
+
+  make_stub <- function(name, lines) {
+    path <- file.path(stub_dir, name)
+    writeLines(lines, path)
+    Sys.chmod(path, "0755")
+    path
+  }
+
+  make_stub("grep", c(
+    "#!/bin/bash",
+    "exec /bin/grep \"$@\""
+  ))
+  make_stub("sh", c(
+    "#!/bin/bash",
+    "exec /bin/sh \"$@\""
+  ))
+  make_stub("xargs", c(
+    "#!/bin/bash",
+    "if [[ \"$1\" == \"--help\" ]]; then",
+    "  echo \"xargs help\"",
+    "  exit 0",
+    "fi",
+    "exit 1"
+  ))
+
+  flame_list <- file.path(tmp, "flame.list")
+  writeLines("exit 9", flame_list)
+
+  withr::local_envvar(c(PATH = stub_dir))
+
+  flame_runner <- normalizePath(file.path(pkg_root, "inst/bin/flame_runner"), mustWork = TRUE)
+  expect_warning(
+    status <- system2(flame_runner, c(flame_list, "1"), stdout = TRUE, stderr = TRUE),
+    "had status"
+  )
+
+  expect_equal(attr(status, "status"), 1)
 })
 
 test_that("flame_runner falls back when xargs lacks -d support", {

@@ -578,7 +578,15 @@ l3_model_names = "prompt", glm_software = NULL, level_backends = NULL, backend_o
           }
 
           if (producer_level == 2L) {
-            if (isTRUE(run_l2)) producer_parents <- c(producer_parents, "setup_run_l2")
+            l2_parent <- paste0("setup_run_l2_", producer_backend)
+            if (!is.null(l2_execute_batches[[producer_backend]])) {
+              producer_parents <- c(producer_parents, l2_parent)
+            } else if (isTRUE(run_l2)) {
+              producer_parents <- c(
+                producer_parents,
+                paste0("setup_run_l2_", names(l2_execute_batches))
+              )
+            }
           } else if (producer_level == 1L) {
             if (!is.null(l1_execute_batches[[producer_backend]])) {
               producer_parents <- c(producer_parents, paste0("run_l1_", producer_backend))
