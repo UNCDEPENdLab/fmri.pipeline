@@ -339,15 +339,35 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       "}",
       "trap feat_killed SIGTERM",
       paste("Rscript", upd_job_status_path, "--job_id" , "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "STARTED"),
+      "job_failed=0",
+      "pids=()",
       sep = "\n", file = outfile, append = TRUE
     )
     if (level == 3L) {
-      cat(paste("feat_runner", thisrun, feat_cpus, "&"), file = outfile, sep = "\n", append = TRUE)
+      feat_launch_lines <- unlist(lapply(thisrun, function(fsf) {
+        c(paste("feat_runner", fsf, feat_cpus, "&"), "pids+=(\"$!\")")
+      }))
+      cat(feat_launch_lines, file = outfile, sep = "\n", append = TRUE)
     } else {
-      cat(paste("feat_runner", thisrun, "&"), file=outfile, sep="\n", append=TRUE)
+      feat_launch_lines <- unlist(lapply(thisrun, function(fsf) {
+        c(paste("feat_runner", fsf, "&"), "pids+=(\"$!\")")
+      }))
+      cat(feat_launch_lines, file=outfile, sep="\n", append=TRUE)
     }
-    cat("wait",
-        paste("Rscript", upd_job_status_path, "--job_id" , "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "COMPLETED"),
+    cat("for pid in \"${pids[@]}\"; do",
+        "  if ! wait \"$pid\"; then",
+        "    job_failed=1",
+        "  fi",
+        "done",
+        "if [ $job_failed -ne 0 ]; then",
+        "  job_status=\"FAILED\"",
+        "else",
+        "  job_status=\"COMPLETED\"",
+        "fi",
+        paste("Rscript", upd_job_status_path, "--job_id" , "\"$job_id\"", "--sqlite_db", tracking_sqlite_db, "--status", "\"${job_status}\""),
+        "if [ \"${job_status}\" = \"FAILED\" ]; then",
+        "  exit 1",
+        "fi",
         "\n\n",
         sep="\n", file=outfile, append=TRUE)
     if (level != 3L) {

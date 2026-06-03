@@ -125,12 +125,12 @@ run_3dlmer_sepjobs <- function(gpa, level=3L, model_names=NULL, rerun=FALSE, wai
       "exit_code=$?",
       "",
       "if [ $exit_code -eq 0 ]; then",
-      paste("  write_job_manifest", shQuote(dirname(script_to_run)), shQuote("afni_3dlmer"), shQuote("COMPLETED"), shQuote(script_to_run)),
-      paste("  Rscript", shQuote(upd_job_status_path), "--job_id" , "\"$job_id\"", "--sqlite_db", shQuote(tracking_sqlite_db), "--status", "COMPLETED"),
+      "  job_status=\"COMPLETED\"",
       "else",
-      paste("  write_job_manifest", shQuote(dirname(script_to_run)), shQuote("afni_3dlmer"), shQuote("FAILED"), shQuote(script_to_run)),
-      paste("  Rscript", shQuote(upd_job_status_path), "--job_id" , "\"$job_id\"", "--sqlite_db", shQuote(tracking_sqlite_db), "--status", "FAILED"),
+      "  job_status=\"FAILED\"",
       "fi",
+      paste("write_job_manifest", shQuote(dirname(script_to_run)), shQuote("afni_3dlmer"), "\"${job_status}\"", shQuote(script_to_run)),
+      paste("Rscript", shQuote(upd_job_status_path), "--job_id" , "\"$job_id\"", "--sqlite_db", shQuote(tracking_sqlite_db), "--status", "\"${job_status}\""),
       "",
       "exit $exit_code"
     )
