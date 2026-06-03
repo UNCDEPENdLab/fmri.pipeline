@@ -12,13 +12,19 @@ setOldClass(c("bg_subtrial_data", "data.frame"))
 #'   influences the top-level folder name of the group analysis outputs, as well as the name of .RData objects
 #'   saved by this function to the output directory for the analysis.
 #' @param scheduler Which HPC scheduler system should be used for queueing jobs. Options are 'slurm', 'torque', or 'local'.
-#' @param subject_data A data.frame containing all subject-level data such as age, sex, or other covariates. Columns
-#'   from \code{subject_data} can be used as covariates in group (aka 'level 3') analyses. If \code{NULL}, then
-#'   this will be distilled from \code{trial_data} by looking for variables that vary at the same
-#'   level as \code{vm["id"]}.
+#' @param subject_data A data.frame containing Level 3 covariates and subject/session metadata. For cross-sectional
+#'   analyses this is typically one row per subject. For longitudinal analyses, this must contain one row per
+#'   \code{id}/\code{session}; person-level covariates such as sex, baseline age, or treatment arm should be repeated
+#'   across that subject's sessions. Columns from \code{subject_data} can be used as covariates in group
+#'   (aka 'level 3') analyses. If \code{NULL}, then this will be distilled from \code{trial_data} by looking for
+#'   variables that vary at the same level as \code{vm["id"]} and \code{vm["session"]}. Do not provide
+#'   \code{session_data}; \code{setup_glm_pipeline()} derives \code{gpa$session_data} internally from
+#'   \code{run_data} and \code{subject_data}.
 #' @param run_data A data.frame containing all run-level data such as run condition or run number. Columns from
 #'   \code{run_data} can be used as covariates in subject (aka 'level 2') analyses. If \code{NULL}, this will be
 #'   distilled from \code{trial_data} by looking for variables that vary at the same level as \code{vm["run_number"]}.
+#'   Columns that are constant within each \code{id}/\code{session} are copied into the internally derived
+#'   \code{gpa$session_data}.
 #' @param block_data An optional data.frame containing information about design features in the task that vary at
 #'   block level (typically, longer periods of time such as 10-30s). Blocks are superordinate to trials and subordinate to runs.
 #' @param trial_data A data.frame containing trial-level statistics for all subjects. Data should be stacked in long
@@ -26,7 +32,7 @@ setOldClass(c("bg_subtrial_data", "data.frame"))
 #'   If you wish, you can pass a single trial-level data frame that also contains all run-level and subject-level covariates
 #'   (i.e., a combined long format, where variables at different levels are all included as columns). In this case,
 #'   \code{setup_glm_pipeline} will detect which variables occur at each level and parse these accordingly into
-#'   \code{subject_data} and \code{run_data}.
+#'   \code{subject_data} and \code{run_data}; \code{session_data} is still constructed internally.
 #' @param ppi_data An optional `data.frame` containing physiological signals (e.g., deconvolved time series in seed ROIs) that
 #'   can be used in setting up the level 1 models for a PPI analysis. Specifically, if this `data.frame` is provided, you will be
 #'   able to create interaction regressors for any convolved event-related signal and the columns of `ppi_data`. This data.frame
@@ -414,13 +420,12 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   return(gpa)
 }
 
-#' Derive a session-level data.frame from run- and subject-level inputs
+#' Derive the internal session-level data.frame from run- and subject-level inputs
 #'
-#' @param run_data A run-level data.frame with id/session/run_number columns.
-#' @param subject_data A subject-level data.frame with unique id/session rows.
-#' @param lg Logger used for diagnostics.
-#' @return A data.frame with one row per id/session.
-#' @keywords internal
+#' \code{session_data} is not a user-supplied setup object. \code{setup_glm_pipeline()}
+#' derives it after validating and normalizing \code{run_data} and \code{subject_data}.
+#'
+#' @noRd
 derive_session_data <- function(run_data, subject_data, lg) {
   checkmate::assert_data_frame(run_data)
   checkmate::assert_data_frame(subject_data)
@@ -807,7 +812,7 @@ validate_block_data <- function(df) {
 }
 
 #' Summarize the contents of the subject data
-#' @param df A \code{bg_subject_data} object containing subject-level data.
+#' @param df A \code{bg_subject_data} object containing subject/session-level data.
 #' @details This is typically run using \code{summary(gpa$trial_data)}
 #' @export
 summary.bg_subject_data <- function(df) {

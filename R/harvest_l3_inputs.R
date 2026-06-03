@@ -135,6 +135,11 @@ harvest_l3_inputs_fsl <- function(gpa, l1_model_names = NULL, l2_model_names = N
       dplyr::select(id, session)
 
     l3_cope_config <- get_fsl_l3_model_df(gpa, model_df, subj_df)
+    if ("l3_cope_number" %in% names(l3_cope_config)) {
+      l3_cope_config <- l3_cope_config %>%
+        dplyr::filter(.data$l3_cope_number == 1L) %>%
+        dplyr::select(-dplyr::any_of(c("l3_cope_number", "l3_cope_name")))
+    }
     feat_inputs <- get_feat_l3_inputs(gpa, l3_cope_config, lg = lg)
 
     for (nm in names(feat_inputs)) {

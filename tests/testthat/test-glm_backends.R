@@ -149,6 +149,71 @@ test_that("model-level L3 requirements resolve producer stage from execution and
   expect_identical(req$producer_level, 2L)
 })
 
+test_that("L3 backend fields round-trip through YAML model building", {
+  gpa <- create_mock_gpa(n_subjects = 2, n_runs = 1, include_l2_models = TRUE)
+  gpa$glm_software <- c("fsl", "afni")
+  gpa$level_backends <- list(l1 = "fsl", l2 = "fsl", l3 = c("fsl", "afni"))
+  gpa$subject_data <- expand.grid(
+    id = paste0("sub", 1:2),
+    session = 1:3,
+    stringsAsFactors = FALSE
+  )
+  gpa$subject_data$session_label <- rep(c("baseline", "month1", "month2"), times = 2)
+  gpa$l2_models$models <- list(
+    l2_id_session = list(
+      name = "l2_id_session",
+      level = 2L,
+      l2_scope = "id_session"
+    )
+  )
+  class(gpa$l2_models) <- c("list", "hi_model_set")
+
+  spec <- list(
+    l3_models = list(
+      l3_pooled_subject_ev = list(
+        level = 3L,
+        l3_input_mode = "pooled_sessions_subject_ev",
+        execution_backend = "fsl",
+        producer_backend = "fsl",
+        model_formula = "~ session_label",
+        reference_level = list(session_label = "baseline"),
+        contrasts = list(diagonal = TRUE)
+      ),
+      l3_3dlmer_session = list(
+        level = 3L,
+        l3_input_mode = "3dlmer",
+        execution_backend = "afni",
+        producer_backend = "fsl",
+        model_formula = "~ session_label",
+        random_effects = "(1 | Subj)",
+        reference_level = list(session_label = "baseline"),
+        contrasts = list(diagonal = TRUE)
+      )
+    )
+  )
+  spec_file <- tempfile(fileext = ".yaml")
+  yaml::write_yaml(spec, spec_file)
+
+  gpa <- build_l3_models(gpa, from_spec_file = spec_file)
+
+  exec_map <- fmri.pipeline:::get_effective_model_backends(
+    gpa,
+    level = 3L,
+    model_names = names(spec$l3_models)
+  )
+  producer_map <- fmri.pipeline:::get_effective_model_backends(
+    gpa,
+    level = 3L,
+    model_names = names(spec$l3_models),
+    type = "producer"
+  )
+
+  expect_identical(exec_map$l3_pooled_subject_ev, "fsl")
+  expect_identical(producer_map$l3_pooled_subject_ev, "fsl")
+  expect_identical(exec_map$l3_3dlmer_session, "afni")
+  expect_identical(producer_map$l3_3dlmer_session, "fsl")
+})
+
 test_that("backend preflight report summarizes execution and producer resolution", {
   gpa <- create_mock_gpa(include_l1_models = TRUE, include_l2_models = TRUE, include_l3_models = TRUE)
   gpa$glm_software <- "fsl"

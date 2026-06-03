@@ -8,7 +8,7 @@ test_that("compose_l2_model_data skips identical session-level duplicates alread
   gpa$session_data <- unique(gpa$run_data[, c("id", "session", "tr", "session_label")])
   gpa$session_data$session_covariate <- seq_len(nrow(gpa$session_data))
 
-  result <- compose_l2_model_data(gpa)
+  result <- fmri.pipeline:::compose_l2_model_data(gpa)
 
   expect_false("session_tr" %in% names(result))
   expect_false("session_session_label" %in% names(result))
@@ -27,7 +27,7 @@ test_that("compose_l2_model_data renames only conflicting session-level columns 
   gpa$session_data <- unique(gpa$run_data[, c("id", "session", "tr", "session_label")])
   gpa$session_data$tr <- gpa$session_data$tr + 0.5
 
-  result <- compose_l2_model_data(gpa)
+  result <- fmri.pipeline:::compose_l2_model_data(gpa)
 
   expect_true("session_tr" %in% names(result))
   expect_false("session_session_label" %in% names(result))

@@ -7,7 +7,7 @@
 spm_l3_model(l3_df = NULL, gpa, execute_spm = FALSE, model_type = NULL)
 }
 \arguments{
-\item{l3_df}{a data.frame containing one row per subject with fields including
+\item{l3_df}{a data.frame containing one row per L3 input map, typically one row per subject/session, with fields including
 id, session, l1_model, l3_model, l1_cope_name, and con_file}
 
 \item{gpa}{a gpa (glm_pipeline_arguments) object containing model specification}

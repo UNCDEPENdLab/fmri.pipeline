@@ -7,7 +7,7 @@
 build_3dlmer_datatable(subject_data, input_files, model_variables)
 }
 \arguments{
-\item{subject_data}{a data.frame containing subject-level covariates}
+\item{subject_data}{a data.frame containing subject/session-level covariates with unique id/session rows}
 
 \item{input_files}{a data.frame with columns 'id', 'session', and 'InputFile'}
 

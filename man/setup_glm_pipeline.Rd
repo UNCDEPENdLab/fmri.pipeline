@@ -50,21 +50,27 @@ saved by this function to the output directory for the analysis.}
 \item{output_directory}{The output directory for all configuration and job submission files for this analysis.
 Default is a subfolder called "glm_out" in the current working directory.}
 
-\item{subject_data}{A data.frame containing all subject-level data such as age, sex, or other covariates. Columns
-from \code{subject_data} can be used as covariates in group (aka 'level 3') analyses. If \code{NULL}, then
-this will be distilled from \code{trial_data} by looking for variables that vary at the same
-level as \code{vm["id"]}.}
+\item{subject_data}{A data.frame containing Level 3 covariates and subject/session metadata. For cross-sectional
+analyses this is typically one row per subject. For longitudinal analyses, this must contain one row per
+\code{id}/\code{session}; person-level covariates such as sex, baseline age, or treatment arm should be repeated
+across that subject's sessions. Columns from \code{subject_data} can be used as covariates in group
+(aka 'level 3') analyses. If \code{NULL}, then this will be distilled from \code{trial_data} by looking for
+variables that vary at the same level as \code{vm["id"]} and \code{vm["session"]}. Do not provide
+\code{session_data}; \code{setup_glm_pipeline()} derives \code{gpa$session_data} internally from
+\code{run_data} and \code{subject_data}.}
 
 \item{run_data}{A data.frame containing all run-level data such as run condition or run number. Columns from
 \code{run_data} can be used as covariates in subject (aka 'level 2') analyses. If \code{NULL}, this will be
-distilled from \code{trial_data} by looking for variables that vary at the same level as \code{vm["run_number"]}.}
+distilled from \code{trial_data} by looking for variables that vary at the same level as \code{vm["run_number"]}.
+Columns that are constant within each \code{id}/\code{session} are copied into the internally derived
+\code{gpa$session_data}.}
 
 \item{trial_data}{A data.frame containing trial-level statistics for all subjects. Data should be stacked in long
 form such that each row represents a single trial for a given subject and the number of total rows is subjects x trials.
 If you wish, you can pass a single trial-level data frame that also contains all run-level and subject-level covariates
 (i.e., a combined long format, where variables at different levels are all included as columns). In this case,
 \code{setup_glm_pipeline} will detect which variables occur at each level and parse these accordingly into
-\code{subject_data} and \code{run_data}.}
+\code{subject_data} and \code{run_data}; \code{session_data} is still constructed internally.}
 
 \item{ppi_data}{An optional `data.frame` containing physiological signals (e.g., deconvolved time series in seed ROIs) that
 can be used in setting up the level 1 models for a PPI analysis. Specifically, if this `data.frame` is provided, you will be

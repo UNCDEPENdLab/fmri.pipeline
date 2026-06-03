@@ -1,6 +1,6 @@
 #' Setup a third-level SPM model using lower-level con images
 #'
-#' @param l3_df a data.frame containing one row per subject with fields including
+#' @param l3_df a data.frame containing one row per L3 input map, typically one row per subject/session, with fields including
 #'   id, session, l1_model, l3_model, l1_cope_name, and con_file
 #' @param gpa a gpa (glm_pipeline_arguments) object containing model specification
 #' @param execute_spm whether to execute SPM setup/estimation immediately. Default: FALSE

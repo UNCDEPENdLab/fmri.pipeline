@@ -7,7 +7,7 @@
 \method{summary}{bg_subject_data}(df)
 }
 \arguments{
-\item{df}{A \code{bg_subject_data} object containing subject-level data.}
+\item{df}{A \code{bg_subject_data} object containing subject/session-level data.}
 }
 \description{
 Summarize the contents of the subject data

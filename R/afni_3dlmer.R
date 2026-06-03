@@ -47,7 +47,7 @@ find_3dlmer_duplicate_keys <- function(df, id_col = "id", session_col = "session
 
 #' Internal function to build the data table for AFNI 3dLMEr
 #'
-#' @param subject_data a data.frame containing subject-level covariates
+#' @param subject_data a data.frame containing subject/session-level covariates with unique id/session rows
 #' @param input_files a data.frame with columns 'id', 'session', and 'InputFile'
 #' @param model_variables a character vector of variables that must be included in the table
 #'
