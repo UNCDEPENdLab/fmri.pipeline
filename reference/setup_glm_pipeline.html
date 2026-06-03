@@ -105,16 +105,22 @@ Default is a subfolder called "glm_out" in the current working directory.</p></d
 
 
 <dt id="arg-subject-data">subject_data<a class="anchor" aria-label="anchor" href="#arg-subject-data"></a></dt>
-<dd><p>A data.frame containing all subject-level data such as age, sex, or other covariates. Columns
-from <code>subject_data</code> can be used as covariates in group (aka 'level 3') analyses. If <code>NULL</code>, then
-this will be distilled from <code>trial_data</code> by looking for variables that vary at the same
-level as <code>vm["id"]</code>.</p></dd>
+<dd><p>A data.frame containing Level 3 covariates and subject/session metadata. For cross-sectional
+analyses this is typically one row per subject. For longitudinal analyses, this must contain one row per
+<code>id</code>/<code>session</code>; person-level covariates such as sex, baseline age, or treatment arm should be repeated
+across that subject's sessions. Columns from <code>subject_data</code> can be used as covariates in group
+(aka 'level 3') analyses. If <code>NULL</code>, then this will be distilled from <code>trial_data</code> by looking for
+variables that vary at the same level as <code>vm["id"]</code> and <code>vm["session"]</code>. Do not provide
+<code>session_data</code>; <code>setup_glm_pipeline()</code> derives <code>gpa$session_data</code> internally from
+<code>run_data</code> and <code>subject_data</code>.</p></dd>
 
 
 <dt id="arg-run-data">run_data<a class="anchor" aria-label="anchor" href="#arg-run-data"></a></dt>
 <dd><p>A data.frame containing all run-level data such as run condition or run number. Columns from
 <code>run_data</code> can be used as covariates in subject (aka 'level 2') analyses. If <code>NULL</code>, this will be
-distilled from <code>trial_data</code> by looking for variables that vary at the same level as <code>vm["run_number"]</code>.</p></dd>
+distilled from <code>trial_data</code> by looking for variables that vary at the same level as <code>vm["run_number"]</code>.
+Columns that are constant within each <code>id</code>/<code>session</code> are copied into the internally derived
+<code>gpa$session_data</code>.</p></dd>
 
 
 <dt id="arg-trial-data">trial_data<a class="anchor" aria-label="anchor" href="#arg-trial-data"></a></dt>
@@ -123,7 +129,7 @@ form such that each row represents a single trial for a given subject and the nu
 If you wish, you can pass a single trial-level data frame that also contains all run-level and subject-level covariates
 (i.e., a combined long format, where variables at different levels are all included as columns). In this case,
 <code>setup_glm_pipeline</code> will detect which variables occur at each level and parse these accordingly into
-<code>subject_data</code> and <code>run_data</code>.</p></dd>
+<code>subject_data</code> and <code>run_data</code>; <code>session_data</code> is still constructed internally.</p></dd>
 
 
 <dt id="arg-ppi-data">ppi_data<a class="anchor" aria-label="anchor" href="#arg-ppi-data"></a></dt>

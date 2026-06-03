@@ -64,7 +64,8 @@ The preferred setup is to provide three long-form data frames:
 [`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
 can derive `run_data` and `subject_data` from `trial_data` when needed,
 but explicit tables are easier to audit and usually clearer for new
-analyses.
+analyses. Do not provide a separate `session_data` table; the GPA object
+constructs that internal table from `run_data` and `subject_data`.
 
 ### Required Identifiers
 
@@ -192,8 +193,10 @@ run_df <- tibble::tibble(
 
 ### Subject Data
 
-`subject_data` has one row per subject-session. It provides Level 3
-covariates and subject/session metadata.
+`subject_data` provides Level 3 covariates and subject/session metadata.
+In cross-sectional analyses, it is usually one row per subject. In
+longitudinal analyses, it must be one row per subject-session (`id` +
+`session`).
 
 Typical columns include:
 
@@ -229,6 +232,12 @@ subject_df <- tibble::tibble(
   age_baseline = c(16.70, 16.70, 16.21, 16.21)
 )
 ```
+
+Person-level covariates such as baseline age, sex, or randomized group
+should be repeated across that subject’s sessions. The pipeline derives
+`gpa$session_data` internally from columns in `run_data` that are
+constant within `id`/`session`, then merges those with the
+subject-session rows from `subject_data`.
 
 ### BIDS Helpers
 

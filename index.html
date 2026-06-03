@@ -60,110 +60,292 @@
   <main id="main" class="col-md-9"><div class="section level1">
 <div class="page-header"><h1 id="fmripipeline">fmri.pipeline<a class="anchor" aria-label="anchor" href="#fmripipeline"></a>
 </h1></div>
-<p>Installing package directly from Github:</p>
-<pre><code><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://devtools.r-lib.org/" class="external-link">devtools</a></span><span class="op">)</span></span>
+<p><code>fmri.pipeline</code> is an R package for setting up, submitting, and tracking hierarchical fMRI GLM analyses on high-performance computing systems. It is designed for studies where the scientifically interesting model is larger than a single FEAT or SPM job: many subjects, many runs, multiple model variants, longitudinal visits, and downstream group models that need to be reproducible months or years later.</p>
+<p>The package is built around a single analysis object, usually called <code>gpa</code>, that stores the input tables, model specifications, output locations, backend choices, scheduler settings, and job-tracking state for one analysis.</p>
+<p>Current package version: <code>0.4</code> (May 2026).</p>
+<div class="section level2">
+<h2 id="why-this-package-exists">Why this package exists<a class="anchor" aria-label="anchor" href="#why-this-package-exists"></a>
+</h2>
+<p>Large fMRI GLM projects have a familiar failure mode: the actual analysis is a constellation of design files, shell scripts, scheduler jobs, and partially remembered choices. <code>fmri.pipeline</code> tries to make that constellation explicit. The package helps you:</p>
+<ul>
+<li>define run-level, subject/session-level, and group-level models in one place;</li>
+<li>generate backend-specific analysis files for FSL, AFNI, and selected SPM workflows;</li>
+<li>submit staged analyses through Slurm, TORQUE, or local execution;</li>
+<li>keep track of job dependencies, logs, and analysis status;</li>
+<li>reuse the same input tables and YAML model specification across model revisions;</li>
+<li>support longitudinal analyses where runs are nested within sessions and sessions are nested within subjects.</li>
+</ul>
+<p>The most mature end-to-end backend is FSL FEAT/FLAME. Current development also supports backend selection and hybrid workflows, especially FSL at Levels 1-2 followed by AFNI <code>3dLMEr</code> at Level 3 for longitudinal mixed-effects models.</p>
+<p><code>fmri.pipeline</code> is not a preprocessing pipeline. It expects preprocessed 4D BOLD NIfTI files, event timing, and optional confound files from tools such as fMRIPrep, custom preprocessing workflows, or lab-specific derivatives.</p>
+</div>
+<div class="section level2">
+<h2 id="analysis-structure">Analysis structure<a class="anchor" aria-label="anchor" href="#analysis-structure"></a>
+</h2>
+<p>The package uses a stable three-level vocabulary:</p>
+<ul>
+<li>
+<strong>Level 1</strong>: run-level time-series GLM. Events and parametric modulators are converted into design matrices or timing files and estimated separately for each run.</li>
+<li>
+<strong>Level 2</strong>: within-subject or within-subject-session run combination. Multiple Level 1 COPEs are combined into subject-level or session-level estimates.</li>
+<li>
+<strong>Level 3</strong>: sample-level, group-level, or longitudinal model. Subject or subject-session maps are modeled across participants.</li>
+</ul>
+<p>Model definitions are organized as sets at each level. If you define two L1 models, two L2 models, and two L3 models, the pipeline can run the full grid of eight model combinations. This makes systematic model comparison possible, but it also means you should start small, verify the analysis path, and then expand.</p>
+</div>
+<div class="section level2">
+<h2 id="input-data">Input data<a class="anchor" aria-label="anchor" href="#input-data"></a>
+</h2>
+<p>The preferred setup uses three explicit long-form data frames:</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr>
+<th>Table</th>
+<th>One row per</th>
+<th>Purpose</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>trial_data</code></td>
+<td>trial/event</td>
+<td>Event onsets, durations, conditions, and trial-level modulators for Level 1 regressors.</td>
+</tr>
+<tr>
+<td><code>run_data</code></td>
+<td>subject/session/run</td>
+<td>Paths to preprocessed run NIfTIs, run-level covariates, TR, confounds, and run exclusion flags.</td>
+</tr>
+<tr>
+<td><code>subject_data</code></td>
+<td>subject or subject/session</td>
+<td>Level 3 covariates. For longitudinal analyses, use one row per <code>id</code> + <code>session</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>Default identifier columns are <code>id</code>, <code>session</code>, and <code>run_number</code>. If your project uses different names, pass a named <code>vm</code> vector to <code><a href="reference/setup_glm_pipeline.html">setup_glm_pipeline()</a></code>.</p>
+<p>For BIDS-like derivatives, helper functions can create starter tables:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">run_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_run_data_from_bids.html">generate_run_data_from_bids</a></span><span class="op">(</span></span>
+<span>  bids_dir <span class="op">=</span> <span class="st">"/proj/lab/derivatives/fmriprep"</span>,</span>
+<span>  task_name <span class="op">=</span> <span class="st">"taskname"</span>,</span>
+<span>  desc <span class="op">=</span> <span class="st">"preproc"</span>,</span>
+<span>  suffix <span class="op">=</span> <span class="st">"bold"</span></span>
+<span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu">install_github</span><span class="op">(</span><span class="st">"UNCDEPENdLab/fmri.pipeline"</span><span class="op">)</span></span></code></pre>
-<p>R package for running full fMRI GLM analyses in FSL and other software.</p>
-<div class="section level2">
-<h2 id="overview">overview<a class="anchor" aria-label="anchor" href="#overview"></a>
-</h2>
-<p>This folder contains all scripts for running a model-based fMRI analysis using FSL FILM GLS for level 1 analyses, OLS for level 2 analyses (combining runs), and and FLAME 1+2 for level 3 analyses. The pipeline is structured to run on a high-performance computing cluster using the TORQUE scheduler. The pipeline will spawn one job submission for each first-level (run) model, then setup job dependencies for the level 2 and level 3 analyses so that the pipeline completes in a funnel-like fashion (many first-level runs funneling into a few group models).</p>
-<p>For the pipeline to work, processed MRI data should be structured as follows:</p>
-<p><code>&lt;fmri_dir&gt;/&lt;subject_id&gt;/&lt;expectdir&gt;/&lt;paradigm_name&gt;&lt;run_number&gt;/&lt;expectfile&gt;</code></p>
-<p>For descriptions of these field names, see documentation below for <code>run_fsl_pipeline.R</code>.</p>
-<p>In general, most scripts in the pipeline expect at least two environment variables to be set (passed using qsub -v in the cluster environment). The first, <code>fsl_pipeline_file</code> is the full path to the analysis specifications defined in <code>run_fsl_pipeline.R</code> and saved to an RData object in the configuration_files subfolder. The second, <code>run_model_index</code> specific element within <code>l1_model_variants</code> that is the current object of analysis. That is parallelization is achieved in part by spawning many jobs that are split in terms of which level 1 model is being executed. These environment variables should be passed by the <code>push_pipeline</code> function called in run_fsl_pipeline.R, but knowing about their existence is helpful for setting up or debugging subsidiary scripts (e.g., the beta extraction scripts).</p>
+<span><span class="va">subject_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_subject_data_from_bids.html">generate_subject_data_from_bids</a></span><span class="op">(</span></span>
+<span>  bids_dir <span class="op">=</span> <span class="st">"/proj/lab/derivatives/fmriprep"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">trial_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_trial_data_from_bids.html">generate_trial_data_from_bids</a></span><span class="op">(</span></span>
+<span>  bids_dir <span class="op">=</span> <span class="st">"/proj/lab/derivatives/fmriprep"</span>,</span>
+<span>  task_name <span class="op">=</span> <span class="st">"taskname"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Treat these helpers as a starting point. In most real analyses, you will still join in task variables, exclusions, and study-specific covariates before submitting the pipeline.</p>
 </div>
 <div class="section level2">
-<h2 id="core-scripts">core scripts<a class="anchor" aria-label="anchor" href="#core-scripts"></a>
+<h2 id="basic-usage">Basic usage<a class="anchor" aria-label="anchor" href="#basic-usage"></a>
 </h2>
-<div class="section level3">
-<h3 id="run_fsl_pipeliner">
-<code>run_fsl_pipeline.R</code><a class="anchor" aria-label="anchor" href="#run_fsl_pipeliner"></a>
-</h3>
-<p>This is the primary script for running the entire voxelwise GLM pipeline. It constructs a full model specification in a list called fsl_model_arguments, which is saved as an RData object and passed to subsidiary scripts. The core ingredients of that object are described below.</p>
-<p>Once the fsl_model_arguments object is created, it is saved, then <code>push_pipeline</code> executes the full analysis pipeline based on the specification.</p>
-</div>
-<div class="section level3">
-<h3 id="extract_sceptic_map_betasr">
-<code>extract_sceptic_map_betas.R</code><a class="anchor" aria-label="anchor" href="#extract_sceptic_map_betasr"></a>
-</h3>
-<p>This script looks for whole-brain-significant clusters in each covariate/predictor included in a level 3 analysis. It uses <code>zthresh</code> and <code>clustsize</code> settings in the <code>fsl_model_arguments</code> list to find the clusters, employing AFNI’s 3dclust program specifically.</p>
-<p>Importantly, for a three-level analysis in FSL, each level 1 contrast becomes the dependent variable in a level 3 model such that there are we need a third-level FLAME analysis for each level 1 contrast, yielding one .gfeat folder per level 1 contrast. This script anticipates this structure and walks over all level 1 and level 3 regressors.</p>
-<p>This is accomplished by a for loop over the level 1 contrasts (<code>for (l1 in 1:n_l1_copes) {</code>), level 2 contrasts (<code>for (l2 in 1:n_l2_contrasts) {</code>), and level 3 contrats (<code>for (l3 in 1:n_l3_copes) {</code>). For each combination, 3dclust is run to identiy whole-brain significant clusters. The coordinates and labels are identified using AFNI whereami, then the cluster mask (integer-valued, one per cluster) is read into R. The mean regression coefficient for each subject and/or run (if <code>calculate_l1_betas</code> is <code>TRUE</code>) is extracted for each cluster. These are compiled into a long-form tidy data.frame (ending in ‘betas.csv’). The script generates on cluster file per level 1 contrast, with columns in that file denoting level 2 and level 3 contrasts.</p>
-<p>For each level 1 contrast, two tidy CSV are produced, one labeled with ‘metadata’ and the other with ‘betas’.</p>
-</div>
-<div class="section level3">
-<h3 id="extract_sceptic_map_betas_atlasr">
-<code>extract_sceptic_map_betas_atlas.R</code><a class="anchor" aria-label="anchor" href="#extract_sceptic_map_betas_atlasr"></a>
-</h3>
-<p>This script extracts voxelwise regression coefficients for each voxel within an a priori set of mask files, <code>atlas_files</code>. Whereas <code>extract_sceptic_map_betas.R</code> extracts one coefficient within each significant cluster, <code>extract_sceptic_map_betas_atlas.R</code> provides regression coefficients for each voxel in a mask. It produces csv files labeled with <code>*atlas_betas.csv.gz</code> for the regression coefficients or <code>*atlas_zstats.csv.gz</code> for the corresponding voxelwise z-statistics (from FSL level 1 analysis). The structure of these files is very close to the voxelwise deconvolution outputs from <code>extract_sceptic_atlas_deconvolved.R</code>, but those contain BOLD/neural estimates at each time point, while this script is just one coefficient for a single subject (from the second-level GLM). The files produced by this script formed the basis of voxelwise analyses along the hippocampal long axis depicted in Figure 2 of Dombrovski, Luna, and Hallquist.</p>
-<ul>
-<li>numid: numeric ID of subject (ascending); match with design.fsf</li>
-<li>vnum: voxel number in the atlas file</li>
-<li>beta: regression coefficient at this voxel</li>
-<li>atlas_value: numeric value stored at this voxel within the atlas (e.g., position along the hippocampal long axis on the 0–1 scale)</li>
-<li>x: L/R coordinate in MNI space</li>
-<li>y: A/P coordinate in MNI space</li>
-<li>z: I/S coordinate in MNI space</li>
-<li>atlas_name: name of NIfTI atlas for extraction</li>
-<li>ID: subject id</li>
-<li>fsldir: second-level (subject) GLM directory used for extraction</li>
-<li>l1_contrast: level 1 regression contrast (for beta)</li>
-<li>l2_contrast: level 2 regression contrast (for beta)</li>
-</ul>
-</div>
-<div class="section level3">
-<h3 id="extract_sceptic_atlas_deconvolvedr">
-<code>extract_sceptic_atlas_deconvolved.R</code><a class="anchor" aria-label="anchor" href="#extract_sceptic_atlas_deconvolvedr"></a>
-</h3>
-<p>This script walks over a set of atlas NIfTI files, <code>atlas_files</code>, runs a voxelwise deconvolution algorithm on each BOLD acquisition in the study (i.e., multiple runs per subject, multiple subjects). The algorithm used in the Dombrovski, Luna, &amp; Hallquist paper is from Bush and Cisler (2013) and is called Bu12 in that paper. We have largely adapted an optimized C++ codebase provided by Keith Bush for speeding up the voxelwise calculation. This program, called <code>deconvolvefilter</code>, is committed in compiled form to Github, but is an ELF binary that will only run on Linux-based machines. The fallback position would be to run the <code>deconvolve_nlreg</code> function in the <code>dependlab</code> R package, which is the same algorithm, but a mixture of C++ and R (and slower).</p>
-<p>The program produces two long-form data.frame for each run of data, one containing the deconvolved time series (labeled ‘deconvolved’) and the other containing the input timeseries (i.e., the preprocessed fMRI data without deconvolution; labeled ‘original’). The structure of these data.frames is:</p>
-<ul>
-<li>subid: subject ID</li>
-<li>run_num: run number</li>
-<li>contingency: reinforcement contingency</li>
-<li>emotion: central stimulus</li>
-<li>time: time since acquisition start, in seconds</li>
-<li>atlas_name: name of NIfTI atlas for extraction</li>
-<li>atlas_value: numeric value stored at this voxel within the atlas (e.g., position along the hippocampal long axis on the 0–1 scale)</li>
-<li>vnum: voxel number in the atlast file</li>
-<li>x: L/R coordinate in MNI space</li>
-<li>y: A/P coordinate in MNI space</li>
-<li>z: I/S coordinate in MNI space</li>
-<li>decon: deconvolved time series value</li>
-<li>BOLD_z: (only in ‘original files’) normalized BOLD time series value</li>
-</ul>
-</div>
+<p>Install from GitHub:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"UNCDEPENdLab/fmri.pipeline"</span><span class="op">)</span></span></code></pre></div>
+<p>Create the analysis object from explicit input tables:</p>
+<p><code>session_data</code> is not a user-provided input; <code><a href="reference/setup_glm_pipeline.html">setup_glm_pipeline()</a></code> derives <code>gpa$session_data</code> internally from <code>run_data</code> and <code>subject_data</code>.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/fmri.pipeline/">fmri.pipeline</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/setup_glm_pipeline.html">setup_glm_pipeline</a></span><span class="op">(</span></span>
+<span>  analysis_name <span class="op">=</span> <span class="st">"facehouse_longitudinal_demo"</span>,</span>
+<span>  scheduler <span class="op">=</span> <span class="st">"slurm"</span>,</span>
+<span>  output_directory <span class="op">=</span> <span class="st">"/proj/lab/glm_outputs"</span>,</span>
+<span>  subject_data <span class="op">=</span> <span class="va">subject_df</span>,</span>
+<span>  run_data <span class="op">=</span> <span class="va">run_df</span>,</span>
+<span>  trial_data <span class="op">=</span> <span class="va">trial_df</span>,</span>
+<span>  glm_software <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"fsl"</span>, <span class="st">"afni"</span><span class="op">)</span>,</span>
+<span>  n_expected_runs <span class="op">=</span> <span class="fl">4L</span>,</span>
+<span>  confound_settings <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>    motion_params_file <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>    confound_input_file <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>    spike_volumes <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Define models interactively:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_l1_models.html">build_l1_models</a></span><span class="op">(</span><span class="va">gpa</span><span class="op">)</span></span>
+<span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_l2_models.html">build_l2_models</a></span><span class="op">(</span><span class="va">gpa</span><span class="op">)</span></span>
+<span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_l3_models.html">build_l3_models</a></span><span class="op">(</span><span class="va">gpa</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/export_glm_config.html">export_glm_config</a></span><span class="op">(</span><span class="va">gpa</span>, file <span class="op">=</span> <span class="st">"task_glm_spec.yaml"</span><span class="op">)</span></span></code></pre></div>
+<p>Or build the model sets from a YAML specification:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_l1_models.html">build_l1_models</a></span><span class="op">(</span><span class="va">gpa</span>, from_spec_file <span class="op">=</span> <span class="st">"task_glm_spec.yaml"</span><span class="op">)</span></span>
+<span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_l2_models.html">build_l2_models</a></span><span class="op">(</span><span class="va">gpa</span>, from_spec_file <span class="op">=</span> <span class="st">"task_glm_spec.yaml"</span><span class="op">)</span></span>
+<span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/build_l3_models.html">build_l3_models</a></span><span class="op">(</span><span class="va">gpa</span>, from_spec_file <span class="op">=</span> <span class="st">"task_glm_spec.yaml"</span><span class="op">)</span></span></code></pre></div>
+<p>Run selected model combinations:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/run_glm_pipeline.html">run_glm_pipeline</a></span><span class="op">(</span></span>
+<span>  <span class="va">gpa</span>,</span>
+<span>  l1_model_names <span class="op">=</span> <span class="st">"facehouse"</span>,</span>
+<span>  l2_model_names <span class="op">=</span> <span class="st">"l2_id_session"</span>,</span>
+<span>  l3_model_names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"l3_pooled_subject_ev"</span>, <span class="st">"l3_3dlmer_session"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Check status and inspect logs:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/diagnose_pipeline.html">diagnose_pipeline</a></span><span class="op">(</span><span class="va">gpa</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/view_log.html">view_log</a></span><span class="op">(</span><span class="va">gpa</span>, level <span class="op">=</span> <span class="fl">1</span>, id <span class="op">=</span> <span class="st">"01"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="fsl_model_arguments-object">fsl_model_arguments object<a class="anchor" aria-label="anchor" href="#fsl_model_arguments-object"></a>
+<h2 id="yaml-model-specifications">YAML model specifications<a class="anchor" aria-label="anchor" href="#yaml-model-specifications"></a>
 </h2>
-<p>The fsl_model_arguments file gets saved by run_fsl_pipeline.R and is a critical input to most subsidiary scripts in the pipeline and in additional analysis scripts. Its structure is as follows:</p>
+<p>YAML specifications are the recommended way to make analysis decisions reviewable and repeatable. A compact face/house example looks like this:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">analysis</span><span class="kw">:</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="at">  </span><span class="fu">name</span><span class="kw">:</span><span class="at"> facehouse_longitudinal_demo</span></span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="at">  </span><span class="fu">scheduler</span><span class="kw">:</span><span class="at"> slurm</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="at">  </span><span class="fu">glm_software</span><span class="kw">:</span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> fsl</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> afni</span></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="at">  </span><span class="fu">level_backends</span><span class="kw">:</span></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="at">    </span><span class="fu">l1</span><span class="kw">:</span><span class="at"> fsl</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="at">    </span><span class="fu">l2</span><span class="kw">:</span><span class="at"> fsl</span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="at">    </span><span class="fu">l3</span><span class="kw">:</span></span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> fsl</span></span>
+<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> afni</span></span>
+<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a><span class="at">  </span><span class="fu">n_expected_runs</span><span class="kw">:</span><span class="at"> </span><span class="dv">4</span></span>
+<span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a></span>
+<span id="cb8-15"><a href="#cb8-15" tabindex="-1"></a><span class="fu">onsets</span><span class="kw">:</span></span>
+<span id="cb8-16"><a href="#cb8-16" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> onset</span></span>
+<span id="cb8-17"><a href="#cb8-17" tabindex="-1"></a></span>
+<span id="cb8-18"><a href="#cb8-18" tabindex="-1"></a><span class="fu">durations</span><span class="kw">:</span></span>
+<span id="cb8-19"><a href="#cb8-19" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> duration</span></span>
+<span id="cb8-20"><a href="#cb8-20" tabindex="-1"></a></span>
+<span id="cb8-21"><a href="#cb8-21" tabindex="-1"></a><span class="fu">events</span><span class="kw">:</span></span>
+<span id="cb8-22"><a href="#cb8-22" tabindex="-1"></a><span class="at">  </span><span class="fu">stim</span><span class="kw">:</span></span>
+<span id="cb8-23"><a href="#cb8-23" tabindex="-1"></a><span class="at">    </span><span class="fu">onset</span><span class="kw">:</span><span class="at"> onset</span></span>
+<span id="cb8-24"><a href="#cb8-24" tabindex="-1"></a><span class="at">    </span><span class="fu">duration</span><span class="kw">:</span><span class="at"> duration</span></span>
+<span id="cb8-25"><a href="#cb8-25" tabindex="-1"></a></span>
+<span id="cb8-26"><a href="#cb8-26" tabindex="-1"></a><span class="fu">signals</span><span class="kw">:</span></span>
+<span id="cb8-27"><a href="#cb8-27" tabindex="-1"></a><span class="at">  </span><span class="fu">face</span><span class="kw">:</span></span>
+<span id="cb8-28"><a href="#cb8-28" tabindex="-1"></a><span class="at">    </span><span class="fu">event</span><span class="kw">:</span><span class="at"> stim</span></span>
+<span id="cb8-29"><a href="#cb8-29" tabindex="-1"></a><span class="at">    </span><span class="fu">trial_subset_expression</span><span class="kw">:</span><span class="at"> object == 'face'</span></span>
+<span id="cb8-30"><a href="#cb8-30" tabindex="-1"></a><span class="at">    </span><span class="fu">normalization</span><span class="kw">:</span><span class="at"> none</span></span>
+<span id="cb8-31"><a href="#cb8-31" tabindex="-1"></a><span class="at">    </span><span class="fu">value_fixed</span><span class="kw">:</span><span class="at"> </span><span class="dv">1</span></span>
+<span id="cb8-32"><a href="#cb8-32" tabindex="-1"></a></span>
+<span id="cb8-33"><a href="#cb8-33" tabindex="-1"></a><span class="at">  </span><span class="fu">house</span><span class="kw">:</span></span>
+<span id="cb8-34"><a href="#cb8-34" tabindex="-1"></a><span class="at">    </span><span class="fu">event</span><span class="kw">:</span><span class="at"> stim</span></span>
+<span id="cb8-35"><a href="#cb8-35" tabindex="-1"></a><span class="at">    </span><span class="fu">trial_subset_expression</span><span class="kw">:</span><span class="at"> object == 'house'</span></span>
+<span id="cb8-36"><a href="#cb8-36" tabindex="-1"></a><span class="at">    </span><span class="fu">normalization</span><span class="kw">:</span><span class="at"> none</span></span>
+<span id="cb8-37"><a href="#cb8-37" tabindex="-1"></a><span class="at">    </span><span class="fu">value_fixed</span><span class="kw">:</span><span class="at"> </span><span class="dv">1</span></span>
+<span id="cb8-38"><a href="#cb8-38" tabindex="-1"></a></span>
+<span id="cb8-39"><a href="#cb8-39" tabindex="-1"></a><span class="fu">l1_models</span><span class="kw">:</span></span>
+<span id="cb8-40"><a href="#cb8-40" tabindex="-1"></a><span class="at">  </span><span class="fu">facehouse</span><span class="kw">:</span></span>
+<span id="cb8-41"><a href="#cb8-41" tabindex="-1"></a><span class="at">    </span><span class="fu">signals</span><span class="kw">:</span></span>
+<span id="cb8-42"><a href="#cb8-42" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> face</span></span>
+<span id="cb8-43"><a href="#cb8-43" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> house</span></span>
+<span id="cb8-44"><a href="#cb8-44" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb8-45"><a href="#cb8-45" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb8-46"><a href="#cb8-46" tabindex="-1"></a></span>
+<span id="cb8-47"><a href="#cb8-47" tabindex="-1"></a><span class="fu">l2_models</span><span class="kw">:</span></span>
+<span id="cb8-48"><a href="#cb8-48" tabindex="-1"></a><span class="at">  </span><span class="fu">l2_id_session</span><span class="kw">:</span></span>
+<span id="cb8-49"><a href="#cb8-49" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb8-50"><a href="#cb8-50" tabindex="-1"></a><span class="at">    </span><span class="fu">l2_scope</span><span class="kw">:</span><span class="at"> id_session</span></span>
+<span id="cb8-51"><a href="#cb8-51" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ stress_label</span></span>
+<span id="cb8-52"><a href="#cb8-52" tabindex="-1"></a><span class="at">    </span><span class="fu">reference_level</span><span class="kw">:</span></span>
+<span id="cb8-53"><a href="#cb8-53" tabindex="-1"></a><span class="at">      </span><span class="fu">stress_label</span><span class="kw">:</span><span class="at"> stress</span></span>
+<span id="cb8-54"><a href="#cb8-54" tabindex="-1"></a><span class="at">    </span><span class="fu">contrasts</span><span class="kw">:</span></span>
+<span id="cb8-55"><a href="#cb8-55" tabindex="-1"></a><span class="at">      </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb8-56"><a href="#cb8-56" tabindex="-1"></a><span class="at">      </span><span class="fu">cond_means</span><span class="kw">:</span></span>
+<span id="cb8-57"><a href="#cb8-57" tabindex="-1"></a><span class="at">        </span><span class="kw">-</span><span class="at"> stress_label</span></span>
+<span id="cb8-58"><a href="#cb8-58" tabindex="-1"></a><span class="at">      </span><span class="fu">pairwise_diffs</span><span class="kw">:</span></span>
+<span id="cb8-59"><a href="#cb8-59" tabindex="-1"></a><span class="at">        </span><span class="kw">-</span><span class="at"> stress_label</span></span>
+<span id="cb8-60"><a href="#cb8-60" tabindex="-1"></a><span class="at">      </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb8-61"><a href="#cb8-61" tabindex="-1"></a></span>
+<span id="cb8-62"><a href="#cb8-62" tabindex="-1"></a><span class="fu">l3_models</span><span class="kw">:</span></span>
+<span id="cb8-63"><a href="#cb8-63" tabindex="-1"></a><span class="at">  </span><span class="fu">l3_pooled_subject_ev</span><span class="kw">:</span></span>
+<span id="cb8-64"><a href="#cb8-64" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb8-65"><a href="#cb8-65" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> pooled_sessions_subject_ev</span></span>
+<span id="cb8-66"><a href="#cb8-66" tabindex="-1"></a><span class="at">    </span><span class="fu">execution_backend</span><span class="kw">:</span><span class="at"> fsl</span></span>
+<span id="cb8-67"><a href="#cb8-67" tabindex="-1"></a><span class="at">    </span><span class="fu">producer_backend</span><span class="kw">:</span><span class="at"> fsl</span></span>
+<span id="cb8-68"><a href="#cb8-68" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ session_label</span></span>
+<span id="cb8-69"><a href="#cb8-69" tabindex="-1"></a><span class="at">    </span><span class="fu">reference_level</span><span class="kw">:</span></span>
+<span id="cb8-70"><a href="#cb8-70" tabindex="-1"></a><span class="at">      </span><span class="fu">session_label</span><span class="kw">:</span><span class="at"> analgesic</span></span>
+<span id="cb8-71"><a href="#cb8-71" tabindex="-1"></a><span class="at">    </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb8-72"><a href="#cb8-72" tabindex="-1"></a><span class="at">    </span><span class="fu">cond_means</span><span class="kw">:</span></span>
+<span id="cb8-73"><a href="#cb8-73" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> session_label</span></span>
+<span id="cb8-74"><a href="#cb8-74" tabindex="-1"></a><span class="at">    </span><span class="fu">pairwise_diffs</span><span class="kw">:</span></span>
+<span id="cb8-75"><a href="#cb8-75" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> session_label</span></span>
+<span id="cb8-76"><a href="#cb8-76" tabindex="-1"></a><span class="at">    </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb8-77"><a href="#cb8-77" tabindex="-1"></a></span>
+<span id="cb8-78"><a href="#cb8-78" tabindex="-1"></a><span class="at">  </span><span class="fu">l3_3dlmer_session</span><span class="kw">:</span></span>
+<span id="cb8-79"><a href="#cb8-79" tabindex="-1"></a><span class="at">    </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb8-80"><a href="#cb8-80" tabindex="-1"></a><span class="at">    </span><span class="fu">l3_input_mode</span><span class="kw">:</span><span class="at"> 3dlmer</span></span>
+<span id="cb8-81"><a href="#cb8-81" tabindex="-1"></a><span class="at">    </span><span class="fu">execution_backend</span><span class="kw">:</span><span class="at"> afni</span></span>
+<span id="cb8-82"><a href="#cb8-82" tabindex="-1"></a><span class="at">    </span><span class="fu">producer_backend</span><span class="kw">:</span><span class="at"> fsl</span></span>
+<span id="cb8-83"><a href="#cb8-83" tabindex="-1"></a><span class="at">    </span><span class="fu">model_formula</span><span class="kw">:</span><span class="at"> ~ session_label</span></span>
+<span id="cb8-84"><a href="#cb8-84" tabindex="-1"></a><span class="at">    </span><span class="fu">random_effects</span><span class="kw">:</span><span class="at"> (1 | Subj)</span></span>
+<span id="cb8-85"><a href="#cb8-85" tabindex="-1"></a><span class="at">    </span><span class="fu">reference_level</span><span class="kw">:</span></span>
+<span id="cb8-86"><a href="#cb8-86" tabindex="-1"></a><span class="at">      </span><span class="fu">session_label</span><span class="kw">:</span><span class="at"> analgesic</span></span>
+<span id="cb8-87"><a href="#cb8-87" tabindex="-1"></a><span class="at">    </span><span class="fu">diagonal</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb8-88"><a href="#cb8-88" tabindex="-1"></a><span class="at">    </span><span class="fu">cond_means</span><span class="kw">:</span></span>
+<span id="cb8-89"><a href="#cb8-89" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> session_label</span></span>
+<span id="cb8-90"><a href="#cb8-90" tabindex="-1"></a><span class="at">    </span><span class="fu">pairwise_diffs</span><span class="kw">:</span></span>
+<span id="cb8-91"><a href="#cb8-91" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> session_label</span></span>
+<span id="cb8-92"><a href="#cb8-92" tabindex="-1"></a><span class="at">    </span><span class="fu">overall_response</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span></code></pre></div>
+<p>This example demonstrates the current longitudinal pattern: keep runs nested within subject-session at Level 2 (<code>l2_scope: id_session</code>), then fit either an FSL-native session model with subject explanatory variables or an AFNI <code>3dLMEr</code> model using FSL-produced Level 2 inputs.</p>
+</div>
+<div class="section level2">
+<h2 id="output-layout">Output layout<a class="anchor" aria-label="anchor" href="#output-layout"></a>
+</h2>
+<p>Each analysis is written under <code>output_directory/analysis_name</code>. The exact layout depends on selected backends, but typical outputs include:</p>
+<pre class="text"><code><span><span class="va">analysis_name</span><span class="op">/</span></span>
+<span>  <span class="va">configuration_files</span><span class="op">/</span>     <span class="co"># exported specs, caches, and finalized pipeline objects</span></span>
+<span>  <span class="va">scheduler_scripts</span><span class="op">/</span>       <span class="co"># one batch_&lt;uuid&gt;/ folder per run_glm_pipeline() call</span></span>
+<span>  <span class="va">feat_l1</span><span class="op">/</span>                 <span class="co"># FSL Level 1 setup and outputs</span></span>
+<span>  <span class="va">feat_l2</span><span class="op">/</span>                 <span class="co"># FSL Level 2 setup and outputs</span></span>
+<span>  <span class="va">feat_l3</span><span class="op">/</span>                 <span class="co"># FSL Level 3 setup and outputs</span></span>
+<span>  <span class="va">afni_3dlmer</span><span class="op">/</span>             <span class="co"># AFNI 3dLMEr data tables, scripts, and outputs</span></span>
+<span>  <span class="va">logs</span><span class="op">/</span>                    <span class="co"># text and JSON logs</span></span>
+<span>  <span class="va">glm_pipeline.sqlite</span>      <span class="co"># job tracking database</span></span></code></pre>
+<p>The pipeline writes backend preflight information before submission, then tracks submitted jobs through the SQLite database. <code><a href="reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> summarizes the job tree and helps locate failed or incomplete stages.</p>
+</div>
+<div class="section level2">
+<h2 id="longitudinal-workflows">Longitudinal workflows<a class="anchor" aria-label="anchor" href="#longitudinal-workflows"></a>
+</h2>
+<p>Longitudinal fMRI analyses require special care because runs, sessions, and subjects represent distinct sources of variation. The current recommended patterns are:</p>
 <ul>
-<li><p>analysis name: This is a string used to name the resulting group analysis folder. Set it to something that describes the overall dataset, preprocessing approach, and model-based input.</p></li>
-<li><p>trial_statistics: this is a long-form data.frame containing trial statistics for each subject to be analyzed. Trials and subjects should be stacked on the rows, leading to a data.frame with subjects x trials total rows. This data.frame is used to calculate model-based fMRI regressors and setup the GLM design matrices for each subject.</p></li>
-<li><p>subject_covariates: A data.frame containing any covariates that could be used in the group analysis. There should be one row per subject.</p></li>
-<li><p>id_col: a string specifying the column name of the subject ID in all data provided as input (esp. subject_covariates and trial_statistics). This is used to merge data together as needed.</p></li>
-<li><p>fmri_dir: The root path to preprocessed data for the entire project</p></li>
-<li><p>expectdir: The subfolder name within <code>fmri_dir</code> containing preprocessed fMRI data for a given subject.</p></li>
-<li><p>expectfile: A regular expression denoting the expected filename for the preprocessed fMRI data to be entered into first-level GLMs.</p></li>
-<li><p>usepreconvolve: a boolean indicating whether regressors should be convolved with the HRF prior to entry into FSL FEAT. Convolution is achieved using the <code>build_design_matrix</code> function in the <a href="https://github.com/PennStateDEPENdLab/dependlab" class="external-link">dependlab R package</a>. I recommend TRUE, which is better tested. If you use FALSE, the pipeline will output so-called three-column timing files (onset, duration, parametric value), which are entered into FEAT, and convolution occurs within FEAT.</p></li>
-<li><p>ncpus: controls how many CPUs are used when running FEAT level 2 analysis (OLS combination of runs). I should probably rename this for clarity.</p></li>
-<li><p>drop_volumes: controls the number of initial volumes that are dropped from each run of fMRI data before GLM analysis. Useful for eliminating volumes before steady state magnetization.</p></li>
-<li><p>tr: the repetition time (in seconds) for the fMRI scan sequence. This is important for various temporal filtering steps to be applied correctly.</p></li>
-<li><p>spikeregressors: a boolean controlling whether 1/0 regressors for each large head movement are added as confound regressors in the GLM. Handled downstream in model_clock_fmri.</p></li>
-<li><p>l1_model_variants: a list where each element is a vector of signals that should be included simultaneously in the level 1 analysis. For each element of the list, the level 1 data are analyzed with the requested combination of regressors, and group models for this combination are also conducted. Thus, the total number of models is the product of l1_model_variants (level 1) and group_model_variants (level 3).</p></li>
-<li><p>group_model_variants: a list where each element is a vector of covariates that should be included in a group analysis. The names refer to columns in the <code>subject_covariates</code> data.frame.</p></li>
-<li><p>l1_contrasts: a named list whose elements are lists specifying a set of level 1 contrasts that should be included. The name of the vector is used to cross-reference the corresponding name in <code>l1_model_variants</code>. For example, if a model is named ‘m1’ in <code>l1_model_variants</code>, you can add level 1 contrasts to this model using ‘m1’ as the name of the list in <code>l1_contrasts</code>.</p></li>
-<li><p>execute_feat: a boolean indicating whether to execute FEAT for the level 1 analysis after creating the FSF file. This is somewhat vestigial from a pipeline variant that was run on a desktop computer. For cluster-based execution, this should be FALSE, which creates the FSF file, but hands off execution to the scheduler.</p></li>
-<li><p>model_suffix: an optional string that is appended to the folder names for each output the level 1 analyses specified in <code>l1_model_variants</code>. This is useful if you are running two or more models with the same level 1 regressors, but the model is nevertheless somewhat different (e.g., different contrasts).</p></li>
-<li><p>root_workdir: location for temporary job scripts generated for each run and model. These are not cleaned up after the pipeline completes (since it is distribted), but they can be deleted manually if you don’t need them.</p></li>
-<li><p>n_cluster_beta_cpus: number of CPUs used simultaneously to extract regression coefficients (betas) from single runs/subjects based on significant group-level clusters.</p></li>
-<li><p>badids: an optional vector of IDs that should be excluded from analysis. These are dorpped before the pipeline begins.</p></li>
-<li><p>zthresh: the minimum z-stastistic threshold to be used in identifying whole-brain-significant clusters in extraction scripts. If not passed, defaults to |z| &gt; 3.09.</p></li>
-<li><p>clustsize: the minimum number of voxels above <code>zthresh</code> that must be present for the cluster to be retained for extraction. This is the second component of a cluster-based thresholding approach for whole-brain significance (e.g., using 3dClustSim). If not specified, defaults to 34.</p></li>
+<li>Use <code>l2_scope = "id_session"</code> for most longitudinal studies. This creates one Level 2 output per subject-session.</li>
+<li>Use <code>l3_input_mode = "pooled_sessions_subject_ev"</code> for balanced categorical visit comparisons that should remain inside FSL.</li>
+<li>Use <code>l3_input_mode = "3dlmer"</code> for irregular visits, incomplete follow-up, continuous time effects, treatment-by-time interactions, or random-effects structures that are better handled by AFNI <code>3dLMEr</code>.</li>
+<li>Reserve <code>l2_scope = "id"</code> for cases where sessions are essentially pseudo-runs and longitudinal change is not the target.</li>
 </ul>
+<p>The repository includes a worked face/house demonstration in <code>longitudinal_fmri_demo_jun2026/</code>, including a walkthrough script and YAML model file.</p>
+</div>
+<div class="section level2">
+<h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
+</h2>
+<p>The pkgdown site is the primary documentation entry point:</p>
+<ul>
+<li>Package website: <a href="https://uncdependlab.github.io/fmri.pipeline/" class="uri">https://uncdependlab.github.io/fmri.pipeline/</a>
+</li>
+<li>Quick start: <a href="https://uncdependlab.github.io/fmri.pipeline/articles/quickstart.html" class="uri">https://uncdependlab.github.io/fmri.pipeline/articles/quickstart.html</a>
+</li>
+<li>Design concepts: <a href="https://uncdependlab.github.io/fmri.pipeline/articles/design.html" class="uri">https://uncdependlab.github.io/fmri.pipeline/articles/design.html</a>
+</li>
+<li>Longitudinal analyses: <a href="https://uncdependlab.github.io/fmri.pipeline/articles/longitudinal.html" class="uri">https://uncdependlab.github.io/fmri.pipeline/articles/longitudinal.html</a>
+</li>
+<li>Pipeline diagnosis: <a href="https://uncdependlab.github.io/fmri.pipeline/articles/diagnosis.html" class="uri">https://uncdependlab.github.io/fmri.pipeline/articles/diagnosis.html</a>
+</li>
+<li>Reference index: <a href="https://uncdependlab.github.io/fmri.pipeline/reference/index.html" class="uri">https://uncdependlab.github.io/fmri.pipeline/reference/index.html</a>
+</li>
+</ul>
+</div>
+<div class="section level2">
+<h2 id="development-status">Development status<a class="anchor" aria-label="anchor" href="#development-status"></a>
+</h2>
+<p><code>fmri.pipeline</code> is under active development. FSL-centered analyses are the most established path. Backend resolution, SPM support, AFNI Level 3 workflows, longitudinal model specification, and diagnostic tooling are current areas of active work. For new projects, prefer YAML model specifications, explicit <code>subject_data</code>/<code>run_data</code>/<code>trial_data</code> tables, and small test runs before launching the full model grid.</p>
+<p>Issues and feature requests are tracked at <a href="https://github.com/UNCDEPENdLab/fmri.pipeline/issues" class="external-link uri">https://github.com/UNCDEPENdLab/fmri.pipeline/issues</a>.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">

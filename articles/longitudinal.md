@@ -233,10 +233,12 @@ using the defaults is easiest.
 | `trial_data` | Event/trial | `id`, `session`, `run_number`, onset/duration/event columns used by L1 | Trial condition columns used by L1 signals |
 
 For L3 longitudinal predictors, put one value per subject-session in
-`subject_data` whenever possible. The setup code also derives
-`session_data` from columns that are constant within each `id`/`session`
-in `run_data`, but an explicit `subject_data` row per visit is clearer
-and easier to audit.
+`subject_data` whenever possible. Person-level covariates such as sex,
+baseline age, or randomized group should be repeated across that
+subject’s sessions. Do not prepare a separate `session_data` input
+table; setup derives `gpa$session_data` internally from columns that are
+constant within each `id`/`session` in `run_data` and the
+subject-session rows in `subject_data`.
 
 A minimal shape looks like this:
 

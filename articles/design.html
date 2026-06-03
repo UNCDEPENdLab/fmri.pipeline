@@ -238,12 +238,20 @@ data structures are somewhat irregular. For example:</p>
 </h4>
 <p>A data.frame containing variables that uniquely identify each subject
 and occasion, as well as person/occasion characteristics that can be
-included in sample-level analyses of individual differences. Examples of
-variables that could be in <code>$subject_data</code> include mean
-framewise displacement for each subject (nuisance covariate), age, sex,
-personality variables, or external cognitive measures (e.g., digit
-span). Any covariate in this data.frame can be incorporated into level 3
-(i.e., sample-level) GLM analysis.</p>
+included in sample-level analyses of individual differences. In
+cross-sectional analyses, <code>$subject_data</code> is usually one row
+per subject. In longitudinal analyses, it should be one row per
+<code>id</code>/<code>session</code>; person-level covariates such as
+sex, baseline age, or treatment arm should be repeated across sessions.
+Examples of variables that could be in <code>$subject_data</code>
+include mean framewise displacement for each subject/session (nuisance
+covariate), age, sex, personality variables, or external cognitive
+measures (e.g., digit span). Any covariate in this data.frame can be
+incorporated into level 3 (i.e., sample-level) GLM analysis. Users
+should not construct <code>$session_data</code> directly; it is derived
+internally from <code>$run_data</code> columns that are constant within
+<code>id</code>/<code>session</code> and from
+<code>$subject_data</code>.</p>
 <p><em>Example</em>:</p>
 <pre><code>id  session    age  sex   impulsivity_score
 1         1   15.1    F                19.2

@@ -12,7 +12,8 @@ build_3dlmer_datatable(subject_data, input_files, model_variables)
 
 - subject_data:
 
-  a data.frame containing subject-level covariates
+  a data.frame containing subject/session-level covariates with unique
+  id/session rows
 
 - input_files:
 

@@ -64,11 +64,17 @@ setup_glm_pipeline(
 
 - subject_data:
 
-  A data.frame containing all subject-level data such as age, sex, or
-  other covariates. Columns from `subject_data` can be used as
-  covariates in group (aka 'level 3') analyses. If `NULL`, then this
-  will be distilled from `trial_data` by looking for variables that vary
-  at the same level as `vm["id"]`.
+  A data.frame containing Level 3 covariates and subject/session
+  metadata. For cross-sectional analyses this is typically one row per
+  subject. For longitudinal analyses, this must contain one row per
+  `id`/`session`; person-level covariates such as sex, baseline age, or
+  treatment arm should be repeated across that subject's sessions.
+  Columns from `subject_data` can be used as covariates in group (aka
+  'level 3') analyses. If `NULL`, then this will be distilled from
+  `trial_data` by looking for variables that vary at the same level as
+  `vm["id"]` and `vm["session"]`. Do not provide `session_data`;
+  `setup_glm_pipeline()` derives `gpa$session_data` internally from
+  `run_data` and `subject_data`.
 
 - run_data:
 
@@ -76,7 +82,9 @@ setup_glm_pipeline(
   run number. Columns from `run_data` can be used as covariates in
   subject (aka 'level 2') analyses. If `NULL`, this will be distilled
   from `trial_data` by looking for variables that vary at the same level
-  as `vm["run_number"]`.
+  as `vm["run_number"]`. Columns that are constant within each
+  `id`/`session` are copied into the internally derived
+  `gpa$session_data`.
 
 - trial_data:
 
@@ -88,7 +96,8 @@ setup_glm_pipeline(
   combined long format, where variables at different levels are all
   included as columns). In this case, `setup_glm_pipeline` will detect
   which variables occur at each level and parse these accordingly into
-  `subject_data` and `run_data`.
+  `subject_data` and `run_data`; `session_data` is still constructed
+  internally.
 
 - ppi_data:
 

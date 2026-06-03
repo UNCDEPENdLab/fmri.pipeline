@@ -65,7 +65,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">2026-05-19</h4>
+            <h4 data-toc-skip class="date">2026-06-03</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/fmri.pipeline/blob/master/vignettes/longitudinal.Rmd" class="external-link"><code>vignettes/longitudinal.Rmd</code></a></small>
       <div class="d-none name"><code>longitudinal.Rmd</code></div>
@@ -467,11 +467,14 @@ onset/duration/event columns used by L1</td>
 </tbody>
 </table>
 <p>For L3 longitudinal predictors, put one value per subject-session in
-<code>subject_data</code> whenever possible. The setup code also derives
-<code>session_data</code> from columns that are constant within each
-<code>id</code>/<code>session</code> in <code>run_data</code>, but an
-explicit <code>subject_data</code> row per visit is clearer and easier
-to audit.</p>
+<code>subject_data</code> whenever possible. Person-level covariates
+such as sex, baseline age, or randomized group should be repeated across
+that subject’s sessions. Do not prepare a separate
+<code>session_data</code> input table; setup derives
+<code>gpa$session_data</code> internally from columns that are constant
+within each <code>id</code>/<code>session</code> in
+<code>run_data</code> and the subject-session rows in
+<code>subject_data</code>.</p>
 <p>A minimal shape looks like this:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">subject_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>

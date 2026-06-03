@@ -141,7 +141,9 @@ nomenclature is stable across single-run and multi-run analyses.</p>
 <code>subject_data</code>. <code><a href="../reference/setup_glm_pipeline.html">setup_glm_pipeline()</a></code> can derive
 <code>run_data</code> and <code>subject_data</code> from
 <code>trial_data</code> when needed, but explicit tables are easier to
-audit and usually clearer for new analyses.</p>
+audit and usually clearer for new analyses. Do not provide a separate
+<code>session_data</code> table; the GPA object constructs that internal
+table from <code>run_data</code> and <code>subject_data</code>.</p>
 <div class="section level3">
 <h3 id="required-identifiers">Required Identifiers<a class="anchor" aria-label="anchor" href="#required-identifiers"></a>
 </h3>
@@ -300,8 +302,10 @@ file, often from fMRIPrep or postprocessing</li>
 <div class="section level3">
 <h3 id="subject-data">Subject Data<a class="anchor" aria-label="anchor" href="#subject-data"></a>
 </h3>
-<p><code>subject_data</code> has one row per subject-session. It
-provides Level 3 covariates and subject/session metadata.</p>
+<p><code>subject_data</code> provides Level 3 covariates and
+subject/session metadata. In cross-sectional analyses, it is usually one
+row per subject. In longitudinal analyses, it must be one row per
+subject-session (<code>id</code> + <code>session</code>).</p>
 <p>Typical columns include:</p>
 <ul>
 <li>
@@ -331,6 +335,12 @@ label or days since baseline</li>
 <span>  days_since_baseline <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">365</span>, <span class="fl">0</span>, <span class="fl">391</span><span class="op">)</span>,</span>
 <span>  age_baseline <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">16.70</span>, <span class="fl">16.70</span>, <span class="fl">16.21</span>, <span class="fl">16.21</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
+<p>Person-level covariates such as baseline age, sex, or randomized
+group should be repeated across that subject’s sessions. The pipeline
+derives <code>gpa$session_data</code> internally from columns in
+<code>run_data</code> that are constant within
+<code>id</code>/<code>session</code>, then merges those with the
+subject-session rows from <code>subject_data</code>.</p>
 </div>
 <div class="section level3">
 <h3 id="bids-helpers">BIDS Helpers<a class="anchor" aria-label="anchor" href="#bids-helpers"></a>

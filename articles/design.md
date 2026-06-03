@@ -145,12 +145,18 @@ structures are somewhat irregular. For example:
 
 A data.frame containing variables that uniquely identify each subject
 and occasion, as well as person/occasion characteristics that can be
-included in sample-level analyses of individual differences. Examples of
-variables that could be in `$subject_data` include mean framewise
-displacement for each subject (nuisance covariate), age, sex,
-personality variables, or external cognitive measures (e.g., digit
-span). Any covariate in this data.frame can be incorporated into level 3
-(i.e., sample-level) GLM analysis.
+included in sample-level analyses of individual differences. In
+cross-sectional analyses, `$subject_data` is usually one row per
+subject. In longitudinal analyses, it should be one row per
+`id`/`session`; person-level covariates such as sex, baseline age, or
+treatment arm should be repeated across sessions. Examples of variables
+that could be in `$subject_data` include mean framewise displacement for
+each subject/session (nuisance covariate), age, sex, personality
+variables, or external cognitive measures (e.g., digit span). Any
+covariate in this data.frame can be incorporated into level 3 (i.e.,
+sample-level) GLM analysis. Users should not construct `$session_data`
+directly; it is derived internally from `$run_data` columns that are
+constant within `id`/`session` and from `$subject_data`.
 
 *Example*:
 

@@ -13,7 +13,7 @@ summary(df)
 
 - df:
 
-  A `bg_subject_data` object containing subject-level data.
+  A `bg_subject_data` object containing subject/session-level data.
 
 ## Details
 
