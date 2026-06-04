@@ -240,6 +240,22 @@ finalize_pipeline_configuration <- function(gpa, refinalize = FALSE) {
   return(gpa)
 }
 
+disable_unavailable_spike_volumes <- function(gpa, lg) {
+  if (is.null(gpa$confound_settings$spike_volumes)) {
+    return(gpa)
+  }
+
+  has_motion <- any(isTRUE(gpa$run_data$motion_params_present), na.rm = TRUE)
+  if (!isTRUE(has_motion)) {
+    lg$warn(
+      "spike_volumes was requested, but no motion parameter files were found for any run; spike regressors will not be generated"
+    )
+    gpa$confound_settings$spike_volumes <- NULL
+  }
+
+  gpa
+}
+
 setup_parallel_settings <- function(gpa, lg = NULL) {
   checkmate::assert_class(lg, "Logger")
 
@@ -653,6 +669,8 @@ finalize_confound_settings <- function(gpa, lg) {
   } else {
     gpa$run_data$confound_input_file_present <- file.exists(get_mr_abspath(gpa$run_data, "confound_input_file"))
   }
+
+  gpa <- disable_unavailable_spike_volumes(gpa, lg)
 
   if (isTRUE(user_specified_exclude_run) &&
       is.character(gpa$confound_settings$exclude_run) &&

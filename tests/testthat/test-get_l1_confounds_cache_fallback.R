@@ -72,6 +72,27 @@ test_that("confound defaults do not assume motion, confounds, or spike regressor
   expect_null(defaults$spike_volumes)
 })
 
+test_that("spike_volumes is disabled when no motion files are present", {
+  lg <- lgr::get_logger("test/disable_unavailable_spike_volumes")
+  lg$set_threshold("fatal")
+
+  gpa <- list(
+    confound_settings = list(spike_volumes = "framewise_displacement > 0.9"),
+    run_data = data.frame(
+      id = "sub01",
+      session = 1L,
+      run_number = 1L,
+      motion_params_present = FALSE,
+      stringsAsFactors = FALSE
+    )
+  )
+  class(gpa) <- c("glm_pipeline_arguments", "list")
+
+  out <- fmri.pipeline:::disable_unavailable_spike_volumes(gpa, lg)
+
+  expect_null(out$confound_settings$spike_volumes)
+})
+
 test_that("read_confounds_motion_parameters returns an empty confound frame when no inputs are present", {
   tdir <- tempfile("missing_input_fallback_")
   dir.create(tdir, recursive = TRUE)

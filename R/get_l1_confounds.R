@@ -477,7 +477,7 @@ read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_d
 
   # combine motion and confound files (all volumes)
   if (is.null(motion_df) && is.null(confound_df)) {
-    lg$info(
+    lg$debug(
       "Neither confounds nor motion parameters are available for id: %s, session: %s, run_number: %d",
       id, session, run_number
     )
