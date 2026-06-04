@@ -46,9 +46,6 @@ run_3dlmer_sepjobs <- function(gpa, level=3L, model_names=NULL, rerun=FALSE, wai
   
   tracking_sqlite_db <- gpa$output_locations$sqlite_db
   upd_job_status_path <- system.file("bin/upd_job_status.R", package = "fmri.pipeline")
-  child_log_directory <- Sys.getenv("SLURM_SUBMIT_DIR", unset = "")
-  if (!nzchar(child_log_directory)) child_log_directory <- Sys.getenv("PBS_O_WORKDIR", unset = "")
-  if (!nzchar(child_log_directory)) child_log_directory <- getwd()
   
   job_ids <- c()
   
@@ -64,6 +61,8 @@ run_3dlmer_sepjobs <- function(gpa, level=3L, model_names=NULL, rerun=FALSE, wai
     submission_id <- basename(tempfile(pattern = paste0("3dlmer_", l3_name, "_")))
     file_suffix <- if (gpa$scheduler %in% c("torque", "qsub")) ".pbs" else ".sbatch"
     sched_script <- file.path(dirname(script_to_run), paste0(submission_id, file_suffix))
+    child_log_directory <- scheduler_child_log_directory(gpa)
+    if (!dir.exists(child_log_directory)) dir.create(child_log_directory, recursive = TRUE, showWarnings = FALSE)
     
     if (gpa$scheduler %in% c("slurm", "sbatch")) {
       header <- c(

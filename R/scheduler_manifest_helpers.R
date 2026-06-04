@@ -47,6 +47,29 @@ scheduler_output_directives <- function(scheduler, log_directory, job_name = NUL
   character(0)
 }
 
+scheduler_child_log_directory <- function(gpa = NULL) {
+  candidates <- character(0)
+
+  if (!is.null(gpa)) {
+    candidates <- c(
+      candidates,
+      gpa$batch_run$batch_directory,
+      gpa$output_locations$active_batch_directory
+    )
+  }
+
+  candidates <- c(
+    candidates,
+    Sys.getenv("FMRI_PIPELINE_BATCH_DIRECTORY", unset = ""),
+    Sys.getenv("SLURM_SUBMIT_DIR", unset = ""),
+    Sys.getenv("PBS_O_WORKDIR", unset = ""),
+    getwd()
+  )
+
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  candidates[1L]
+}
+
 scheduler_runtime_log_assignment <- function(scheduler, log_directory, job_name = NULL, extra = NULL, job_var = "job_id") {
   scheduler <- tolower(scheduler %||% "local")
   scheduler_name <- if (scheduler %in% c("slurm", "sbatch")) {

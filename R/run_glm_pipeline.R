@@ -177,6 +177,11 @@ l3_model_names = "prompt", glm_software = NULL, level_backends = NULL, backend_o
   # that is amended as each batch job runs and completes.
   batch_directory <- file.path(gpa$output_locations$scheduler_scripts, paste0("batch_", batch_id))
   if (!dir.exists(batch_directory)) dir.create(batch_directory, recursive = TRUE)
+  gpa$batch_run <- modifyList(gpa$batch_run %||% list(), list(
+    sequence_id = batch_id,
+    batch_directory = batch_directory
+  ))
+  gpa$output_locations$active_batch_directory <- batch_directory
   gpa_cache <- file.path(batch_directory, "run_pipeline_cache.RData")
   save(gpa, file=gpa_cache)
 
