@@ -89,24 +89,26 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   # Note: normalizePath will fail to evaluate properly if directory does not exist
   analysis_outdir <- get_output_directory(id=id, session=session, gpa=gpa, create_if_missing = TRUE, what="sub")
 
-  # COPIED FROM HERE generate_l1_confounds
-  generate_l1_confounds_output <- test_generate_l1_confounds(gpa,analysis_outdir, run_number, lg)
+  generate_l1_confounds_output <- test_generate_l1_confounds(gpa, analysis_outdir, run_number, lg)
   expected_l1_confound_file <- generate_l1_confounds_output$expected_l1_confound_file
 
   l1_cached_df <- read_df_sqlite(gpa = gpa, id = id, session = session, run_number = run_number, table = "l1_run_calculations")
 
-  # COPIED fROM HERE generate_run_exclusion
   generate_run_exclusion_output <- test_generate_run_exclusion(gpa, id, session, run_number, l1_cached_df, lg)
   exclude_data <- generate_run_exclusion_output$exclude_data
 
-  # COPIED FROM HERE generate_run_truncation
   generate_run_truncation_output <- test_generate_run_truncation(gpa, id, session, run_number, lg)
   generate_run_truncation <- generate_run_truncation_output$generate_run_truncation
   truncation_data <- generate_run_truncation_output$truncation_data
 
   # If run exclusion, l1 confounds, and truncation data exist, just use the precalculated information
-  # Only if all 3 are false go in this loop
-  if (!(generate_l1_confounds_output$generate_l1_confounds || generate_run_exclusion_output$generate_run_exclusion || generate_run_truncation_output$generate_run_truncation)) {
+  needs_recalculation <- (
+    generate_l1_confounds_output$generate_l1_confounds ||
+      generate_run_exclusion_output$generate_run_exclusion ||
+      generate_run_truncation_output$generate_run_truncation
+  )
+
+  if (!isTRUE(needs_recalculation)) {
     if (!is.na(expected_l1_confound_file)) lg$debug("Returning extant file: %s in get_l1_confounds", expected_l1_confound_file)
 
     # populate cached values for run if not recalculating anything
@@ -127,12 +129,10 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
         lg = lg
       )
 
-      insert_df_sqlite(
+      cache_l1_run_calculations(
         gpa,
         id = id, session = session, run_number = run_number,
-        data = run_df[, calculation_columns, drop = FALSE],
-        table = "l1_run_calculations",
-        immediate = TRUE
+        run_df = run_df, calculation_columns = calculation_columns
       )
 
       l1_cached_df <- run_df[, calculation_columns, drop = FALSE]
@@ -146,15 +146,15 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
     # above seems like it could be removed/factored out.
     run_df[, calculation_columns] <- l1_cached_df[, calculation_columns]
 
-    if (isTRUE(return_run_df)) {
-      return(run_df)
-    } else {
-      return(list(
-        l1_confound_file = expected_l1_confound_file,
-        l1_confounds_df = data.table::fread(expected_l1_confound_file, data.table = FALSE),
-        exclude_run = generate_run_exclusion_output$exclude_run, exclude_data = exclude_data, truncation_data = truncation_data
-      ))
-    }
+    return(return_l1_confounds_result(
+      return_run_df = return_run_df,
+      run_df = run_df,
+      l1_confound_file = expected_l1_confound_file,
+      l1_confounds_df = read_l1_confound_file(expected_l1_confound_file),
+      exclude_run = generate_run_exclusion_output$exclude_run,
+      exclude_data = exclude_data,
+      truncation_data = truncation_data
+    ))
   }
   
   confound_path <- NA_character_
@@ -166,7 +166,6 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
     motion_path <- get_mr_abspath(run_df, "motion_params_file")[1L]
   }
 
-  # COPIED FROM HERE read_confounds_motion_parameters
   read_confounds_motion_parameters_output <- read_confounds_motion_parameters(
     gpa, id, session, run_number, run_df, expected_l1_confound_file, lg,
     confound_path = confound_path, motion_path = motion_path
@@ -189,7 +188,9 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
 
   # truncate confounds to match
   all_confounds <- all_confounds[run_df$first_volume:run_df$last_volume, , drop = FALSE]
-  motion_df <- motion_df[run_df$first_volume:run_df$last_volume, , drop = FALSE]
+  if (!is.null(motion_df)) {
+    motion_df <- motion_df[run_df$first_volume:run_df$last_volume, , drop = FALSE]
+  }
 
   exclude_run_output <- test_exclude_run(
     gpa, id, session, run_number, generate_run_exclusion_output$generate_run_exclusion,
@@ -198,7 +199,6 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   # add run exclusion column to data.frame
   run_df$exclude_run <- exclude_run_output$exclude_run
 
-  # COPIED FROM HERE confound_manip
   all_confounds <- confound_manipulations(
     gpa,
     all_confounds,
@@ -211,8 +211,35 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   )
 
   # incorporate spike regressors if requested (not used in conventional AROMA)
+  if (!is.null(gpa$confound_settings$spike_volumes) && is.null(motion_df)) {
+    lg$warn("spike_volumes was requested, but no motion parameters are available for id: %s, session: %s, run_number: %s", id, session, run_number)
+  }
   spikes <- compute_spike_regressors(motion_df, gpa$confound_settings$spike_volumes, lg = lg)
   if (!is.null(spikes)) all_confounds <- cbind(all_confounds, spikes)
+
+  if (ncol(all_confounds) < 1L) {
+    expected_l1_confound_file <- NA_character_
+  }
+
+  if (is.na(expected_l1_confound_file)) {
+    run_df$l1_confound_file <- NA_character_
+
+    cache_l1_run_calculations(
+      gpa,
+      id = id, session = session, run_number = run_number,
+      run_df = run_df, calculation_columns = calculation_columns
+    )
+
+    return(return_l1_confounds_result(
+      return_run_df = return_run_df,
+      run_df = run_df,
+      l1_confound_file = NA_character_,
+      l1_confounds_df = data.frame(),
+      exclude_run = exclude_run_output$exclude_run,
+      exclude_data = exclude_run_output$exclude_data,
+      truncation_data = truncation_data
+    ))
+  }
 
   # persist confound column metadata for downstream concatenation
   if (is.null(names(all_confounds)) || any(!nzchar(names(all_confounds)))) {
@@ -241,20 +268,72 @@ get_l1_confounds <- function(run_df = NULL, id = NULL, session = NULL, run_numbe
   )
 
   # cache run_df calculations to db
-  insert_df_sqlite(gpa,
+  cache_l1_run_calculations(gpa,
     id = id, session = session, run_number = run_number,
-    data = run_df[, calculation_columns, drop = FALSE], table = "l1_run_calculations", immediate = TRUE
+    run_df = run_df, calculation_columns = calculation_columns
   )
 
+  return(return_l1_confounds_result(
+    return_run_df = return_run_df,
+    run_df = run_df,
+    l1_confound_file = expected_l1_confound_file,
+    l1_confounds_df = all_confounds,
+    exclude_run = exclude_run_output$exclude_run,
+    exclude_data = exclude_run_output$exclude_data,
+    truncation_data = truncation_data
+  ))
+}
+
+cache_l1_run_calculations <- function(gpa, id, session, run_number, run_df, calculation_columns) {
+  insert_df_sqlite(
+    gpa,
+    id = id, session = session, run_number = run_number,
+    data = run_df[, calculation_columns, drop = FALSE],
+    table = "l1_run_calculations",
+    immediate = TRUE
+  )
+}
+
+read_l1_confound_file <- function(l1_confound_file) {
+  if (is.null(l1_confound_file) || length(l1_confound_file) == 0L ||
+      is.na(l1_confound_file) || !nzchar(l1_confound_file) || !file.exists(l1_confound_file)) {
+    return(data.frame())
+  }
+  data.table::fread(l1_confound_file, data.table = FALSE)
+}
+
+get_run_tr <- function(run_df, gpa) {
+  tr <- NULL
+  if ("tr" %in% names(run_df)) tr <- run_df$tr[1L]
+  if (is.null(tr) || length(tr) == 0L || is.na(tr)) tr <- gpa$tr
+  if (is.null(tr) || length(tr) == 0L || is.na(tr)) return(NA_real_)
+  as.numeric(tr[1L])
+}
+
+empty_run_confounds <- function(run_df, gpa) {
+  n_volumes <- suppressWarnings(as.integer(run_df$run_volumes[1L]))
+  if (is.na(n_volumes) || n_volumes < 1L) return(data.frame())
+
+  volume <- seq_len(n_volumes)
+  data.frame(
+    volume = volume,
+    time = (volume - 1L) * get_run_tr(run_df, gpa)
+  )
+}
+
+return_l1_confounds_result <- function(return_run_df, run_df, l1_confound_file, l1_confounds_df,
+                                       exclude_run, exclude_data, truncation_data) {
   if (isTRUE(return_run_df)) {
     return(run_df)
-  } else {
-    return(list(
-      l1_confound_file = expected_l1_confound_file,
-      l1_confounds_df = all_confounds,
-      exclude_run = exclude_run_output$exclude_run, exclude_data = exclude_run_output$exclude_data, truncation_data = truncation_data
-    ))
   }
+
+  list(
+    l1_confound_file = l1_confound_file,
+    l1_confounds_df = l1_confounds_df,
+    exclude_run = exclude_run,
+    exclude_data = exclude_data,
+    truncation_data = truncation_data
+  )
 }
 
 #' helper function to generate confounds file
@@ -402,15 +481,19 @@ read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_d
       "Neither confounds nor motion parameters are available for id: %s, session: %s, run_number: %d",
       id, session, run_number
     )
-    return(empty_set)
+    return(list(all_confounds = empty_run_confounds(run_df, gpa), motion_df = NULL))
   } else if (is.null(motion_df)) {
     all_confounds <- confound_df
   } else if (is.null(confound_df)) {
     all_confounds <- motion_df
   } else {
     if (nrow(motion_df) != nrow(confound_df)) {
-      lg$error("Number of rows in motion_df is: %d and in confound_df is %d. Cannot combine", nrow(motion_df), nrow(confound_df))
-      return(empty_set)
+      msg <- sprintf(
+        "Number of rows in motion_df is %d and in confound_df is %d. Cannot combine.",
+        nrow(motion_df), nrow(confound_df)
+      )
+      lg$error("%s", msg)
+      stop(msg, call. = FALSE)
     } else {
       # prefer confound_df as authoritative in cases where motion_df has overlapping columns
       overlap_names <- intersect(names(motion_df), names(confound_df))
@@ -429,7 +512,7 @@ read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_d
 
   # add volume and time columns to confounds in case these are helpful in exclusion or truncation expressions
   all_confounds <- all_confounds %>%
-    mutate(volume = 1:n(), time = (volume - 1) * run_df$tr[1L])
+    mutate(volume = 1:n(), time = (volume - 1) * get_run_tr(run_df, gpa))
 
   # handle NA values in confounds -> convert to 0
   has_na <- sapply(all_confounds, anyNA)

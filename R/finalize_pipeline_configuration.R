@@ -606,19 +606,18 @@ finalize_confound_settings <- function(gpa, lg) {
   confound_defaults <- list(
     motion_params_file = NULL,
     motion_params_colnames = NULL,
-    confound_input_file = "confounds.tsv",
+    confound_input_file = NULL,
     l1_confound_regressors = NULL, # column names in motion_params_file and/or confound_input_file ("all" to include all columns)
     exclude_run = NULL,
     truncate_run = NULL, # example: framewise_displacement > 1 & time > last_onset
-    spike_volumes = "framewise_displacement > 0.9",
+    spike_volumes = NULL,
     na_strings = getOption("datatable.na.strings", "NA") # default na.strings argument for data.table::fread calls
   )
 
   user_specified_exclude_run <- !is.null(gpa$confound_settings) && "exclude_run" %in% names(gpa$confound_settings)
   if (is.null(gpa$confound_settings)) {
     lg$info("Using default settings for confounds and exclusions")
-    lg$info("Look for confounds in confounds.tsv")
-    lg$info("Default exclude_run will be applied only if framewise_displacement is available")
+    lg$info("No motion parameters, confounds, spike regressors, or run exclusions are assumed by default")
   } else {
     checkmate::assert_string(gpa$confound_settings$exclude_run, null.ok = TRUE)
     checkmate::assert_string(gpa$confound_settings$exclude_subject, null.ok = TRUE)
