@@ -1563,6 +1563,110 @@ mobj_refit_lm <- function(mobj, new_data) {
 
 }
 
+#' Format a clear diagnostic for aliased higher-level model coefficients
+#'
+#' @param mobj a model object populated by \code{mobj_fit_lm}
+#' @param model_formula optional formula string used for display
+#' @return a character string suitable for an error or interactive prompt
+#' @keywords internal
+format_hi_model_alias_message <- function(mobj, model_formula = NULL) {
+  checkmate::assert_class(mobj, "hi_model_spec")
+
+  model_label <- sprintf("L%d model", mobj$level %||% NA_integer_)
+  if (!is.null(mobj$name) && nzchar(mobj$name)) {
+    model_label <- sprintf("%s '%s'", model_label, mobj$name)
+  }
+
+  aliased_terms <- mobj$aliased_terms %||% character(0)
+  alias_complete <- mobj$alias_complete
+  formula_label <- model_formula %||% mobj$model_formula
+  if (!is.null(formula_label)) formula_label <- paste(as.character(formula_label), collapse = " ")
+
+  coef_to_model_term <- function(coef_names) {
+    if (is.null(mobj$model_matrix) || is.null(mobj$lmfit)) return(coef_names)
+    assign_idx <- attr(mobj$model_matrix, "assign")
+    term_labels <- c("(Intercept)", attr(stats::terms(mobj$lmfit), "term.labels"))
+    coef_map <- stats::setNames(term_labels[assign_idx + 1L], colnames(mobj$model_matrix))
+    unique(stats::na.omit(coef_map[intersect(coef_names, names(coef_map))]))
+  }
+
+  relation_lines <- character(0)
+  if (!is.null(alias_complete) && length(aliased_terms) > 0L) {
+    for (coef_name in aliased_terms) {
+      alias_row <- alias_complete[coef_name, , drop = FALSE]
+      dep_cols <- colnames(alias_complete)[abs(as.numeric(alias_row[1L, ])) > 1e-10]
+      lhs_terms <- coef_to_model_term(coef_name)
+      rhs_terms <- setdiff(coef_to_model_term(dep_cols), lhs_terms)
+      if (length(rhs_terms) == 0L) rhs_terms <- dep_cols
+      relation_lines <- c(
+        relation_lines,
+        sprintf(
+          "  - %s (%s) is perfectly explained by: %s",
+          coef_name,
+          paste(lhs_terms, collapse = ", "),
+          paste(rhs_terms, collapse = ", ")
+        )
+      )
+    }
+  }
+
+  data_hint_lines <- character(0)
+  model_data <- mobj$model_data
+  model_vars <- setdiff(mobj$model_variables, c("dummy"))
+  if (!is.null(model_data) && length(model_vars) > 1L) {
+    present_vars <- intersect(model_vars, names(model_data))
+    is_num <- vapply(model_data[, present_vars, drop = FALSE], function(x) is.numeric(x) || is.integer(x), logical(1))
+    is_cat <- vapply(model_data[, present_vars, drop = FALSE], function(x) is.factor(x) || is.character(x), logical(1))
+    num_vars <- present_vars[is_num]
+    cat_vars <- present_vars[is_cat]
+
+    for (num_var in num_vars) {
+      for (cat_var in cat_vars) {
+        dd <- model_data[, c(num_var, cat_var), drop = FALSE]
+        dd <- dd[stats::complete.cases(dd), , drop = FALSE]
+        if (nrow(dd) == 0L) next
+        vals_by_level <- split(dd[[num_var]], as.character(dd[[cat_var]]))
+        one_value_per_level <- all(vapply(vals_by_level, function(x) length(unique(x)) <= 1L, logical(1)))
+        if (isTRUE(one_value_per_level) && length(unique(dd[[num_var]])) > 1L && length(vals_by_level) > 1L) {
+          data_hint_lines <- c(
+            data_hint_lines,
+            sprintf(
+              "  - %s has exactly one value within each %s level, so it is redundant with %s.",
+              num_var, cat_var, cat_var
+            )
+          )
+        }
+      }
+    }
+  }
+  data_hint_lines <- unique(data_hint_lines)
+
+  lines <- c(
+    sprintf("%s contains aliased coefficients; the fixed-effects design is rank deficient.", model_label),
+    "",
+    "Aliased coefficient(s):",
+    paste0("  - ", aliased_terms)
+  )
+
+  if (!is.null(formula_label) && nzchar(formula_label)) {
+    lines <- c(lines, "", "Model formula:", paste0("  ", formula_label))
+  }
+
+  if (length(relation_lines) > 0L) {
+    lines <- c(lines, "", "Perfect redundancy detected in the design matrix:", relation_lines)
+  }
+
+  if (length(data_hint_lines) > 0L) {
+    lines <- c(lines, "", "Data pattern suggesting the cause:", data_hint_lines)
+  }
+
+  paste(c(
+    lines,
+    "",
+    "Please remove or recode redundant predictors and respecify the model."
+  ), collapse = "\n")
+}
+
 #' internal helper function to setup a linear model for a given l1, l2, or l3 model
 #' 
 #' @param mobj a model object to be populated or modified
@@ -1570,9 +1674,10 @@ mobj_refit_lm <- function(mobj, new_data) {
 #' @param data a data.frame containing all columns used in model fitting
 #' @param id_cols a character vector of column names in \code{data} that identify the observations
 #'   and can be used for merging the model against related datasets
+#' @param report_alias whether to print a short message when aliased coefficients are detected
 #' @return a model object containing the fitted model
 #' @keywords internal
-mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NULL) {
+mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NULL, report_alias = TRUE) {
   if (is.null(lg)) { lg <- lgr::get_logger() }
   # verify that we have an object of known structure
   checkmate::assert_multi_class(mobj, c("l1_model_spec", "hi_model_spec"), null.ok=TRUE)
@@ -1677,9 +1782,12 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
   # handle coefficient aliasing
   al <- alias(mobj$lmfit)
   if (!is.null(al$Complete)) {
-    cat("Problems with aliased (redundant) terms in model.\n\n")
     bad_terms <- rownames(al$Complete)
-    cat(paste(bad_terms, collapse = ", "), "\n\n")
+    if (isTRUE(report_alias)) {
+      cat("Problems with aliased (redundant) terms in model.\n\n")
+      cat(paste(bad_terms, collapse = ", "), "\n\n")
+    }
+    mobj$alias_complete <- al$Complete
 
     # find unaliased (good) terms in the model
     good_terms <- colnames(mobj$model_matrix)[!(colnames(mobj$model_matrix) %in% bad_terms)]
@@ -1705,6 +1813,9 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
 
     # N.B. emmeans needs to calculate contrasts on the original design to see the factor structure
     # So, we also need to drop out columns from the emmeans linfct
+  } else {
+    mobj$aliased_terms <- NULL
+    mobj$alias_complete <- NULL
   }
 
   return(mobj)

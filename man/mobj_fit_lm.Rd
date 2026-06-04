@@ -4,7 +4,14 @@
 \alias{mobj_fit_lm}
 \title{internal helper function to setup a linear model for a given l1, l2, or l3 model}
 \usage{
-mobj_fit_lm(mobj = NULL, model_formula = NULL, data, id_cols = NULL, lg = NULL)
+mobj_fit_lm(
+  mobj = NULL,
+  model_formula = NULL,
+  data,
+  id_cols = NULL,
+  lg = NULL,
+  report_alias = TRUE
+)
 }
 \arguments{
 \item{mobj}{a model object to be populated or modified}
@@ -15,6 +22,8 @@ mobj_fit_lm(mobj = NULL, model_formula = NULL, data, id_cols = NULL, lg = NULL)
 
 \item{id_cols}{a character vector of column names in \code{data} that identify the observations
 and can be used for merging the model against related datasets}
+
+\item{report_alias}{whether to print a short message when aliased coefficients are detected}
 }
 \value{
 a model object containing the fitted model

@@ -337,6 +337,7 @@ return_l1_confounds_result <- function(return_run_df, run_df, l1_confound_file, 
 }
 
 #' helper function to generate confounds file
+#' @noRd
 test_generate_l1_confounds <- function(gpa, analysis_outdir, run_number, lg){
 
   # Determine whether we should be returning information about l1 confound regressors
@@ -357,6 +358,7 @@ test_generate_l1_confounds <- function(gpa, analysis_outdir, run_number, lg){
 }
 
 #' helper function to generate run exclusion
+#' @noRd
 test_generate_run_exclusion <- function(gpa, id, session, run_number, l1_cached_df, lg){
 
   # default empty data.frames for exclusion and truncation (in case of NULL exclude or truncate criteria)
@@ -387,6 +389,7 @@ test_generate_run_exclusion <- function(gpa, id, session, run_number, l1_cached_
 }
 
 #' helper function to generate run truncation
+#' @noRd
 test_generate_run_truncation <- function(gpa, id, session, run_number, lg){
 
   lg <- lgr::get_logger("glm_pipeline/l1_setup")

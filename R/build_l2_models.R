@@ -332,7 +332,8 @@ build_l3_models <- build_l2_models
 #' @return a `hi_model_spec` object containing the L2/L3 model to be added to gpa$l2_models or gpa$l3_models
 #' @importFrom checkmate assert_integerish assert_list assert_class test_data_table
 #' @keywords internal
-create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_names = NULL, spec_list = NULL, lg = NULL) {
+create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_names = NULL, spec_list = NULL, lg = NULL,
+                                retry_name = NULL) {
     if (checkmate::test_data_table(data)) {
       data <- as.data.frame(data) # make subsetting syntax in this function consistent with standard data.frame conventions
     }
@@ -352,6 +353,7 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
     checkmate::assert_integerish(level, lower = 2, upper = 3, len = 1L)
     checkmate::assert_character(cur_model_names, null.ok = TRUE)
     checkmate::assert_list(spec_list, null.ok = TRUE)
+    checkmate::assert_string(retry_name, null.ok = TRUE)
 
     if (level == 2) {
       id_cols <- c("id", "session", "run_number")
@@ -418,6 +420,28 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       }
     }
 
+    handle_aliased_model <- function(fit_mobj, model_formula) {
+      if (is.null(fit_mobj$aliased_terms)) {
+        return(list(mobj = fit_mobj, retry = FALSE))
+      }
+
+      alias_msg <- format_hi_model_alias_message(fit_mobj, model_formula = as.character(model_formula))
+
+      if (!is.null(spec_list) || !rlang::is_interactive()) {
+        stop(alias_msg, call. = FALSE)
+      }
+
+      cat("\n", alias_msg, "\n\n", sep = "")
+      retry <- menu(
+        c("Respecify model", "Cancel model setup"),
+        title = "How would you like to proceed?"
+      )
+      if (retry == 1L) {
+        return(list(mobj = fit_mobj, retry = TRUE))
+      }
+      stop("Model setup cancelled because the fixed-effects design contains aliased coefficients.", call. = FALSE)
+    }
+
     ### ------ model name ------
     if (isTRUE(modify)) {
       cat("Current model name:", mobj$name, "\n")
@@ -427,6 +451,9 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
 
     if (!is.null(spec_list$name)) { # populate from specification, if requested
       mobj$name <- spec_list$name
+    }
+    if (!is.null(retry_name)) {
+      mobj$name <- retry_name
     }
 
     if (!is.null(spec_list$execution_backend)) {
@@ -538,7 +565,9 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
       }
 
       if (is.integer(data[[vv]]) && length(unique(data[[vv]]) < 20)) {
-        if (vv %in% spec_list$num2fac) {
+        if (!is.null(spec_list)) {
+          conv <- if (vv %in% spec_list$num2fac) 1L else 2L
+        } else if (vv %in% spec_list$num2fac) {
           conv <- 1L
         } else {
           cat(
@@ -559,6 +588,30 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
         }
       }
     }
+
+    # Fit a provisional model before asking about centering or reference levels.
+    # Those choices do not fix rank deficiency, so aliased formulas should fail
+    # or return to model specification before asking follow-up questions.
+    if (!is.null(spec_list)) {
+      mobj$covariate_transform <- spec_list$covariate_transform
+      mobj$reference_level <- spec_list$reference_level
+    }
+    alias_check <- handle_aliased_model(
+      mobj_fit_lm(mobj, as.character(model_formula), data, id_cols, lg = lg, report_alias = FALSE),
+      model_formula
+    )
+    if (isTRUE(alias_check$retry)) {
+      return(create_new_hi_model(
+        data = data,
+        to_modify = NULL,
+        level = level,
+        cur_model_names = setdiff(cur_model_names, alias_check$mobj$name),
+        spec_list = NULL,
+        lg = lg,
+        retry_name = alias_check$mobj$name
+      ))
+    }
+    mobj <- alias_check$mobj
 
     # need to build a model LM-style
     if (!is.null(spec_list)) {
@@ -691,7 +744,20 @@ create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_
 
     # fit linear model and populate model object
     # For 3dLMEr, we still fit a standard lm to allow emmeans to work for gltCode generation
-    mobj <- mobj_fit_lm(mobj, as.character(model_formula), data, id_cols, lg = lg)
+    mobj <- mobj_fit_lm(mobj, as.character(model_formula), data, id_cols, lg = lg, report_alias = FALSE)
+    alias_check <- handle_aliased_model(mobj, model_formula)
+    if (isTRUE(alias_check$retry)) {
+      return(create_new_hi_model(
+        data = data,
+        to_modify = NULL,
+        level = level,
+        cur_model_names = setdiff(cur_model_names, alias_check$mobj$name),
+        spec_list = NULL,
+        lg = lg,
+        retry_name = alias_check$mobj$name
+      ))
+    }
+    mobj <- alias_check$mobj
 
     # 3dLMEr-specific: collect lme4-style random-effects specification
     if (level == 3L && identical(mobj$l3_input_mode, "3dlmer")) {

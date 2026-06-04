@@ -17,7 +17,7 @@ update_tracked_job_status(
 
 \item{job_id}{Character string specifying the job id to update as failed}
 
-\item{status}{Character string specifying the job status to set. Must be one of: 
+\item{status}{Character string specifying the job status to set. Must be one of:
 "QUEUED", "STARTED", "FAILED", "COMPLETED", "FAILED_BY_EXT"}
 
 \item{exclude}{Any job ids to ignore when cascading a status}

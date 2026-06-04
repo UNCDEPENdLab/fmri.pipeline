@@ -2,7 +2,8 @@
 #'
 #' Internal helper that uses stored confound column metadata to align shared
 #' columns and union spike regressors across runs with zero padding.
-
+#' @keywords internal
+#' @noRd
 read_l1_confound_columns <- function(gpa, id, session, run_number, lg = NULL) {
   if (is.null(lg)) lg <- lgr::get_logger("glm_pipeline/l1_setup")
   col_info <- read_df_sqlite(

@@ -4,7 +4,13 @@
 \alias{emmeans_to_3dlmer_glt}
 \title{Translator from emmeans-style contrast spec to 3dLMEr -gltCode}
 \usage{
-emmeans_to_3dlmer_glt(mobj, data)
+emmeans_to_3dlmer_glt(
+  mobj,
+  data,
+  qVars = NULL,
+  raw_glt_codes = NULL,
+  context = NULL
+)
 }
 \arguments{
 \item{mobj}{high-level model specification object (hi_model_spec)}

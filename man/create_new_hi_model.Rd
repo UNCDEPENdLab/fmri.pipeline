@@ -10,7 +10,8 @@ create_new_hi_model(
   level = NULL,
   cur_model_names = NULL,
   spec_list = NULL,
-  lg = NULL
+  lg = NULL,
+  retry_name = NULL
 )
 }
 \arguments{
