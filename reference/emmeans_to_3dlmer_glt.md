@@ -5,7 +5,13 @@ Translator from emmeans-style contrast spec to 3dLMEr -gltCode
 ## Usage
 
 ``` r
-emmeans_to_3dlmer_glt(mobj, data)
+emmeans_to_3dlmer_glt(
+  mobj,
+  data,
+  qVars = NULL,
+  raw_glt_codes = NULL,
+  context = NULL
+)
 ```
 
 ## Arguments

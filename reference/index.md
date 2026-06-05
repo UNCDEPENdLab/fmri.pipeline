@@ -106,6 +106,9 @@
   : This function deconvolves the BOLD signal using Bush 2011 method,
   augmented by the resampling approach of Bush 2015.
 
+- [`deconvolve_reglin()`](https://uncdependlab.github.io/fmri.pipeline/reference/deconvolve_reglin.md)
+  : Regularized linear deconvolution of BOLD time series
+
 - [`detrendts()`](https://uncdependlab.github.io/fmri.pipeline/reference/detrendts.md)
   : Detrend a time series up to quadratic trend. Used by fir1Bandpass
   prior to filtering
@@ -241,6 +244,9 @@
   : helper function to insert a keyed data.frame into the sqlite storage
   database
 
+- [`lookup_feat_outputs()`](https://uncdependlab.github.io/fmri.pipeline/reference/lookup_feat_outputs.md)
+  : Lookup FSL FEAT output images by model and contrast
+
 - [`meta_mixed_by()`](https://uncdependlab.github.io/fmri.pipeline/reference/meta_mixed_by.md)
   : Function to run Bayesian random-effects meta-regression on
   coefficients from mixed_by
@@ -275,9 +281,6 @@
 
 - [`read_gfeat_dir()`](https://uncdependlab.github.io/fmri.pipeline/reference/read_gfeat_dir.md)
   : helper function to look up core stats outputs from a .gfeat folder
-
-- [`read_l1_confound_columns()`](https://uncdependlab.github.io/fmri.pipeline/reference/read_l1_confound_columns.md)
-  : Build concatenated L1 confounds for multi-run analyses
 
 - [`refresh_glm_status()`](https://uncdependlab.github.io/fmri.pipeline/reference/refresh_glm_status.md)
   : Refresh GLM backend status for a given analysis level
@@ -374,15 +377,6 @@
 
 - [`test_exclude_run()`](https://uncdependlab.github.io/fmri.pipeline/reference/test_exclude_run.md)
   : calculate whether to retain or exclude this run
-
-- [`test_generate_l1_confounds()`](https://uncdependlab.github.io/fmri.pipeline/reference/test_generate_l1_confounds.md)
-  : helper function to generate confounds file
-
-- [`test_generate_run_exclusion()`](https://uncdependlab.github.io/fmri.pipeline/reference/test_generate_run_exclusion.md)
-  : helper function to generate run exclusion
-
-- [`test_generate_run_truncation()`](https://uncdependlab.github.io/fmri.pipeline/reference/test_generate_run_truncation.md)
-  : helper function to generate run truncation
 
 - [`update_tracked_job_status()`](https://uncdependlab.github.io/fmri.pipeline/reference/update_tracked_job_status.md)
   : Update job status in tracking SQLite database

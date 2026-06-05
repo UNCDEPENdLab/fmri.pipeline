@@ -83,9 +83,10 @@ voxelwise_deconvolution(
 
   Which deconvolution algorithm to use for deconvolving voxelwise time
   series. Default: "bush2011". Alternative is "bush2015", which
-  implements a resampling approach as well. If you use "bush2011", the
-  function will try to call on a fast compiled version of the algorithm
-  to support whole-brain processing.
+  implements a resampling approach as well, or
+  "reglin"/"regularized_linear", which estimates a continuous latent
+  activity time series using regularized linear deconvolution with
+  optional HRF tuning.
 
 - decon_settings:
 

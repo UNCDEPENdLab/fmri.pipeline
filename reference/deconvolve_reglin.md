@@ -1,0 +1,140 @@
+# Regularized linear deconvolution of BOLD time series
+
+Estimate a continuous latent activity time series by solving a
+regularized inverse convolution problem for one or more BOLD signals.
+
+## Usage
+
+``` r
+deconvolve_reglin(
+  BOLDobs,
+  kernel,
+  lambda = NULL,
+  lambda_grid = 10^seq(-4, 2, length.out = 20),
+  penalty = c("diff2", "diff1", "ridge"),
+  kernel_grid = NULL,
+  hrf_lags = 0L,
+  tune_by = c("global", "signal"),
+  normalize = TRUE,
+  demean = TRUE,
+  trim_kernel = TRUE,
+  ridge_floor = 1e-08,
+  return_diagnostics = FALSE,
+  prewhiten_gcv = FALSE,
+  prewhiten_rho = NULL,
+  backend = c("cpp", "r", "wiener"),
+  wiener_shrinkage = c("scalar", "psd"),
+  wiener_psd_smooth = 7L,
+  wiener_psd_floor = 1e-08,
+  gcv_rule = c("min", "1se")
+)
+```
+
+## Arguments
+
+- BOLDobs:
+
+  matrix of observed BOLD time series (n_timepoints x n_signals) or a
+  numeric vector.
+
+- kernel:
+
+  assumed HRF kernel. A vector or single-column matrix.
+
+- lambda:
+
+  regularization strength. If `NULL`, chosen from `lambda_grid` by
+  generalized cross-validation.
+
+- lambda_grid:
+
+  candidate regularization strengths used when `lambda` is `NULL`.
+
+- penalty:
+
+  regularization penalty: `"diff2"` for smooth curvature, `"diff1"` for
+  smooth first differences, or `"ridge"` for simple amplitude shrinkage.
+
+- kernel_grid:
+
+  optional list or matrix of candidate HRF kernels. If supplied,
+  `kernel` and `hrf_lags` are ignored for tuning.
+
+- hrf_lags:
+
+  integer shifts, in TR bins, applied to `kernel`. Negative values make
+  the candidate HRF peak earlier; positive values make it later.
+
+- tune_by:
+
+  whether to tune `lambda`/HRF globally across all signals or
+  independently for each signal.
+
+- normalize:
+
+  whether to z-score `BOLDobs` before deconvolution. Default: `TRUE`.
+
+- demean:
+
+  whether to subtract column means before deconvolution. Ignored when
+  `normalize = TRUE`, because z-scoring already demeans.
+
+- trim_kernel:
+
+  whether to remove the initial `length(kernel) - 1` latent samples,
+  corresponding to pre-observation HRF support.
+
+- ridge_floor:
+
+  small diagonal ridge added for numerical stability.
+
+- return_diagnostics:
+
+  whether to return a list containing diagnostics rather than only the
+  deconvolved matrix.
+
+- prewhiten_gcv:
+
+  whether to estimate AR(1) autocorrelation and use a prewhitened
+  objective for lambda/HRF selection and deconvolution.
+
+- prewhiten_rho:
+
+  optional AR(1) coefficient used when `prewhiten_gcv = TRUE`. If
+  `NULL`, a pooled median AR(1) coefficient is estimated from first-pass
+  reconstruction residuals.
+
+- backend:
+
+  implementation backend. `"cpp"` uses the RcppArmadillo regularized
+  inverse implementation; `"r"` uses the reference R implementation;
+  `"wiener"` uses a frequency-domain Wiener-style deconvolution for
+  comparison.
+
+- wiener_shrinkage:
+
+  shrinkage strategy for `backend = "wiener"`. `"scalar"` uses
+  `Conj(H) / (|H|^2 + lambda)`. `"psd"` estimates smoothed signal and
+  residual noise spectra from a scalar Wiener first pass, then uses
+  frequency-dependent shrinkage.
+
+- wiener_psd_smooth:
+
+  odd integer smoothing width for the estimated signal/noise spectra in
+  `wiener_shrinkage = "psd"`.
+
+- wiener_psd_floor:
+
+  lower bound for estimated spectra.
+
+- gcv_rule:
+
+  lambda/HRF selection rule. `"min"` selects the minimum mean GCV
+  candidate. `"1se"` selects the largest lambda whose mean GCV is within
+  one standard error of the minimum. The standard error is computed
+  across signal columns for `tune_by = "global"`.
+
+## Value
+
+A matrix of deconvolved time series, or a list with `activity` and
+tuning diagnostics when `return_diagnostics = TRUE`.

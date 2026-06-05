@@ -11,6 +11,8 @@ confound_manipulations(
   expected_l1_confound_file,
   run_df,
   demean,
-  lg
+  lg,
+  confound_path = NA_character_,
+  motion_path = NA_character_
 )
 ```

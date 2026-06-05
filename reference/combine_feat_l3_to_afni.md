@@ -41,7 +41,13 @@ combine_feat_l3_to_afni(
 To specify the folder and filename structure for the combined feat
 analyses, use a `glue` expression that indicates how outputs should be
 structured. In particular, variables in gpa\$l3_model_setup\$fsl can be
-used for dynamically naming of afni outputs.
+used for dynamically naming of afni outputs. Rows that evaluate to the
+same `feat_l3_combined_filename` are stitched into the same AFNI file,
+so filename variables control grouping. The multi-run default
+intentionally excludes `l2_cope_name` from the filename and includes it
+in `feat_l3_combined_briknames`; this keeps per-cope L2 inputs grouped
+into a compact AFNI file per L1 contrast, with L2/L3 contrast names
+preserved as sub-brik labels.
 
 - l1_model:
 

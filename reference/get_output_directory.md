@@ -13,6 +13,9 @@ get_output_directory(
   l1_model = NULL,
   l2_model = NULL,
   l3_model = NULL,
+  l1_cope_number = NULL,
+  l2_cope_number = NULL,
+  l3_cope_number = NULL,
   l1_contrast = NULL,
   l2_contrast = NULL,
   l3_contrast = NULL,
@@ -36,6 +39,12 @@ get_output_directory(
 - run_number:
 
   The run number to lookup
+
+- l1_cope_number, l2_cope_number, l3_cope_number:
+
+  Optional cope numbers used in output templates. These are combined
+  with the corresponding contrast names into labels such as
+  `02_EV_house`.
 
 - gpa:
 

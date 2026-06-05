@@ -118,8 +118,9 @@ have been dropped from the NIfTI data prior to deconvolution.</p></dd>
 
 <dt id="arg-algorithm">algorithm<a class="anchor" aria-label="anchor" href="#arg-algorithm"></a></dt>
 <dd><p>Which deconvolution algorithm to use for deconvolving voxelwise time series. Default: "bush2011". Alternative is
-"bush2015", which implements a resampling approach as well. If you use "bush2011", the function will try to call on a fast compiled
-version of the algorithm to support whole-brain processing.</p></dd>
+"bush2015", which implements a resampling approach as well, or "reglin"/"regularized_linear",
+which estimates a continuous latent activity time series using regularized linear deconvolution
+with optional HRF tuning.</p></dd>
 
 
 <dt id="arg-decon-settings">decon_settings<a class="anchor" aria-label="anchor" href="#arg-decon-settings"></a></dt>

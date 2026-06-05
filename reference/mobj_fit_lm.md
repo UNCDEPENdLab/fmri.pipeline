@@ -6,7 +6,14 @@ l3 model
 ## Usage
 
 ``` r
-mobj_fit_lm(mobj = NULL, model_formula = NULL, data, id_cols = NULL, lg = NULL)
+mobj_fit_lm(
+  mobj = NULL,
+  model_formula = NULL,
+  data,
+  id_cols = NULL,
+  lg = NULL,
+  report_alias = TRUE
+)
 ```
 
 ## Arguments
@@ -28,6 +35,11 @@ mobj_fit_lm(mobj = NULL, model_formula = NULL, data, id_cols = NULL, lg = NULL)
   a character vector of column names in `data` that identify the
   observations and can be used for merging the model against related
   datasets
+
+- report_alias:
+
+  whether to print a short message when aliased coefficients are
+  detected
 
 ## Value
 
