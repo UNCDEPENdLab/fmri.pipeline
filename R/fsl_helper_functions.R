@@ -515,6 +515,20 @@ gfeat_stats_to_brik <- function(gfeat_dir, cope_names = NULL, level=NULL) {
 
 }
 
+resolve_afni_output_dataset <- function(afni_out) {
+  checkmate::assert_string(afni_out)
+  if (file.exists(paste0(afni_out, ".HEAD"))) return(afni_out)
+
+  afni_base <- sub("\\+(orig|acpc|tlrc)$", "", afni_out, perl = TRUE)
+  afni_view <- sub("^.*\\+(orig|acpc|tlrc)$", "\\1", afni_out, perl = TRUE)
+  views <- unique(c(afni_view, "orig", "tlrc", "acpc"))
+  candidates <- paste0(afni_base, "+", views)
+  existing <- candidates[file.exists(paste0(candidates, ".HEAD"))]
+  if (length(existing) > 0L) return(existing[1L])
+
+  afni_out
+}
+
 #' Function to combine Feat L3 analyses into AFNI BRIK+HEAD files according to user-specified combinations
 #' @param gpa a glm_pipeline_arguments object having a populated l3_model_setup field. The L3 analyses should also
 #'   be complete (i.e., after run_glm_pipeline).
@@ -524,7 +538,10 @@ gfeat_stats_to_brik <- function(gfeat_dir, cope_names = NULL, level=NULL) {
 #'   image will be symbolically linked into each directory created by \code{combine_feat_l3_to_afni}.
 #' @details To specify the folder and filename structure for the combined feat analyses, use a \code{glue} expression
 #'   that indicates how outputs should be structured. In particular, variables in gpa$l3_model_setup$fsl can be used for
-#'   dynamically naming of afni outputs.
+#'   dynamically naming of afni outputs. Rows that evaluate to the same \code{feat_l3_combined_filename} are stitched
+#'   into the same AFNI file, so filename variables control grouping. The multi-run default intentionally excludes
+#'   \code{l2_cope_name} from the filename and includes it in \code{feat_l3_combined_briknames}; this keeps per-cope L2
+#'   inputs grouped into a compact AFNI file per L1 contrast, with L2/L3 contrast names preserved as sub-brik labels.
 #'   
 #' \describe{
 #'   \item{l1_model}{the name of the level 1 model}
@@ -600,7 +617,15 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
       if (!is.null(template_brain)) file.symlink(template_brain, file.path(afni_dir, paste0("template_brain", template_ext)))
     }
     tcatcall <- paste("3dTcat -overwrite -prefix", afni_out, paste(ss$nii_file, collapse = " "))
-    run_afni_command(tcatcall)
+    tcat_ret <- run_afni_command(tcatcall)
+    if (!is.null(tcat_ret) && !identical(as.integer(tcat_ret), 0L)) {
+      stop("AFNI command failed: ", tcatcall, call. = FALSE)
+    }
+
+    afni_out <- resolve_afni_output_dataset(afni_out)
+    if (!file.exists(paste0(afni_out, ".HEAD"))) {
+      stop("AFNI output dataset was not created: ", afni_out, call. = FALSE)
+    }
 
     z_briks <- which(ss$image_type %in% c("z", "zthresh")) - 1 # subtract 1 because AFNI uses 0-based indexing
 
@@ -612,7 +637,10 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
       "3drefit -fbuc ", paste("-substatpar", z_briks, "fizt", collapse = " "),
       " -relabel_all_str '", paste(ss$afni_briks, collapse = " "), "' ", afni_out
     )
-    run_afni_command(refitcall)
+    refit_ret <- run_afni_command(refitcall)
+    if (!is.null(refit_ret) && !identical(as.integer(refit_ret), 0L)) {
+      stop("AFNI command failed: ", refitcall, call. = FALSE)
+    }
 
   })
   return(meta_df)

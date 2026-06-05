@@ -28,7 +28,10 @@ Function to combine Feat L3 analyses into AFNI BRIK+HEAD files according to user
 \details{
 To specify the folder and filename structure for the combined feat analyses, use a \code{glue} expression
   that indicates how outputs should be structured. In particular, variables in gpa$l3_model_setup$fsl can be used for
-  dynamically naming of afni outputs.
+  dynamically naming of afni outputs. Rows that evaluate to the same \code{feat_l3_combined_filename} are stitched
+  into the same AFNI file, so filename variables control grouping. The multi-run default intentionally excludes
+  \code{l2_cope_name} from the filename and includes it in \code{feat_l3_combined_briknames}; this keeps per-cope L2
+  inputs grouped into a compact AFNI file per L1 contrast, with L2/L3 contrast names preserved as sub-brik labels.
   
 \describe{
   \item{l1_model}{the name of the level 1 model}
