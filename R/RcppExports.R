@@ -73,6 +73,10 @@ deconvolve_nlreg <- function(BOLDobs, kernel, nev_lr = .01, epsilon = .005, beta
     .Call(`_fmri_pipeline_deconvolve_nlreg`, BOLDobs, kernel, nev_lr, epsilon, beta, normalize, trim_kernel)
 }
 
+deconvolve_reglin_cpp <- function(BOLDobs, kernels, lambda_grid, penalty, tune_by, normalize, demean, trim_kernel, ridge_floor, return_diagnostics, prewhiten_gcv, prewhiten_rho, gcv_rule) {
+    .Call(`_fmri_pipeline_deconvolve_reglin_cpp`, BOLDobs, kernels, lambda_grid, penalty, tune_by, normalize, demean, trim_kernel, ridge_floor, return_diagnostics, prewhiten_gcv, prewhiten_rho, gcv_rule)
+}
+
 #' Internal port of fsl do_convolve
 #'
 #' @name do_convolve

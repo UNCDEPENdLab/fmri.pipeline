@@ -49,8 +49,9 @@ have been dropped from the NIfTI data prior to deconvolution.}
 \item{save_original_ts}{Whether to save the voxelwise BOLD data prior to deconvolution (for comparison/diagnosis). Default: TRUE}
 
 \item{algorithm}{Which deconvolution algorithm to use for deconvolving voxelwise time series. Default: "bush2011". Alternative is
-"bush2015", which implements a resampling approach as well. If you use "bush2011", the function will try to call on a fast compiled
-version of the algorithm to support whole-brain processing.}
+"bush2015", which implements a resampling approach as well, or "reglin"/"regularized_linear",
+which estimates a continuous latent activity time series using regularized linear deconvolution
+with optional HRF tuning.}
 
 \item{decon_settings}{A list of settings passed to the deconvolution algorithm. If you have a compiled deconvolvefilter binary,
 pass it as \code{bush2011_binary}, which will be used in deconvolution.}

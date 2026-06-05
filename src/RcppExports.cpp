@@ -56,6 +56,29 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// deconvolve_reglin_cpp
+Rcpp::RObject deconvolve_reglin_cpp(arma::mat BOLDobs, const arma::mat& kernels, const arma::vec& lambda_grid, const std::string& penalty, const std::string& tune_by, bool normalize, bool demean, bool trim_kernel, double ridge_floor, bool return_diagnostics, bool prewhiten_gcv, double prewhiten_rho, const std::string& gcv_rule);
+RcppExport SEXP _fmri_pipeline_deconvolve_reglin_cpp(SEXP BOLDobsSEXP, SEXP kernelsSEXP, SEXP lambda_gridSEXP, SEXP penaltySEXP, SEXP tune_bySEXP, SEXP normalizeSEXP, SEXP demeanSEXP, SEXP trim_kernelSEXP, SEXP ridge_floorSEXP, SEXP return_diagnosticsSEXP, SEXP prewhiten_gcvSEXP, SEXP prewhiten_rhoSEXP, SEXP gcv_ruleSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::mat >::type BOLDobs(BOLDobsSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type kernels(kernelsSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type lambda_grid(lambda_gridSEXP);
+    Rcpp::traits::input_parameter< const std::string& >::type penalty(penaltySEXP);
+    Rcpp::traits::input_parameter< const std::string& >::type tune_by(tune_bySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type demean(demeanSEXP);
+    Rcpp::traits::input_parameter< bool >::type trim_kernel(trim_kernelSEXP);
+    Rcpp::traits::input_parameter< double >::type ridge_floor(ridge_floorSEXP);
+    Rcpp::traits::input_parameter< bool >::type return_diagnostics(return_diagnosticsSEXP);
+    Rcpp::traits::input_parameter< bool >::type prewhiten_gcv(prewhiten_gcvSEXP);
+    Rcpp::traits::input_parameter< double >::type prewhiten_rho(prewhiten_rhoSEXP);
+    Rcpp::traits::input_parameter< const std::string& >::type gcv_rule(gcv_ruleSEXP);
+    rcpp_result_gen = Rcpp::wrap(deconvolve_reglin_cpp(BOLDobs, kernels, lambda_grid, penalty, tune_by, normalize, demean, trim_kernel, ridge_floor, return_diagnostics, prewhiten_gcv, prewhiten_rho, gcv_rule));
+    return rcpp_result_gen;
+END_RCPP
+}
 // do_convolve
 arma::vec do_convolve(const arma::vec& input, const arma::vec& kernel, int phase, const int renorm);
 RcppExport SEXP _fmri_pipeline_do_convolve(SEXP inputSEXP, SEXP kernelSEXP, SEXP phaseSEXP, SEXP renormSEXP) {
@@ -160,6 +183,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_fmri_pipeline_convolve_cpp", (DL_FUNC) &_fmri_pipeline_convolve_cpp, 2},
     {"_fmri_pipeline_convolve_double_gamma", (DL_FUNC) &_fmri_pipeline_convolve_double_gamma, 6},
     {"_fmri_pipeline_deconvolve_nlreg", (DL_FUNC) &_fmri_pipeline_deconvolve_nlreg, 7},
+    {"_fmri_pipeline_deconvolve_reglin_cpp", (DL_FUNC) &_fmri_pipeline_deconvolve_reglin_cpp, 13},
     {"_fmri_pipeline_do_convolve", (DL_FUNC) &_fmri_pipeline_do_convolve, 4},
     {"_fmri_pipeline_dsigmoid", (DL_FUNC) &_fmri_pipeline_dsigmoid, 2},
     {"_fmri_pipeline_gammapdf", (DL_FUNC) &_fmri_pipeline_gammapdf, 3},

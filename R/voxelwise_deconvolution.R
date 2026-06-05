@@ -17,8 +17,9 @@
 #' @param nprocs The number of processors to use simultaneously for deconvolution
 #' @param save_original_ts Whether to save the voxelwise BOLD data prior to deconvolution (for comparison/diagnosis). Default: TRUE
 #' @param algorithm Which deconvolution algorithm to use for deconvolving voxelwise time series. Default: "bush2011". Alternative is
-#'   "bush2015", which implements a resampling approach as well. If you use "bush2011", the function will try to call on a fast compiled
-#'   version of the algorithm to support whole-brain processing.
+#'   "bush2015", which implements a resampling approach as well, or "reglin"/"regularized_linear",
+#'   which estimates a continuous latent activity time series using regularized linear deconvolution
+#'   with optional HRF tuning.
 #' @param decon_settings A list of settings passed to the deconvolution algorithm. If you have a compiled deconvolvefilter binary,
 #'   pass it as \code{bush2011_binary}, which will be used in deconvolution.
 #' @param afni_dir Full path to directory containing AFNI binaries (this function uses 3dMaskdump).
@@ -223,6 +224,38 @@ voxelwise_deconvolution <- function(
           if (is.list(reg)) { reg <- reg$NEVmean } #just keep the mean resampled events vector
           return(reg)
         }
+      } else if (algorithm %in% c("reglin", "regularized_linear")) {
+        # Regularized linear deconvolution estimates continuous latent activity without
+        # sigmoid bounding. R function is time x voxels, matching the Rcpp path.
+        alg_input <- t(alg_input)
+        deconv_mat <- tryCatch(
+          deconvolve_reglin(
+            BOLDobs = alg_input,
+            kernel = decon_settings$kernel,
+            lambda = decon_settings$lambda,
+            lambda_grid = if (is.null(decon_settings$lambda_grid)) 10^seq(-4, 2, length.out = 20) else decon_settings$lambda_grid,
+            penalty = if (is.null(decon_settings$penalty)) "diff2" else decon_settings$penalty,
+            kernel_grid = decon_settings$kernel_grid,
+            hrf_lags = if (is.null(decon_settings$hrf_lags)) 0L else decon_settings$hrf_lags,
+            tune_by = if (is.null(decon_settings$tune_by)) "global" else decon_settings$tune_by,
+            normalize = if (is.null(decon_settings$normalize)) FALSE else decon_settings$normalize,
+            demean = if (is.null(decon_settings$demean)) TRUE else decon_settings$demean,
+            prewhiten_gcv = if (is.null(decon_settings$prewhiten_gcv)) FALSE else decon_settings$prewhiten_gcv,
+            prewhiten_rho = decon_settings$prewhiten_rho,
+            backend = if (is.null(decon_settings$backend)) "cpp" else decon_settings$backend,
+            wiener_shrinkage = if (is.null(decon_settings$wiener_shrinkage)) "scalar" else decon_settings$wiener_shrinkage,
+            wiener_psd_smooth = if (is.null(decon_settings$wiener_psd_smooth)) 7L else decon_settings$wiener_psd_smooth,
+            wiener_psd_floor = if (is.null(decon_settings$wiener_psd_floor)) 1e-8 else decon_settings$wiener_psd_floor,
+            gcv_rule = if (is.null(decon_settings$gcv_rule)) "min" else decon_settings$gcv_rule,
+            trim_kernel = TRUE
+          ),
+          error = function(e) {
+            cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file = log_file, append = TRUE)
+            return(matrix(NA, nrow = nrow(alg_input), ncol = ncol(alg_input)))
+          }
+        )
+
+        deconv_mat <- t(deconv_mat)
       } else if (algorithm == "bush2011") {
         # This should use the new internal RcppArmadillo function
         # Rcpp function is time x voxels... transpose inputs and outputs to match voxels x time expectations
