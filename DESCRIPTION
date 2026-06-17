@@ -63,10 +63,13 @@ Imports:
     tidyselect,
     yaml
 Suggests:
+    bayestestR,
     brms,
+    JuliaCall,
     knitr,
     pkgload,
     rmarkdown,
+    rstanarm,
     testthat (>= 3.0.0)
 LinkingTo:
     Rcpp,

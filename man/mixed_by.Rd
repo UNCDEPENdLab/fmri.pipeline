@@ -22,6 +22,8 @@ mixed_by(
   refit_on_nonconvergence = 3,
   tidy_args = list(effects = "fixed", conf.int = TRUE),
   lmer_control = lmerControl(optimizer = "nloptwrap"),
+  engine = c("lme4", "rstanarm", "jlmer"),
+  engine_args = list(),
   calculate = c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"),
   return_models = FALSE,
   emmeans_spec = NULL,
@@ -79,6 +81,12 @@ the function only returns the fixed effects and computes confidence intervals us
 
 \item{lmer_control}{An lmerControl object specifying any optimization settings to be passed to lmer()}
 
+\item{engine}{Estimation engine to use. \code{"lme4"} uses \code{lmerTest::lmer()} for
+compatibility with the historical output, \code{"rstanarm"} uses \code{rstanarm::stan_lmer()},
+and \code{"jlmer"} uses the package's \code{jlmer()} function.}
+
+\item{engine_args}{A named list of additional arguments passed to the selected engine.}
+
 \item{calculate}{A character vector specifying what calculations should be returned by the function. 
 The options are: "parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics", "fitted", and "residuals".}
 
@@ -107,6 +115,12 @@ In general, restricted maximum likelihood (REML) should be used for making infer
   fitted with ML. Note that if both REML and ML are requested, each model is fit twice since the estimators
   each have advantages and disadvantages noted above.
   
+  For \code{engine = "rstanarm"}, coefficient tables include \code{pd}, the
+  posterior probability of direction from \code{bayestestR::p_direction()},
+  and \code{p.value}, its two-sided p-like conversion using
+  \code{as_p = TRUE}. These are posterior-derived indices rather than
+  frequentist df-based p-values.
+
 Example of emmeans_spec usage:
   mixed_by(data, emmeans_spec=list(
     em1=list(specs = ~ memory | noise_level, adjust = "sidak", weights = "cells"),

@@ -35,6 +35,10 @@
 #' @param tidy_args A list of arguments passed to tidy.merMod for creating the coefficient data.frame. By default,
 #'   the function only returns the fixed effects and computes confidence intervals using the Wald method.
 #' @param lmer_control An lmerControl object specifying any optimization settings to be passed to lmer()
+#' @param engine Estimation engine to use. \code{"lme4"} uses \code{lmerTest::lmer()} for
+#'   compatibility with the historical output, \code{"rstanarm"} uses \code{rstanarm::stan_lmer()},
+#'   and \code{"jlmer"} uses the package's \code{jlmer()} function.
+#' @param engine_args A named list of additional arguments passed to the selected engine.
 #' @param calculate A character vector specifying what calculations should be returned by the function. 
 #'   The options are: "parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics", "fitted", and "residuals".
 #' @param emmeans_spec A named list of emmeans calls to be run for each model to obtain model predictions.
@@ -51,6 +55,12 @@
 #'   be fitted with REML. If "parameter_estimates_ml" and/or "fit_statistics" are requested, models will be
 #'   fitted with ML. Note that if both REML and ML are requested, each model is fit twice since the estimators
 #'   each have advantages and disadvantages noted above.
+#'
+#'   For \code{engine = "rstanarm"}, coefficient tables include \code{pd}, the
+#'   posterior probability of direction from \code{bayestestR::p_direction()},
+#'   and \code{p.value}, its two-sided p-like conversion using
+#'   \code{as_p = TRUE}. These are posterior-derived indices rather than
+#'   frequentist df-based p-values.
 #'   
 #' Example of emmeans_spec usage:
 #'   mixed_by(data, emmeans_spec=list(
@@ -77,18 +87,24 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
                      ncores = 1L, cl = NULL, refit_on_nonconvergence = 3,
                      tidy_args = list(effects = "fixed", conf.int = TRUE),
                      lmer_control = lmerControl(optimizer = "nloptwrap"),
+                     engine = c("lme4", "rstanarm", "jlmer"), engine_args = list(),
                      calculate=c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"),
                      return_models = FALSE, emmeans_spec = NULL, emtrends_spec=NULL) {
-  
-  requireNamespace("data.table") # remove for package
-  requireNamespace("dplyr")
-  requireNamespace("lme4")
-  requireNamespace("lmerTest")
-  requireNamespace("foreach")
-  requireNamespace("doParallel")
-  requireNamespace("iterators")
-  requireNamespace("broom.mixed")
-  requireNamespace("formula.tools")
+
+  engine <- match.arg(engine)
+  checkmate::assert_list(engine_args, names = "unique")
+  if (engine == "rstanarm" && !requireNamespace("rstanarm", quietly = TRUE)) {
+    stop("Package \"rstanarm\" must be installed to use engine = \"rstanarm\".", call. = FALSE)
+  }
+  if (engine == "rstanarm" && !requireNamespace("bayestestR", quietly = TRUE)) {
+    stop("Package \"bayestestR\" must be installed to use engine = \"rstanarm\".", call. = FALSE)
+  }
+  if (engine == "jlmer" && !is.null(engine_args$jlmer_fun)) {
+    stop(
+      "engine_args$jlmer_fun is no longer supported; engine = \"jlmer\" always uses fmri.pipeline::jlmer().",
+      call. = FALSE
+    )
+  }
 
   ## VALIDATE INPUTS
   # support data.frame input for single dataset execution or a vector of files that are imported and fit sequentially
@@ -145,18 +161,20 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     model_formulae <- validate_form_list(model_formulae)
     
     # don't expand combinations, just form outcomes, rhs, and formulae
-    model_set <- tibble(outcome = sapply(model_formulae, formula.tools::lhs.vars), model_name = names(model_formulae)) %>%
-      mutate(rhs = lapply(model_formulae, function(x) { update.formula(x, "NULL ~ .") }), form = model_formulae)
+    model_set <- tibble::tibble(outcome = sapply(model_formulae, formula.tools::lhs.vars), model_name = names(model_formulae))
+    model_set$rhs <- lapply(model_formulae, function(x) { update.formula(x, "NULL ~ .") })
+    model_set$form <- model_formulae
 
   } else if (!is.null(rhs_model_formulae)) {
     checkmate::assert_character(outcomes, null.ok = FALSE) # must provide valid outcomes
     rhs_model_formulae <- validate_form_list(rhs_model_formulae)
     
-    model_set <- expand.grid(outcome = outcomes, rhs = rhs_model_formulae, stringsAsFactors = FALSE) %>%
-      rowwise() %>%
-      mutate(form = list(update.formula(rhs, paste(outcome, "~ .")))) %>%
-      ungroup() %>% as_tibble() %>%
-      mutate(model_name = names(.$rhs))
+    model_set <- expand.grid(outcome = outcomes, rhs = rhs_model_formulae, stringsAsFactors = FALSE)
+    model_set$form <- lapply(seq_len(nrow(model_set)), function(ii) {
+      update.formula(model_set$rhs[[ii]], paste(model_set$outcome[[ii]], "~ ."))
+    })
+    model_set <- tibble::as_tibble(model_set)
+    model_set$model_name <- names(model_set$rhs)
   }
   
   # handle external_df
@@ -175,7 +193,8 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   }
 
   # worker subfunction to fit a given model to a data split
-  model_worker <- function(data, model_formula, lmer_control, outcome_transform = NULL, scale_predictors = NULL, REML = TRUE) {
+  model_worker <- function(data, model_formula, lmer_control, outcome_transform = NULL, scale_predictors = NULL,
+                           REML = TRUE, engine = "lme4", engine_args = list()) {
     if (!is.null(outcome_transform)) { # apply transformation to outcome
       lhs <- all.vars(model_formula)[1]
       data[[lhs]] <- outcome_transform(data[[lhs]])
@@ -192,13 +211,27 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
       }
     }
     
-    md <- lmerTest::lmer(model_formula, data, control = lmer_control, REML = REML, na.action=na.exclude)
+    if (engine == "lme4") {
+      fit_args <- c(
+        list(formula = model_formula, data = data, control = lmer_control, REML = REML, na.action = na.exclude),
+        engine_args
+      )
+      md <- do.call(lmerTest::lmer, fit_args)
+    } else if (engine == "rstanarm") {
+      fit_args <- c(list(formula = model_formula, data = data, na.action = na.exclude), engine_args)
+      md <- do.call(rstanarm::stan_lmer, fit_args)
+    } else if (engine == "jlmer") {
+      fit_args <- c(list(formula = model_formula, data = data, REML = REML), engine_args)
+      md <- do.call(jlmer, fit_args)
+    } else {
+      stop("Unsupported mixed model engine: ", engine, call. = FALSE)
+    }
 
-    if (refit_on_nonconvergence > 0L) {
+    if (engine == "lme4" && refit_on_nonconvergence > 0L) {
       rfc <- 0
       while (any(grepl("failed to converge", md@optinfo$conv$lme4$messages)) && rfc < refit_on_nonconvergence) {
         # print(md@optinfo$conv$lme4$conv)
-        ss <- getME(md, "theta")
+        ss <- lme4::getME(md, "theta")
         lmod <- lmer_control
         lmod$optimizer <- "bobyqa" # produces convergence more reliably
         md <- update(md, start = ss, control = lmod)
@@ -211,7 +244,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   # convert to data.table and nest
   if (isTRUE(single_df)) {
     if (!is.data.table(data)) {
-      setDT(data)
+      data.table::setDT(data)
     } # convert to data.table by reference to avoid RAM copy
     # bad idea -- will copy data and then original dataset is maintained in calling
     # environment after rm() since it is not fully dereferenced
@@ -236,8 +269,8 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
       names(emmeans_spec)[empty_names] <- paste("emm", empty_names, sep="_")
     }
     
-    emm_metadata <- rbindlist(lapply(emmeans_spec, function(ee) { data.frame(ee[c("outcome", "model_name")])})) %>%
-      mutate(emm_label=names(emmeans_spec))
+    emm_metadata <- data.table::rbindlist(lapply(emmeans_spec, function(ee) { data.frame(ee[c("outcome", "model_name")])}))
+    emm_metadata$emm_label <- names(emmeans_spec)
     
     bad_outcomes <- !emm_metadata$outcome %in% model_set$outcome
     if (any(bad_outcomes)) {
@@ -275,8 +308,8 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
       names(emtrends_spec)[empty_names] <- paste("emt", empty_names, sep="_")
     }
 
-    emt_metadata <- rbindlist(lapply(emtrends_spec, function(ee) { data.frame(ee[c("outcome", "model_name")])})) %>%
-      mutate(emt_label=names(emtrends_spec))
+    emt_metadata <- data.table::rbindlist(lapply(emtrends_spec, function(ee) { data.frame(ee[c("outcome", "model_name")])}))
+    emt_metadata$emt_label <- names(emtrends_spec)
     
     bad_outcomes <- !emt_metadata$outcome %in% model_set$outcome
     if (any(bad_outcomes)) {
@@ -329,7 +362,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
       if (grepl(".rds$", df_i, ignore.case = TRUE)) {
         data <- readRDS(df_i)
         if (!is.data.table(data)) {
-          setDT(data)
+          data.table::setDT(data)
         }
       } else if (grepl("(.csv|.csv.gz|.csv.bz2|.dat|.txt|.txt.gz|.txt.bz2)", df_i, ignore.case = TRUE, perl = TRUE)) {
         data <- data.table::fread(df_i, data.table = TRUE)
@@ -359,7 +392,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     checkmate::assert_subset(split_on, names(data))
 
     # nest data.tables for each combination of split factors
-    setkeyv(data, split_on)
+    data.table::setkeyv(data, split_on)
     data <- data[, .(dt = list(.SD)), by = split_on]
 
     # for each split and each outcome + rhs, examine whether there are 0 non-NA cases
@@ -384,8 +417,12 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
 
     # loop over outcomes and rhs formulae within each chunk to maximize compute time by chunk (reduce worker overhead)
     message("Starting processing of data splits")
+    foreach_packages <- c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed", "emmeans")
+    if (engine == "rstanarm") {
+      foreach_packages <- c(foreach_packages, "rstanarm", "bayestestR")
+    }
     mresults[[i]] <- foreach(
-      dt_split = iter(data, by = "row"), .packages = c("lme4", "lmerTest", "data.table", "dplyr", "broom.mixed", "emmeans"),
+      dt_split = iter(data, by = "row"), .packages = foreach_packages,
       .noexport = "data", .inorder = FALSE
     ) %dopar% {
       if (nrow(dt_split$dt[[1L]]) == 0L) {
@@ -399,23 +436,23 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
         ret[, outcome := model_set$outcome[[mm]]]
         ret[, model_name := names(model_set$rhs)[mm]]
         ret[, rhs := as.character(model_set$rhs[mm])]
+        ret[, engine := engine]
         
         # defaults
         ret[, coef_df_reml := list()]
         ret[, coef_df_ml := list()]
+        ret[, fit_df := list()]
         ret[, residuals := list()]
         ret[, fitted := list()]
         ret[, emm := list()] 
+        ret[, emt := list()]
+        if (isTRUE(return_models)) ret[, model := list()]
         
         # check missingness
         vv <- all.vars(ff)
         
-        miss_data <- ret$dt[[1]] %>%
-          dplyr::select(!!vv) %>% # just keep model-relevant variables
-          mutate(any_miss = rowSums(is.na(dplyr::select(., any_of(!!vv)))) > 0)
-        n_present <- miss_data %>%
-          dplyr::filter(any_miss == FALSE) %>%
-          nrow()
+        miss_data <- as.data.frame(ret$dt[[1]])[, vv, drop = FALSE]
+        n_present <- sum(stats::complete.cases(miss_data))
         
         if (n_present == 0) {
           ret[, dt := NULL]
@@ -424,38 +461,121 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
         
         ##
 
-        if ("parameter_estimates_reml" %in% calculate) {
-          thism <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, scale_predictors, REML=TRUE)
-          ret[, coef_df_reml := list(do.call(tidy, append(tidy_args, x = thism)))]
+        thism <- NULL
+        thism_ml <- NULL
+        estimator <- if (engine == "rstanarm") "bayes" else NA_character_
+
+        glance_model <- function(model, estimator) {
+          gd <- broom.mixed::glance(model)
+          gd$estimator <- estimator
+          gd
         }
-        
-        if (any(c("parameter_estimates_ml", "fit_statistics") %in% calculate)) {
-          thism_ml <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, scale_predictors, REML=FALSE) #refit with ML for AIC/BIC
-          ret[, fit_df := list(glance(thism_ml))]
-          ret[, coef_df_ml := list(do.call(tidy, append(tidy_args, x = thism_ml)))]
+
+        add_bayes_p_values <- function(coef_df, model) {
+          pd_df <- as.data.frame(bayestestR::p_direction(model, effects = "fixed", as_p = FALSE))
+          p_df <- as.data.frame(bayestestR::p_direction(model, effects = "fixed", as_p = TRUE))
+
+          stopifnot(all(c("term") %in% names(coef_df)))
+          stopifnot(all(c("Parameter", "pd") %in% names(pd_df)))
+          stopifnot(all(c("Parameter", "p") %in% names(p_df)))
+
+          coef_df$pd <- pd_df$pd[match(coef_df$term, pd_df$Parameter)]
+          coef_df$p.value <- p_df$p[match(coef_df$term, p_df$Parameter)]
+          coef_df
         }
+
+        if (engine == "rstanarm") {
+          needs_model <- any(c(
+            "parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics",
+            "residuals", "fitted"
+          ) %in% calculate) || !is.null(emmeans_spec) || !is.null(emtrends_spec) || isTRUE(return_models)
+
+          if (isTRUE(needs_model)) {
+            thism <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, scale_predictors,
+                                  REML = NA, engine = engine, engine_args = engine_args)
+          }
+
+          if ("parameter_estimates_reml" %in% calculate) {
+            coef_reml <- do.call(broom.mixed::tidy, c(list(x = thism), tidy_args))
+            coef_reml <- add_bayes_p_values(coef_reml, thism)
+            coef_reml$estimator <- estimator
+            ret[, coef_df_reml := list(coef_reml)]
+          }
+
+          if ("parameter_estimates_ml" %in% calculate) {
+            coef_ml <- do.call(broom.mixed::tidy, c(list(x = thism), tidy_args))
+            coef_ml <- add_bayes_p_values(coef_ml, thism)
+            coef_ml$estimator <- estimator
+            ret[, coef_df_ml := list(coef_ml)]
+          }
+
+          if ("fit_statistics" %in% calculate) {
+            ret[, fit_df := list(glance_model(thism, estimator))]
+          }
+        } else {
+          if ("parameter_estimates_reml" %in% calculate) {
+            thism <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, scale_predictors,
+                                  REML = TRUE, engine = engine, engine_args = engine_args)
+            coef_reml <- do.call(broom.mixed::tidy, c(list(x = thism), tidy_args))
+            coef_reml$estimator <- "REML"
+            ret[, coef_df_reml := list(coef_reml)]
+          }
+
+          if (any(c("parameter_estimates_ml", "fit_statistics") %in% calculate)) {
+            thism_ml <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, scale_predictors,
+                                     REML = FALSE, engine = engine, engine_args = engine_args) #refit with ML for AIC/BIC
+            if ("fit_statistics" %in% calculate) {
+              ret[, fit_df := list(glance_model(thism_ml, "ML"))]
+            }
+            if ("parameter_estimates_ml" %in% calculate) {
+              coef_ml <- do.call(broom.mixed::tidy, c(list(x = thism_ml), tidy_args))
+              coef_ml$estimator <- "ML"
+              ret[, coef_df_ml := list(coef_ml)]
+            }
+          }
+
+          needs_posthoc <- any(c("residuals", "fitted") %in% calculate) ||
+            !is.null(emmeans_spec) || !is.null(emtrends_spec) || isTRUE(return_models)
+          if (isTRUE(needs_posthoc) && is.null(thism) && is.null(thism_ml)) {
+            thism <- model_worker(ret$dt[[1]], ff, lmer_control, outcome_transform, scale_predictors,
+                                  REML = TRUE, engine = engine, engine_args = engine_args)
+          }
+        }
+
+        posthoc_model <- if (!is.null(thism)) thism else thism_ml
         
         if ("residuals" %in% calculate) {
-          ret[, residuals := list(resid = residuals(thism))]
+          ret[, residuals := list(resid = residuals(posthoc_model))]
         }
         
         if ("fitted" %in% calculate) {
-          ret[, fitted := list(fitted = fitted(thism))]
+          ret[, fitted := list(fitted = fitted(posthoc_model))]
         }
         
-        # no option to return model object at present
-        # ret[, model := list(list(thism))] #not sure why a double list is needed, but a single list does not make a list-column
+        if (isTRUE(return_models)) {
+          model_payload <- if (engine == "rstanarm") {
+            list(bayes = posthoc_model)
+          } else {
+            list(reml = thism, ml = thism_ml)
+          }
+          ret[, model := list(list(model_payload))]
+        }
         
         # process emmeans
         if (!is.null(emmeans_spec)) {
-          emm_torun <- emm_metadata %>% 
-            filter(outcome == !!model_set$outcome[[mm]] & model_name == !!names(model_set$rhs)[mm])
+          emm_torun <- emm_metadata[
+            emm_metadata$outcome == model_set$outcome[[mm]] & emm_metadata$model_name == names(model_set$rhs)[mm],
+            ,
+            drop = FALSE
+          ]
           
           if (nrow(emm_torun) > 0L) {
-            this_emmspec <- emmeans_spec[emm_torun %>% pull(emm_number)] #subset list to relevant elements
+            this_emmspec <- emmeans_spec[emm_torun$emm_number] #subset list to relevant elements
             emms <- lapply(seq_along(this_emmspec), function(emm_i) {
-              tidy(do.call(emmeans, c(this_emmspec[[emm_i]], object=thism))) %>%
-                dplyr::bind_cols(emm_torun[emm_i,] %>% dplyr::select(emm_number, emm_label)) # don't add model and outcome, which will double at the unnest
+              cbind(
+                broom.mixed::tidy(do.call(emmeans::emmeans, c(list(object = posthoc_model), this_emmspec[[emm_i]]))),
+                emm_torun[emm_i, c("emm_number", "emm_label"), drop = FALSE]
+              ) # don't add model and outcome, which will double at the unnest
             })
             names(emms) <- names(this_emmspec)
             
@@ -466,14 +586,19 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
 
         # process emtrends
         if (!is.null(emtrends_spec)) {
-          emt_torun <- emt_metadata %>% 
-            filter(outcome == !!model_set$outcome[[mm]] & model_name == !!names(model_set$rhs)[mm])
+          emt_torun <- emt_metadata[
+            emt_metadata$outcome == model_set$outcome[[mm]] & emt_metadata$model_name == names(model_set$rhs)[mm],
+            ,
+            drop = FALSE
+          ]
 
           if (nrow(emt_torun) > 0L) {
-            this_emtspec <- emtrends_spec[emt_torun %>% pull(emt_number)] #subset list to relevant elements
+            this_emtspec <- emtrends_spec[emt_torun$emt_number] #subset list to relevant elements
             emts <- lapply(seq_along(this_emtspec), function(emt_i) {
-              tidy(do.call(emtrends, c(this_emtspec[[emt_i]], object=thism))) %>%
-                dplyr::bind_cols(emt_torun[emt_i,] %>% dplyr::select(emt_number, emt_label)) # don't add model and outcome, which will double at the unnest
+              cbind(
+                broom.mixed::tidy(do.call(emmeans::emtrends, c(list(object = posthoc_model), this_emtspec[[emt_i]]))),
+                emt_torun[emt_i, c("emt_number", "emt_label"), drop = FALSE]
+              ) # don't add model and outcome, which will double at the unnest
             })
             names(emts) <- names(this_emtspec)
 
@@ -487,25 +612,26 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
         return(ret)
       })
 
-      split_results <- rbindlist(split_results, fill=TRUE)
+      split_results <- data.table::rbindlist(split_results, fill=TRUE)
 
       #need to unnest
 
       coef_df_reml <- NULL
+      result_keys <- c("outcome", "model_name", "rhs", "engine")
       if ("parameter_estimates_reml" %in% calculate) {
-        coef_df_reml <- split_results[, coef_df_reml[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
+        coef_df_reml <- split_results[, coef_df_reml[[1]], by = result_keys] # unnest coefficients
         coef_df_reml <- cbind(dt_split[, ..split_on], coef_df_reml) # add back metadata for this split
       }
 
       coef_df_ml <- NULL
       if ("parameter_estimates_ml" %in% calculate) {
-        coef_df_ml <- split_results[, coef_df_ml[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
+        coef_df_ml <- split_results[, coef_df_ml[[1]], by = result_keys] # unnest coefficients
         coef_df_ml <- cbind(dt_split[, ..split_on], coef_df_ml) # add back metadata for this split
       }
 
       fit_df <- NULL
       if ("fit_statistics" %in% calculate) {
-        fit_df <- split_results[, fit_df[[1]], by = .(outcome, model_name, rhs)] # unnest coefficients
+        fit_df <- split_results[, fit_df[[1]], by = result_keys] # unnest coefficients
         fit_df <- cbind(dt_split[, ..split_on], fit_df) # add back metadata for this split
       }
       
@@ -533,8 +659,14 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
         fitted_data <- cbind(dt_split[, ..split_on], fitted_data) # add back metadata for this split
       }
 
+      model_data <- NULL
+      if (isTRUE(return_models) && "model" %in% names(split_results)) {
+        model_data <- subset(split_results, select=c(split_on, "outcome", "model_name", "rhs", "engine", "model"))
+      }
+
       list(coef_df_reml=coef_df_reml, coef_df_ml=coef_df_ml, fit_df=fit_df, 
-           emm_data=emm_data, emt_data=emt_data, residuals = residual_data, fitted = fitted_data) # return list
+           emm_data=emm_data, emt_data=emt_data, residuals = residual_data, fitted = fitted_data,
+           models = model_data) # return list
     }
     
     rm(data) # cleanup big datasets and force memory release before next iteration
@@ -546,8 +678,8 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   
   #helper subfunction to pull out and rbind element from doubly nested structure above
   extract_df <- function(nested_list, element, split_on) {
-    result_df <- rbindlist(lapply(nested_list, function(df_set) {
-      rbindlist(lapply(df_set, "[[", element))
+    result_df <- data.table::rbindlist(lapply(nested_list, function(df_set) {
+      data.table::rbindlist(lapply(df_set, "[[", element))
     })) # combine results from each df (in the multiple df case)
     
     if (nrow(result_df) > 0L) { # only set keys if data were extracted (setorderv fails on 0-row df)
@@ -564,11 +696,13 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   fit_results <- NULL
   fitted_data <- NULL
   residual_data <- NULL
+  model_data <- NULL
   if ("parameter_estimates_reml" %in% calculate) { coef_results_reml <- extract_df(mresults, "coef_df_reml", split_on) }
   if ("parameter_estimates_ml" %in% calculate) { coef_results_ml <- extract_df(mresults, "coef_df_ml", split_on) }
   if ("fit_statistics" %in% calculate) { fit_results <- extract_df(mresults, "fit_df", split_on) }
   if ("fitted" %in% calculate) { fitted_data <- extract_df(mresults, "fitted", split_on) }
   if ("residuals" %in% calculate) { residual_data <- extract_df(mresults, "residuals", split_on) }
+  if (isTRUE(return_models)) { model_data <- extract_df(mresults, "models", split_on) }
   
   emmeans_list <- NULL
   if (!is.null(emmeans_spec)) {
@@ -606,6 +740,10 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   
   #helper subfunction to adjust p-values
   adjust_dt <- function(dt, padjust_by) {
+    if (!"p.value" %in% names(dt)) {
+      warning("Skipping p-value adjustment because coefficient table has no p.value column.")
+      return(dt)
+    }
     for (ff in padjust_by) {
       checkmate::assert_subset(ff, names(dt))
       cname <- paste0("padj_", padjust_method, "_", paste(ff, collapse = "_"))
@@ -632,8 +770,10 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     if (!is.null(coef_results_reml)) { coef_results_reml[, split := NULL] }
     if (!is.null(coef_results_ml)) { coef_results_ml[, split := NULL] }
     if (!is.null(fit_results)) { fit_results[, split := NULL] }
+    if (!is.null(model_data)) { model_data[, split := NULL] }
   }
 
   return(list(coef_df_reml=coef_results_reml, coef_df_ml=coef_results_ml, fit_df=fit_results, 
-              emmeans_list=emmeans_list, emtrends_list=emtrends_list, residuals = residual_data, fitted = fitted_data))
+              emmeans_list=emmeans_list, emtrends_list=emtrends_list, residuals = residual_data,
+              fitted = fitted_data, models = model_data))
 }
