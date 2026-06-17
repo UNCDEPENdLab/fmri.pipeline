@@ -244,6 +244,9 @@
   : helper function to insert a keyed data.frame into the sqlite storage
   database
 
+- [`jlmer()`](https://uncdependlab.github.io/fmri.pipeline/reference/jlmer.md)
+  : Fit a linear mixed model with Julia MixedModels
+
 - [`lookup_feat_outputs()`](https://uncdependlab.github.io/fmri.pipeline/reference/lookup_feat_outputs.md)
   : Lookup FSL FEAT output images by model and contrast
 

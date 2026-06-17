@@ -24,6 +24,8 @@ mixed_by(
   refit_on_nonconvergence = 3,
   tidy_args = list(effects = "fixed", conf.int = TRUE),
   lmer_control = lmerControl(optimizer = "nloptwrap"),
+  engine = c("lme4", "rstanarm", "jlmer"),
+  engine_args = list(),
   calculate = c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"),
   return_models = FALSE,
   emmeans_spec = NULL,
@@ -132,6 +134,20 @@ mixed_by(
   An lmerControl object specifying any optimization settings to be
   passed to lmer()
 
+- engine:
+
+  Estimation engine to use. `"lme4"` uses
+  [`lmerTest::lmer()`](https://rdrr.io/pkg/lmerTest/man/lmer.html) for
+  compatibility with the historical output, `"rstanarm"` uses
+  [`rstanarm::stan_lmer()`](https://mc-stan.org/rstanarm/reference/stan_glmer.html),
+  and `"jlmer"` uses the package's
+  [`jlmer()`](https://uncdependlab.github.io/fmri.pipeline/reference/jlmer.md)
+  function.
+
+- engine_args:
+
+  A named list of additional arguments passed to the selected engine.
+
 - calculate:
 
   A character vector specifying what calculations should be returned by
@@ -172,6 +188,13 @@ will be fitted with REML. If "parameter_estimates_ml" and/or
 "fit_statistics" are requested, models will be fitted with ML. Note that
 if both REML and ML are requested, each model is fit twice since the
 estimators each have advantages and disadvantages noted above.
+
+For `engine = "rstanarm"`, coefficient tables include `pd`, the
+posterior probability of direction from
+[`bayestestR::p_direction()`](https://easystats.github.io/bayestestR/reference/p_direction.html),
+and `p.value`, its two-sided p-like conversion using `as_p = TRUE`.
+These are posterior-derived indices rather than frequentist df-based
+p-values.
 
 Example of emmeans_spec usage: mixed_by(data, emmeans_spec=list(
 em1=list(specs = ~ memory \| noise_level, adjust = "sidak", weights =

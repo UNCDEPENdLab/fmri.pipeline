@@ -68,6 +68,8 @@
 <span>  refit_on_nonconvergence <span class="op">=</span> <span class="fl">3</span>,</span>
 <span>  tidy_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>effects <span class="op">=</span> <span class="st">"fixed"</span>, conf.int <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
 <span>  lmer_control <span class="op">=</span> <span class="fu">lmerControl</span><span class="op">(</span>optimizer <span class="op">=</span> <span class="st">"nloptwrap"</span><span class="op">)</span>,</span>
+<span>  engine <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lme4"</span>, <span class="st">"rstanarm"</span>, <span class="st">"jlmer"</span><span class="op">)</span>,</span>
+<span>  engine_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  calculate <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"parameter_estimates_reml"</span>, <span class="st">"parameter_estimates_ml"</span>, <span class="st">"fit_statistics"</span><span class="op">)</span>,</span>
 <span>  return_models <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  emmeans_spec <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -161,6 +163,16 @@ the function only returns the fixed effects and computes confidence intervals us
 <dd><p>An lmerControl object specifying any optimization settings to be passed to lmer()</p></dd>
 
 
+<dt id="arg-engine">engine<a class="anchor" aria-label="anchor" href="#arg-engine"></a></dt>
+<dd><p>Estimation engine to use. <code>"lme4"</code> uses <code><a href="https://rdrr.io/pkg/lmerTest/man/lmer.html" class="external-link">lmerTest::lmer()</a></code> for
+compatibility with the historical output, <code>"rstanarm"</code> uses <code><a href="https://mc-stan.org/rstanarm/reference/stan_glmer.html" class="external-link">rstanarm::stan_lmer()</a></code>,
+and <code>"jlmer"</code> uses the package's <code><a href="jlmer.html">jlmer()</a></code> function.</p></dd>
+
+
+<dt id="arg-engine-args">engine_args<a class="anchor" aria-label="anchor" href="#arg-engine-args"></a></dt>
+<dd><p>A named list of additional arguments passed to the selected engine.</p></dd>
+
+
 <dt id="arg-calculate">calculate<a class="anchor" aria-label="anchor" href="#arg-calculate"></a></dt>
 <dd><p>A character vector specifying what calculations should be returned by the function.
 The options are: "parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics", "fitted", and "residuals".</p></dd>
@@ -194,6 +206,11 @@ Any arguments that are valid for emtrends can be passed through the list structu
   be fitted with REML. If "parameter_estimates_ml" and/or "fit_statistics" are requested, models will be
   fitted with ML. Note that if both REML and ML are requested, each model is fit twice since the estimators
   each have advantages and disadvantages noted above.</p>
+<p>For <code>engine = "rstanarm"</code>, coefficient tables include <code>pd</code>, the
+  posterior probability of direction from <code><a href="https://easystats.github.io/bayestestR/reference/p_direction.html" class="external-link">bayestestR::p_direction()</a></code>,
+  and <code>p.value</code>, its two-sided p-like conversion using
+  <code>as_p = TRUE</code>. These are posterior-derived indices rather than
+  frequentist df-based p-values.</p>
 <p>Example of emmeans_spec usage:
   mixed_by(data, emmeans_spec=list(
     em1=list(specs = ~ memory | noise_level, adjust = "sidak", weights = "cells"),
