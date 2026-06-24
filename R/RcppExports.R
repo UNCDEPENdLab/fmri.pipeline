@@ -89,7 +89,7 @@ deconvolve_reglin_cpp <- function(BOLDobs, kernels, lambda_grid, penalty, tune_b
 #' @details This is an internal function used for testing alignment with FSL HRF convolution
 NULL
 
-do_convolve <- function(input, kernel, phase = 0L, renorm = TRUE) {
+do_convolve <- function(input, kernel, phase = 0L, renorm = 1L) {
     .Call(`_fmri_pipeline_do_convolve`, input, kernel, phase, renorm)
 }
 

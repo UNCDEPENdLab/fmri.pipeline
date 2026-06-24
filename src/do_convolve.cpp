@@ -16,27 +16,24 @@
 // [[Rcpp::depends(RcppArmadillo)]]
 // [[Rcpp::export]]
 
-arma::vec do_convolve(const arma::vec &input, const arma::vec &kernel, int phase = 0, const int renorm = true) {
-  int ts_len = input.n_elem;
-  int kern_len = kernel.n_elem;
+arma::vec do_convolve(const arma::vec &input, const arma::vec &kernel, const int phase = 0, const int renorm = 1) {
+  const int ts_len = input.n_elem;
+  const int kern_len = kernel.n_elem;
   arma::vec output(ts_len, fill::zeros);
-  //phase=5;
-  double kernel_norm;
-  
+
   for (int t = 0; t < ts_len; t++) {
-    kernel_norm = 0.0;
-    //int b_i = std::max(0, t + phase - ts_len + 1);
-    //int e_i = std::min(kern_len, t + phase + 1);
-    //Rcout << "start: " << b_i << ", end: " << e_i << endl;
-    for (int i = std::max(0, t + phase - ts_len + 1); i < std::min(kern_len, t + phase + 1); i++) {
-      output(t) += input(t+phase-i) * kernel(i); // also remove +1?
+    float kernel_norm = 0;
+
+    for (int i = std::max(0, 1 + t + phase - ts_len); i < std::min(kern_len, t + phase + 1); i++) {
+      output(t) += input(t + phase - i) * kernel(i);
       kernel_norm += kernel(i);
     }
-    
-    if (renorm)
+
+    if (renorm) {
       output(t) /= kernel_norm;
+    }
   }
-  
+
   return output;
 }
 

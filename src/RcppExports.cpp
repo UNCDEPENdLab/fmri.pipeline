@@ -80,14 +80,14 @@ BEGIN_RCPP
 END_RCPP
 }
 // do_convolve
-arma::vec do_convolve(const arma::vec& input, const arma::vec& kernel, int phase, const int renorm);
+arma::vec do_convolve(const arma::vec& input, const arma::vec& kernel, const int phase, const int renorm);
 RcppExport SEXP _fmri_pipeline_do_convolve(SEXP inputSEXP, SEXP kernelSEXP, SEXP phaseSEXP, SEXP renormSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const arma::vec& >::type input(inputSEXP);
     Rcpp::traits::input_parameter< const arma::vec& >::type kernel(kernelSEXP);
-    Rcpp::traits::input_parameter< int >::type phase(phaseSEXP);
+    Rcpp::traits::input_parameter< const int >::type phase(phaseSEXP);
     Rcpp::traits::input_parameter< const int >::type renorm(renormSEXP);
     rcpp_result_gen = Rcpp::wrap(do_convolve(input, kernel, phase, renorm));
     return rcpp_result_gen;
