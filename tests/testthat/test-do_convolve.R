@@ -1,4 +1,4 @@
-fsl_do_convolve_reference <- function(input, kernel, phase = 0L, renorm = 1L) {
+fsl_do_convolve_reference <- function(input, kernel, phase = 0L, renorm = TRUE) {
   n_input <- length(input)
   n_kernel <- length(kernel)
   output <- rep(0, n_input)
@@ -118,7 +118,7 @@ expected_unfiltered_feat_design <- function(events, tr, n_vols) {
   }
 
   high_res <- high_res - mean(high_res)
-  convolved <- fmri.pipeline:::do_convolve(high_res, fsl_double_gamma_kernel(), phase = 0L, renorm = 1L)
+  convolved <- fmri.pipeline:::do_convolve(high_res, fsl_double_gamma_kernel(), phase = 0L, renorm = TRUE)
   downsample_index <- as.integer(((0:(n_vols - 1L)) + 0.5) * trmult) + negpts + 1L
   design <- convolved[downsample_index]
   design - mean(design)
@@ -181,7 +181,7 @@ test_that("do_convolve matches a direct FSL source translation across randomized
     n_input = c(3L, 5L, 12L, 31L),
     n_kernel = c(1L, 2L, 4L, 9L),
     phase = -5L:5L,
-    renorm = c(0L, 1L)
+    renorm = c(FALSE, TRUE)
   )
 
   for (case_i in seq_len(nrow(cases))) {
@@ -200,7 +200,7 @@ test_that("do_convolve matches a direct FSL source translation across randomized
       expected,
       tolerance = 1e-6,
       info = sprintf(
-        "n_input=%d, n_kernel=%d, phase=%d, renorm=%d",
+        "n_input=%d, n_kernel=%d, phase=%d, renorm=%s",
         n_input, n_kernel, phase, renorm
       )
     )

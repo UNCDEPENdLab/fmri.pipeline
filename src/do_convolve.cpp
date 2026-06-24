@@ -16,13 +16,13 @@
 // [[Rcpp::depends(RcppArmadillo)]]
 // [[Rcpp::export]]
 
-arma::vec do_convolve(const arma::vec &input, const arma::vec &kernel, const int phase = 0, const int renorm = 1) {
+arma::vec do_convolve(const arma::vec &input, const arma::vec &kernel, const int phase = 0, const bool renorm = true) {
   const int ts_len = input.n_elem;
   const int kern_len = kernel.n_elem;
   arma::vec output(ts_len, fill::zeros);
 
   for (int t = 0; t < ts_len; t++) {
-    float kernel_norm = 0;
+    double kernel_norm = 0;
 
     for (int i = std::max(0, 1 + t + phase - ts_len); i < std::min(kern_len, t + phase + 1); i++) {
       output(t) += input(t + phase - i) * kernel(i);
