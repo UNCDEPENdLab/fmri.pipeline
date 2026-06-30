@@ -23,7 +23,15 @@ Almost always 'func', which is the default.}
 
 \item{task_name}{the name of the task, which is appended with "task-"}
 
+\item{desc}{BIDS description entity to match.}
+
 \item{suffix}{an optional suffix in the expected filename (just before the file extension)}
+
+\item{space}{optional BIDS space entity to match.}
+
+\item{anat_root}{optional anatomical root directory.}
+
+\item{fmap_root}{optional fieldmap root directory.}
 }
 \value{
 a data.frame containing all run_nifti and confound_input_file results for subjects in the folder

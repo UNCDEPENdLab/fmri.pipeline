@@ -17,7 +17,7 @@ read_feat_inputs <- function(feat_list, recursive=FALSE) {
     check_fsfs <- feat_list[!is_feat_dir]
     sapply(check_fsfs, checkmate::assert_file_exists)
     if (!all(goodfiles <- grepl(".fsf$", check_fsfs, perl=TRUE))) {
-      error("The following inputs do not end in .fsf, .gfeat, or .feat: ", paste(check_fsfs[!goodfiles], collapse=", "))
+      stop("The following inputs do not end in .fsf, .gfeat, or .feat: ", paste(check_fsfs[!goodfiles], collapse=", "))
     }
   }
 

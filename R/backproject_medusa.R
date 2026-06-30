@@ -1,9 +1,12 @@
 #' @importFrom checkmate assert_data_frame assert_string assert_file_exists assert_character
-#' @importFrom oro.nifti readNIfTI
+#' @importFrom oro.nifti readNIfTI writeNIfTI
 #' @importFrom dplyr bind_rows filter select
 #' @importFrom doParallel registerDoParallel
 #' @importFrom parallel makeCluster stopCluster
 #' @importFrom iterators iter
+#' @importFrom foreach %dopar% foreach registerDoSEQ
+#' @importFrom methods slot
+#' @importFrom stats median
 backproject_medusa <- function(coef_df, brain_mask, plot_cols=NULL, parcel_col="roi", time_col="time",
                                effect_col="term", output_dir=getwd(), ncpus=4L) {
 

@@ -241,7 +241,7 @@ spm_hrf <- function(TR, P) {
 
     ## MH: eliminated use of spm Gpdf in favor of built-in gamma PDF in R. Checked that this yields identical
     ## results, although the third parameter of spm_Gpdf is really rate, not shape.
-    hrf   = dgamma(u, shape=p[1]/p[3], rate=dt/p[3]) - dgamma(u, shape=p[2]/p[4], rate=dt/p[4])/p[5]
+    hrf   = stats::dgamma(u, shape=p[1]/p[3], rate=dt/p[3]) - stats::dgamma(u, shape=p[2]/p[4], rate=dt/p[4])/p[5]
 
     hrf   = hrf[0:(p[7]/TR)*fMRI_T + 1] #subsample hrf back onto TR grid
     hrf   = hrf/sum(hrf) #Unit normalize hrf
@@ -417,7 +417,7 @@ spm_gamma_bf <- function(u,h) {
     for (i in 2:(1 + h)) {
         m   = 2^i
         s   = sqrt(m)
-        bf  = cbind(bf, dgamma(u, shape=(m/s)^2, rate=m/s^2)) #replace spm_Gpdf in favor of R built-in dgamma
+        bf  = cbind(bf, stats::dgamma(u, shape=(m/s)^2, rate=m/s^2)) #replace spm_Gpdf in favor of R built-in dgamma
     }
    
     return(bf)
@@ -452,26 +452,28 @@ spm_orth <- function(X, OPT) {
     X     = X[, apply(X, 2, function(col) { any(col != 0.0) }), drop=FALSE] ##Only retain non-zero columns
     rankX = qr(X)$rank
 
-    tryCatch({
-        x     <<- X[,1, drop=FALSE] #assign in global environment
-        j     <<- 1
+    orth <- tryCatch({
+        x <- X[,1, drop=FALSE]
+        j <- 1
 
         if (ncol(X) > 1L) {
             for (i in 2:ncol(X)) {
                 D = X[,i, drop=FALSE]
                 D = D - x%*%(MASS::ginv(x) %*% D)
                 if (norm(D,"1") > exp(-32)) {
-                    x                <<-  cbind(x, D)
-                    j[length(j) + 1] <<- i                    
+                    x <- cbind(x, D)
+                    j[length(j) + 1] <- i
                 }
                 if (length(j) == rankX) { break }
             }
         }
+        list(x = x, j = j)
     }, error=function(e) {
         print(e)
-        x     <<- matrix(0, nrow=n, ncol=0)
-        j     <<- c()        
+        list(x = matrix(0, nrow=n, ncol=0), j = c())
     })
+    x <- orth$x
+    j <- orth$j
 
     ## and normalisation, if requested
     ##--------------------------------------------------------------------------
@@ -510,8 +512,6 @@ spm_orth <- function(X, OPT) {
 #'            represent the condition average across all runs (e.g., [ .5, .5 ] for 2 runs). Default: TRUE
 #' @param unit_contrasts Whether to estimate a unit-height contrast for every regressor in the design.
 #'            This essentially includes a diagonal matrix in the contrast specification. Default: FALSE
-#' @param include_block_contrasts Whether to estimate contrasts for the run-specific intercepts in the design.
-#'            Note that this qualifies \code{condition_contrasts} and \code{unit_contrasts}, but does nothing on its own.
 #' @param effects_of_interest_F Whether to include a single F test contrast with all regressors of interest. Useful
 #'            in adjusting VOIs for nuisance regressors. Default: TRUE
 #' @param spm_execute_setup Whether to run the GLM setup script in MATLAB, creating SPM.mat. Default: FALSE

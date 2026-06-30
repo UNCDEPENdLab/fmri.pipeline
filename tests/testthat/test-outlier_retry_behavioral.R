@@ -3,10 +3,7 @@
 # These tests exercise the actual bash and R logic rather than grepping source
 # code for string patterns.
 
-retry_script <- normalizePath(
-  file.path(pkg_root, "inst", "bash", "run_feat_with_outlier_retry.sh"),
-  mustWork = TRUE
-)
+retry_script <- source_tree_file("inst", "bash", "run_feat_with_outlier_retry.sh")
 
 # ===========================================================================
 # 1. Bash helper functions: extract_outputdir, extract_robust_yn,

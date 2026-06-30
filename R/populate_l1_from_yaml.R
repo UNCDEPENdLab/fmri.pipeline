@@ -1,4 +1,8 @@
 #' internal function to populate l1_model_set onsets from spec specification
+#' @param l1_model_set An L1 model set.
+#' @param slist Parsed signal/model specification list.
+#' @param trial_data Trial-level data.
+#' @param field_names Fields to populate from the specification.
 fields_from_spec <- function(l1_model_set, slist, trial_data, field_names=NULL) {
   checkmate::assert_class(l1_model_set, "l1_model_set", null.ok = FALSE)
   checkmate::assert_list(slist)

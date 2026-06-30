@@ -20,6 +20,10 @@ spm_l1_model(
 )
 }
 \arguments{
+\item{id}{subject id.}
+
+\item{session}{session number.}
+
 \item{l1_confound_files}{optional character vector of nuisance regressor files,
 one per run, to include in SPM's multi_reg field}
 
@@ -34,6 +38,12 @@ you wish to setup multiple models, this is handled upstream in setup_l1_models.R
 Prefer to pass these via the build_design_matrix object in $run_nifti}
 
 \item{run_numbers}{optional integer vector of run numbers corresponding to \code{run_nifti}}
+
+\item{run_sessions}{optional session vector corresponding to \code{run_nifti}.}
+
+\item{source_run_numbers}{optional source run numbers for pooled/session models.}
+
+\item{l1_session_mode}{optional session handling mode for SPM L1 setup.}
 
 \item{execute_spm}{whether to execute SPM setup/estimation immediately. Default: FALSE}
 }

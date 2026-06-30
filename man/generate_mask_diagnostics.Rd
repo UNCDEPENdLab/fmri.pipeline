@@ -32,6 +32,10 @@ the current directory. This directory will be created if it does not exist.}
 not provided in the $brain_mask field. If NULL (default), the user will be prompted for whether they wish to
 generate missing brain masks. If \code{FALSE}, masks will not be generate, and if \code{TRUE}, they will be
 generated.}
+
+\item{generate_run_plots}{whether to write per-run diagnostic plots.}
+
+\item{ncores}{number of cores to use for parallel mask diagnostics.}
 }
 \description{
 Generate a set of diagnostic images and plots for brain masks relative to one another and a template

@@ -16,6 +16,25 @@ test_exclude_run(
   motion_path = NA_character_
 )
 }
+\arguments{
+\item{gpa}{A \code{glm_pipeline_arguments} object.}
+
+\item{id}{subject id.}
+
+\item{session}{session number.}
+
+\item{run_number}{run number.}
+
+\item{generate_run_exclusion}{whether exclusion should be evaluated.}
+
+\item{all_confounds}{Combined confound data.}
+
+\item{lg}{Logger object.}
+
+\item{confound_path}{Path to the raw confound file.}
+
+\item{motion_path}{Path to the raw motion file.}
+}
 \description{
 calculate whether to retain or exclude this run
 }

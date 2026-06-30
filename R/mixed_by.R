@@ -80,6 +80,7 @@
 #' @importFrom doParallel registerDoParallel
 #' @importFrom broom.mixed tidy
 #' @importFrom data.table fread setDT setkeyv setattr copy
+#' @importFrom stats fitted na.exclude p.adjust update update.formula
 #' @export
 mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_formulae = NULL, split_on = NULL,
                      external_df = NULL, external_merge_by = NULL,

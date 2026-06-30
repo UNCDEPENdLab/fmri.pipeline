@@ -12,11 +12,7 @@ generate_trial_data_from_bids(bids_dir, modality = "func", task_name = "ridl")
 \item{modality}{the subfolder within \code{bids_dir} that contains data of a certain modality.
 Almost always 'func', which is the default.}
 
-\item{task_name}{the name of the task, which is appended with \code{type}}
-
-\item{type}{at present, always 'task' to denote this part of the BIDS filename... Not totally sure what else it could be}
-
-\item{suffix}{an optional suffix in the expected filename (just before the file extension)}
+\item{task_name}{the name of the task, which is matched as a BIDS \code{task-} entity.}
 }
 \value{
 a data.frame containing all run_nifti and confound_input_file results for subjects in the folder
@@ -28,7 +24,7 @@ Function to generate a trial_data object from a BIDS-compliant folder
 The files should generally have a name like
   sub-220256_task-ridl3_space-MNI152NLin2009cAsym_desc-preproc_bold_postprocessed.nii.gz
   and be located in a folder like: /proj/mnhallqlab/proc_data/sub-220256/func/
-  where 'func' is the \code{modality}, 'task' is the \code{type}, 'ridl' is the \code{task_name}, and
+  where 'func' is the \code{modality}, and 'ridl' is the \code{task_name}.
   '_postprocessed' is the \code{suffix}.
 }
 \examples{

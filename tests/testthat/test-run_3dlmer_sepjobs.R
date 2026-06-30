@@ -1,5 +1,5 @@
 test_that("run_3dlmer_sepjobs wrapper reuses one terminal job status", {
-  run_3dlmer_path <- normalizePath(file.path(pkg_root, "R", "run_3dlmer_sepjobs.R"), mustWork = TRUE)
+  run_3dlmer_path <- source_tree_file("R", "run_3dlmer_sepjobs.R")
   lines <- readLines(run_3dlmer_path, warn = FALSE)
 
   expect_true(any(grepl("job_status=\\\"COMPLETED\\\"", lines, fixed = TRUE)))

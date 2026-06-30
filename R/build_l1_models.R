@@ -29,6 +29,8 @@
 #' @importFrom dplyr bind_cols select mutate
 #' @importFrom yaml read_yaml
 #' @importFrom jsonlite read_json
+#' @importFrom stats coef model.matrix update.formula
+#' @importFrom utils head menu select.list
 #' @export
 build_l1_models <- function(gpa=NULL, trial_data=NULL, ppi_data = NULL, l1_model_set=NULL, from_spec_file=NULL,
                            onset_cols=NULL, onset_regex=".*(onset|time).*",

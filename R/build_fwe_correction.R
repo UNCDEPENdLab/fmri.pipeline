@@ -4,6 +4,7 @@
 #' @param level an integer indicating what modeling level this FWE correction applies to (1, 2, or 3)
 #' @param lg a logger object for logging messages
 #' @details note that this only works for level = 3 for now
+#' @importFrom utils capture.output menu select.list
 create_fwe_spec <- function(gpa, level = level, lg = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_integerish(level, lower = 1, upper = 3)

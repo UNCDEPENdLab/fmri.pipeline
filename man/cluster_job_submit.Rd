@@ -52,6 +52,10 @@ submission fails. Defaults to FALSE (i.e., issue a warning).}
 \item{wait_signal}{on torque or slurm clusters, the signal that should indicate that parent jobs have finished.}
 
 \item{repolling_interval}{The number of seconds to wait before rechecking job status (used only for local scheduler)}
+
+\item{tracking_sqlite_db}{Optional SQLite database used for job tracking.}
+
+\item{tracking_args}{Optional job-tracking metadata passed through to the tracking database.}
 }
 \value{
 A character string containing the jobid of the scheduled job.

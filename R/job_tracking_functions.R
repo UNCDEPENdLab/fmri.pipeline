@@ -163,6 +163,7 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
 #' @param job_id Character string specifying the job id to update as failed
 #' @param status Character string specifying the job status to set. Must be one of:
 #'   "QUEUED", "STARTED", "FAILED", "COMPLETED", "FAILED_BY_EXT"
+#' @param cascade Whether to cascade terminal status to child jobs.
 #' @param exclude Any job ids to ignore when cascading a status
 #' @importFrom glue glue
 #' @importFrom DBI dbConnect dbExecute dbDisconnect

@@ -17,12 +17,12 @@ submit_sqlite_query(
 
 \item{sqlite_db}{Character path to SQLite database}
 
+\item{param}{Optional list of parameters to pass to statement}
+
 \item{busy_timeout}{Time (in s) after which to retry write operations; default is 10 s}
 
 \item{return_result}{Logical. If TRUE submits DBI::dbGetQuery instead of DBI::dbExecute;
 Only use if expecting something in return for your query}
-
-\item{params}{Optional list of parameters to pass to statement}
 }
 \description{
 helper function to establish sqlite connection and submit query

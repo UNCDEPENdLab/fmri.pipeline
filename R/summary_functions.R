@@ -1,8 +1,10 @@
 #' Helper function to better summarize GPA object
-#' @param gpa the \code{gpa} object
+#' @param object the \code{glm_pipeline_arguments} object
+#' @param ... ignored.
 #' @return a readable summary of the given gpa object
 #' @export
-summary.glm_pipeline_arguments <- function(gpa) {
+summary.glm_pipeline_arguments <- function(object, ...) {
+      gpa <- object
       cat("\nSummary of GLM Pipeline Analysis: \n\n")
       if (!is.null(gpa)) {
           cat("Analysis Name: ", gpa$analysis_name[1])
@@ -89,10 +91,13 @@ summary.glm_pipeline_arguments <- function(gpa) {
 }
 
 #' Helper function to better summarize GPA object's L1 models
-#' @param gpa the \code{gpa} object
+#' @param object the \code{l1_model_set} object
+#' @param ... ignored.
 #' @return a readable summary of the given gpa object's L1 models
+#' @importFrom utils menu
 #' @export
-summary.l1_model_set <- function(l1_ms) {
+summary.l1_model_set <- function(object, ...) {
+  l1_ms <- object
   complete <- FALSE
   if (!is.null(l1_ms)) {
       while (isFALSE(complete)) {
@@ -124,10 +129,13 @@ summary.l1_model_set <- function(l1_ms) {
 }
 
 #' Helper function to better summarize GPA object's l1_models' events
-#' @param gpa the \code{gpa} object
+#' @param object the \code{l1_model_set_events} object
+#' @param ... ignored.
 #' @return a readable summary of the given gpa object's l1_models' events
+#' @importFrom utils head
 #' @export
-summary.l1_model_set_events <- function(l1_model_set_events) {
+summary.l1_model_set_events <- function(object, ...) {
+    l1_model_set_events <- object
     cat("Summary of events available in l1 models:\n--------\n")
     if (!is.null(l1_model_set_events)) {
       lapply(l1_model_set_events, function(x) {
@@ -164,10 +172,12 @@ summary.l1_model_set_events <- function(l1_model_set_events) {
 }
 
 #' Helper function to better summarize GPA object's l1_models' models
-#' @param gpa the \code{gpa} object
+#' @param object the \code{l1_model_set_models} object
+#' @param ... ignored.
 #' @return a readable summary of the given gpa object's l1_models' models
 #' @export
-summary.l1_model_set_models <- function(ml) {
+summary.l1_model_set_models <- function(object, ...) {
+  ml <- object
   if (length(ml) == 0L) { return(invisible(NULL)) }
   cat("Summary of l1 models:\n--------\n")
   lapply(seq_along(ml), function(ii) {
@@ -184,10 +194,12 @@ summary.l1_model_set_models <- function(ml) {
 }
 
 #' Helper function to better summarize GPA object's l1_models' signals
-#' @param gpa the \code{gpa} object
+#' @param object the \code{l1_model_set_signals} object
+#' @param ... ignored.
 #' @return a readable summary of the given gpa object's l1_models' signals
 #' @export
-summary.l1_model_set_signals <- function(sl) {
+summary.l1_model_set_signals <- function(object, ...) {
+  sl <- object
   if (length(sl) == 0L) {
     return(invisible(NULL))
   }
@@ -233,4 +245,3 @@ summary.l1_model_set_signals <- function(sl) {
     cat("\n--------\n")
   })
 }
-

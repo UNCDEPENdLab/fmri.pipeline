@@ -28,6 +28,16 @@ variables will be tested in separate meta-regression models. This can be useful 
 model comparison tests to examine whether a given factor has an overall effect. If
 \code{FALSE} or \code{"none"}, no split variable subsets will be fit. If \code{"individual"},
 then the split variables are added in subsets individually, but their interactions are not.}
+
+\item{max_order}{Maximum subset order for meta-regression combinations.}
+
+\item{outcome}{Optional outcome column override.}
+
+\item{fixef}{Optional fixed-effect specification.}
+
+\item{rhs}{Optional right-hand-side formula specification.}
+
+\item{brms_args}{Arguments passed to \code{brms::brm()}.}
 }
 \description{
 Function to run Bayesian random-effects meta-regression on coefficients from mixed_by

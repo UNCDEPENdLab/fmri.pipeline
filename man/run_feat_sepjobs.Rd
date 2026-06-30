@@ -15,6 +15,8 @@ run_feat_sepjobs(
 \arguments{
 \item{gpa}{a \code{glm_pipeline_arguments} object containing model specification}
 
+\item{level}{GLM level to run.}
+
 \item{model_names}{an optional level 1 model name used to subset the runs to submit to feat.
 If not provided, all level 1 models in \code{gpa} will be submitted for feat estimation.}
 

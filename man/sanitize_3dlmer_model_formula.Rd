@@ -8,23 +8,9 @@ sanitize_3dlmer_model_formula(model_formula)
 }
 \arguments{
 \item{model_formula}{fixed effects formula string}
-
-\item{prefix}{output prefix for 3dLMEr}
-
-\item{qVars}{character vector of quantitative variables}
-
-\item{glt_codes}{list of named GLT code strings}
-
-\item{data_table_file}{path to the data table text file}
-
-\item{mask}{path to the brain mask file}
-
-\item{njobs}{number of parallel jobs for 3dLMEr}
-
-\item{ss_type}{sum of squares type (default 3)}
 }
 \value{
-a character string containing the 3dLMEr command
+a compact 3dLMEr formula string
 }
 \description{
 Internal function to construct the 3dLMEr command string

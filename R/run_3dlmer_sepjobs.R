@@ -1,6 +1,7 @@
 #' function to submit 3dLMEr jobs on a cluster
 #'
 #' @param gpa a \code{glm_pipeline_arguments} object
+#' @param level GLM level to run; currently only level 3 is supported.
 #' @param model_names optional subset of L3 model names to run
 #' @param rerun logical, whether to rerun existing models
 #' @param wait_for job ID(s) to wait for

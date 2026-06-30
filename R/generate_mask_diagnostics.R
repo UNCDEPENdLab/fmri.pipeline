@@ -14,10 +14,12 @@
 #'   not provided in the $brain_mask field. If NULL (default), the user will be prompted for whether they wish to
 #'   generate missing brain masks. If \code{FALSE}, masks will not be generate, and if \code{TRUE}, they will be
 #'   generated.
+#' @param generate_run_plots whether to write per-run diagnostic plots.
+#' @param ncores number of cores to use for parallel mask diagnostics.
 #'
-#' @importFrom RNifti readNifti niftiHeader
+#' @importFrom RNifti asNifti readNifti niftiHeader
 #' @importFrom glue glue
-#' @importFrom ggplot2 aes scale_fill_viridis_c
+#' @importFrom ggplot2 aes scale_fill_brewer scale_fill_viridis_c
 #' @importFrom patchwork plot_layout plot_annotation
 #' @importFrom abind abind
 #' @import ggbrain
@@ -214,7 +216,7 @@ generate_mask_diagnostics <- function(input = NULL, reference_mask = NULL, refer
         ) +
         plot_layout(nrow=3)
       
-      ggsave(file.path(run_dir, paste0(fmri.pipeline:::file_sans_ext(basename(mask_files[ii])), ".png")), plot = run_gg, width = 12, height=9)
+      ggsave(file.path(run_dir, paste0(file_sans_ext(basename(mask_files[ii])), ".png")), plot = run_gg, width = 12, height=9)
     }, mc.cores = ncores)
   }
   

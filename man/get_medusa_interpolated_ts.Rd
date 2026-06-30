@@ -36,14 +36,11 @@ than specified by \code{time_before}.}
 time point used in interpolation. This effectively truncates the time series for interpolation to a smaller window
 than specified by \code{time_after}.}
 
-\item{pad_before}{Number of seconds to include in the epoch time window before the event of interest. Interpolation
-spans the window from \code{time_before} to \code{time_after}, but padding includes data points at the
-boundary that can help to have sufficient data to interpolate early and late times within the epoch.}
+\item{pad_before}{Number of seconds to include before the event-locking window for interpolation support.}
 
-\item{pad_after}{Number of seconds to include in the epoch time window after the event of interest.}
+\item{pad_after}{Number of seconds to include after the event-locking window for interpolation support.}
 
-\item{output_resolution}{the sampling frequency (in seconds) of the interpolated data. Defaults to be
-the same as \code{tr}.}
+\item{output_resolution}{the sampling frequency (in seconds) of the interpolated data. Defaults to the TR.}
 
 \item{group_by}{return interpolated time series for each combination of group_by variables. Default is
 to provide one interpolated time series per trial.}

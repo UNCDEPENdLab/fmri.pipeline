@@ -1,5 +1,6 @@
 #' helper function to insert a keyed data.frame into the sqlite storage database
 #'
+#' @param gpa A \code{glm_pipeline_arguments} object.
 #' @param id the id of the subject to whom these data belong
 #' @param session the session of these data
 #' @param run_number the run_number of these data
@@ -185,7 +186,7 @@ read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, 
 #' 
 #' @param sqlite_db Character path to SQLite database
 #' @param str Character query statement to execute
-#' @param params Optional list of parameters to pass to statement
+#' @param param Optional list of parameters to pass to statement
 #' @param busy_timeout Time (in s) after which to retry write operations; default is 10 s
 #' @param return_result Logical. If TRUE submits DBI::dbGetQuery instead of DBI::dbExecute;
 #'                        Only use if expecting something in return for your query
@@ -254,4 +255,3 @@ get_default_sqlite_busy_timeout <- function(ms = T) {
   }
   
 }
-

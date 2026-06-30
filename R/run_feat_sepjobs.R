@@ -1,6 +1,7 @@
 #' function to submit a set of jobs on a cluster to estimate many Feat level 1 models
 #'
 #' @param gpa a \code{glm_pipeline_arguments} object containing model specification
+#' @param level GLM level to run.
 #' @param model_names an optional level 1 model name used to subset the runs to submit to feat.
 #'   If not provided, all level 1 models in \code{gpa} will be submitted for feat estimation.
 #' @param rerun a logical indicating whether to re-run an existing directory. Default: FALSE

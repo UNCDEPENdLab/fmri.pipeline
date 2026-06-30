@@ -8,6 +8,8 @@ setup_compute_environment(gpa, preselect_action = NULL)
 }
 \arguments{
 \item{gpa}{a \code{glm_pipeline_arguments} object}
+
+\item{preselect_action}{optional menu action to apply without prompting.}
 }
 \value{
 a modified gpa object containing settings for the compute environment

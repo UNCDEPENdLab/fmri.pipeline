@@ -1,13 +1,3 @@
-#' Estimate a level 2 (subject) model using FSL FEAT with fixed effects integration of runs
-#'
-#' @param l1_df a data.frame containing all runs for a single subject and a single l1 model. This
-#'   data.frame defines the inputs for the L2 analysis (i.e., which runs to combine).
-#' @param l2_model a model string in gpa$l2_models containing the L2 model to setup
-#' @param gpa a \code{glm_pipeline_arguments} object containing model specification
-#'
-#' @importFrom dplyr mutate filter select right_join pull
-#' @author Michael Hallquist
-#' @keywords internal
 is_l2_passthrough_estimable <- function(dmat, cmat, tol = sqrt(.Machine$double.eps)) {
   if (checkmate::test_data_frame(dmat)) dmat <- as.matrix(dmat)
   if (checkmate::test_data_frame(cmat)) cmat <- as.matrix(cmat)
@@ -25,6 +15,16 @@ is_l2_passthrough_estimable <- function(dmat, cmat, tol = sqrt(.Machine$double.e
     isTRUE(abs(as.numeric(cmat[1L, 1L]) - 1) <= tol)
 }
 
+#' Estimate a level 2 (subject) model using FSL FEAT with fixed effects integration of runs
+#'
+#' @param l1_df a data.frame containing all runs for a single subject and a single l1 model. This
+#'   data.frame defines the inputs for the L2 analysis (i.e., which runs to combine).
+#' @param l2_model a model string in gpa$l2_models containing the L2 model to setup
+#' @param gpa a \code{glm_pipeline_arguments} object containing model specification
+#'
+#' @importFrom dplyr filter
+#' @author Michael Hallquist
+#' @keywords internal
 fsl_l2_model <- function(l1_df=NULL, l2_model, gpa) {
   checkmate::assert_data_frame(l1_df)
   checkmate::assert_subset(c("id", "session", "l1_model", "l1_cope_name", "l1_cope_number", "cope_file"), names(l1_df))

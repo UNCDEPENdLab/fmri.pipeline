@@ -77,6 +77,10 @@ able to create interaction regressors for any convolved event-related signal and
 must include subject id, session id (if relevant), and run_number as columns. All additional columns should be eligible
 physiological signals for PPI analysis.}
 
+\item{group_output_directory}{Group-level output directory policy.}
+
+\item{output_locations}{Output location template settings.}
+
 \item{vm}{A named character vector containing key identifying columns in \code{subject_data} and
 \code{trial_data}. Minimally, this vector should contain the elements 'id'}
 
@@ -87,6 +91,10 @@ function will look for a \code{tr} field in the \code{run_data} object, which sp
 
 \item{fmri_file_regex}{A character string containing a Perl-compatible regular expression for the subfolder and filename
 within the \code{mr_dir} field in \code{subject_data}.}
+
+\item{fmri_path_regex}{Optional regular expression for extracting fMRI paths.}
+
+\item{run_number_regex}{Optional regular expression for extracting run numbers.}
 
 \item{drop_volumes}{The number of volumes to drop from the fMRI data and convolved regressors prior to analysis.
 Default is 0.}
@@ -117,6 +125,12 @@ the resulting object will not be functional within the pipeline until l3 models 
 If \code{FALSE}, onset-duration-value timing will be entered and convolution will be handled internally
 by the GLM software. I recommend \code{TRUE} for consistency.}
 
+\item{glm_settings}{GLM backend settings.}
+
+\item{confound_settings}{Confound-file and censoring settings.}
+
+\item{parallel}{Parallelization and scheduler settings.}
+
 \item{additional}{A list of additional metadata that will be added to the \code{glm.pipeline} object returned
 by the function. This can be useful if there are other identifiers that you want for long-term storage or
 off-shoot functions.}
@@ -125,12 +139,6 @@ off-shoot functions.}
 the screen and to log files. Default is "info", which produces all messages, warnings, and errors, but not debug
 or trace statements. To output only concerning errors, change to "error". See: 
 \url{https://s-fleck.github.io/lgr/articles/lgr.html} for details.}
-
-\item{block_data}{An optional data.frame containing information about design features in the task that vary at
-block level (typically, longer periods of time such as 10-30s). Blocks are superordinate to trials and subordinate to runs.}
-
-\item{mr_dir_column}{A character string indicating the column name in \code{subject_data} containing the folder for each
-subject's data. Default is "mr_dir".}
 }
 \description{
 Main worker function for setting up an analysis pipeline

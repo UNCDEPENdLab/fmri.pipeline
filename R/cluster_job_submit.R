@@ -25,6 +25,8 @@
 #' @param wait_jobs a character string of jobs or process ids that should complete before this job is executed
 #' @param wait_signal on torque or slurm clusters, the signal that should indicate that parent jobs have finished.
 #' @param repolling_interval The number of seconds to wait before rechecking job status (used only for local scheduler)
+#' @param tracking_sqlite_db Optional SQLite database used for job tracking.
+#' @param tracking_args Optional job-tracking metadata passed through to the tracking database.
 #'
 #' @return A character string containing the jobid of the scheduled job.
 #'
@@ -44,6 +46,7 @@
 #' @author Michael Hallquist
 #' @importFrom tools file_path_sans_ext
 #' @importFrom checkmate assert_character assert_subset
+#' @importFrom utils write.csv
 #' @export
 cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
                            env_variables=NULL, export_all=FALSE, echo=TRUE, fail_on_error=FALSE, 
@@ -211,8 +214,14 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 #' @param cpus_per_job how many cpus/cores are requested for each job
 #' @param memgb_per_command amount of memory (RAM) requested for each command (in GB)
 #' @param time_per_job amount of time requested for each job
+#' @param time_per_command amount of time requested for each individual command
 #' @param fork_jobs if TRUE, all jobs within a single batch will run simultaneously using the fork (&) approach.
 #' @param pre user-specified code to include in the job script prior to job_list (e.g., module load commands)
+#' @param post user-specified code to include in the job script after job_list.
+#' @param sched_args scheduler directives passed to \code{cluster_job_submit()}.
+#' @param env_variables named environment variables passed to \code{cluster_job_submit()}.
+#' @param wait_jobs jobs that must complete before submitted jobs run.
+#' @param scheduler scheduler backend used for submission.
 #' @param job_out_dir the directory where job scripts should be written
 #' @param job_script_prefix the filename prefix for each job script
 #' @param log_file a csv log file containing the job ids and commands that were executed

@@ -4,10 +4,12 @@
 \alias{summary.l1_model_set_models}
 \title{Helper function to better summarize GPA object's l1_models' models}
 \usage{
-\method{summary}{l1_model_set_models}(ml)
+\method{summary}{l1_model_set_models}(object, ...)
 }
 \arguments{
-\item{gpa}{the \code{gpa} object}
+\item{object}{the \code{l1_model_set_models} object}
+
+\item{...}{ignored.}
 }
 \value{
 a readable summary of the given gpa object's l1_models' models

@@ -1,5 +1,5 @@
 test_that("run_feat_sepjobs source wires L3 execution to outlier retry wrapper", {
-  run_feat_path <- normalizePath(file.path(pkg_root, "R", "run_feat_sepjobs.R"), mustWork = TRUE)
+  run_feat_path <- source_tree_file("R", "run_feat_sepjobs.R")
   lines <- readLines(run_feat_path, warn = FALSE)
 
   expect_true(any(grepl("feat_retry_binary <- system.file\\(\"bash/run_feat_with_outlier_retry\\.sh\"", lines)))
@@ -10,7 +10,7 @@ test_that("run_feat_sepjobs source wires L3 execution to outlier retry wrapper",
 })
 
 test_that("run_feat_sepjobs waits on each background FEAT child", {
-  run_feat_path <- normalizePath(file.path(pkg_root, "R", "run_feat_sepjobs.R"), mustWork = TRUE)
+  run_feat_path <- source_tree_file("R", "run_feat_sepjobs.R")
   lines <- readLines(run_feat_path, warn = FALSE)
 
   expect_true(any(grepl("job_failed=0", lines, fixed = TRUE)))

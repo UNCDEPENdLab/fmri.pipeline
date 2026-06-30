@@ -17,11 +17,13 @@ output:
     number_sections: yes
     toc: yes
     toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{Familywise error correction for voxelwise GLMs in fmri.pipeline}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include=FALSE}
-if (!require(pacman)) { install.packages("pacman"); library(pacman) }
-p_load(tidyverse, fmri.pipeline, gsubfn)
 knitr::opts_chunk$set(echo = TRUE, eval = FALSE) # show code, but do not run HPC- and data-dependent chunks during site builds
 options(digits=3)
 ```

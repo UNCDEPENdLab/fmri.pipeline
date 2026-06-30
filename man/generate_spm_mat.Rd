@@ -89,9 +89,6 @@ a single concatenated time series. This is useful as a preamble to DCM, which of
 
 \item{compute_env}{Optional character vector of shell commands to prepare the environment
 (e.g., module load statements). These are prepended to direct MATLAB execution.}
-
-\item{include_block_contrasts}{Whether to estimate contrasts for the run-specific intercepts in the design.
-Note that this qualifies \code{condition_contrasts} and \code{unit_contrasts}, but does nothing on its own.}
 }
 \value{
 A list containing the MATLAB syntax/scripts for GLM setup, execution, and contrast estimation

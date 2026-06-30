@@ -34,6 +34,9 @@
 #' @importFrom data.table fwrite rbindlist
 #' @importFrom glue glue_data
 #' @importFrom RNifti readNifti
+#' @importFrom stats na.omit setNames
+#' @importFrom tidyselect matches
+#' @importFrom utils capture.output
 #' @export
 extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "zstat"), out_dir=getwd(),
   extract_l1="all", extract_l2="all", extract_l3="all",

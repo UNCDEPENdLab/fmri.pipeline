@@ -37,6 +37,8 @@ These cuts are applied to the \code{aggregate_by} column, commonly "atlas_value"
 \item{out_file}{The output file name (can include path) for the event-aligned csv file. If NULL, nothing is output 
 (but the event-aligned data are always returned as a data.frame)}
 
+\item{ncpus}{Number of local worker processes to use.}
+
 \item{time_audit}{If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing}
 }
 \description{

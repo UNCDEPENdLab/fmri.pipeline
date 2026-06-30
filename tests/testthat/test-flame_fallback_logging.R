@@ -18,10 +18,7 @@ test_that("FLAME fallback TSV records are promoted to lgr estimation logs", {
   ), fallback_tsv)
 
   log_txt <- file.path(tmp, "logs", "l3_estimation.txt")
-  script <- normalizePath(
-    file.path(pkg_root, "inst/bin/log_flame_runner_fallbacks.R"),
-    mustWork = TRUE
-  )
+  script <- source_tree_file("inst", "bin", "log_flame_runner_fallbacks.R")
 
   status <- system2(
     "Rscript",
@@ -46,7 +43,7 @@ test_that("FLAME fallback TSV records are promoted to lgr estimation logs", {
 })
 
 test_that("run_feat_sepjobs source wires FLAME fallback logging into FEAT jobs", {
-  run_feat_path <- normalizePath(file.path(pkg_root, "R", "run_feat_sepjobs.R"), mustWork = TRUE)
+  run_feat_path <- source_tree_file("R", "run_feat_sepjobs.R")
   lines <- readLines(run_feat_path, warn = FALSE)
 
   expect_true(any(grepl("log_flame_runner_fallbacks\\.R", lines)))

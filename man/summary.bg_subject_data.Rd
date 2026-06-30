@@ -4,10 +4,12 @@
 \alias{summary.bg_subject_data}
 \title{Summarize the contents of the subject data}
 \usage{
-\method{summary}{bg_subject_data}(df)
+\method{summary}{bg_subject_data}(object, ...)
 }
 \arguments{
-\item{df}{A \code{bg_subject_data} object containing subject/session-level data.}
+\item{object}{A \code{bg_subject_data} object containing subject/session-level data.}
+
+\item{...}{ignored.}
 }
 \description{
 Summarize the contents of the subject data

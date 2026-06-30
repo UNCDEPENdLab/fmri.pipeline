@@ -7,12 +7,11 @@
 is_l2_passthrough_estimable(dmat, cmat, tol = sqrt(.Machine$double.eps))
 }
 \arguments{
-\item{l1_df}{a data.frame containing all runs for a single subject and a single l1 model. This
-data.frame defines the inputs for the L2 analysis (i.e., which runs to combine).}
+\item{dmat}{L2 design matrix.}
 
-\item{l2_model}{a model string in gpa$l2_models containing the L2 model to setup}
+\item{cmat}{L2 contrast matrix.}
 
-\item{gpa}{a \code{glm_pipeline_arguments} object containing model specification}
+\item{tol}{Numerical tolerance for estimability checks.}
 }
 \description{
 Estimate a level 2 (subject) model using FSL FEAT with fixed effects integration of runs

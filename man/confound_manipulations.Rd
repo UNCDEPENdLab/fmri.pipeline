@@ -15,6 +15,23 @@ confound_manipulations(
   motion_path = NA_character_
 )
 }
+\arguments{
+\item{gpa}{A \code{glm_pipeline_arguments} object.}
+
+\item{all_confounds}{Combined confound data.}
+
+\item{expected_l1_confound_file}{Expected output confound filename.}
+
+\item{run_df}{One-row run metadata.}
+
+\item{demean}{Whether to demean confounds.}
+
+\item{lg}{Logger object.}
+
+\item{confound_path}{Path to the raw confound file.}
+
+\item{motion_path}{Path to the raw motion file.}
+}
 \description{
 helper function to manipulate confounds
 }

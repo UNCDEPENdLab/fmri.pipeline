@@ -26,6 +26,8 @@ Options: c("torque", "qsub", "slurm", "sbatch", "sh", "local")}
 
 \item{quiet}{If \code{TRUE}, \code{wait_for_job} will not print out any status updates on jobs. If \code{FALSE},
 the function prints out status updates for each tracked job so that the user knows what's holding up progress.}
+
+\item{stop_on_timeout}{Whether to stop if \code{max_wait} is reached.}
 }
 \value{
 Nothing. Just returns when the blocking job completes.

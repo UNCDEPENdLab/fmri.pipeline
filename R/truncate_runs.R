@@ -8,6 +8,7 @@
 #' @importFrom checkmate assert_data_frame test_directory_exists test_number test_logical
 #' @importFrom data.table fread fwrite
 #' @importFrom glue glue_data
+#' @importFrom tidyselect starts_with
 truncate_runs <- function(mr_df, gpa = NULL, subj_outdir = NULL, truncation_data = NULL, lg = NULL) {
   checkmate::assert_data_frame(mr_df)
   if (nrow(mr_df) != 1L) {

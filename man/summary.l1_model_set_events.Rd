@@ -4,10 +4,12 @@
 \alias{summary.l1_model_set_events}
 \title{Helper function to better summarize GPA object's l1_models' events}
 \usage{
-\method{summary}{l1_model_set_events}(l1_model_set_events)
+\method{summary}{l1_model_set_events}(object, ...)
 }
 \arguments{
-\item{gpa}{the \code{gpa} object}
+\item{object}{the \code{l1_model_set_events} object}
+
+\item{...}{ignored.}
 }
 \value{
 a readable summary of the given gpa object's l1_models' events

@@ -16,6 +16,10 @@ output:
     number_sections: yes
     toc: yes
     toc_depth: 4
+vignette: >
+  %\VignetteIndexEntry{fmri.pipeline overview and design}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 # Overview of pipeline setup

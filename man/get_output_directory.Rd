@@ -31,8 +31,14 @@ get_output_directory(
 
 \item{run_number}{The run number to lookup}
 
+\item{l1_model, l2_model, l3_model}{Optional model names used in output templates.}
+
 \item{l1_cope_number, l2_cope_number, l3_cope_number}{Optional cope numbers used in output templates.
 These are combined with the corresponding contrast names into labels such as \code{02_EV_house}.}
+
+\item{l1_contrast, l2_contrast, l3_contrast}{Optional contrast names used in output templates.}
+
+\item{what}{output directory type to return.}
 
 \item{gpa}{A \code{glm_pipeline_arguments} object}
 

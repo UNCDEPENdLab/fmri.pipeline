@@ -15,6 +15,8 @@ run_3dlmer_sepjobs(
 \arguments{
 \item{gpa}{a \code{glm_pipeline_arguments} object}
 
+\item{level}{GLM level to run; currently only level 3 is supported.}
+
 \item{model_names}{optional subset of L3 model names to run}
 
 \item{rerun}{logical, whether to rerun existing models}

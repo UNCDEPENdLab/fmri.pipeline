@@ -5,15 +5,7 @@
 #' @return a `data.frame` containing the fields extraced from `filenames`
 #' @importFrom checkmate assert_character
 #' @keywords internal
-#' @examples 
-#'  filenames <- c(
-#'     "/proj/fmap-phase/task-memory_sub-01_ses-02_run-1_space-MNI2009c_acq-highres_desc-preproc_bold.nii.gz",
-#'     "acq-lowres_desc-smoothed_sub-02_task-attention_run-2_bold.nii.gz",
-#'    "sub-03_space-MNI152NLin6Asym_task-motor_desc-raw_echo-2_dir-PA_bold.nii.gz",
-#'    "hemi-L_desc-denoised_task-vision_rec-magnitude_fmap-phase_sub-04_bold.nii.gz"
-#'  )
-#' 
-#' extract_bids_info(filenames)
+#' @noRd
 extract_bids_info <- function(filenames, drop_unused=FALSE) {
   checkmate::assert_character(filenames)
   filenames <- basename(filenames) # avoid matching on path components
@@ -67,7 +59,11 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
 #' @param modality the subfolder within \code{bids_dir} that contains data of a certain modality.
 #'   Almost always 'func', which is the default.
 #' @param task_name the name of the task, which is appended with "task-"
+#' @param desc BIDS description entity to match.
 #' @param suffix an optional suffix in the expected filename (just before the file extension)
+#' @param space optional BIDS space entity to match.
+#' @param anat_root optional anatomical root directory.
+#' @param fmap_root optional fieldmap root directory.
 #' @return a data.frame containing all run_nifti and confound_input_file results for subjects in the folder
 #' @details The files should generally have a name like
 #'   sub-220256_task-ridl3_space-MNI152NLin2009cAsym_desc-preproc_bold_postprocessed.nii.gz
@@ -256,17 +252,16 @@ generate_run_data_from_bids <- function(bids_dir, modality="func", task_name="ri
 #' @param bids_dir a directory containing BIDS-compliant processed data for analysis
 #' @param modality the subfolder within \code{bids_dir} that contains data of a certain modality.
 #'   Almost always 'func', which is the default.
-#' @param type at present, always 'task' to denote this part of the BIDS filename... Not totally sure what else it could be
-#' @param task_name the name of the task, which is appended with \code{type}
-#' @param suffix an optional suffix in the expected filename (just before the file extension)
+#' @param task_name the name of the task, which is matched as a BIDS \code{task-} entity.
 #' @return a data.frame containing all run_nifti and confound_input_file results for subjects in the folder
 #' @details The files should generally have a name like
 #'   sub-220256_task-ridl3_space-MNI152NLin2009cAsym_desc-preproc_bold_postprocessed.nii.gz
 #'   and be located in a folder like: /proj/mnhallqlab/proc_data/sub-220256/func/
-#'   where 'func' is the \code{modality}, 'task' is the \code{type}, 'ridl' is the \code{task_name}, and
+#'   where 'func' is the \code{modality}, and 'ridl' is the \code{task_name}.
 #'   '_postprocessed' is the \code{suffix}.
 #' @importFrom dplyr bind_rows
 #' @importFrom tidyr unnest
+#' @importFrom utils read.delim
 #' @export
 #' @examples
 #' \dontrun{

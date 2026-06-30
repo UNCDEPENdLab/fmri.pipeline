@@ -27,6 +27,8 @@ run_decon_alignment(
 \item{decon_dir}{The directory containing the deconvolved data from \code{voxelwise_deconvolution}. Should be the same as
 \code{out_dir} from \code{voxelwise_deconvolution}.}
 
+\item{trial_df}{Trial-level data used for event alignment.}
+
 \item{alignments}{A list of alignment specifications, each of which will be computed by this function.
 See \code{get_medusa_interpolated_ts} for help with arguments, and see Details.}
 
@@ -35,6 +37,8 @@ by bin.}
 
 \item{aggregate_by}{The column name in the individual deconvolved files used for averaging repeated units (e.g., voxels) into single
 event-aligned time series. Most commonly, this is "atlas_value", which will lead to averaging of voxels within each parcel in the mask.}
+
+\item{atlas_subset}{Optional subset of atlas values to retain.}
 
 \item{overwrite}{if TRUE, overwrite existing output files}
 

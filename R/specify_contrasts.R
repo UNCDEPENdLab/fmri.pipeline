@@ -9,6 +9,8 @@
 #' @importFrom emmeans emmeans emtrends
 #' @importFrom lgr get_logger
 #' @importFrom checkmate assert_multi_class assert_integerish
+#' @importFrom stats coef model.matrix setNames terms
+#' @importFrom utils menu modifyList
 specify_contrasts <- function(mobj = NULL, signals = NULL, spec_list = NULL) {
   checkmate::assert_multi_class(mobj, c("l1_model_spec", "l1_wi_spec", "hi_model_spec")) # verify that we have an object of known structure
   checkmate::assert_list(signals, null.ok = TRUE)

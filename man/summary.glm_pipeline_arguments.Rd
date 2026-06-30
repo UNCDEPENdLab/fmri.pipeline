@@ -4,10 +4,12 @@
 \alias{summary.glm_pipeline_arguments}
 \title{Helper function to better summarize GPA object}
 \usage{
-\method{summary}{glm_pipeline_arguments}(gpa)
+\method{summary}{glm_pipeline_arguments}(object, ...)
 }
 \arguments{
-\item{gpa}{the \code{gpa} object}
+\item{object}{the \code{glm_pipeline_arguments} object}
+
+\item{...}{ignored.}
 }
 \value{
 a readable summary of the given gpa object

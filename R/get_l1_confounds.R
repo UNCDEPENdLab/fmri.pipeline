@@ -336,8 +336,7 @@ return_l1_confounds_result <- function(return_run_df, run_df, l1_confound_file, 
   )
 }
 
-#' helper function to generate confounds file
-#' @noRd
+# helper function to generate confounds file
 test_generate_l1_confounds <- function(gpa, analysis_outdir, run_number, lg){
 
   # Determine whether we should be returning information about l1 confound regressors
@@ -357,8 +356,7 @@ test_generate_l1_confounds <- function(gpa, analysis_outdir, run_number, lg){
   return(list(expected_l1_confound_file = expected_l1_confound_file, generate_l1_confounds = generate_l1_confounds))
 }
 
-#' helper function to generate run exclusion
-#' @noRd
+# helper function to generate run exclusion
 test_generate_run_exclusion <- function(gpa, id, session, run_number, l1_cached_df, lg){
 
   # default empty data.frames for exclusion and truncation (in case of NULL exclude or truncate criteria)
@@ -389,6 +387,12 @@ test_generate_run_exclusion <- function(gpa, id, session, run_number, l1_cached_
 }
 
 #' helper function to generate run truncation
+#' @param gpa A \code{glm_pipeline_arguments} object.
+#' @param id subject id.
+#' @param session session number.
+#' @param run_number run number.
+#' @param lg Logger object.
+#' @keywords internal
 #' @noRd
 test_generate_run_truncation <- function(gpa, id, session, run_number, lg){
 
@@ -411,6 +415,15 @@ test_generate_run_truncation <- function(gpa, id, session, run_number, lg){
 }
 
 #' helper function to read confounds and motion parameters and combine them
+#' @param gpa A \code{glm_pipeline_arguments} object.
+#' @param id subject id.
+#' @param session session number.
+#' @param run_number run number.
+#' @param run_df One-row run metadata.
+#' @param expected_l1_confound_file Expected output confound filename.
+#' @param lg Logger object.
+#' @param confound_path Path to the raw confound file.
+#' @param motion_path Path to the raw motion file.
 read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_df, expected_l1_confound_file, lg,
                                              confound_path = NA_character_, motion_path = NA_character_) {
 
@@ -534,6 +547,17 @@ read_confounds_motion_parameters <- function(gpa, id, session, run_number, run_d
 }
 
 #' calculate whether to retain or exclude this run
+#' @param gpa A \code{glm_pipeline_arguments} object.
+#' @param id subject id.
+#' @param session session number.
+#' @param run_number run number.
+#' @param generate_run_exclusion whether exclusion should be evaluated.
+#' @param all_confounds Combined confound data.
+#' @param lg Logger object.
+#' @param confound_path Path to the raw confound file.
+#' @param motion_path Path to the raw motion file.
+#' @keywords internal
+#' @noRd
 test_exclude_run <- function(gpa, id, session, run_number, generate_run_exclusion, all_confounds, lg,
                              confound_path = NA_character_, motion_path = NA_character_) {
   
@@ -646,6 +670,16 @@ abort_missing_l1_confound_columns <- function(requested, available, run_df, conf
 }
 
 #' helper function to manipulate confounds
+#' @param gpa A \code{glm_pipeline_arguments} object.
+#' @param all_confounds Combined confound data.
+#' @param expected_l1_confound_file Expected output confound filename.
+#' @param run_df One-row run metadata.
+#' @param demean Whether to demean confounds.
+#' @param lg Logger object.
+#' @param confound_path Path to the raw confound file.
+#' @param motion_path Path to the raw motion file.
+#' @keywords internal
+#' @noRd
 confound_manipulations <- function(gpa, all_confounds, expected_l1_confound_file, run_df, demean, lg,
                                    confound_path = NA_character_, motion_path = NA_character_) {
   requested <- gpa$confound_settings$l1_confound_regressors

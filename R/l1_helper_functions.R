@@ -24,7 +24,7 @@ get_trial_subset_stats <- function(signal, trial_data, trial_set=NULL) {
     dplyr::group_by(id) %>%
     dplyr::summarize(pct_true = sum(trial_set == TRUE) / n(), .groups = "drop") %>%
     dplyr::summarize(
-      mean = mean(pct_true, na.rm = T), sd = sd(pct_true, na.rm = T),
+      mean = mean(pct_true, na.rm = T), sd = stats::sd(pct_true, na.rm = T),
       min = min(pct_true, na.rm = T), max = max(pct_true, na.rm = T)
     ) %>%
     mutate(overall = overall) %>%
@@ -41,7 +41,7 @@ get_regressors_from_signal <- function(sig) {
   # handle expansion of PPI signals slightly differently -- expand w/i factors within psych and PPI parts if needed
   if (checkmate::test_string(sig$ts_multiplier)) {
     if (!is.null(sig$wi_factors)) {
-      cols <- paste(sig$name, names(coef(sig$wi_model)), sep = ".")
+      cols <- paste(sig$name, names(stats::coef(sig$wi_model)), sep = ".")
       cols <- c(cols, sig$ts_multiplier, sub(paste0("^", sig$name), paste(sig$name, "ppi", sep = "."), cols))
     } else {
       cols <- c(sig$name, sig$ts_multiplier, paste(sig$name, "ppi", sep = "."))
@@ -49,7 +49,7 @@ get_regressors_from_signal <- function(sig) {
   } else if (!is.null(sig$wi_factors)) {
     # use the lmfit object in the signal to determine the columns that will be included
     # for within-subject factor modulation, always include the signal as the prefix on the column names
-    cols <- paste(sig$name, names(coef(sig$wi_model)), sep = ".")
+    cols <- paste(sig$name, names(stats::coef(sig$wi_model)), sep = ".")
   } else if (isTRUE(sig$beta_series)) {
     if (is.data.frame(sig$value)) {
       # TODO: this approach is imperfect if there are jumps in trials for a subject
@@ -101,7 +101,7 @@ expand_signal <- function(sig) {
     stop("In expand_signal, cannot sort out what to do when beta series is enabled and there is a within-subject factor!")
   } else if (!is.null(sig$wi_factors)) {
     # extract within-subject regression model matrix (has dummy coding)
-    model_df <- as.data.frame(model.matrix(sig$wi_model))
+    model_df <- as.data.frame(stats::model.matrix(sig$wi_model))
     if (nrow(model_df) != nrow(sig$value)) {
       warning("Number of rows in wi_model data.frame does not match signal value data.frame")
     }
@@ -117,10 +117,10 @@ expand_signal <- function(sig) {
     })
 
     # coefficients to loop over
-    coefs <- names(coef(sig$wi_model))
+    coefs <- names(stats::coef(sig$wi_model))
 
     # expand regressor names to match l1 model specification
-    exp_names <- paste(sig$name, names(coef(sig$wi_model)), sep = ".")
+    exp_names <- paste(sig$name, names(stats::coef(sig$wi_model)), sep = ".")
 
     # loop over each coefficient and build the signal copy
     s_list <- lapply(seq_along(exp_names), function(ee) {
@@ -183,7 +183,7 @@ fit_wi_model <- function(sobj) {
     mutate(dummy = 1:n()) %>%
     mutate(across(!!sobj$wi_factors, factor)) # always force wi_factors to be stored as factor to make contrasts straightforward
   
-  ffit <- update.formula(as.formula(sobj$wi_formula), "dummy ~ .")
+  ffit <- stats::update.formula(as.formula(sobj$wi_formula), "dummy ~ .")
   sobj$wi_model <- lm(ffit, wi_df)
   return(sobj)
 }
@@ -239,4 +239,3 @@ as.character.formula <- function(x, ...) {
 
 #   # now handle beta series
 # }
-

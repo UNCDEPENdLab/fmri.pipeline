@@ -14,9 +14,13 @@ test_that("flame_runner uses parallel and clamps to allocation", {
     "#!/bin/bash",
     "exec /bin/sh \"$@\""
   ))
+  make_stub("env", c(
+    "#!/bin/bash",
+    "exec /usr/bin/env \"$@\""
+  ))
   make_stub("grep", c(
     "#!/bin/bash",
-    "exec /bin/grep \"$@\""
+    "exec /usr/bin/grep \"$@\""
   ))
 
   parallel_log <- file.path(tmp, "parallel.log")
@@ -59,7 +63,7 @@ test_that("flame_runner uses parallel and clamps to allocation", {
   ), flame_list)
 
   withr::local_envvar(c(
-    PATH = stub_dir,
+    PATH = paste(stub_dir, "/bin:/usr/bin", sep = .Platform$path.sep),
     PARALLEL_LOG = parallel_log,
     SLURM_CPUS_PER_TASK = NA_character_,
     SLURM_NTASKS = "2",
@@ -69,7 +73,7 @@ test_that("flame_runner uses parallel and clamps to allocation", {
     PBS_NUM_PPN = NA_character_
   ))
 
-  flame_runner <- normalizePath(file.path(pkg_root, "inst/bin/flame_runner"), mustWork = TRUE)
+  flame_runner <- source_tree_file("inst", "bin", "flame_runner")
   system2(flame_runner, c(flame_list, "999"), stdout = TRUE, stderr = TRUE)
 
   expect_equal(readLines(parallel_log), "2")
@@ -93,9 +97,13 @@ test_that("flame_runner uses xargs when parallel is unavailable", {
     "#!/bin/bash",
     "exec /bin/sh \"$@\""
   ))
+  make_stub("env", c(
+    "#!/bin/bash",
+    "exec /usr/bin/env \"$@\""
+  ))
   make_stub("grep", c(
     "#!/bin/bash",
-    "exec /bin/grep \"$@\""
+    "exec /usr/bin/grep \"$@\""
   ))
 
   xargs_log <- file.path(tmp, "xargs.log")
@@ -131,11 +139,11 @@ test_that("flame_runner uses xargs when parallel is unavailable", {
   ), flame_list)
 
   withr::local_envvar(c(
-    PATH = stub_dir,
+    PATH = paste(stub_dir, "/bin:/usr/bin", sep = .Platform$path.sep),
     XARGS_LOG = xargs_log
   ))
 
-  flame_runner <- normalizePath(file.path(pkg_root, "inst/bin/flame_runner"), mustWork = TRUE)
+  flame_runner <- source_tree_file("inst", "bin", "flame_runner")
   system2(flame_runner, c(flame_list, "4"), stdout = TRUE, stderr = TRUE)
 
   expect_equal(readLines(xargs_log), "2")
@@ -157,7 +165,7 @@ test_that("flame_runner retries failed FLAME12 slices with FLAME1", {
 
   make_stub("grep", c(
     "#!/bin/bash",
-    "exec /bin/grep \"$@\""
+    "exec /usr/bin/grep \"$@\""
   ))
   make_stub("sh", c(
     "#!/bin/bash",
@@ -202,12 +210,12 @@ test_that("flame_runner retries failed FLAME12 slices with FLAME1", {
   )
 
   withr::local_envvar(c(
-    PATH = stub_dir,
+    PATH = paste(stub_dir, "/bin:/usr/bin", sep = .Platform$path.sep),
     FAKE_FLAMEO_LOG = attempt_log,
     FLAME_RUNNER_FALLBACK_LOG = fallback_log
   ))
 
-  flame_runner <- normalizePath(file.path(pkg_root, "inst/bin/flame_runner"), mustWork = TRUE)
+  flame_runner <- source_tree_file("inst", "bin", "flame_runner")
   status <- system2(flame_runner, c(flame_list, "1"), stdout = TRUE, stderr = TRUE)
 
   expect_false(inherits(status, "status"))
@@ -241,7 +249,7 @@ test_that("flame_runner reports unrecovered non-FLAME12 failures", {
 
   make_stub("grep", c(
     "#!/bin/bash",
-    "exec /bin/grep \"$@\""
+    "exec /usr/bin/grep \"$@\""
   ))
   make_stub("sh", c(
     "#!/bin/bash",
@@ -259,9 +267,9 @@ test_that("flame_runner reports unrecovered non-FLAME12 failures", {
   flame_list <- file.path(tmp, "flame.list")
   writeLines("exit 9", flame_list)
 
-  withr::local_envvar(c(PATH = stub_dir))
+  withr::local_envvar(c(PATH = paste(stub_dir, "/bin:/usr/bin", sep = .Platform$path.sep)))
 
-  flame_runner <- normalizePath(file.path(pkg_root, "inst/bin/flame_runner"), mustWork = TRUE)
+  flame_runner <- source_tree_file("inst", "bin", "flame_runner")
   expect_warning(
     status <- system2(flame_runner, c(flame_list, "1"), stdout = TRUE, stderr = TRUE),
     "had status"
@@ -288,7 +296,7 @@ test_that("flame_runner falls back when xargs lacks -d support", {
   ))
   make_stub("grep", c(
     "#!/bin/bash",
-    "exec /bin/grep \"$@\""
+    "exec /usr/bin/grep \"$@\""
   ))
   make_stub("xargs", c(
     "#!/bin/bash",
@@ -307,10 +315,10 @@ test_that("flame_runner falls back when xargs lacks -d support", {
   ), flame_list)
 
   withr::local_envvar(c(
-    PATH = stub_dir
+    PATH = paste(stub_dir, "/bin:/usr/bin", sep = .Platform$path.sep)
   ))
 
-  flame_runner <- normalizePath(file.path(pkg_root, "inst/bin/flame_runner"), mustWork = TRUE)
+  flame_runner <- source_tree_file("inst", "bin", "flame_runner")
   system2(flame_runner, c(flame_list, "10"), stdout = TRUE, stderr = TRUE)
 
   expect_true(file.exists(out_file))

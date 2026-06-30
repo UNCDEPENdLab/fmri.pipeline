@@ -42,6 +42,8 @@ to the expression, so don't pass this piece.}
 \item{time_offset}{The number of seconds that will be subtracted or added to the time field. Default: 0. Useful if some number of volumes
 have been dropped from the NIfTI data prior to deconvolution.}
 
+\item{atlas_files}{optional atlas file vector specifying voxels used in deconvolution. If omitted, perform whole-brain deconvolution}
+
 \item{mask}{an optional character string specifying a mask that should be used to constrain bounds of deconvolution.}
 
 \item{nprocs}{The number of processors to use simultaneously for deconvolution}
@@ -57,8 +59,6 @@ with optional HRF tuning.}
 pass it as \code{bush2011_binary}, which will be used in deconvolution.}
 
 \item{afni_dir}{Full path to directory containing AFNI binaries (this function uses 3dMaskdump).}
-
-\item{atlas}{an optional character vector specifying voxels used in deconvolution. If omitted, perform whole-brain deconvolution}
 }
 \value{
 Nothing (invisible NULL).

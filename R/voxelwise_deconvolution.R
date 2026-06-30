@@ -12,7 +12,7 @@
 #' @param TR the repetition time of the sequence in seconds. Required
 #' @param time_offset The number of seconds that will be subtracted or added to the time field. Default: 0. Useful if some number of volumes
 #'   have been dropped from the NIfTI data prior to deconvolution.
-#' @param atlas an optional character vector specifying voxels used in deconvolution. If omitted, perform whole-brain deconvolution
+#' @param atlas_files optional atlas file vector specifying voxels used in deconvolution. If omitted, perform whole-brain deconvolution
 #' @param mask an optional character string specifying a mask that should be used to constrain bounds of deconvolution.
 #' @param nprocs The number of processors to use simultaneously for deconvolution
 #' @param save_original_ts Whether to save the voxelwise BOLD data prior to deconvolution (for comparison/diagnosis). Default: TRUE
@@ -49,9 +49,11 @@
 #' @importFrom data.table fread
 #' @importFrom oro.nifti readNIfTI translateCoordinate
 #' @importFrom checkmate assert_file_exists
-#' @importFrom foreach foreach
+#' @importFrom foreach %do% foreach
 #' @importFrom dplyr mutate across select left_join
 #' @importFrom readr write_delim write_csv
+#' @importFrom stats setNames
+#' @importFrom tibble as_tibble
 #' @export
 voxelwise_deconvolution <- function(
   niftis, add_metadata=NULL, out_dir=getwd(), out_file_expression=NULL,

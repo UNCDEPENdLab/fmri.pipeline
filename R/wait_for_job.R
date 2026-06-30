@@ -12,6 +12,7 @@
 #'   Options: c("torque", "qsub", "slurm", "sbatch", "sh", "local")
 #' @param quiet If \code{TRUE}, \code{wait_for_job} will not print out any status updates on jobs. If \code{FALSE},
 #'   the function prints out status updates for each tracked job so that the user knows what's holding up progress.
+#' @param stop_on_timeout Whether to stop if \code{max_wait} is reached.
 #'
 #' @return Nothing. Just returns when the blocking job completes.
 #'
@@ -31,6 +32,7 @@
 #'
 #' @author Michael Hallquist
 #' @importFrom dplyr full_join if_else bind_rows
+#' @importFrom utils type.convert
 #' @export
 wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 24,
                          scheduler = "local", quiet = TRUE, stop_on_timeout = TRUE) {

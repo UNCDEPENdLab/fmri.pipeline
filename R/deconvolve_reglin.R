@@ -51,6 +51,7 @@
 #'
 #' @return A matrix of deconvolved time series, or a list with \code{activity}
 #'   and tuning diagnostics when \code{return_diagnostics = TRUE}.
+#' @importFrom stats fft median mvfft sd
 #' @export
 deconvolve_reglin <- function(
   BOLDobs,

@@ -445,7 +445,7 @@ plot_collinearity <- function(collin_summary, plot_type = "both") {
   # VIF boxplot
   if (plot_type %in% c("vif", "both") && nrow(collin_summary$vif_summary) > 0) {
     p_vif <- ggplot2::ggplot(collin_summary$vif_summary, 
-                              ggplot2::aes(x = reorder(regressor, vif, FUN = median), y = vif)) +
+                              ggplot2::aes(x = stats::reorder(regressor, vif, FUN = stats::median), y = vif)) +
       ggplot2::geom_boxplot(fill = "steelblue", alpha = 0.7) +
       ggplot2::geom_hline(yintercept = collin_summary$thresholds$vif, 
                           linetype = "dashed", color = "red", linewidth = 1) +

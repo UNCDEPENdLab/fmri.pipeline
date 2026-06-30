@@ -18,6 +18,7 @@
 #'   environments (e.g., R scripts run in batch mode).
 #' @importFrom glue glue
 #' @importFrom checkmate test_string assert_string assert_subset assert_number
+#' @importFrom utils type.convert
 #' @keywords internal
 prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "character", lower = -Inf, upper = Inf, 
                          len = NULL, min.len=NULL, max.len=NULL, split = NULL, among = NULL, required = TRUE, uniq=FALSE, default = NULL) {

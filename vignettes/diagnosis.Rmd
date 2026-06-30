@@ -17,6 +17,10 @@ output:
     number_sections: yes
     toc: yes
     toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{Diagnosing a run of fmri.pipeline}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 # Overview of `diagnose_pipeline` Function

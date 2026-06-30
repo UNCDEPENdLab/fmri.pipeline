@@ -9,7 +9,7 @@ mobj_refit_lm(mobj, new_data)
 \arguments{
 \item{mobj}{a \code{hi_model_spec} object containing the L3 GLM model to run}
 
-\item{data}{The run-level data frame containing data for all ids and sessions. This will be split into individual chunks}
+\item{new_data}{The run-level data frame containing data for all ids and sessions. This will be split into individual chunks}
 }
 \value{
 a modified copy of \code{mobj} where the $by_subject field has been added

@@ -35,9 +35,21 @@ cluster_submit_shell_jobs(
 
 \item{time_per_job}{amount of time requested for each job}
 
+\item{time_per_command}{amount of time requested for each individual command}
+
 \item{fork_jobs}{if TRUE, all jobs within a single batch will run simultaneously using the fork (&) approach.}
 
 \item{pre}{user-specified code to include in the job script prior to job_list (e.g., module load commands)}
+
+\item{post}{user-specified code to include in the job script after job_list.}
+
+\item{sched_args}{scheduler directives passed to \code{cluster_job_submit()}.}
+
+\item{env_variables}{named environment variables passed to \code{cluster_job_submit()}.}
+
+\item{wait_jobs}{jobs that must complete before submitted jobs run.}
+
+\item{scheduler}{scheduler backend used for submission.}
 
 \item{job_out_dir}{the directory where job scripts should be written}
 

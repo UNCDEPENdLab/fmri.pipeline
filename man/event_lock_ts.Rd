@@ -42,8 +42,6 @@ boundary that can help to have sufficient data to interpolate early and late tim
 \item{pad_after}{Number of seconds to include in the epoch time window after the event of interest.}
 
 \item{time_audit}{If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing}
-
-\item{logfile}{Name of log file containing event-locking problems}
 }
 \description{
 function to get interpolated event locked data

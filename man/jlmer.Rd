@@ -65,8 +65,8 @@ are cleared after conversion to R.}
 }
 \value{
 An \code{lmerMod} object converted by JellyMe4, with a \code{"jlmer"}
-attribute containing backend metadata. By default, the object is further
-converted to \code{lmerTest}'s \code{lmerModLmerTest} class.
+  attribute containing backend metadata. By default, the object is further
+  converted to \code{lmerTest}'s \code{lmerModLmerTest} class.
 }
 \description{
 \code{jlmer()} is an \code{lme4::lmer()}-style wrapper around Julia's

@@ -19,6 +19,7 @@
 #' @importFrom iterators iter
 #' @importFrom doParallel registerDoParallel
 #' @importFrom foreach foreach registerDoSEQ
+#' @importFrom stats na.omit setNames terms
 #' @export
 setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, backend = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")

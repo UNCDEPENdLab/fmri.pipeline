@@ -11,6 +11,8 @@
 #' @param level_backends optional per-level backend override list keyed by `l1`, `l2`, and/or `l3`
 #' @param backend_overrides optional model-specific backend override list
 #' @importFrom checkmate assert_string assert_class assert_subset assert_integerish
+#' @importFrom stats setNames
+#' @importFrom utils menu modifyList
 #' @export
 run_glm_pipeline <- function(gpa, l1_model_names = "prompt", l2_model_names = "prompt",
 l3_model_names = "prompt", glm_software = NULL, level_backends = NULL, backend_overrides = NULL) {

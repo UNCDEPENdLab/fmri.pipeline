@@ -15,7 +15,13 @@
 #'   model comparison tests to examine whether a given factor has an overall effect. If
 #'   \code{FALSE} or \code{"none"}, no split variable subsets will be fit. If \code{"individual"},
 #'   then the split variables are added in subsets individually, but their interactions are not.
+#' @param max_order Maximum subset order for meta-regression combinations.
+#' @param outcome Optional outcome column override.
+#' @param fixef Optional fixed-effect specification.
+#' @param rhs Optional right-hand-side formula specification.
+#' @param brms_args Arguments passed to \code{brms::brm()}.
 #'
+#' @importFrom utils combn
 #' @export
 meta_mixed_by <- function(coef_df, terms = "all", fit_subsets = "all", max_order = 3, 
                           outcome=NULL, fixef=NULL, rhs=NULL,

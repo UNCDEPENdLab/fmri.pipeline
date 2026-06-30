@@ -6,6 +6,13 @@
 \usage{
 build_l3_models(gpa, from_spec_file = NULL, regressor_cols = NULL)
 }
+\arguments{
+\item{gpa}{a \code{glm_pipeline_arguments} object.}
+
+\item{from_spec_file}{optional YAML or JSON file containing L3 model settings.}
+
+\item{regressor_cols}{optional character vector of columns to consider as regressors.}
+}
 \description{
 Interactive function to build an l3 model specification for setup_glm_pipeline
 }

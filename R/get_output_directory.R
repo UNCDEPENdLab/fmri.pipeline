@@ -8,10 +8,13 @@
 #' @param id The id of a participant
 #' @param session The session number to lookup
 #' @param run_number The run number to lookup
+#' @param l1_model,l2_model,l3_model Optional model names used in output templates.
 #' @param l1_cope_number,l2_cope_number,l3_cope_number Optional cope numbers used in output templates.
 #'   These are combined with the corresponding contrast names into labels such as \code{02_EV_house}.
+#' @param l1_contrast,l2_contrast,l3_contrast Optional contrast names used in output templates.
 #' @param gpa A \code{glm_pipeline_arguments} object
 #' @param glm_software which software is being used for the analysis (since directories may vary)
+#' @param what output directory type to return.
 #' @param create_if_missing whether to create the directory if it does not exist
 get_output_directory <- function(id = NULL, session = NULL, run_number = NULL,
   l1_model = NULL, l2_model = NULL, l3_model = NULL,

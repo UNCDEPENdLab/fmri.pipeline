@@ -615,6 +615,7 @@ compute_spike_regressors <- function(mot = NULL, spike_volume = NULL, lg=NULL) {
 #'
 #' @return A matrix of PCA-compressed motion regressors
 #' @importFrom psych smc
+#' @importFrom stats prcomp
 #' @keywords internal
 pca_motion <- function(motion_df, num_pcs=3L, zscore=TRUE, verbose=FALSE) {
   checkmate::assert_data_frame(motion_df)
@@ -891,6 +892,7 @@ calculate_subject_exclusions <- function(gpa) {
 #' @return a modified copy of gpa with $run_data populated with last_offset and last_onset columns (times in seconds)
 #' @keywords internal
 #' @importFrom dplyr summarize group_by left_join
+#' @importFrom utils capture.output
 populate_last_events <- function(gpa, lg) {
   # get all events as a long data.frame
   m_events <- data.table::rbindlist(lapply(gpa$l1_models$events, function(this_event) this_event$data))
@@ -963,6 +965,9 @@ sched_args_to_header <- function(gpa) {
 #'   fully populated 
 #' @keywords internal
 #' @importFrom emmeans emmeans emtrends
+#' @importFrom graphics pairs
+#' @importFrom stats coef na.omit
+#' @importFrom utils menu
 get_contrasts_from_spec <- function(mobj, lmfit=NULL) {
   checkmate::assert_multi_class(mobj, c("l1_model_spec", "l1_wi_spec", "hi_model_spec")) # verify that we have an object of known structure
   if (is.null(lmfit)) {
@@ -1341,6 +1346,7 @@ get_wi_contrast_matrix <- function(mobj, c_colnames) {
 #' @param lg Optional logger.
 #' @return A data.frame suitable for L2 model fitting/respecification.
 #' @keywords internal
+#' @importFrom stats setNames
 compose_l2_model_data <- function(gpa, lg = NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_data_frame(gpa$run_data)
@@ -1479,6 +1485,7 @@ compose_l2_model_data <- function(gpa, lg = NULL) {
 #' @keywords internal
 #' @importFrom checkmate assert_data_frame assert_multi_class assert_subset
 #' @importFrom data.table data.table
+#' @importFrom stats model.matrix terms
 respecify_l2_models_by_subject <- function(mobj, data, split_on = c("id", "session"), aggregated_session = 0L) {
   checkmate::assert_multi_class(mobj, c("l1_model_spec", "hi_model_spec")) # verify that we have an object of known structure
   checkmate::assert_data_frame(data)
@@ -1543,7 +1550,7 @@ respecify_l2_models_by_subject <- function(mobj, data, split_on = c("id", "sessi
 #' Helper function to re-calculate the l3 design matrix for a model based on available data
 #'
 #' @param mobj a \code{hi_model_spec} object containing the L3 GLM model to run
-#' @param data The run-level data frame containing data for all ids and sessions. This will be split into individual chunks
+#' @param new_data The run-level data frame containing data for all ids and sessions. This will be split into individual chunks
 #'
 #' @return a modified copy of \code{mobj} where the $by_subject field has been added
 #'
@@ -1677,6 +1684,9 @@ format_hi_model_alias_message <- function(mobj, model_formula = NULL) {
 #' @param report_alias whether to print a short message when aliased coefficients are detected
 #' @return a model object containing the fitted model
 #' @keywords internal
+#' @importFrom stats alias model.matrix relevel update.formula
+#' @importFrom tidyselect any_of
+#' @importFrom utils capture.output
 mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NULL, report_alias = TRUE) {
   if (is.null(lg)) { lg <- lgr::get_logger() }
   # verify that we have an object of known structure
@@ -2162,7 +2172,7 @@ populate_defaults <- function(target = NULL, defaults) {
 # little helper function to create named list from objects
 named_list <- function(...) {
   vnames <- as.character(match.call())[-1]
-  return(setNames(list(...), vnames))
+  return(stats::setNames(list(...), vnames))
 }
 
 # little helper function to create named list from objects
@@ -2180,7 +2190,7 @@ named_vector <- function(...) {
     stop("All inputs must be of the same data type.")
   }
 
-  return(setNames(do.call(c, vec), vnames))
+  return(stats::setNames(do.call(c, vec), vnames))
 }
 
 #' Helper function to create named data.frame from a set of objects
@@ -2194,7 +2204,12 @@ named_vector <- function(...) {
 #   return(setNames(data.frame(...), vnames))
 # }
 
-
+#' Enforce that GLM setup objects are complete
+#' @param gpa A \code{glm_pipeline_arguments} object.
+#' @param level GLM level to validate.
+#' @param lg Logger object.
+#' @param glm_software Optional backend filter.
+#' @noRd
 enforce_glms_complete <- function(gpa, level=1L, lg=NULL, glm_software=NULL) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_integerish(level, lower=1L, upper=3L)
@@ -2429,6 +2444,7 @@ compute_permutations <- function(n, keys = NULL) {
 #'   run twice for each pair, reflecting the two directions of comparison (s1 %notin% s2 and s2 %notin% s1).
 #' @return NULL (invisibly)
 #' @keywords internal
+#' @importFrom utils combn
 setdiff_list_combn <- function(l) {
   combs <- combn(length(l), 2)
   for (i in seq_len(ncol(combs))) {

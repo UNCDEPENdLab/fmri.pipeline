@@ -95,7 +95,7 @@ across signal columns for \code{tune_by = "global"}.}
 }
 \value{
 A matrix of deconvolved time series, or a list with \code{activity}
-and tuning diagnostics when \code{return_diagnostics = TRUE}.
+  and tuning diagnostics when \code{return_diagnostics = TRUE}.
 }
 \description{
 Estimate a continuous latent activity time series by solving a regularized

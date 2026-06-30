@@ -114,13 +114,13 @@ In general, restricted maximum likelihood (REML) should be used for making infer
   be fitted with REML. If "parameter_estimates_ml" and/or "fit_statistics" are requested, models will be
   fitted with ML. Note that if both REML and ML are requested, each model is fit twice since the estimators
   each have advantages and disadvantages noted above.
-  
+
   For \code{engine = "rstanarm"}, coefficient tables include \code{pd}, the
   posterior probability of direction from \code{bayestestR::p_direction()},
   and \code{p.value}, its two-sided p-like conversion using
   \code{as_p = TRUE}. These are posterior-derived indices rather than
   frequentist df-based p-values.
-
+  
 Example of emmeans_spec usage:
   mixed_by(data, emmeans_spec=list(
     em1=list(specs = ~ memory | noise_level, adjust = "sidak", weights = "cells"),

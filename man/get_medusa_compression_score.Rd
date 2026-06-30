@@ -34,15 +34,6 @@ than specified by \code{time_after}.}
 
 \item{group_by}{return interpolated time series for each combination of group_by variables. Default is
 to provide one interpolated time series per trial.}
-
-\item{pad_before}{Number of seconds to include in the epoch time window before the event of interest. Interpolation
-spans the window from \code{time_before} to \code{time_after}, but padding includes data points at the
-boundary that can help to have sufficient data to interpolate early and late times within the epoch.}
-
-\item{pad_after}{Number of seconds to include in the epoch time window after the event of interest.}
-
-\item{output_resolution}{the sampling frequency (in seconds) of the interpolated data. Defaults to be
-the same as \code{tr}.}
 }
 \description{
 front-end function for taking a list of windowed time series by mask value, interpolating them onto a time grid,

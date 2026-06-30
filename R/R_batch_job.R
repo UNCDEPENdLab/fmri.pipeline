@@ -1,5 +1,7 @@
 #' Description of R_batch_job R6 class
 #' @importFrom lubridate period_to_seconds
+#' @importFrom stats setNames
+#' @importFrom utils capture.output
 #' @export
 R_batch_job <- R6::R6Class("batch_job",
   private = list(

@@ -16,6 +16,25 @@ read_confounds_motion_parameters(
   motion_path = NA_character_
 )
 }
+\arguments{
+\item{gpa}{A \code{glm_pipeline_arguments} object.}
+
+\item{id}{subject id.}
+
+\item{session}{session number.}
+
+\item{run_number}{run number.}
+
+\item{run_df}{One-row run metadata.}
+
+\item{expected_l1_confound_file}{Expected output confound filename.}
+
+\item{lg}{Logger object.}
+
+\item{confound_path}{Path to the raw confound file.}
+
+\item{motion_path}{Path to the raw motion file.}
+}
 \description{
 helper function to read confounds and motion parameters and combine them
 }
