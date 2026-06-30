@@ -159,7 +159,8 @@ voxelwise_deconvolution <- function(
 
     #loop over niftis in parallel
     ff <- foreach(si = seq_along(niftis),
-      .packages=c("dplyr", "readr", "data.table", "reshape2", "fmri.pipeline", "foreach", "iterators")) %dopar% {
+      .packages=c("dplyr", "readr", "data.table", "fmri.pipeline", "foreach", "iterators"),
+      .export="mat2df") %dopar% {
 
       #get the si-th row of the metadata to match nifti, allow one to use this_subj in out_file_expression
       if (!is.null(add_metadata)) {
@@ -315,7 +316,7 @@ voxelwise_deconvolution <- function(
       deconv_mat <- deconv_mat[, c(seq(-ncol(deconv_mat), -ncol(deconv_mat)+hrf_pad-1))] #trim trailing padding added above
 
       # melt this for combination
-      deconv_melt <- reshape2::melt(deconv_mat, value.name="decon", varnames=c("vnum", "volume"))
+      deconv_melt <- mat2df(deconv_mat, value_name="decon", varnames=c("vnum", "volume"))
       deconv_melt$time <- (deconv_melt$volume - 1)*TR + time_offset #convert back to seconds; first volume is time 0
 
       deconv_df <- deconv_melt %>% 
@@ -331,7 +332,7 @@ voxelwise_deconvolution <- function(
 
       #handle output of original time series (before deconvolution) -- mostly useful for debugging
       if (isTRUE(save_original_ts)) {
-        to_deconvolve_melt <- reshape2::melt(to_deconvolve, value.name="BOLD_z", varnames=c("vnum", "time"))
+        to_deconvolve_melt <- mat2df(to_deconvolve, value_name="BOLD_z", varnames=c("vnum", "time"))
         to_deconvolve_melt$time <- (to_deconvolve_melt$time - 1)*TR + time_offset #convert back to seconds; first volume is time 0
 
         orig_df <- to_deconvolve_melt %>% 

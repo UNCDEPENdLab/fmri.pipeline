@@ -169,6 +169,22 @@ get_nifti_dim <- function(infile) {
     .Call(`_fmri_pipeline_get_nifti_dim`, infile)
 }
 
+#' Fast conversion of a 2D numeric matrix to a 3-column data.frame
+#'
+#' @name mat2df
+#' @description Converts a 2D numeric matrix into a 3-column data.frame
+#' @details This function is a fast matrix-to-long-data-frame converter for the simple 2D case.
+#' @param mat A \code{matrix} to convert to data.frame
+#' @param na_zeros Whether near-zero values should be converted to \code{NA}
+#' @param varnames Names for the two dimension key columns
+#' @param value_name Name for the value column
+#' @return A 3-column data.frame with two dimension key columns and one value column
+#' @keywords internal
+#' @author Michael Hallquist
+mat2df <- function(mat, na_zeros = FALSE, varnames = as.character( c("dim1", "dim2")), value_name = "value") {
+    .Call(`_fmri_pipeline_mat2df`, mat, na_zeros, varnames, value_name)
+}
+
 #' Subset Timepoints from a 4D NIfTI Image
 #'
 #' This function keeps or removes specified timepoints (volumes) from a 4D NIfTI image

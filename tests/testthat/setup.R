@@ -14,10 +14,28 @@ library(dplyr)
 
 # Always prefer the working tree when running tests from source.
 pkg_root <- normalizePath(file.path("..", ".."), mustWork = FALSE)
-if (requireNamespace("pkgload", quietly = TRUE) && file.exists(file.path(pkg_root, "DESCRIPTION"))) {
+running_check <- nzchar(Sys.getenv("R_TESTS")) || nzchar(Sys.getenv("R_PACKAGE_NAME"))
+if (!running_check && requireNamespace("pkgload", quietly = TRUE) && file.exists(file.path(pkg_root, "DESCRIPTION"))) {
   pkgload::load_all(pkg_root, export_all = FALSE, helpers = TRUE)
-} else {
+} else if (!running_check && file.exists(file.path(pkg_root, "DESCRIPTION"))) {
   stop("pkgload is required to run tests from the working tree. Install pkgload or run devtools::test().")
+}
+
+source_tree_file <- function(...) {
+  parts <- c(...)
+  path <- do.call(file.path, as.list(c(pkg_root, parts)))
+  if (file.exists(path)) {
+    return(normalizePath(path, mustWork = TRUE))
+  }
+
+  if (length(parts) > 1L && parts[[1L]] == "inst") {
+    installed <- system.file(do.call(file.path, as.list(parts[-1L])), package = "fmri.pipeline")
+    if (nzchar(installed) && file.exists(installed)) {
+      return(normalizePath(installed, mustWork = TRUE))
+    }
+  }
+
+  testthat::skip(sprintf("Source-tree file not available in installed-package checks: %s", do.call(file.path, as.list(parts))))
 }
 
 # ==============================================================================

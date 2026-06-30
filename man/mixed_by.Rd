@@ -27,7 +27,11 @@ mixed_by(
   calculate = c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"),
   return_models = FALSE,
   emmeans_spec = NULL,
-  emtrends_spec = NULL
+  emmeans_pairs = FALSE,
+  emmeans_pairs_args = list(),
+  emtrends_spec = NULL,
+  emtrends_pairs = FALSE,
+  emtrends_pairs_args = list()
 )
 }
 \arguments{
@@ -97,11 +101,25 @@ careful with this option since it could generate a massive data object.}
 \item{emmeans_spec}{A named list of emmeans calls to be run for each model to obtain model predictions.
 Any arguments that are valid for emmeans can be passed through the list structure.}
 
+\item{emmeans_pairs}{A boolean indicating whether to also return pairwise comparisons (via
+\code{pairs()} on the \code{emmeans} result) for each requested element of \code{emmeans_spec}.}
+
+\item{emmeans_pairs_args}{A named list of arguments passed to \code{pairs()} (e.g.,
+\code{list(adjust = "tukey")}).}
+
 \item{emtrends_spec}{A named list of emtrends calls to be run for each model to obtain model-predicted slopes.
 Any arguments that are valid for emtrends can be passed through the list structure.}
+
+\item{emtrends_pairs}{A boolean indicating whether to also return pairwise comparisons (via
+\code{pairs()} on the \code{emtrends} result) for each requested element of \code{emtrends_spec}.}
+
+\item{emtrends_pairs_args}{A named list of arguments passed to \code{pairs()} (e.g.,
+\code{list(adjust = "tukey")}).}
 }
 \value{
-A data.table object containing all coefficients for each model estimated separately by \code{split_on}
+A list containing coefficient tables, fit statistics, optional post-hoc outputs
+(\code{emmeans_list}, \code{emmeans_pairs_list}, \code{emtrends_list},
+\code{emtrends_pairs_list}), residuals, fitted values, and optionally fitted models.
 }
 \description{
 Mixed by runs a set of mixed-effects models for each combination of a set of factors. Its primary use is to

@@ -1,3 +1,134 @@
+.mixed_by_normalize_pairs_args <- function(pairs_args, field_name) {
+  if (is.null(pairs_args) || identical(pairs_args, FALSE)) {
+    return(NULL)
+  }
+  if (isTRUE(pairs_args)) {
+    return(list())
+  }
+  if (is.character(pairs_args) && length(pairs_args) == 1L) {
+    return(list(adjust = pairs_args))
+  }
+  if (!is.list(pairs_args)) {
+    stop(field_name, " must be TRUE/FALSE, a single adjustment method, or a named list of pairs() arguments.", call. = FALSE)
+  }
+  pairs_args
+}
+
+.mixed_by_merge_pair_args <- function(base_args, override_args) {
+  if (length(override_args) == 0L) {
+    return(base_args)
+  }
+  override_names <- names(override_args)
+  if (!is.null(override_names)) {
+    named_overrides <- override_names[nzchar(override_names)]
+    base_args[named_overrides] <- NULL
+  }
+  c(base_args, override_args)
+}
+
+.mixed_by_split_posthoc_spec <- function(spec, pairs_field) {
+  spec[c("outcome", "model_name", "pairs", pairs_field, paste0(pairs_field, "_args"))] <- NULL
+  spec
+}
+
+.mixed_by_tidy_emm_result <- function(result, component = NULL) {
+  if (inherits(result, "emm_list")) {
+    if (!is.null(component) && component %in% names(result)) {
+      return(broom.mixed::tidy(result[[component]]))
+    }
+
+    components <- setdiff(names(result), "contrasts")
+    if (length(components) == 1L) {
+      return(broom.mixed::tidy(result[[components]]))
+    }
+
+    return(data.table::rbindlist(lapply(components, function(component) {
+      td <- broom.mixed::tidy(result[[component]])
+      td$emm_component <- component
+      td
+    }), fill = TRUE))
+  }
+  broom.mixed::tidy(result)
+}
+
+.mixed_by_get_pairs_args <- function(spec, pairs_field, pairs_enabled, pairs_args) {
+  has_spec_pairs <- pairs_field %in% names(spec) || "pairs" %in% names(spec)
+
+  if (pairs_field %in% names(spec)) {
+    spec_pairs <- spec[[pairs_field]]
+  } else if ("pairs" %in% names(spec)) {
+    spec_pairs <- spec[["pairs"]]
+  } else {
+    spec_pairs <- NULL
+  }
+
+  if (has_spec_pairs) {
+    out <- .mixed_by_normalize_pairs_args(spec_pairs, pairs_field)
+  } else if (isTRUE(pairs_enabled)) {
+    out <- pairs_args
+  } else {
+    out <- NULL
+  }
+
+  spec_args_field <- paste0(pairs_field, "_args")
+  if (!is.null(out) && spec_args_field %in% names(spec)) {
+    out <- .mixed_by_merge_pair_args(out, spec[[spec_args_field]])
+  }
+
+  out
+}
+
+.mixed_by_tidy_emm_pairs <- function(result, pairs_args, main_component, pairs_field) {
+  if (inherits(result, "emm_list")) {
+    if (main_component %in% names(result)) {
+      result <- result[[main_component]]
+    } else if ("contrasts" %in% names(result)) {
+      warning(
+        "Using precomputed contrasts from emm_list because the main ", main_component,
+        " component is unavailable; ", pairs_field, "_args cannot be reapplied."
+      )
+      return(broom.mixed::tidy(result[["contrasts"]]))
+    } else {
+      stop("Cannot apply ", pairs_field, " to this emmeans result list.", call. = FALSE)
+    }
+  }
+
+  pairs_result <- do.call(utils::getS3method("pairs", "emmGrid"), c(list(x = result), pairs_args))
+  broom.mixed::tidy(pairs_result)
+}
+
+.mixed_by_run_posthoc_spec <- function(posthoc_fun, posthoc_model, spec, main_component,
+                                       pairs_field, pairs_enabled, pairs_args) {
+  call_args <- .mixed_by_split_posthoc_spec(spec, pairs_field)
+  result <- do.call(posthoc_fun, c(list(object = posthoc_model), call_args))
+  these_pairs_args <- .mixed_by_get_pairs_args(spec, pairs_field, pairs_enabled, pairs_args)
+
+  list(
+    main = .mixed_by_tidy_emm_result(result, component = main_component),
+    pairs = if (is.null(these_pairs_args)) NULL else .mixed_by_tidy_emm_pairs(result, these_pairs_args, main_component, pairs_field)
+  )
+}
+
+.mixed_by_extract_posthoc_list <- function(nested_list, data_element, spec, value_col, split_on, extract_fun) {
+  if (is.null(spec)) {
+    return(NULL)
+  }
+
+  posthoc_data <- extract_fun(nested_list, data_element, split_on)
+  if (nrow(posthoc_data) == 0L) {
+    return(NULL)
+  }
+
+  out <- lapply(seq_along(spec), function(aa) {
+    posthoc_sub <- subset(posthoc_data, outcome == spec[[aa]]$outcome & model_name == spec[[aa]]$model_name)
+    other_keys <- setdiff(names(posthoc_sub), value_col)
+    posthoc_name <- names(spec)[aa]
+    posthoc_sub[, get(value_col)[[1]][[posthoc_name]], by = other_keys]
+  })
+  names(out) <- names(spec)
+  out
+}
+
 #' Mixed by runs a set of mixed-effects models for each combination of a set of factors. Its primary use is to
 #'   run the same model on different splits of the data.
 #'
@@ -43,8 +174,16 @@
 #'   The options are: "parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics", "fitted", and "residuals".
 #' @param emmeans_spec A named list of emmeans calls to be run for each model to obtain model predictions.
 #'   Any arguments that are valid for emmeans can be passed through the list structure.
+#' @param emmeans_pairs A boolean indicating whether to also return pairwise comparisons (via
+#'   \code{pairs()} on the \code{emmeans} result) for each requested element of \code{emmeans_spec}.
+#' @param emmeans_pairs_args A named list of arguments passed to \code{pairs()} (e.g.,
+#'   \code{list(adjust = "tukey")}).
 #' @param emtrends_spec A named list of emtrends calls to be run for each model to obtain model-predicted slopes.
 #'   Any arguments that are valid for emtrends can be passed through the list structure.
+#' @param emtrends_pairs A boolean indicating whether to also return pairwise comparisons (via
+#'   \code{pairs()} on the \code{emtrends} result) for each requested element of \code{emtrends_spec}.
+#' @param emtrends_pairs_args A named list of arguments passed to \code{pairs()} (e.g.,
+#'   \code{list(adjust = "tukey")}).
 #' @param return_models A boolean indicating whether to return fitted model objects, which can be used for
 #'   post hoc contrasts, visualization and statistics. Note that model objects can get very large, so be
 #'   careful with this option since it could generate a massive data object.
@@ -69,7 +208,9 @@
 #'     em3=list(specs = ~ memory)
 #'   ))
 #'
-#' @return A data.table object containing all coefficients for each model estimated separately by \code{split_on}
+#' @return A list containing coefficient tables, fit statistics, optional post-hoc outputs
+#'   (\code{emmeans_list}, \code{emmeans_pairs_list}, \code{emtrends_list},
+#'   \code{emtrends_pairs_list}), residuals, fitted values, and optionally fitted models.
 #'
 #' @importFrom lmerTest lmer
 #' @importFrom lme4 lmerControl
@@ -90,7 +231,9 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
                      lmer_control = lmerControl(optimizer = "nloptwrap"),
                      engine = c("lme4", "rstanarm", "jlmer"), engine_args = list(),
                      calculate=c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"),
-                     return_models = FALSE, emmeans_spec = NULL, emtrends_spec=NULL) {
+                     return_models = FALSE, emmeans_spec = NULL, emmeans_pairs = FALSE,
+                     emmeans_pairs_args = list(), emtrends_spec=NULL, emtrends_pairs = FALSE,
+                     emtrends_pairs_args = list()) {
 
   engine <- match.arg(engine)
   checkmate::assert_list(engine_args, names = "unique")
@@ -133,7 +276,11 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   checkmate::assert_logical(return_models, len = 1L)
   checkmate::assert_character(scale_predictors, null.ok = TRUE)
   checkmate::assert_list(emmeans_spec, null.ok = TRUE)
+  checkmate::assert_logical(emmeans_pairs, len = 1L)
+  checkmate::assert_list(emmeans_pairs_args, null.ok = FALSE)
   checkmate::assert_list(emtrends_spec, null.ok = TRUE)
+  checkmate::assert_logical(emtrends_pairs, len = 1L)
+  checkmate::assert_list(emtrends_pairs_args, null.ok = FALSE)
 
   # turn off refitting if user specifies 'FALSE'
   if (is.logical(refit_on_nonconvergence) && isFALSE(refit_on_nonconvergence)) {
@@ -352,6 +499,26 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   }
 
   mresults <- vector(mode = "list", length(df_set)) # preallocate list
+  posthoc_helper_exports <- c(
+    ".mixed_by_normalize_pairs_args",
+    ".mixed_by_merge_pair_args",
+    ".mixed_by_split_posthoc_spec",
+    ".mixed_by_tidy_emm_result",
+    ".mixed_by_get_pairs_args",
+    ".mixed_by_tidy_emm_pairs",
+    ".mixed_by_run_posthoc_spec"
+  )
+
+  # foreach workers need local bindings for unexported package helpers.
+  .mixed_by_normalize_pairs_args <- .mixed_by_normalize_pairs_args
+  .mixed_by_merge_pair_args <- .mixed_by_merge_pair_args
+  .mixed_by_split_posthoc_spec <- .mixed_by_split_posthoc_spec
+  .mixed_by_tidy_emm_result <- .mixed_by_tidy_emm_result
+  .mixed_by_get_pairs_args <- .mixed_by_get_pairs_args
+  .mixed_by_tidy_emm_pairs <- .mixed_by_tidy_emm_pairs
+  .mixed_by_run_posthoc_spec <- .mixed_by_run_posthoc_spec
+  environment(.mixed_by_get_pairs_args) <- environment()
+  environment(.mixed_by_run_posthoc_spec) <- environment()
 
   # loop over each dataset to be fit
   for (i in seq_along(df_set)) {
@@ -424,7 +591,7 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     }
     mresults[[i]] <- foreach(
       dt_split = iter(data, by = "row"), .packages = foreach_packages,
-      .noexport = "data", .inorder = FALSE
+      .export = posthoc_helper_exports, .noexport = "data", .inorder = FALSE
     ) %dopar% {
       if (nrow(dt_split$dt[[1L]]) == 0L) {
         warning("No rows found in split. Skipping")
@@ -446,7 +613,9 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
         ret[, residuals := list()]
         ret[, fitted := list()]
         ret[, emm := list()] 
+        ret[, emp := list()]
         ret[, emt := list()]
+        ret[, etp := list()]
         if (isTRUE(return_models)) ret[, model := list()]
         
         # check missingness
@@ -572,9 +741,15 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
           
           if (nrow(emm_torun) > 0L) {
             this_emmspec <- emmeans_spec[emm_torun$emm_number] #subset list to relevant elements
-            emms <- lapply(seq_along(this_emmspec), function(emm_i) {
+            emm_runs <- lapply(seq_along(this_emmspec), function(emm_i) {
+              .mixed_by_run_posthoc_spec(
+                emmeans::emmeans, posthoc_model, this_emmspec[[emm_i]], "emmeans",
+                "emmeans_pairs", emmeans_pairs, emmeans_pairs_args
+              )
+            })
+            emms <- lapply(seq_along(emm_runs), function(emm_i) {
               cbind(
-                broom.mixed::tidy(do.call(emmeans::emmeans, c(list(object = posthoc_model), this_emmspec[[emm_i]]))),
+                emm_runs[[emm_i]]$main,
                 emm_torun[emm_i, c("emm_number", "emm_label"), drop = FALSE]
               ) # don't add model and outcome, which will double at the unnest
             })
@@ -582,6 +757,20 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
             
             #N.B. Need to double list wrap for data.table to keep list class for singleton list
             ret[, emm := list(list(emms))] 
+
+            emps <- lapply(seq_along(emm_runs), function(emm_i) {
+              if (is.null(emm_runs[[emm_i]]$pairs)) {
+                return(NULL)
+              }
+              cbind(
+                emm_runs[[emm_i]]$pairs,
+                emm_torun[emm_i, c("emm_number", "emm_label"), drop = FALSE]
+              )
+            })
+            if (any(!vapply(emps, is.null, logical(1)))) {
+              names(emps) <- names(this_emmspec)
+              ret[, emp := list(list(emps))]
+            }
           }
         }
 
@@ -595,9 +784,15 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
 
           if (nrow(emt_torun) > 0L) {
             this_emtspec <- emtrends_spec[emt_torun$emt_number] #subset list to relevant elements
-            emts <- lapply(seq_along(this_emtspec), function(emt_i) {
+            emt_runs <- lapply(seq_along(this_emtspec), function(emt_i) {
+              .mixed_by_run_posthoc_spec(
+                emmeans::emtrends, posthoc_model, this_emtspec[[emt_i]], "emtrends",
+                "emtrends_pairs", emtrends_pairs, emtrends_pairs_args
+              )
+            })
+            emts <- lapply(seq_along(emt_runs), function(emt_i) {
               cbind(
-                broom.mixed::tidy(do.call(emmeans::emtrends, c(list(object = posthoc_model), this_emtspec[[emt_i]]))),
+                emt_runs[[emt_i]]$main,
                 emt_torun[emt_i, c("emt_number", "emt_label"), drop = FALSE]
               ) # don't add model and outcome, which will double at the unnest
             })
@@ -605,6 +800,20 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
 
             #N.B. Need to double list wrap for data.table to keep list class for singleton list
             ret[, emt := list(list(emts))] 
+
+            etps <- lapply(seq_along(emt_runs), function(emt_i) {
+              if (is.null(emt_runs[[emt_i]]$pairs)) {
+                return(NULL)
+              }
+              cbind(
+                emt_runs[[emt_i]]$pairs,
+                emt_torun[emt_i, c("emt_number", "emt_label"), drop = FALSE]
+              )
+            })
+            if (any(!vapply(etps, is.null, logical(1)))) {
+              names(etps) <- names(this_emtspec)
+              ret[, etp := list(list(etps))]
+            }
           }
         }
 
@@ -642,10 +851,22 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
                            select=c(split_on, "outcome", "model_name", "rhs", "emm"))
       }
 
+      emp_data <- NULL
+      if (!is.null(emmeans_spec) && "emp" %in% names(split_results)) {
+        emp_data <- subset(split_results, sapply(emp, function(x) !is.null(x)),
+                           select=c(split_on, "outcome", "model_name", "rhs", "emp"))
+      }
+
       emt_data <- NULL
       if (!is.null(emtrends_spec) && "emt" %in% names(split_results)) {
         emt_data <- subset(split_results, sapply(emt, function(x) !is.null(x)), 
                            select=c(split_on, "outcome", "model_name", "rhs", "emt"))
+      }
+
+      etp_data <- NULL
+      if (!is.null(emtrends_spec) && "etp" %in% names(split_results)) {
+        etp_data <- subset(split_results, sapply(etp, function(x) !is.null(x)),
+                           select=c(split_on, "outcome", "model_name", "rhs", "etp"))
       }
       
       residual_data <- NULL
@@ -665,8 +886,9 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
         model_data <- subset(split_results, select=c(split_on, "outcome", "model_name", "rhs", "engine", "model"))
       }
 
-      list(coef_df_reml=coef_df_reml, coef_df_ml=coef_df_ml, fit_df=fit_df, 
-           emm_data=emm_data, emt_data=emt_data, residuals = residual_data, fitted = fitted_data,
+      list(coef_df_reml=coef_df_reml, coef_df_ml=coef_df_ml, fit_df=fit_df,
+           emm_data=emm_data, emp_data=emp_data, emt_data=emt_data, etp_data=etp_data,
+           residuals = residual_data, fitted = fitted_data,
            models = model_data) # return list
     }
     
@@ -690,8 +912,6 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     return(result_df)
   }
   
-  emm_data <- NULL
-  emt_data <- NULL
   coef_results_reml <- NULL
   coef_results_ml <- NULL
   fit_results <- NULL
@@ -705,39 +925,10 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   if ("residuals" %in% calculate) { residual_data <- extract_df(mresults, "residuals", split_on) }
   if (isTRUE(return_models)) { model_data <- extract_df(mresults, "models", split_on) }
   
-  emmeans_list <- NULL
-  if (!is.null(emmeans_spec)) {
-    # will be a 0-row data.frame if there are no emm_data embedded in mresults
-    emm_data <- extract_df(mresults, "emm_data", split_on)
-    
-    if (nrow(emm_data) > 0L) {
-      emmeans_list <- lapply(seq_along(emmeans_spec), function(aa) {
-        em_sub <- subset(emm_data, outcome==emmeans_spec[[aa]]$outcome & model_name==emmeans_spec[[aa]]$model_name)
-        nn <- names(em_sub)
-        other_keys <- nn[nn != "emm"]
-        em_name <- names(emmeans_spec)[aa]
-        em_sub[, emm[[1]][[em_name]], by=other_keys]  
-      })
-      names(emmeans_list) <- names(emmeans_spec)
-    }
-  }
-  
-  emtrends_list <- NULL
-  if (!is.null(emtrends_spec)) {
-    # will be a 0-row data.frame if there are no emt_data embedded in mresults
-    emt_data <- extract_df(mresults, "emt_data", split_on)
-    
-    if (nrow(emt_data) > 0L) {
-      emtrends_list <- lapply(seq_along(emtrends_spec), function(aa) {
-        em_sub <- subset(emt_data, outcome==emtrends_spec[[aa]]$outcome & model_name==emtrends_spec[[aa]]$model_name)
-        nn <- names(em_sub)
-        other_keys <- nn[nn != "emt"]
-        em_name <- names(emtrends_spec)[aa]
-        em_sub[, emt[[1]][[em_name]], by=other_keys]  
-      })
-      names(emtrends_list) <- names(emtrends_spec)
-    }
-  }
+  emmeans_list <- .mixed_by_extract_posthoc_list(mresults, "emm_data", emmeans_spec, "emm", split_on, extract_df)
+  emmeans_pairs_list <- .mixed_by_extract_posthoc_list(mresults, "emp_data", emmeans_spec, "emp", split_on, extract_df)
+  emtrends_list <- .mixed_by_extract_posthoc_list(mresults, "emt_data", emtrends_spec, "emt", split_on, extract_df)
+  emtrends_pairs_list <- .mixed_by_extract_posthoc_list(mresults, "etp_data", emtrends_spec, "etp", split_on, extract_df)
   
   #helper subfunction to adjust p-values
   adjust_dt <- function(dt, padjust_by) {
@@ -775,6 +966,8 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
   }
 
   return(list(coef_df_reml=coef_results_reml, coef_df_ml=coef_results_ml, fit_df=fit_results, 
-              emmeans_list=emmeans_list, emtrends_list=emtrends_list, residuals = residual_data,
+              emmeans_list=emmeans_list, emmeans_pairs_list=emmeans_pairs_list,
+              emtrends_list=emtrends_list, emtrends_pairs_list=emtrends_pairs_list,
+              residuals = residual_data,
               fitted = fitted_data, models = model_data))
 }

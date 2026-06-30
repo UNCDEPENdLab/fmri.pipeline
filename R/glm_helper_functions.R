@@ -683,7 +683,7 @@ get_cluster_means <- function(roimask, ni4d) {
 get_beta_series <- function(inputs, roimask, n_bs=50) {
   #inputs <- inputs[1:5] #speed up testing
 
-  beta_res <- foreach(i=iter(seq_along(inputs)), .packages=c("reshape2", "oro.nifti", "dplyr", "abind"), .export="get_cluster_means") %dopar% {
+  beta_res <- foreach(i=iter(seq_along(inputs)), .packages=c("oro.nifti", "dplyr", "abind"), .export=c("get_cluster_means", "mat2df")) %dopar% {
   #beta_res <- lapply(1:length(inputs), function(i) {
     run_dirs <- list.files(path=inputs[i], pattern="FEAT_LVL1_run\\d+\\.feat", recursive=FALSE, full.names=TRUE)
     run_betas <- list()
@@ -708,7 +708,7 @@ get_beta_series <- function(inputs, roimask, n_bs=50) {
 
       cout <- do.call(abind, list(along=4, lapply(copes, function(x) { readNIfTI(x, reorient=FALSE)@.Data })))
       beta_series_cluster_means <- get_cluster_means(roimask, cout)
-      beta_melt <- reshape2::melt(beta_series_cluster_means, value.name="bs_value", varnames=c("trial", "cluster_number")) %>%
+      beta_melt <- mat2df(as.matrix(beta_series_cluster_means), value_name="bs_value", varnames=c("trial", "cluster_number")) %>%
         mutate(feat_input_id=i, run=runnum)
 
       run_betas[[r]] <- beta_melt

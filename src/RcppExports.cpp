@@ -153,6 +153,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// mat2df
+DataFrame mat2df(NumericMatrix mat, bool na_zeros, CharacterVector varnames, std::string value_name);
+RcppExport SEXP _fmri_pipeline_mat2df(SEXP matSEXP, SEXP na_zerosSEXP, SEXP varnamesSEXP, SEXP value_nameSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type mat(matSEXP);
+    Rcpp::traits::input_parameter< bool >::type na_zeros(na_zerosSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type varnames(varnamesSEXP);
+    Rcpp::traits::input_parameter< std::string >::type value_name(value_nameSEXP);
+    rcpp_result_gen = Rcpp::wrap(mat2df(mat, na_zeros, varnames, value_name));
+    return rcpp_result_gen;
+END_RCPP
+}
 // subset_nifti_volumes
 void subset_nifti_volumes(std::string infile, const std::vector<int>& tpts, std::string mode, std::string outfile);
 RcppExport SEXP _fmri_pipeline_subset_nifti_volumes(SEXP infileSEXP, SEXP tptsSEXP, SEXP modeSEXP, SEXP outfileSEXP) {
@@ -190,6 +204,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_fmri_pipeline_generate_feature", (DL_FUNC) &_fmri_pipeline_generate_feature, 2},
     {"_fmri_pipeline_generate_feature_armadillo", (DL_FUNC) &_fmri_pipeline_generate_feature_armadillo, 2},
     {"_fmri_pipeline_get_nifti_dim", (DL_FUNC) &_fmri_pipeline_get_nifti_dim, 1},
+    {"_fmri_pipeline_mat2df", (DL_FUNC) &_fmri_pipeline_mat2df, 4},
     {"_fmri_pipeline_subset_nifti_volumes", (DL_FUNC) &_fmri_pipeline_subset_nifti_volumes, 4},
     {"_fmri_pipeline_sigmoid", (DL_FUNC) &_fmri_pipeline_sigmoid, 2},
     {NULL, NULL, 0}
