@@ -29,7 +29,11 @@ mixed_by(
   calculate = c("parameter_estimates_reml", "parameter_estimates_ml", "fit_statistics"),
   return_models = FALSE,
   emmeans_spec = NULL,
-  emtrends_spec = NULL
+  emmeans_pairs = FALSE,
+  emmeans_pairs_args = list(),
+  emtrends_spec = NULL,
+  emtrends_pairs = FALSE,
+  emtrends_pairs_args = list()
 )
 ```
 
@@ -167,16 +171,42 @@ mixed_by(
   predictions. Any arguments that are valid for emmeans can be passed
   through the list structure.
 
+- emmeans_pairs:
+
+  A boolean indicating whether to also return pairwise comparisons (via
+  [`pairs()`](https://rdrr.io/r/graphics/pairs.html) on the `emmeans`
+  result) for each requested element of `emmeans_spec`.
+
+- emmeans_pairs_args:
+
+  A named list of arguments passed to
+  [`pairs()`](https://rdrr.io/r/graphics/pairs.html) (e.g.,
+  `list(adjust = "tukey")`).
+
 - emtrends_spec:
 
   A named list of emtrends calls to be run for each model to obtain
   model-predicted slopes. Any arguments that are valid for emtrends can
   be passed through the list structure.
 
+- emtrends_pairs:
+
+  A boolean indicating whether to also return pairwise comparisons (via
+  [`pairs()`](https://rdrr.io/r/graphics/pairs.html) on the `emtrends`
+  result) for each requested element of `emtrends_spec`.
+
+- emtrends_pairs_args:
+
+  A named list of arguments passed to
+  [`pairs()`](https://rdrr.io/r/graphics/pairs.html) (e.g.,
+  `list(adjust = "tukey")`).
+
 ## Value
 
-A data.table object containing all coefficients for each model estimated
-separately by `split_on`
+A list containing coefficient tables, fit statistics, optional post-hoc
+outputs (`emmeans_list`, `emmeans_pairs_list`, `emtrends_list`,
+`emtrends_pairs_list`), residuals, fitted values, and optionally fitted
+models.
 
 ## Details
 

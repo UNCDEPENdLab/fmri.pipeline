@@ -73,7 +73,11 @@
 <span>  calculate <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"parameter_estimates_reml"</span>, <span class="st">"parameter_estimates_ml"</span>, <span class="st">"fit_statistics"</span><span class="op">)</span>,</span>
 <span>  return_models <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  emmeans_spec <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  emtrends_spec <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  emmeans_pairs <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  emmeans_pairs_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  emtrends_spec <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  emtrends_pairs <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  emtrends_pairs_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -189,14 +193,36 @@ careful with this option since it could generate a massive data object.</p></dd>
 Any arguments that are valid for emmeans can be passed through the list structure.</p></dd>
 
 
+<dt id="arg-emmeans-pairs">emmeans_pairs<a class="anchor" aria-label="anchor" href="#arg-emmeans-pairs"></a></dt>
+<dd><p>A boolean indicating whether to also return pairwise comparisons (via
+<code><a href="https://rdrr.io/r/graphics/pairs.html" class="external-link">pairs()</a></code> on the <code>emmeans</code> result) for each requested element of <code>emmeans_spec</code>.</p></dd>
+
+
+<dt id="arg-emmeans-pairs-args">emmeans_pairs_args<a class="anchor" aria-label="anchor" href="#arg-emmeans-pairs-args"></a></dt>
+<dd><p>A named list of arguments passed to <code><a href="https://rdrr.io/r/graphics/pairs.html" class="external-link">pairs()</a></code> (e.g.,
+<code>list(adjust = "tukey")</code>).</p></dd>
+
+
 <dt id="arg-emtrends-spec">emtrends_spec<a class="anchor" aria-label="anchor" href="#arg-emtrends-spec"></a></dt>
 <dd><p>A named list of emtrends calls to be run for each model to obtain model-predicted slopes.
 Any arguments that are valid for emtrends can be passed through the list structure.</p></dd>
 
+
+<dt id="arg-emtrends-pairs">emtrends_pairs<a class="anchor" aria-label="anchor" href="#arg-emtrends-pairs"></a></dt>
+<dd><p>A boolean indicating whether to also return pairwise comparisons (via
+<code><a href="https://rdrr.io/r/graphics/pairs.html" class="external-link">pairs()</a></code> on the <code>emtrends</code> result) for each requested element of <code>emtrends_spec</code>.</p></dd>
+
+
+<dt id="arg-emtrends-pairs-args">emtrends_pairs_args<a class="anchor" aria-label="anchor" href="#arg-emtrends-pairs-args"></a></dt>
+<dd><p>A named list of arguments passed to <code><a href="https://rdrr.io/r/graphics/pairs.html" class="external-link">pairs()</a></code> (e.g.,
+<code>list(adjust = "tukey")</code>).</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A data.table object containing all coefficients for each model estimated separately by <code>split_on</code></p>
+    <p>A list containing coefficient tables, fit statistics, optional post-hoc outputs
+(<code>emmeans_list</code>, <code>emmeans_pairs_list</code>, <code>emtrends_list</code>,
+<code>emtrends_pairs_list</code>), residuals, fitted values, and optionally fitted models.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
