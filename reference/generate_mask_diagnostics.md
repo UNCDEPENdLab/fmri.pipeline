@@ -50,3 +50,11 @@ generate_mask_diagnostics(
   (default), the user will be prompted for whether they wish to generate
   missing brain masks. If `FALSE`, masks will not be generate, and if
   `TRUE`, they will be generated.
+
+- generate_run_plots:
+
+  whether to write per-run diagnostic plots.
+
+- ncores:
+
+  number of cores to use for parallel mask diagnostics.

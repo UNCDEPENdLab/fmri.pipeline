@@ -139,6 +139,14 @@ must include subject id, session id (if relevant), and run_number as columns. Al
 physiological signals for PPI analysis.</p></dd>
 
 
+<dt id="arg-group-output-directory">group_output_directory<a class="anchor" aria-label="anchor" href="#arg-group-output-directory"></a></dt>
+<dd><p>Group-level output directory policy.</p></dd>
+
+
+<dt id="arg-output-locations">output_locations<a class="anchor" aria-label="anchor" href="#arg-output-locations"></a></dt>
+<dd><p>Output location template settings.</p></dd>
+
+
 <dt id="arg-vm">vm<a class="anchor" aria-label="anchor" href="#arg-vm"></a></dt>
 <dd><p>A named character vector containing key identifying columns in <code>subject_data</code> and
 <code>trial_data</code>. Minimally, this vector should contain the elements 'id'</p></dd>
@@ -156,6 +164,14 @@ function will look for a <code>tr</code> field in the <code>run_data</code> obje
 <dt id="arg-fmri-file-regex">fmri_file_regex<a class="anchor" aria-label="anchor" href="#arg-fmri-file-regex"></a></dt>
 <dd><p>A character string containing a Perl-compatible regular expression for the subfolder and filename
 within the <code>mr_dir</code> field in <code>subject_data</code>.</p></dd>
+
+
+<dt id="arg-fmri-path-regex">fmri_path_regex<a class="anchor" aria-label="anchor" href="#arg-fmri-path-regex"></a></dt>
+<dd><p>Optional regular expression for extracting fMRI paths.</p></dd>
+
+
+<dt id="arg-run-number-regex">run_number_regex<a class="anchor" aria-label="anchor" href="#arg-run-number-regex"></a></dt>
+<dd><p>Optional regular expression for extracting run numbers.</p></dd>
 
 
 <dt id="arg-drop-volumes">drop_volumes<a class="anchor" aria-label="anchor" href="#arg-drop-volumes"></a></dt>
@@ -201,6 +217,18 @@ If <code>FALSE</code>, onset-duration-value timing will be entered and convoluti
 by the GLM software. I recommend <code>TRUE</code> for consistency.</p></dd>
 
 
+<dt id="arg-glm-settings">glm_settings<a class="anchor" aria-label="anchor" href="#arg-glm-settings"></a></dt>
+<dd><p>GLM backend settings.</p></dd>
+
+
+<dt id="arg-confound-settings">confound_settings<a class="anchor" aria-label="anchor" href="#arg-confound-settings"></a></dt>
+<dd><p>Confound-file and censoring settings.</p></dd>
+
+
+<dt id="arg-parallel">parallel<a class="anchor" aria-label="anchor" href="#arg-parallel"></a></dt>
+<dd><p>Parallelization and scheduler settings.</p></dd>
+
+
 <dt id="arg-additional">additional<a class="anchor" aria-label="anchor" href="#arg-additional"></a></dt>
 <dd><p>A list of additional metadata that will be added to the <code>glm.pipeline</code> object returned
 by the function. This can be useful if there are other identifiers that you want for long-term storage or
@@ -212,16 +240,6 @@ off-shoot functions.</p></dd>
 the screen and to log files. Default is "info", which produces all messages, warnings, and errors, but not debug
 or trace statements. To output only concerning errors, change to "error". See:
 <a href="https://s-fleck.github.io/lgr/articles/lgr.html" class="external-link">https://s-fleck.github.io/lgr/articles/lgr.html</a> for details.</p></dd>
-
-
-<dt id="arg-block-data">block_data<a class="anchor" aria-label="anchor" href="#arg-block-data"></a></dt>
-<dd><p>An optional data.frame containing information about design features in the task that vary at
-block level (typically, longer periods of time such as 10-30s). Blocks are superordinate to trials and subordinate to runs.</p></dd>
-
-
-<dt id="arg-mr-dir-column">mr_dir_column<a class="anchor" aria-label="anchor" href="#arg-mr-dir-column"></a></dt>
-<dd><p>A character string indicating the column name in <code>subject_data</code> containing the folder for each
-subject's data. Default is "mr_dir".</p></dd>
 
 </dl></div>
 

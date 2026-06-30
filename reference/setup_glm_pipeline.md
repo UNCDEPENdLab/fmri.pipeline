@@ -109,6 +109,14 @@ setup_glm_pipeline(
   relevant), and run_number as columns. All additional columns should be
   eligible physiological signals for PPI analysis.
 
+- group_output_directory:
+
+  Group-level output directory policy.
+
+- output_locations:
+
+  Output location template settings.
+
 - vm:
 
   A named character vector containing key identifying columns in
@@ -132,6 +140,14 @@ setup_glm_pipeline(
   A character string containing a Perl-compatible regular expression for
   the subfolder and filename within the `mr_dir` field in
   `subject_data`.
+
+- fmri_path_regex:
+
+  Optional regular expression for extracting fMRI paths.
+
+- run_number_regex:
+
+  Optional regular expression for extracting run numbers.
 
 - drop_volumes:
 
@@ -185,6 +201,18 @@ setup_glm_pipeline(
   handled internally by the GLM software. I recommend `TRUE` for
   consistency.
 
+- glm_settings:
+
+  GLM backend settings.
+
+- confound_settings:
+
+  Confound-file and censoring settings.
+
+- parallel:
+
+  Parallelization and scheduler settings.
+
 - additional:
 
   A list of additional metadata that will be added to the `glm.pipeline`
@@ -199,15 +227,3 @@ setup_glm_pipeline(
   which produces all messages, warnings, and errors, but not debug or
   trace statements. To output only concerning errors, change to "error".
   See: <https://s-fleck.github.io/lgr/articles/lgr.html> for details.
-
-- block_data:
-
-  An optional data.frame containing information about design features in
-  the task that vary at block level (typically, longer periods of time
-  such as 10-30s). Blocks are superordinate to trials and subordinate to
-  runs.
-
-- mr_dir_column:
-
-  A character string indicating the column name in `subject_data`
-  containing the folder for each subject's data. Default is "mr_dir".

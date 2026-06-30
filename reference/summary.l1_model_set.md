@@ -6,14 +6,18 @@ Helper function to better summarize GPA object's L1 models
 
 ``` r
 # S3 method for class 'l1_model_set'
-summary(l1_ms)
+summary(object, ...)
 ```
 
 ## Arguments
 
-- gpa:
+- object:
 
-  the `gpa` object
+  the `l1_model_set` object
+
+- ...:
+
+  ignored.
 
 ## Value
 

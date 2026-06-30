@@ -104,6 +104,10 @@ to the expression, so don't pass this piece.</p></dd>
 have been dropped from the NIfTI data prior to deconvolution.</p></dd>
 
 
+<dt id="arg-atlas-files">atlas_files<a class="anchor" aria-label="anchor" href="#arg-atlas-files"></a></dt>
+<dd><p>optional atlas file vector specifying voxels used in deconvolution. If omitted, perform whole-brain deconvolution</p></dd>
+
+
 <dt id="arg-mask">mask<a class="anchor" aria-label="anchor" href="#arg-mask"></a></dt>
 <dd><p>an optional character string specifying a mask that should be used to constrain bounds of deconvolution.</p></dd>
 
@@ -130,10 +134,6 @@ pass it as <code>bush2011_binary</code>, which will be used in deconvolution.</p
 
 <dt id="arg-afni-dir">afni_dir<a class="anchor" aria-label="anchor" href="#arg-afni-dir"></a></dt>
 <dd><p>Full path to directory containing AFNI binaries (this function uses 3dMaskdump).</p></dd>
-
-
-<dt id="arg-atlas">atlas<a class="anchor" aria-label="anchor" href="#arg-atlas"></a></dt>
-<dd><p>an optional character vector specifying voxels used in deconvolution. If omitted, perform whole-brain deconvolution</p></dd>
 
 </dl></div>
     <div class="section level2">

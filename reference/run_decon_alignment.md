@@ -37,6 +37,10 @@ run_decon_alignment(
   `voxelwise_deconvolution`. Should be the same as `out_dir` from
   `voxelwise_deconvolution`.
 
+- trial_df:
+
+  Trial-level data used for event alignment.
+
 - alignments:
 
   A list of alignment specifications, each of which will be computed by
@@ -54,6 +58,10 @@ run_decon_alignment(
   repeated units (e.g., voxels) into single event-aligned time series.
   Most commonly, this is "atlas_value", which will lead to averaging of
   voxels within each parcel in the mask.
+
+- atlas_subset:
+
+  Optional subset of atlas values to retain.
 
 - overwrite:
 

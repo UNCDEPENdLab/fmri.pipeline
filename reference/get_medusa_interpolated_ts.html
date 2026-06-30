@@ -99,18 +99,15 @@ than specified by <code>time_after</code>.</p></dd>
 
 
 <dt id="arg-pad-before">pad_before<a class="anchor" aria-label="anchor" href="#arg-pad-before"></a></dt>
-<dd><p>Number of seconds to include in the epoch time window before the event of interest. Interpolation
-spans the window from <code>time_before</code> to <code>time_after</code>, but padding includes data points at the
-boundary that can help to have sufficient data to interpolate early and late times within the epoch.</p></dd>
+<dd><p>Number of seconds to include before the event-locking window for interpolation support.</p></dd>
 
 
 <dt id="arg-pad-after">pad_after<a class="anchor" aria-label="anchor" href="#arg-pad-after"></a></dt>
-<dd><p>Number of seconds to include in the epoch time window after the event of interest.</p></dd>
+<dd><p>Number of seconds to include after the event-locking window for interpolation support.</p></dd>
 
 
 <dt id="arg-output-resolution">output_resolution<a class="anchor" aria-label="anchor" href="#arg-output-resolution"></a></dt>
-<dd><p>the sampling frequency (in seconds) of the interpolated data. Defaults to be
-the same as <code>tr</code>.</p></dd>
+<dd><p>the sampling frequency (in seconds) of the interpolated data. Defaults to the TR.</p></dd>
 
 
 <dt id="arg-group-by">group_by<a class="anchor" aria-label="anchor" href="#arg-group-by"></a></dt>

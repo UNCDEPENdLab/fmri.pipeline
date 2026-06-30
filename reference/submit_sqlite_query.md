@@ -24,6 +24,10 @@ submit_sqlite_query(
 
   Character path to SQLite database
 
+- param:
+
+  Optional list of parameters to pass to statement
+
 - busy_timeout:
 
   Time (in s) after which to retry write operations; default is 10 s
@@ -32,7 +36,3 @@ submit_sqlite_query(
 
   Logical. If TRUE submits DBI::dbGetQuery instead of DBI::dbExecute;
   Only use if expecting something in return for your query
-
-- params:
-
-  Optional list of parameters to pass to statement

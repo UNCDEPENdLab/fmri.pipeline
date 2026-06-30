@@ -20,6 +20,10 @@ run_3dlmer_sepjobs(
 
   a `glm_pipeline_arguments` object
 
+- level:
+
+  GLM level to run; currently only level 3 is supported.
+
 - model_names:
 
   optional subset of L3 model names to run

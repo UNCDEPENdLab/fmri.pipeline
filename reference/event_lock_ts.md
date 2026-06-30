@@ -71,7 +71,3 @@ event_lock_ts(
 
   If TRUE, additional columns will be added to the output showing how
   alignment is calculated vis-a-vis event timing
-
-- logfile:
-
-  Name of log file containing event-locking problems

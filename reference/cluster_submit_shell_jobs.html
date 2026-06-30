@@ -93,12 +93,36 @@
 <dd><p>amount of time requested for each job</p></dd>
 
 
+<dt id="arg-time-per-command">time_per_command<a class="anchor" aria-label="anchor" href="#arg-time-per-command"></a></dt>
+<dd><p>amount of time requested for each individual command</p></dd>
+
+
 <dt id="arg-fork-jobs">fork_jobs<a class="anchor" aria-label="anchor" href="#arg-fork-jobs"></a></dt>
 <dd><p>if TRUE, all jobs within a single batch will run simultaneously using the fork (&amp;) approach.</p></dd>
 
 
 <dt id="arg-pre">pre<a class="anchor" aria-label="anchor" href="#arg-pre"></a></dt>
 <dd><p>user-specified code to include in the job script prior to job_list (e.g., module load commands)</p></dd>
+
+
+<dt id="arg-post">post<a class="anchor" aria-label="anchor" href="#arg-post"></a></dt>
+<dd><p>user-specified code to include in the job script after job_list.</p></dd>
+
+
+<dt id="arg-sched-args">sched_args<a class="anchor" aria-label="anchor" href="#arg-sched-args"></a></dt>
+<dd><p>scheduler directives passed to <code><a href="cluster_job_submit.html">cluster_job_submit()</a></code>.</p></dd>
+
+
+<dt id="arg-env-variables">env_variables<a class="anchor" aria-label="anchor" href="#arg-env-variables"></a></dt>
+<dd><p>named environment variables passed to <code><a href="cluster_job_submit.html">cluster_job_submit()</a></code>.</p></dd>
+
+
+<dt id="arg-wait-jobs">wait_jobs<a class="anchor" aria-label="anchor" href="#arg-wait-jobs"></a></dt>
+<dd><p>jobs that must complete before submitted jobs run.</p></dd>
+
+
+<dt id="arg-scheduler">scheduler<a class="anchor" aria-label="anchor" href="#arg-scheduler"></a></dt>
+<dd><p>scheduler backend used for submission.</p></dd>
 
 
 <dt id="arg-job-out-dir">job_out_dir<a class="anchor" aria-label="anchor" href="#arg-job-out-dir"></a></dt>

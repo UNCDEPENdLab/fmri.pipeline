@@ -119,9 +119,6 @@
 - [`do_convolve`](https://uncdependlab.github.io/fmri.pipeline/reference/do_convolve.md)
   : Internal port of fsl do_convolve
 
-- [`enforce_glms_complete()`](https://uncdependlab.github.io/fmri.pipeline/reference/enforce_glms_complete.md)
-  : Helper function to create named data.frame from a set of objects
-
 - [`event_lock_ts()`](https://uncdependlab.github.io/fmri.pipeline/reference/event_lock_ts.md)
   : function to get interpolated event locked data
 

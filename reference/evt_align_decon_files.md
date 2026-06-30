@@ -64,6 +64,10 @@ evt_align_decon_files(
   file. If NULL, nothing is output (but the event-aligned data are
   always returned as a data.frame)
 
+- ncpus:
+
+  Number of local worker processes to use.
+
 - time_audit:
 
   If TRUE, additional columns will be added to the output showing how

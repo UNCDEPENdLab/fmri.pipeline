@@ -32,10 +32,26 @@ generate_run_data_from_bids(
 
   the name of the task, which is appended with "task-"
 
+- desc:
+
+  BIDS description entity to match.
+
 - suffix:
 
   an optional suffix in the expected filename (just before the file
   extension)
+
+- space:
+
+  optional BIDS space entity to match.
+
+- anat_root:
+
+  optional anatomical root directory.
+
+- fmap_root:
+
+  optional fieldmap root directory.
 
 ## Value
 

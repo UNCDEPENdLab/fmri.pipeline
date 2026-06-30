@@ -15,7 +15,7 @@ mobj_refit_lm(mobj, new_data)
 
   a `hi_model_spec` object containing the L3 GLM model to run
 
-- data:
+- new_data:
 
   The run-level data frame containing data for all ids and sessions.
   This will be split into individual chunks

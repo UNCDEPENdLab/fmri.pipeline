@@ -6,14 +6,18 @@ Helper function to better summarize GPA object
 
 ``` r
 # S3 method for class 'glm_pipeline_arguments'
-summary(gpa)
+summary(object, ...)
 ```
 
 ## Arguments
 
-- gpa:
+- object:
 
-  the `gpa` object
+  the `glm_pipeline_arguments` object
+
+- ...:
+
+  ignored.
 
 ## Value
 

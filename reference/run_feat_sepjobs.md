@@ -21,6 +21,10 @@ run_feat_sepjobs(
 
   a `glm_pipeline_arguments` object containing model specification
 
+- level:
+
+  GLM level to run.
+
 - model_names:
 
   an optional level 1 model name used to subset the runs to submit to

@@ -22,6 +22,10 @@ insert_df_sqlite(
 
 ## Arguments
 
+- gpa:
+
+  A `glm_pipeline_arguments` object.
+
 - id:
 
   the id of the subject to whom these data belong

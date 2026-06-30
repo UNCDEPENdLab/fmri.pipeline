@@ -159,12 +159,6 @@ generate_spm_mat(
   (e.g., module load statements). These are prepended to direct MATLAB
   execution.
 
-- include_block_contrasts:
-
-  Whether to estimate contrasts for the run-specific intercepts in the
-  design. Note that this qualifies `condition_contrasts` and
-  `unit_contrasts`, but does nothing on its own.
-
 ## Value
 
 A list containing the MATLAB syntax/scripts for GLM setup, execution,

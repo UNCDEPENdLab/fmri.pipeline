@@ -29,6 +29,10 @@ update_tracked_job_status(
   Character string specifying the job status to set. Must be one of:
   "QUEUED", "STARTED", "FAILED", "COMPLETED", "FAILED_BY_EXT"
 
+- cascade:
+
+  Whether to cascade terminal status to child jobs.
+
 - exclude:
 
   Any job ids to ignore when cascading a status

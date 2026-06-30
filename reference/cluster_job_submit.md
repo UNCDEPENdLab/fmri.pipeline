@@ -85,6 +85,15 @@ cluster_job_submit(
   The number of seconds to wait before rechecking job status (used only
   for local scheduler)
 
+- tracking_sqlite_db:
+
+  Optional SQLite database used for job tracking.
+
+- tracking_args:
+
+  Optional job-tracking metadata passed through to the tracking
+  database.
+
 ## Value
 
 A character string containing the jobid of the scheduled job.

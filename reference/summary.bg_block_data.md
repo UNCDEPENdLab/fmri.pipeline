@@ -6,14 +6,18 @@ Summarize the contents of the subject data
 
 ``` r
 # S3 method for class 'bg_block_data'
-summary(df)
+summary(object, ...)
 ```
 
 ## Arguments
 
-- df:
+- object:
 
   A `bg_block_data` object containing block-level data.
+
+- ...:
+
+  ignored.
 
 ## Details
 

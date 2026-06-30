@@ -45,6 +45,10 @@ wait_for_job(
   jobs. If `FALSE`, the function prints out status updates for each
   tracked job so that the user knows what's holding up progress.
 
+- stop_on_timeout:
+
+  Whether to stop if `max_wait` is reached.
+
 ## Value
 
 Nothing. Just returns when the blocking job completes.

@@ -15,6 +15,10 @@ setup_compute_environment(gpa, preselect_action = NULL)
 
   a `glm_pipeline_arguments` object
 
+- preselect_action:
+
+  optional menu action to apply without prompting.
+
 ## Value
 
 a modified gpa object containing settings for the compute environment

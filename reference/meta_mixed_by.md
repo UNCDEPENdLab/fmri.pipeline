@@ -39,3 +39,24 @@ meta_mixed_by(
   overall effect. If `FALSE` or `"none"`, no split variable subsets will
   be fit. If `"individual"`, then the split variables are added in
   subsets individually, but their interactions are not.
+
+- max_order:
+
+  Maximum subset order for meta-regression combinations.
+
+- outcome:
+
+  Optional outcome column override.
+
+- fixef:
+
+  Optional fixed-effect specification.
+
+- rhs:
+
+  Optional right-hand-side formula specification.
+
+- brms_args:
+
+  Arguments passed to
+  [`brms::brm()`](https://paulbuerkner.com/brms/reference/brm.html).

@@ -98,21 +98,6 @@ than specified by <code>time_after</code>.</p></dd>
 <dd><p>return interpolated time series for each combination of group_by variables. Default is
 to provide one interpolated time series per trial.</p></dd>
 
-
-<dt id="arg-pad-before">pad_before<a class="anchor" aria-label="anchor" href="#arg-pad-before"></a></dt>
-<dd><p>Number of seconds to include in the epoch time window before the event of interest. Interpolation
-spans the window from <code>time_before</code> to <code>time_after</code>, but padding includes data points at the
-boundary that can help to have sufficient data to interpolate early and late times within the epoch.</p></dd>
-
-
-<dt id="arg-pad-after">pad_after<a class="anchor" aria-label="anchor" href="#arg-pad-after"></a></dt>
-<dd><p>Number of seconds to include in the epoch time window after the event of interest.</p></dd>
-
-
-<dt id="arg-output-resolution">output_resolution<a class="anchor" aria-label="anchor" href="#arg-output-resolution"></a></dt>
-<dd><p>the sampling frequency (in seconds) of the interpolated data. Defaults to be
-the same as <code>tr</code>.</p></dd>
-
 </dl></div>
     <div class="section level2">
     <h2 id="author">Author<a class="anchor" aria-label="anchor" href="#author"></a></h2>

@@ -71,12 +71,10 @@
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/do_convolve.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/dsigmoid.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/emmeans_to_3dlmer_glt.html</loc></url>
-<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/enforce_glms_complete.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/event_lock_ts.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/evt_align_decon_files.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/export_collinearity_to_csv.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/export_glm_config.html</loc></url>
-<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/extract_bids_info.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/extract_fsl_betas.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/extract_glm_betas_in_mask.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/extract_l1_collinearity.html</loc></url>
@@ -152,7 +150,6 @@
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/names_to_internal.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/ol_mean_min_max.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/ol_unique.html</loc></url>
-<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/path_sanitize.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/pca_motion.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/place_dmat_on_time_grid.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/plot_collinearity.html</loc></url>

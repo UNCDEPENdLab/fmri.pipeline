@@ -59,21 +59,18 @@ get_medusa_interpolated_ts(
 
 - pad_before:
 
-  Number of seconds to include in the epoch time window before the event
-  of interest. Interpolation spans the window from `time_before` to
-  `time_after`, but padding includes data points at the boundary that
-  can help to have sufficient data to interpolate early and late times
-  within the epoch.
+  Number of seconds to include before the event-locking window for
+  interpolation support.
 
 - pad_after:
 
-  Number of seconds to include in the epoch time window after the event
-  of interest.
+  Number of seconds to include after the event-locking window for
+  interpolation support.
 
 - output_resolution:
 
   the sampling frequency (in seconds) of the interpolated data. Defaults
-  to be the same as `tr`.
+  to the TR.
 
 - group_by:
 

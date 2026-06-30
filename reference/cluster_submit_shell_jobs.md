@@ -51,6 +51,10 @@ cluster_submit_shell_jobs(
 
   amount of time requested for each job
 
+- time_per_command:
+
+  amount of time requested for each individual command
+
 - fork_jobs:
 
   if TRUE, all jobs within a single batch will run simultaneously using
@@ -60,6 +64,28 @@ cluster_submit_shell_jobs(
 
   user-specified code to include in the job script prior to job_list
   (e.g., module load commands)
+
+- post:
+
+  user-specified code to include in the job script after job_list.
+
+- sched_args:
+
+  scheduler directives passed to
+  [`cluster_job_submit()`](https://uncdependlab.github.io/fmri.pipeline/reference/cluster_job_submit.md).
+
+- env_variables:
+
+  named environment variables passed to
+  [`cluster_job_submit()`](https://uncdependlab.github.io/fmri.pipeline/reference/cluster_job_submit.md).
+
+- wait_jobs:
+
+  jobs that must complete before submitted jobs run.
+
+- scheduler:
+
+  scheduler backend used for submission.
 
 - job_out_dir:
 

@@ -21,17 +21,7 @@ generate_trial_data_from_bids(bids_dir, modality = "func", task_name = "ridl")
 
 - task_name:
 
-  the name of the task, which is appended with `type`
-
-- type:
-
-  at present, always 'task' to denote this part of the BIDS filename...
-  Not totally sure what else it could be
-
-- suffix:
-
-  an optional suffix in the expected filename (just before the file
-  extension)
+  the name of the task, which is matched as a BIDS `task-` entity.
 
 ## Value
 
@@ -44,8 +34,8 @@ The files should generally have a name like
 sub-220256_task-ridl3_space-MNI152NLin2009cAsym_desc-preproc_bold_postprocessed.nii.gz
 and be located in a folder like:
 /proj/mnhallqlab/proc_data/sub-220256/func/ where 'func' is the
-`modality`, 'task' is the `type`, 'ridl' is the `task_name`, and
-'\_postprocessed' is the `suffix`.
+`modality`, and 'ridl' is the `task_name`. '\_postprocessed' is the
+`suffix`.
 
 ## Examples
 

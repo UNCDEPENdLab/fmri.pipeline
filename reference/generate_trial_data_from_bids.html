@@ -65,15 +65,7 @@ Almost always 'func', which is the default.</p></dd>
 
 
 <dt id="arg-task-name">task_name<a class="anchor" aria-label="anchor" href="#arg-task-name"></a></dt>
-<dd><p>the name of the task, which is appended with <code>type</code></p></dd>
-
-
-<dt id="arg-type">type<a class="anchor" aria-label="anchor" href="#arg-type"></a></dt>
-<dd><p>at present, always 'task' to denote this part of the BIDS filename... Not totally sure what else it could be</p></dd>
-
-
-<dt id="arg-suffix">suffix<a class="anchor" aria-label="anchor" href="#arg-suffix"></a></dt>
-<dd><p>an optional suffix in the expected filename (just before the file extension)</p></dd>
+<dd><p>the name of the task, which is matched as a BIDS <code>task-</code> entity.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -85,7 +77,7 @@ Almost always 'func', which is the default.</p></dd>
     <p>The files should generally have a name like
   sub-220256_task-ridl3_space-MNI152NLin2009cAsym_desc-preproc_bold_postprocessed.nii.gz
   and be located in a folder like: /proj/mnhallqlab/proc_data/sub-220256/func/
-  where 'func' is the <code>modality</code>, 'task' is the <code>type</code>, 'ridl' is the <code>task_name</code>, and
+  where 'func' is the <code>modality</code>, and 'ridl' is the <code>task_name</code>.
   '_postprocessed' is the <code>suffix</code>.</p>
     </div>
 

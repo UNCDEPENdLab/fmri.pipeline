@@ -40,11 +40,23 @@ get_output_directory(
 
   The run number to lookup
 
+- l1_model, l2_model, l3_model:
+
+  Optional model names used in output templates.
+
 - l1_cope_number, l2_cope_number, l3_cope_number:
 
   Optional cope numbers used in output templates. These are combined
   with the corresponding contrast names into labels such as
   `02_EV_house`.
+
+- l1_contrast, l2_contrast, l3_contrast:
+
+  Optional contrast names used in output templates.
+
+- what:
+
+  output directory type to return.
 
 - gpa:
 

@@ -23,6 +23,14 @@ spm_l1_model(
 
 ## Arguments
 
+- id:
+
+  subject id.
+
+- session:
+
+  session number.
+
 - l1_confound_files:
 
   optional character vector of nuisance regressor files, one per run, to
@@ -50,6 +58,18 @@ spm_l1_model(
 - run_numbers:
 
   optional integer vector of run numbers corresponding to `run_nifti`
+
+- run_sessions:
+
+  optional session vector corresponding to `run_nifti`.
+
+- source_run_numbers:
+
+  optional source run numbers for pooled/session models.
+
+- l1_session_mode:
+
+  optional session handling mode for SPM L1 setup.
 
 - execute_spm:
 

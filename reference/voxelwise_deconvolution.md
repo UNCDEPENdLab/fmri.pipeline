@@ -65,6 +65,11 @@ voxelwise_deconvolution(
   field. Default: 0. Useful if some number of volumes have been dropped
   from the NIfTI data prior to deconvolution.
 
+- atlas_files:
+
+  optional atlas file vector specifying voxels used in deconvolution. If
+  omitted, perform whole-brain deconvolution
+
 - mask:
 
   an optional character string specifying a mask that should be used to
@@ -98,11 +103,6 @@ voxelwise_deconvolution(
 
   Full path to directory containing AFNI binaries (this function uses
   3dMaskdump).
-
-- atlas:
-
-  an optional character vector specifying voxels used in deconvolution.
-  If omitted, perform whole-brain deconvolution
 
 ## Value
 
