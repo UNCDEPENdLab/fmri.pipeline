@@ -2,8 +2,6 @@
 
 R6 class for pTFCE specification for one or more z-statistic images
 
-R6 class for pTFCE specification for one or more z-statistic images
-
 ## Active bindings
 
 - `fwe_p`:
@@ -20,7 +18,7 @@ R6 class for pTFCE specification for one or more z-statistic images
 
 ### Public methods
 
-- [`ptfce_spec$new()`](#method-ptfce_spec-new)
+- [`ptfce_spec$new()`](#method-ptfce_spec-initialize)
 
 - [`ptfce_spec$get_ptfce_calls()`](#method-ptfce_spec-get_ptfce_calls)
 
@@ -38,7 +36,7 @@ R6 class for pTFCE specification for one or more z-statistic images
 
 ------------------------------------------------------------------------
 
-### Method `new()`
+### `ptfce_spec$new()`
 
 Create a new ptfce_spec object
 
@@ -132,7 +130,7 @@ Create a new ptfce_spec object
 
 ------------------------------------------------------------------------
 
-### Method `get_ptfce_calls()`
+### `ptfce_spec$get_ptfce_calls()`
 
 method to return calls to external ptfce_zstat.R script for each zstat
 
@@ -149,7 +147,7 @@ method to return calls to external ptfce_zstat.R script for each zstat
 
 ------------------------------------------------------------------------
 
-### Method `get_expected_files()`
+### `ptfce_spec$get_expected_files()`
 
 return the vector of expected output files
 
@@ -159,7 +157,7 @@ return the vector of expected output files
 
 ------------------------------------------------------------------------
 
-### Method `run()`
+### `ptfce_spec$run()`
 
 Run pTFCE in this compute environment. This is not supported at present!
 
@@ -176,7 +174,7 @@ Run pTFCE in this compute environment. This is not supported at present!
 
 ------------------------------------------------------------------------
 
-### Method `submit()`
+### `ptfce_spec$submit()`
 
 #### Usage
 
@@ -191,7 +189,7 @@ Run pTFCE in this compute environment. This is not supported at present!
 
 ------------------------------------------------------------------------
 
-### Method `is_complete()`
+### `ptfce_spec$is_complete()`
 
 returns `TRUE` if all expected pTFCE output files exist, `FALSE` if any
 output is missing
@@ -202,7 +200,7 @@ output is missing
 
 ------------------------------------------------------------------------
 
-### Method `get_clusters()`
+### `ptfce_spec$get_clusters()`
 
 for each input file, obtain 3dClusterize objects that reflect the
 pTFCE-corrected clusters
@@ -249,7 +247,7 @@ clust_nvox \> 1, but it may be a good idea for your sanity.
 
 ------------------------------------------------------------------------
 
-### Method `clone()`
+### `ptfce_spec$clone()`
 
 The objects of this class are cloneable with this method.
 

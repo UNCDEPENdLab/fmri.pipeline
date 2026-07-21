@@ -1,6 +1,6 @@
-# Internal function to construct the 3dLMEr command string
+# Normalize an AFNI 3dLMEr model formula
 
-Internal function to construct the 3dLMEr command string
+Normalize an AFNI 3dLMEr model formula
 
 ## Usage
 
@@ -12,8 +12,8 @@ sanitize_3dlmer_model_formula(model_formula)
 
 - model_formula:
 
-  fixed effects formula string
+  fixed-effects formula string.
 
 ## Value
 
-a compact 3dLMEr formula string
+A character string with whitespace removed.

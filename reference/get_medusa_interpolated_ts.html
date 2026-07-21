@@ -99,15 +99,18 @@ than specified by <code>time_after</code>.</p></dd>
 
 
 <dt id="arg-pad-before">pad_before<a class="anchor" aria-label="anchor" href="#arg-pad-before"></a></dt>
-<dd><p>Number of seconds to include before the event-locking window for interpolation support.</p></dd>
+<dd><p>Number of seconds to include in the epoch time window before the event of interest. Interpolation
+spans the window from <code>time_before</code> to <code>time_after</code>, but padding includes data points at the
+boundary that can help provide sufficient data to interpolate early and late times within the epoch.</p></dd>
 
 
 <dt id="arg-pad-after">pad_after<a class="anchor" aria-label="anchor" href="#arg-pad-after"></a></dt>
-<dd><p>Number of seconds to include after the event-locking window for interpolation support.</p></dd>
+<dd><p>Number of seconds to include in the epoch time window after the event of interest.</p></dd>
 
 
 <dt id="arg-output-resolution">output_resolution<a class="anchor" aria-label="anchor" href="#arg-output-resolution"></a></dt>
-<dd><p>the sampling frequency (in seconds) of the interpolated data. Defaults to the TR.</p></dd>
+<dd><p>Time step, in seconds, for the interpolated data. Defaults to the repetition time
+stored in <code>fmri_obj</code>.</p></dd>
 
 
 <dt id="arg-group-by">group_by<a class="anchor" aria-label="anchor" href="#arg-group-by"></a></dt>
@@ -133,7 +136,7 @@ to provide one interpolated time series per trial.</p></dd>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

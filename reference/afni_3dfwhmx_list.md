@@ -3,14 +3,11 @@
 R6 class for running 3dFWHMx on a group of input files using a
 scheduler/cluster
 
-R6 class for running 3dFWHMx on a group of input files using a
-scheduler/cluster
-
 ## Methods
 
 ### Public methods
 
-- [`afni_3dfwhmx_list$new()`](#method-afni_3dfwhmx_list-new)
+- [`afni_3dfwhmx_list$new()`](#method-afni_3dfwhmx_list-initialize)
 
 - [`afni_3dfwhmx_list$refresh()`](#method-afni_3dfwhmx_list-refresh)
 
@@ -30,7 +27,7 @@ scheduler/cluster
 
 ------------------------------------------------------------------------
 
-### Method `new()`
+### `afni_3dfwhmx_list$new()`
 
 create a new afni_3dfwhmx_list object
 
@@ -68,7 +65,7 @@ create a new afni_3dfwhmx_list object
 
 ------------------------------------------------------------------------
 
-### Method `refresh()`
+### `afni_3dfwhmx_list$refresh()`
 
 recreate afni_3dfwhmx objects and completion status
 
@@ -88,7 +85,7 @@ useful for updating job status and ACF params after a run completes
 
 ------------------------------------------------------------------------
 
-### Method `submit()`
+### `afni_3dfwhmx_list$submit()`
 
 Submit the 3dFWHMx batch for all inputs to the scheduler
 
@@ -105,7 +102,7 @@ Submit the 3dFWHMx batch for all inputs to the scheduler
 
 ------------------------------------------------------------------------
 
-### Method `get_batch()`
+### `afni_3dfwhmx_list$get_batch()`
 
 Return R_batch_job objects used to submit 3dFWHMx for all inputs
 
@@ -122,7 +119,7 @@ Return R_batch_job objects used to submit 3dFWHMx for all inputs
 
 ------------------------------------------------------------------------
 
-### Method `get_acf_average()`
+### `afni_3dfwhmx_list$get_acf_average()`
 
 method to calculate the overall ACF average across all input datasets
 
@@ -145,7 +142,7 @@ datasets
 
 ------------------------------------------------------------------------
 
-### Method `get_acf_df()`
+### `afni_3dfwhmx_list$get_acf_df()`
 
 return the 3dFWHMx results as a data.frame
 
@@ -155,7 +152,7 @@ return the 3dFWHMx results as a data.frame
 
 ------------------------------------------------------------------------
 
-### Method `get_effective_fwhm()`
+### `afni_3dfwhmx_list$get_effective_fwhm()`
 
 return the effective FWHM estimated by 3dFWHMx -ACF
 
@@ -165,7 +162,7 @@ return the effective FWHM estimated by 3dFWHMx -ACF
 
 ------------------------------------------------------------------------
 
-### Method `is_complete()`
+### `afni_3dfwhmx_list$is_complete()`
 
 Simple method to return whether 3dFWHMx is complete for all input files
 
@@ -179,7 +176,7 @@ returns `TRUE` if 3dFWHMx has completed for all runs
 
 ------------------------------------------------------------------------
 
-### Method `clone()`
+### `afni_3dfwhmx_list$clone()`
 
 The objects of this class are cloneable with this method.
 

@@ -3,14 +3,11 @@
 R6 class for a keyed data.table object that uses run-length encoding to
 reduce storage size
 
-R6 class for a keyed data.table object that uses run-length encoding to
-reduce storage size
-
 ## Methods
 
 ### Public methods
 
-- [`rle_dt$new()`](#method-rle_dt-new)
+- [`rle_dt$new()`](#method-rle_dt-initialize)
 
 - [`rle_dt$get()`](#method-rle_dt-get)
 
@@ -18,7 +15,7 @@ reduce storage size
 
 ------------------------------------------------------------------------
 
-### Method `new()`
+### `rle_dt$new()`
 
 Create an RLE-encoded copy of the data
 
@@ -45,7 +42,7 @@ Create an RLE-encoded copy of the data
 
 ------------------------------------------------------------------------
 
-### Method [`get()`](https://rdrr.io/r/base/get.html)
+### `rle_dt$get()`
 
 Simple method to return the data.table with all columns in their
 original form.
@@ -62,7 +59,7 @@ originally provided, left-to-right)
 
 ------------------------------------------------------------------------
 
-### Method `clone()`
+### `rle_dt$clone()`
 
 The objects of this class are cloneable with this method.
 

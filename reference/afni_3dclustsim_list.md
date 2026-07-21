@@ -2,13 +2,11 @@
 
 R6 class for a list of 3dClustSim runs
 
-R6 class for a list of 3dClustSim runs
-
 ## Methods
 
 ### Public methods
 
-- [`afni_3dclustsim_list$new()`](#method-afni_3dclustsim_list-new)
+- [`afni_3dclustsim_list$new()`](#method-afni_3dclustsim_list-initialize)
 
 - [`afni_3dclustsim_list$submit()`](#method-afni_3dclustsim_list-submit)
 
@@ -18,7 +16,7 @@ R6 class for a list of 3dClustSim runs
 
 ------------------------------------------------------------------------
 
-### Method `new()`
+### `afni_3dclustsim_list$new()`
 
 create a new afni_3dclustsim_list object
 
@@ -38,7 +36,7 @@ create a new afni_3dclustsim_list object
 
 ------------------------------------------------------------------------
 
-### Method `submit()`
+### `afni_3dclustsim_list$submit()`
 
 submit all jobs in this list
 
@@ -55,7 +53,7 @@ submit all jobs in this list
 
 ------------------------------------------------------------------------
 
-### Method `get_objs()`
+### `afni_3dclustsim_list$get_objs()`
 
 return the clustsim objects
 
@@ -65,7 +63,7 @@ return the clustsim objects
 
 ------------------------------------------------------------------------
 
-### Method `clone()`
+### `afni_3dclustsim_list$clone()`
 
 The objects of this class are cloneable with this method.
 

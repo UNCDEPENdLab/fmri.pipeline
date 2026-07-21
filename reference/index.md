@@ -84,9 +84,6 @@
   : Concatenate design matrices for each run to form a single design
   with unique baselines per run (ala AFNI)
 
-- [`confound_manipulations()`](https://uncdependlab.github.io/fmri.pipeline/reference/confound_manipulations.md)
-  : helper function to manipulate confounds
-
 - [`convolve_cpp`](https://uncdependlab.github.io/fmri.pipeline/reference/convolve_cpp.md)
   : Internal function to convolve two vectors using nested for loop
 
@@ -374,9 +371,6 @@
 
 - [`summary(`*`<l1_model_set_signals>`*`)`](https://uncdependlab.github.io/fmri.pipeline/reference/summary.l1_model_set_signals.md)
   : Helper function to better summarize GPA object's l1_models' signals
-
-- [`test_exclude_run()`](https://uncdependlab.github.io/fmri.pipeline/reference/test_exclude_run.md)
-  : calculate whether to retain or exclude this run
 
 - [`update_tracked_job_status()`](https://uncdependlab.github.io/fmri.pipeline/reference/update_tracked_job_status.md)
   : Update job status in tracking SQLite database

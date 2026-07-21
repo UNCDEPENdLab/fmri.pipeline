@@ -1,6 +1,6 @@
-# Internal function to construct the 3dLMEr command string
+# Construct an AFNI 3dLMEr command string
 
-Internal function to construct the 3dLMEr command string
+Construct an AFNI 3dLMEr command string
 
 ## Usage
 
@@ -21,36 +21,36 @@ build_3dlmer_command(
 
 - prefix:
 
-  output prefix for 3dLMEr
+  Output prefix for 3dLMEr.
 
 - model_formula:
 
-  fixed effects formula string
+  Fixed-effects formula string.
 
 - qVars:
 
-  character vector of quantitative variables
+  Character vector of quantitative variables.
 
 - glt_codes:
 
-  list of named GLT code strings
+  List, character vector, or data frame of named GLT code strings.
 
 - data_table_file:
 
-  path to the data table text file
+  Path to the data-table text file.
 
 - mask:
 
-  path to the brain mask file
+  Optional path to the brain-mask file.
 
 - njobs:
 
-  number of parallel jobs for 3dLMEr
+  Number of parallel jobs for 3dLMEr.
 
 - ss_type:
 
-  sum of squares type (default 3)
+  Sum-of-squares type (1–3; defaults to 3).
 
 ## Value
 
-a character string containing the 3dLMEr command
+A character string containing the 3dLMEr command.

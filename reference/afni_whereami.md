@@ -2,13 +2,11 @@
 
 wrapper class for AFNI whereami
 
-wrapper class for AFNI whereami
-
 ## Methods
 
 ### Public methods
 
-- [`afni_whereami$new()`](#method-afni_whereami-new)
+- [`afni_whereami$new()`](#method-afni_whereami-initialize)
 
 - [`afni_whereami$get_call()`](#method-afni_whereami-get_call)
 
@@ -28,7 +26,7 @@ wrapper class for AFNI whereami
 
 ------------------------------------------------------------------------
 
-### Method `new()`
+### `afni_whereami$new()`
 
 create new afni_whereami object
 
@@ -102,7 +100,7 @@ create new afni_whereami object
 
 ------------------------------------------------------------------------
 
-### Method `get_call()`
+### `afni_whereami$get_call()`
 
 return the whereami call for this object
 
@@ -112,7 +110,7 @@ return the whereami call for this object
 
 ------------------------------------------------------------------------
 
-### Method `get_omask_call()`
+### `afni_whereami$get_omask_call()`
 
 return the whereami call for the omask lookup
 
@@ -122,7 +120,7 @@ return the whereami call for the omask lookup
 
 ------------------------------------------------------------------------
 
-### Method `get_whereami_df()`
+### `afni_whereami$get_whereami_df()`
 
 return the data.frame of coordinates and labels from the whereami lookup
 
@@ -132,7 +130,7 @@ return the data.frame of coordinates and labels from the whereami lookup
 
 ------------------------------------------------------------------------
 
-### Method `get_overlap_df()`
+### `afni_whereami$get_overlap_df()`
 
 return the data.frame of percent overlap between each atlas and
 clusters/ROIs in the input mask
@@ -143,7 +141,7 @@ clusters/ROIs in the input mask
 
 ------------------------------------------------------------------------
 
-### Method `get_omask_df()`
+### `afni_whereami$get_omask_df()`
 
 return the data.frame of the percentage overlap for each parcel (not
 implemented)
@@ -154,7 +152,7 @@ implemented)
 
 ------------------------------------------------------------------------
 
-### Method `get_outputs()`
+### `afni_whereami$get_outputs()`
 
 return a list of the output files from this whereami object
 
@@ -175,7 +173,7 @@ a list of all output files
 
 ------------------------------------------------------------------------
 
-### Method `run()`
+### `afni_whereami$run()`
 
 Run whereami for this object
 
@@ -192,7 +190,7 @@ Run whereami for this object
 
 ------------------------------------------------------------------------
 
-### Method `clone()`
+### `afni_whereami$clone()`
 
 The objects of this class are cloneable with this method.
 

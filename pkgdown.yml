@@ -1,5 +1,5 @@
 pandoc: 3.8.3
-pkgdown: 2.2.0
+pkgdown: 2.2.1
 pkgdown_sha: ~
 articles:
   design: design.html
@@ -8,7 +8,7 @@ articles:
   interactive-model-builder: interactive-model-builder.html
   longitudinal: longitudinal.html
   quickstart: quickstart.html
-last_built: 2026-06-30T15:19Z
+last_built: 2026-07-21T23:02Z
 urls:
   reference: https://uncdependlab.github.io/fmri.pipeline/reference
   article: https://uncdependlab.github.io/fmri.pipeline/articles

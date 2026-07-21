@@ -2,13 +2,11 @@
 
 helper class to generate 3dttest++ null datasets using -randomsign
 
-helper class to generate 3dttest++ null datasets using -randomsign
-
 ## Methods
 
 ### Public methods
 
-- [`simulate_null_3dttest$new()`](#method-simulate_null_3dttest-new)
+- [`simulate_null_3dttest$new()`](#method-simulate_null_3dttest-initialize)
 
 - [`simulate_null_3dttest$is_complete()`](#method-simulate_null_3dttest-is_complete)
 
@@ -26,7 +24,7 @@ helper class to generate 3dttest++ null datasets using -randomsign
 
 ------------------------------------------------------------------------
 
-### Method `new()`
+### `simulate_null_3dttest$new()`
 
 initialize a simulate_null_3dttest object to support 3dttest++
 -randomsign
@@ -86,7 +84,7 @@ initialize a simulate_null_3dttest object to support 3dttest++
 
 ------------------------------------------------------------------------
 
-### Method `is_complete()`
+### `simulate_null_3dttest$is_complete()`
 
 test whether the expected outputs of the permutation are complete
 
@@ -100,7 +98,7 @@ a boolean indicating whether the expected output file exists
 
 ------------------------------------------------------------------------
 
-### Method `submit()`
+### `simulate_null_3dttest$submit()`
 
 submit the permutation job to the cluster
 
@@ -117,7 +115,7 @@ submit the permutation job to the cluster
 
 ------------------------------------------------------------------------
 
-### Method `get_3dttest_calls()`
+### `simulate_null_3dttest$get_3dttest_calls()`
 
 build the 3dttest++ command strings for each permutation job
 
@@ -138,7 +136,7 @@ A character vector of 3dttest++ calls.
 
 ------------------------------------------------------------------------
 
-### Method `get_permutation_files()`
+### `simulate_null_3dttest$get_permutation_files()`
 
 return the permutation output files once available
 
@@ -153,7 +151,7 @@ file.
 
 ------------------------------------------------------------------------
 
-### Method `get_batch()`
+### `simulate_null_3dttest$get_batch()`
 
 return the R_batch_job used to run 3dttest permutations
 
@@ -167,7 +165,7 @@ An R_batch_job object.
 
 ------------------------------------------------------------------------
 
-### Method `get_use_sdat()`
+### `simulate_null_3dttest$get_use_sdat()`
 
 indicate whether sdat output is enabled
 
@@ -181,7 +179,7 @@ A logical scalar.
 
 ------------------------------------------------------------------------
 
-### Method `clone()`
+### `simulate_null_3dttest$clone()`
 
 The objects of this class are cloneable with this method.
 

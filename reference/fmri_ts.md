@@ -3,9 +3,6 @@
 R6 class representing a multivariate time series object for fMRI
 analysis
 
-R6 class representing a multivariate time series object for fMRI
-analysis
-
 ## Public fields
 
 - `ts_data`:
@@ -33,7 +30,7 @@ analysis
 
 ### Public methods
 
-- [`fmri_ts$new()`](#method-fmri_ts-new)
+- [`fmri_ts$new()`](#method-fmri_ts-initialize)
 
 - [`fmri_ts$get_ts()`](#method-fmri_ts-get_ts)
 
@@ -51,7 +48,7 @@ analysis
 
 ------------------------------------------------------------------------
 
-### Method `new()`
+### `fmri_ts$new()`
 
 Create a new fmri_ts object
 
@@ -81,7 +78,7 @@ Create a new fmri_ts object
 
 ------------------------------------------------------------------------
 
-### Method `get_ts()`
+### `fmri_ts$get_ts()`
 
 method to get rehydrated time series object with key values
 
@@ -98,7 +95,7 @@ method to get rehydrated time series object with key values
 
 ------------------------------------------------------------------------
 
-### Method `add_keys()`
+### `fmri_ts$add_keys()`
 
 method to add a variable in ts_data to the set of keying variables for
 further use
@@ -116,7 +113,7 @@ further use
 
 ------------------------------------------------------------------------
 
-### Method `replace_vm()`
+### `fmri_ts$replace_vm()`
 
 method to replace one or more variable mappings in the object
 
@@ -133,7 +130,7 @@ method to replace one or more variable mappings in the object
 
 ------------------------------------------------------------------------
 
-### Method `get_kvars()`
+### `fmri_ts$get_kvars()`
 
 return names of key variables
 
@@ -143,7 +140,7 @@ return names of key variables
 
 ------------------------------------------------------------------------
 
-### Method `get_vmvec()`
+### `fmri_ts$get_vmvec()`
 
 return variable mapping information
 
@@ -153,7 +150,7 @@ return variable mapping information
 
 ------------------------------------------------------------------------
 
-### Method `export()`
+### `fmri_ts$export()`
 
 not currently used
 
@@ -169,7 +166,7 @@ not currently used
 
 ------------------------------------------------------------------------
 
-### Method `clone()`
+### `fmri_ts$clone()`
 
 The objects of this class are cloneable with this method.
 

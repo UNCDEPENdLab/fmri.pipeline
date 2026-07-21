@@ -3,14 +3,11 @@
 R6 class for an FWE correction method that can apply to one or more
 models
 
-R6 class for an FWE correction method that can apply to one or more
-models
-
 ## Methods
 
 ### Public methods
 
-- [`fwe_spec$new()`](#method-fwe_spec-new)
+- [`fwe_spec$new()`](#method-fwe_spec-initialize)
 
 - [`fwe_spec$submit()`](#method-fwe_spec-submit)
 
@@ -18,7 +15,7 @@ models
 
 ------------------------------------------------------------------------
 
-### Method `new()`
+### `fwe_spec$new()`
 
 create a new FWE correction instance
 
@@ -38,7 +35,7 @@ create a new FWE correction instance
 
 ------------------------------------------------------------------------
 
-### Method `submit()`
+### `fwe_spec$submit()`
 
 submit FWE estimation to the cluster
 
@@ -48,7 +45,7 @@ submit FWE estimation to the cluster
 
 ------------------------------------------------------------------------
 
-### Method `clone()`
+### `fwe_spec$clone()`
 
 The objects of this class are cloneable with this method.
 
