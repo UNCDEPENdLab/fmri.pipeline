@@ -12,6 +12,8 @@
 #' @importFrom magrittr %>%
 #' @importFrom tidyselect all_of
 #' @importFrom dplyr select
+#' @importFrom stats setNames
+#' @importFrom utils menu select.list tail
 #' @export
 #'
 build_l2_models <- function(gpa, from_spec_file = NULL, regressor_cols = NULL) {
@@ -314,10 +316,75 @@ build_l2_models <- function(gpa, from_spec_file = NULL, regressor_cols = NULL) {
 }
 
 #' Interactive function to build an l3 model specification for setup_glm_pipeline
+#' @param gpa a \code{glm_pipeline_arguments} object.
+#' @param from_spec_file optional YAML or JSON file containing L3 model settings.
+#' @param regressor_cols optional character vector of columns to consider as regressors.
 #' @rdname build_l3_models
 #' @name build_l3_models
 #' @export
 build_l3_models <- build_l2_models
+
+
+#' Choose higher-level model regressors interactively
+#' @param data data.frame containing candidate regressors
+#' @param regressor_cols current selected regressor columns
+#' @return character vector of selected regressor columns
+#' @importFrom utils menu select.list
+#' @noRd
+get_regressors <- function(data, regressor_cols = NULL) {
+  done_regressors <- FALSE
+  while (isFALSE(done_regressors)) {
+    cat("Current regressors for this model:\n\n  ", paste(regressor_cols, collapse = ", "), "\n\n")
+
+    var_origin <- attr(data, "l2_var_origin")
+    if (!is.null(var_origin)) {
+      session_vars <- names(var_origin)[var_origin == "session"]
+      if (length(session_vars) > 0L) {
+        cat(
+          "  Session-level columns (for between-session effects): ",
+          paste(session_vars, collapse = ", "), "\n\n", sep = ""
+        )
+      }
+    }
+
+    action <- menu(c("Add/modify regressors", "Delete regressors", "Done with regressor selection"),
+      title = "Would you like to modify the model regressors?"
+    )
+
+    if (action == 1L) {
+      regressor_cols <- select.list(names(data),
+        multiple = TRUE, preselect = regressor_cols,
+        title = "Choose all model regressors\n(Command/Control-click to select multiple)"
+      )
+    } else if (action == 2L) {
+      if (length(regressor_cols) == 0L) {
+        message("No regressors yet. Please add at least one.")
+      } else {
+        which_del <- menu(regressor_cols, title = "Which regressor would you like to remove?")
+        if (which_del > 0) {
+          proceed <- menu(c("Proceed", "Cancel"),
+            title = paste0("Are you sure you want to delete ", regressor_cols[which_del], "?")
+          )
+          if (proceed == 1) {
+            cat("  Deleting ", regressor_cols[which_del], "\n")
+            regressor_cols <- regressor_cols[-which_del]
+          } else {
+            cat("  Not deleting ", regressor_cols[which_del], "\n")
+          }
+        }
+      }
+    } else if (action == 3L) {
+      if (length(regressor_cols) == 0L) {
+        message("No regressors yet. Please add at least one.")
+      } else {
+        done_regressors <- TRUE
+        cat("The following columns were chosen as model regressors.\n\n")
+        cat("  ", paste(regressor_cols, collapse = ", "), "\n\n")
+      }
+    }
+  }
+  regressor_cols
+}
 
 
 #' Internal function to walk through l2/l3 model setup, including populated from a specification (YAML) file
@@ -331,6 +398,8 @@ build_l3_models <- build_l2_models
 #'   of the specification list, rather than prompting the user for input
 #' @return a `hi_model_spec` object containing the L2/L3 model to be added to gpa$l2_models or gpa$l3_models
 #' @importFrom checkmate assert_integerish assert_list assert_class test_data_table
+#' @importFrom stats alias coef model.matrix relevel terms update.formula
+#' @importFrom utils capture.output menu tail
 #' @keywords internal
 create_new_hi_model <- function(data, to_modify = NULL, level = NULL, cur_model_names = NULL, spec_list = NULL, lg = NULL,
                                 retry_name = NULL) {

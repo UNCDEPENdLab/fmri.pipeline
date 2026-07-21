@@ -434,7 +434,7 @@ export_collinearity_to_csv <- function(collin_summary, output_dir, prefix = "col
 #' @return A ggplot object or list of ggplot objects
 #'
 #' @importFrom ggplot2 ggplot aes geom_boxplot geom_hline geom_tile scale_fill_gradient2
-#'   theme_minimal labs coord_flip theme element_text
+#' @importFrom ggplot2 theme_minimal labs coord_flip theme element_text
 #' @export
 plot_collinearity <- function(collin_summary, plot_type = "both") {
   checkmate::assert_class(collin_summary, "l1_collinearity_summary")

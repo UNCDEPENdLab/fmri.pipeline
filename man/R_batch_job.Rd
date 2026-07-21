@@ -5,109 +5,108 @@
 \title{Description of R_batch_job R6 class}
 \description{
 Description of R_batch_job R6 class
-
-Description of R_batch_job R6 class
 }
 \section{Public fields}{
-\if{html}{\out{<div class="r6-fields">}}
-\describe{
-\item{\code{parent_jobs}}{a vector of parent_jobs that are upstream of this job and may influence its execution}
+  \if{html}{\out{<div class="r6-fields">}}
+  \describe{
+    \item{\code{parent_jobs}}{a vector of parent_jobs that are upstream of this job and may influence its execution}
 
-\item{\code{depends_on_parents}}{logical or character string indicating whether this job should wait until
+    \item{\code{depends_on_parents}}{logical or character string indicating whether this job should wait until
 \code{parent_jobs} complete. If a character string is passed, it indicates which named elements of
 \code{parent_jobs} must complete before this job begins.}
 
-\item{\code{job_name}}{a user-defined name for the job used for specifying job dependencies and informative job
+    \item{\code{job_name}}{a user-defined name for the job used for specifying job dependencies and informative job
 status queries on a job scheduler}
 
-\item{\code{wait_for_children}}{if TRUE, code will be inserted to wait for all jobs in a vector called
+    \item{\code{wait_for_children}}{if TRUE, code will be inserted to wait for all jobs in a vector called
 \code{child_job_ids} to finish before the batch exits. It's up to your code to use this variable name}
 
-\item{\code{all_children_successful}}{if TRUE, all jobs in vector \code{child_job_ids} 
+    \item{\code{all_children_successful}}{if TRUE, all jobs in vector \code{child_job_ids} 
 must be successful for this job to finish (see \code{wait_for_children} field)}
 
-\item{\code{wall_time}}{The amount of time requested on the job scheduler, following d-hh:mm:ss format. Defaults to
+    \item{\code{wall_time}}{The amount of time requested on the job scheduler, following d-hh:mm:ss format. Defaults to
 "4:00:00", which is 4 hours.}
 
-\item{\code{n_nodes}}{The number of nodes to be requested on the job scheduler}
+    \item{\code{n_nodes}}{The number of nodes to be requested on the job scheduler}
 
-\item{\code{n_cpus}}{The number of cores (aka 'cpus', ignoring hyperthreading) to be requested on the job scheduler}
+    \item{\code{n_cpus}}{The number of cores (aka 'cpus', ignoring hyperthreading) to be requested on the job scheduler}
 
-\item{\code{mem_total}}{The total amount of memory (RAM) requested by the job}
+    \item{\code{mem_total}}{The total amount of memory (RAM) requested by the job}
 
-\item{\code{mem_per_cpu}}{The amount of memory (RAM) requested per cpu (total = mem_per_cpu * n_cpus)}
+    \item{\code{mem_per_cpu}}{The amount of memory (RAM) requested per cpu (total = mem_per_cpu * n_cpus)}
 
-\item{\code{input_objects}}{An environment containing all objects to be written to an RData object and passed
+    \item{\code{input_objects}}{An environment containing all objects to be written to an RData object and passed
 to the batch job at execution}
 
-\item{\code{input_rdata_file}}{The name of the environment to be loaded at the beginning of the R batch prior to executing}
+    \item{\code{input_rdata_file}}{The name of the environment to be loaded at the beginning of the R batch prior to executing}
 
-\item{\code{output_rdata_file}}{The name of the environment to be saved at the end of the R batch execution, which can then
+    \item{\code{output_rdata_file}}{The name of the environment to be saved at the end of the R batch execution, which can then
 be loaded by subsequent jobs.}
 
-\item{\code{sqlite_db}}{File path to tracking SQLite database}
+    \item{\code{sqlite_db}}{File path to tracking SQLite database}
 
-\item{\code{batch_directory}}{Location of batch scripts to be written}
+    \item{\code{batch_directory}}{Location of batch scripts to be written}
 
-\item{\code{batch_code}}{Shell code to be included in the batch script prior to the R code to be run. This can include
+    \item{\code{batch_code}}{Shell code to be included in the batch script prior to the R code to be run. This can include
 module load statements, environment variable exports, etc.}
 
-\item{\code{r_code}}{The R code to be executed by the scheduler. This can be a character vector that includes multiple
+    \item{\code{r_code}}{The R code to be executed by the scheduler. This can be a character vector that includes multiple
 R statements or an expression object containing the R code to be evaluated}
 
-\item{\code{post_children_r_code}}{The R code to be executed after child jobs have completed. This can be a character vector that includes
+    \item{\code{post_children_r_code}}{The R code to be executed after child jobs have completed. This can be a character vector that includes
 multiple R statements or an expression object containing the R code to be evaluated. Only relevant if wait_for_children = TRUE}
 
-\item{\code{r_packages}}{The R packages to be loaded into the environment before job execution. These are loaded by
+    \item{\code{r_packages}}{The R packages to be loaded into the environment before job execution. These are loaded by
 pacman::p_load, which will install any missing packages before attempting to load}
 
-\item{\code{scheduler}}{The job scheduler to be used for this batch. Options are: "slurm", "torque", or "local".}
+    \item{\code{scheduler}}{The job scheduler to be used for this batch. Options are: "slurm", "torque", or "local".}
 
-\item{\code{scheduler_options}}{An optional character vector of scheduler arguments to be included in the batch script header
+    \item{\code{scheduler_options}}{An optional character vector of scheduler arguments to be included in the batch script header
 that control additional features such as job emails or group permissions. These directives are added with #SBATCH
 or #PBS headings, depending on the scheduler, and are ignored if the scheduler is "local".}
 
-\item{\code{repolling_interval}}{The number of seconds to wait between successive checks on whether parent jobs have completed.
+    \item{\code{repolling_interval}}{The number of seconds to wait between successive checks on whether parent jobs have completed.
 This is mostly relevant to the 'local' scheduler.}
 
-\item{\code{print_session_info}}{If TRUE, print the `sessionInfo()` and `Sys.info()` when the job starts. Useful for debugging
+    \item{\code{print_session_info}}{If TRUE, print the `sessionInfo()` and `Sys.info()` when the job starts. Useful for debugging
 problems with the compute environment or R installation.}
 
-\item{\code{print_environment}}{If `TRUE`, print the `Sys.getenv()` when the job starts. This can produce a lot of output,
+    \item{\code{print_environment}}{If `TRUE`, print the `Sys.getenv()` when the job starts. This can produce a lot of output,
 but can be useful if certain environment variables are not being found when your job runs, leading it to fail.}
 
-\item{\code{sqlite_cache_obj}}{If `TRUE`, copy this object into the SQLite database at submission time. This is mostly useful for
+    \item{\code{sqlite_cache_obj}}{If `TRUE`, copy this object into the SQLite database at submission time. This is mostly useful for
 detailed debugging and is not generally recommended because it can increase the size of the database considerably}
-}
-\if{html}{\out{</div>}}
+  }
+  \if{html}{\out{</div>}}
 }
 \section{Active bindings}{
-\if{html}{\out{<div class="r6-active-bindings">}}
-\describe{
-\item{\code{sequence_id}}{Used to identify sequence when using R_batch_sequence}
-}
-\if{html}{\out{</div>}}
+  \if{html}{\out{<div class="r6-active-bindings">}}
+  \describe{
+    \item{\code{sequence_id}}{Used to identify sequence when using R_batch_sequence}
+  }
+  \if{html}{\out{</div>}}
 }
 \section{Methods}{
 \subsection{Public methods}{
-\itemize{
-\item \href{#method-batch_job-new}{\code{R_batch_job$new()}}
-\item \href{#method-batch_job-generate}{\code{R_batch_job$generate()}}
-\item \href{#method-batch_job-submit}{\code{R_batch_job$submit()}}
-\item \href{#method-batch_job-copy}{\code{R_batch_job$copy()}}
-\item \href{#method-batch_job-reset_file_names}{\code{R_batch_job$reset_file_names()}}
-\item \href{#method-batch_job-get_job_id}{\code{R_batch_job$get_job_id()}}
-\item \href{#method-batch_job-get_child_ids}{\code{R_batch_job$get_child_ids()}}
-\item \href{#method-batch_job-clone}{\code{R_batch_job$clone()}}
-}
+  \itemize{
+    \item \href{#method-batch_job-initialize}{\code{batch_job$new()}}
+    \item \href{#method-batch_job-generate}{\code{batch_job$generate()}}
+    \item \href{#method-batch_job-submit}{\code{batch_job$submit()}}
+    \item \href{#method-batch_job-copy}{\code{batch_job$copy()}}
+    \item \href{#method-batch_job-reset_file_names}{\code{batch_job$reset_file_names()}}
+    \item \href{#method-batch_job-get_job_id}{\code{batch_job$get_job_id()}}
+    \item \href{#method-batch_job-get_child_ids}{\code{batch_job$get_child_ids()}}
+    \item \href{#method-batch_job-clone}{\code{batch_job$clone()}}
+  }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-batch_job-new"></a>}}
-\if{latex}{\out{\hypertarget{method-batch_job-new}{}}}
-\subsection{Method \code{new()}}{
-Create a new R_batch_job object for execution on an HPC cluster
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_job$new(
+\if{html}{\out{<a id="method-batch_job-initialize"></a>}}
+\if{latex}{\out{\hypertarget{method-batch_job-initialize}{}}}
+\subsection{\code{batch_job$new()}}{
+  Create a new R_batch_job object for execution on an HPC cluster
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_job$new(
   batch_directory = NULL,
   parent_jobs = NULL,
   job_name = NULL,
@@ -132,106 +131,88 @@ Create a new R_batch_job object for execution on an HPC cluster
   repolling_interval = NULL,
   print_session_info = TRUE,
   print_environment = FALSE
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{batch_directory}}{The location of batch scripts to be generated}
-
-\item{\code{parent_jobs}}{A vector of one or more job ids that are parents to this job. This can be a named vector, to
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{batch_directory}}{The location of batch scripts to be generated}
+      \item{\code{parent_jobs}}{A vector of one or more job ids that are parents to this job. This can be a named vector, to
 be used in conjunction with \code{depends_on_parents} to specify which parent jobs must be completed before this
 job begins.}
-
-\item{\code{job_name}}{The name of the job used in dependency specification and job scheduler naming}
-
-\item{\code{n_nodes}}{The number of compute nodes to be requested on the scheduler}
-
-\item{\code{n_cpus}}{The number of cpus to be requested on the scheduler}
-
-\item{\code{wall_time}}{The compute time requested on the cluster dd-HH:MM:SS}
-
-\item{\code{mem_per_cpu}}{The amount of memory to be requested per cpu}
-
-\item{\code{mem_total}}{The total amount of memory to requested by the job}
-
-\item{\code{r_code}}{A character vector or expression containing R code to be executed}
-
-\item{\code{r_script}}{The path to an R script to be executed by the batch (mutually exclusive with \code{r_code}).}
-
-\item{\code{post_children_r_code}}{A character vector of R code to be executed after waiting for child jobs finishes}
-
-\item{\code{batch_code}}{A character vector of code to be included in the batch script for job scheduling}
-
-\item{\code{r_packages}}{A character vector of R packages to be loaded when compute script runs}
-
-\item{\code{scheduler}}{The scheduler to be used for this compute. Options are 'slurm', 'torque', or 'local'.}
-
-\item{\code{wait_for_children}}{If TRUE, do not end this job until all child jobs have completed}
-
-\item{\code{all_children_successful}}{If TRUE, don't count this job as successful unless all child jobs are successful}
-
-\item{\code{input_rdata_file}}{The name of the environment to be loaded at the beginning of the R batch prior to executing code}
-
-\item{\code{input_objects}}{A list object in the current execution environment to be cached and used as input to the R batch.
+      \item{\code{job_name}}{The name of the job used in dependency specification and job scheduler naming}
+      \item{\code{n_nodes}}{The number of compute nodes to be requested on the scheduler}
+      \item{\code{n_cpus}}{The number of cpus to be requested on the scheduler}
+      \item{\code{wall_time}}{The compute time requested on the cluster dd-HH:MM:SS}
+      \item{\code{mem_per_cpu}}{The amount of memory to be requested per cpu}
+      \item{\code{mem_total}}{The total amount of memory to requested by the job}
+      \item{\code{r_code}}{A character vector or expression containing R code to be executed}
+      \item{\code{r_script}}{The path to an R script to be executed by the batch (mutually exclusive with \code{r_code}).}
+      \item{\code{post_children_r_code}}{A character vector of R code to be executed after waiting for child jobs finishes}
+      \item{\code{batch_code}}{A character vector of code to be included in the batch script for job scheduling}
+      \item{\code{r_packages}}{A character vector of R packages to be loaded when compute script runs}
+      \item{\code{scheduler}}{The scheduler to be used for this compute. Options are 'slurm', 'torque', or 'local'.}
+      \item{\code{wait_for_children}}{If TRUE, do not end this job until all child jobs have completed}
+      \item{\code{all_children_successful}}{If TRUE, don't count this job as successful unless all child jobs are successful}
+      \item{\code{input_rdata_file}}{The name of the environment to be loaded at the beginning of the R batch prior to executing code}
+      \item{\code{input_objects}}{A list object in the current execution environment to be cached and used as input to the R batch.
 This is mutually exclusive with input_rdata_file at present.}
-
-\item{\code{output_rdata_file}}{The name of the environment to be saved at the end of the R batch execution}
-
-\item{\code{sqlite_db}}{The location of the SQLite database to be used for job tracking. If `NULL`, job tracking will be disabled.}
-
-\item{\code{scheduler_options}}{A character vector of scheduler options to be added to the header of the batch script}
-
-\item{\code{repolling_interval}}{The number of seconds to wait before rechecking whether parent jobs have completed}
-
-\item{\code{print_session_info}}{If TRUE (default), print information about the R environment `sessionInfo()` and
+      \item{\code{output_rdata_file}}{The name of the environment to be saved at the end of the R batch execution}
+      \item{\code{sqlite_db}}{The location of the SQLite database to be used for job tracking. If `NULL`, job tracking will be disabled.}
+      \item{\code{scheduler_options}}{A character vector of scheduler options to be added to the header of the batch script}
+      \item{\code{repolling_interval}}{The number of seconds to wait before rechecking whether parent jobs have completed}
+      \item{\code{print_session_info}}{If TRUE (default), print information about the R environment `sessionInfo()` and
 compute environment `Sys.info()` when the job starts.}
+      \item{\code{print_environment}}{If TRUE, print the session environment via `Sys.getenv()` when the job starts. Default: FALSE.}
+    }
+    \if{html}{\out{</div>}}
+  }
+}
 
-\item{\code{print_environment}}{If TRUE, print the session environment via `Sys.getenv()` when the job starts. Default: FALSE.}
-}
-\if{html}{\out{</div>}}
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-batch_job-generate"></a>}}
 \if{latex}{\out{\hypertarget{method-batch_job-generate}{}}}
-\subsection{Method \code{generate()}}{
-Helper function that generates the batch and compute files for a job
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_job$generate(force = FALSE)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{force}}{if TRUE, the RData, batch, and compute will be regenerated/rewritten}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Details}{
-this is called by \code{$submit} when a job is submitted and is provided
+\subsection{\code{batch_job$generate()}}{
+  Helper function that generates the batch and compute files for a job
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_job$generate(force = FALSE)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{force}}{if TRUE, the RData, batch, and compute will be regenerated/rewritten}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Details}{
+    this is called by \code{$submit} when a job is submitted and is provided
   here in case the user wants to generate the batch files without executing them
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-batch_job-submit"></a>}}
 \if{latex}{\out{\hypertarget{method-batch_job-submit}{}}}
-\subsection{Method \code{submit()}}{
-Submit job to scheduler or local compute
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_job$submit()}\if{html}{\out{</div>}}
+\subsection{\code{batch_job$submit()}}{
+  Submit job to scheduler or local compute
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_job$submit()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-batch_job-copy"></a>}}
 \if{latex}{\out{\hypertarget{method-batch_job-copy}{}}}
-\subsection{Method \code{copy()}}{
-Function to create a deep copy of a batch job
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_job$copy(
+\subsection{\code{batch_job$copy()}}{
+  Function to create a deep copy of a batch job
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_job$copy(
   job_name = NULL,
   n_nodes = NULL,
   n_cpus = NULL,
@@ -239,85 +220,86 @@ Function to create a deep copy of a batch job
   mem_total = NULL,
   r_code = NULL,
   post_children_r_code = NULL
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{job_name}}{The name of the job used in dependency specification and job scheduler naming}
-
-\item{\code{n_nodes}}{The number of compute nodes to be requested on the scheduler}
-
-\item{\code{n_cpus}}{The number of cpus to be requested on the scheduler}
-
-\item{\code{wall_time}}{The compute time requested on the cluster dd-HH:MM:SS}
-
-\item{\code{mem_total}}{The total amount of memory (RAM) requested by the job}
-
-\item{\code{r_code}}{A character vector or expression containing R code to be executed}
-
-\item{\code{post_children_r_code}}{The R code to be executed after child jobs have completed}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Details}{
-Note that this also resets the compute_file_name and batch_file_name fields so that the
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{job_name}}{The name of the job used in dependency specification and job scheduler naming}
+      \item{\code{n_nodes}}{The number of compute nodes to be requested on the scheduler}
+      \item{\code{n_cpus}}{The number of cpus to be requested on the scheduler}
+      \item{\code{wall_time}}{The compute time requested on the cluster dd-HH:MM:SS}
+      \item{\code{mem_total}}{The total amount of memory (RAM) requested by the job}
+      \item{\code{r_code}}{A character vector or expression containing R code to be executed}
+      \item{\code{post_children_r_code}}{The R code to be executed after child jobs have completed}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Details}{
+    Note that this also resets the compute_file_name and batch_file_name fields so that the
    copied object doesn't create files that collide with the original.
    This method also exposes a few named parameters that can be used to override the copied fields
    with new values to avoid needing to change these one-by-one using obj$<field> <- x syntax
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-batch_job-reset_file_names"></a>}}
 \if{latex}{\out{\hypertarget{method-batch_job-reset_file_names}{}}}
-\subsection{Method \code{reset_file_names()}}{
-helper function to reset names of compute and batch files that will be generated by this job.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_job$reset_file_names()}\if{html}{\out{</div>}}
+\subsection{\code{batch_job$reset_file_names()}}{
+  helper function to reset names of compute and batch files that will be generated by this job.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_job$reset_file_names()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Details}{
+    This needs to be exposed as a public method for copied objects to be able to reset these private fields.
+  }
 }
 
-\subsection{Details}{
-This needs to be exposed as a public method for copied objects to be able to reset these private fields.
-}
-
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-batch_job-get_job_id"></a>}}
 \if{latex}{\out{\hypertarget{method-batch_job-get_job_id}{}}}
-\subsection{Method \code{get_job_id()}}{
-Return the job id of this job (populated by job submission)
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_job$get_job_id()}\if{html}{\out{</div>}}
+\subsection{\code{batch_job$get_job_id()}}{
+  Return the job id of this job (populated by job submission)
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_job$get_job_id()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-batch_job-get_child_ids"></a>}}
 \if{latex}{\out{\hypertarget{method-batch_job-get_child_ids}{}}}
-\subsection{Method \code{get_child_ids()}}{
-Return the ids of all child jobs launched by this job
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_job$get_child_ids()}\if{html}{\out{</div>}}
+\subsection{\code{batch_job$get_child_ids()}}{
+  Return the ids of all child jobs launched by this job
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_job$get_child_ids()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-batch_job-clone"></a>}}
 \if{latex}{\out{\hypertarget{method-batch_job-clone}{}}}
-\subsection{Method \code{clone()}}{
-The objects of this class are cloneable with this method.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_job$clone(deep = FALSE)}\if{html}{\out{</div>}}
+\subsection{\code{batch_job$clone()}}{
+  The objects of this class are cloneable with this method.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_job$clone(deep = FALSE)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{deep}}{Whether to make a deep clone.}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{deep}}{Whether to make a deep clone.}
-}
-\if{html}{\out{</div>}}
-}
-}
 }

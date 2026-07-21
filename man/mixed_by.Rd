@@ -118,8 +118,8 @@ Any arguments that are valid for emtrends can be passed through the list structu
 }
 \value{
 A list containing coefficient tables, fit statistics, optional post-hoc outputs
-(\code{emmeans_list}, \code{emmeans_pairs_list}, \code{emtrends_list},
-\code{emtrends_pairs_list}), residuals, fitted values, and optionally fitted models.
+  (\code{emmeans_list}, \code{emmeans_pairs_list}, \code{emtrends_list},
+  \code{emtrends_pairs_list}), residuals, fitted values, and optionally fitted models.
 }
 \description{
 Mixed by runs a set of mixed-effects models for each combination of a set of factors. Its primary use is to

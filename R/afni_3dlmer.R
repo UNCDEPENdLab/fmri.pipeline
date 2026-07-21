@@ -250,18 +250,11 @@ resolve_3dlmer_mask <- function(target_dir, harvested_inputs, explicit_mask = NU
   )
 }
 
-#' Internal function to construct the 3dLMEr command string
+#' Normalize an AFNI 3dLMEr model formula
 #'
-#' @param prefix output prefix for 3dLMEr
-#' @param model_formula fixed effects formula string
-#' @param qVars character vector of quantitative variables
-#' @param glt_codes list of named GLT code strings
-#' @param data_table_file path to the data table text file
-#' @param mask path to the brain mask file
-#' @param njobs number of parallel jobs for 3dLMEr
-#' @param ss_type sum of squares type (default 3)
+#' @param model_formula fixed-effects formula string.
 #'
-#' @return a character string containing the 3dLMEr command
+#' @return A character string with whitespace removed.
 #' @keywords internal
 # Collapse whitespace because AFNI counts spaces inside -model formulas.
 sanitize_3dlmer_model_formula <- function(model_formula) {
@@ -512,6 +505,19 @@ validate_3dlmer_glt_table <- function(glt_table, datatable, qVars = NULL, contex
   glt_table
 }
 
+#' Construct an AFNI 3dLMEr command string
+#'
+#' @param prefix Output prefix for 3dLMEr.
+#' @param model_formula Fixed-effects formula string.
+#' @param qVars Character vector of quantitative variables.
+#' @param glt_codes List, character vector, or data frame of named GLT code strings.
+#' @param data_table_file Path to the data-table text file.
+#' @param mask Optional path to the brain-mask file.
+#' @param njobs Number of parallel jobs for 3dLMEr.
+#' @param ss_type Sum-of-squares type (1--3; defaults to 3).
+#'
+#' @return A character string containing the 3dLMEr command.
+#' @keywords internal
 build_3dlmer_command <- function(prefix, model_formula, qVars = NULL, glt_codes = NULL,
                                  data_table_file, mask = NULL, njobs = 1, ss_type = 3) {
   checkmate::assert_string(prefix)

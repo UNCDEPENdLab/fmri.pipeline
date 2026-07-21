@@ -5,48 +5,47 @@
 \title{R6 class for 3dClustSim automation}
 \description{
 R6 class for 3dClustSim automation
-
-R6 class for 3dClustSim automation
 }
 \section{Public fields}{
-\if{html}{\out{<div class="r6-fields">}}
-\describe{
-\item{\code{fwhmx_set}}{A afni_3dfwhmx_list object containing 3dFWHMx information for all fwhmx_input_files}
+  \if{html}{\out{<div class="r6-fields">}}
+  \describe{
+    \item{\code{fwhmx_set}}{A afni_3dfwhmx_list object containing 3dFWHMx information for all fwhmx_input_files}
 
-\item{\code{inset_files}}{A character vector of files to use directly as volumes to threshold and clusterize}
+    \item{\code{inset_files}}{A character vector of files to use directly as volumes to threshold and clusterize}
 
-\item{\code{insdat_file}}{An sdat file containing permutations to be passed to 3dClustSim through -insdat}
+    \item{\code{insdat_file}}{An sdat file containing permutations to be passed to 3dClustSim through -insdat}
 
-\item{\code{insdat_mask_file}}{A mask file corresponding to the insdat_file data that indicates where each value is in space}
+    \item{\code{insdat_mask_file}}{A mask file corresponding to the insdat_file data that indicates where each value is in space}
 
-\item{\code{null_3dttest_obj}}{only used if residuals_file is passed in, this contains the object for running the permutations}
-}
-\if{html}{\out{</div>}}
+    \item{\code{null_3dttest_obj}}{only used if residuals_file is passed in, this contains the object for running the permutations}
+  }
+  \if{html}{\out{</div>}}
 }
 \section{Methods}{
 \subsection{Public methods}{
-\itemize{
-\item \href{#method-afni_3dclustsim-new}{\code{afni_3dclustsim$new()}}
-\item \href{#method-afni_3dclustsim-submit}{\code{afni_3dclustsim$submit()}}
-\item \href{#method-afni_3dclustsim-get_clustsim_df}{\code{afni_3dclustsim$get_clustsim_df()}}
-\item \href{#method-afni_3dclustsim-get_clustsim_output_files}{\code{afni_3dclustsim$get_clustsim_output_files()}}
-\item \href{#method-afni_3dclustsim-get_call}{\code{afni_3dclustsim$get_call()}}
-\item \href{#method-afni_3dclustsim-get_out_dir}{\code{afni_3dclustsim$get_out_dir()}}
-\item \href{#method-afni_3dclustsim-get_ncpus}{\code{afni_3dclustsim$get_ncpus()}}
-\item \href{#method-afni_3dclustsim-use_fwhmx_acf}{\code{afni_3dclustsim$use_fwhmx_acf()}}
-\item \href{#method-afni_3dclustsim-is_complete}{\code{afni_3dclustsim$is_complete()}}
-\item \href{#method-afni_3dclustsim-refresh}{\code{afni_3dclustsim$refresh()}}
-\item \href{#method-afni_3dclustsim-apply_clustsim}{\code{afni_3dclustsim$apply_clustsim()}}
-\item \href{#method-afni_3dclustsim-clone}{\code{afni_3dclustsim$clone()}}
-}
+  \itemize{
+    \item \href{#method-afni_3dclustsim-initialize}{\code{afni_3dclustsim$new()}}
+    \item \href{#method-afni_3dclustsim-submit}{\code{afni_3dclustsim$submit()}}
+    \item \href{#method-afni_3dclustsim-get_clustsim_df}{\code{afni_3dclustsim$get_clustsim_df()}}
+    \item \href{#method-afni_3dclustsim-get_clustsim_output_files}{\code{afni_3dclustsim$get_clustsim_output_files()}}
+    \item \href{#method-afni_3dclustsim-get_call}{\code{afni_3dclustsim$get_call()}}
+    \item \href{#method-afni_3dclustsim-get_out_dir}{\code{afni_3dclustsim$get_out_dir()}}
+    \item \href{#method-afni_3dclustsim-get_ncpus}{\code{afni_3dclustsim$get_ncpus()}}
+    \item \href{#method-afni_3dclustsim-use_fwhmx_acf}{\code{afni_3dclustsim$use_fwhmx_acf()}}
+    \item \href{#method-afni_3dclustsim-is_complete}{\code{afni_3dclustsim$is_complete()}}
+    \item \href{#method-afni_3dclustsim-refresh}{\code{afni_3dclustsim$refresh()}}
+    \item \href{#method-afni_3dclustsim-apply_clustsim}{\code{afni_3dclustsim$apply_clustsim()}}
+    \item \href{#method-afni_3dclustsim-clone}{\code{afni_3dclustsim$clone()}}
+  }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-afni_3dclustsim-new"></a>}}
-\if{latex}{\out{\hypertarget{method-afni_3dclustsim-new}{}}}
-\subsection{Method \code{new()}}{
-Create a new afni_3dclustsim object
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$new(
+\if{html}{\out{<a id="method-afni_3dclustsim-initialize"></a>}}
+\if{latex}{\out{\hypertarget{method-afni_3dclustsim-initialize}{}}}
+\subsection{\code{afni_3dclustsim$new()}}{
+  Create a new afni_3dclustsim object
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{afni_3dclustsim$new(
   out_dir = NULL,
   prefix = NULL,
   fwhmx_input_files = NULL,
@@ -69,183 +68,180 @@ Create a new afni_3dclustsim object
   seed = NULL,
   scheduler = NULL,
   ncpus = NULL
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{out_dir}}{the intended output directory for 3dClustSim files}
-
-\item{\code{prefix}}{the prefix to be included in the names of 3dClustSim output files}
-
-\item{\code{fwhmx_input_files}}{A character vector of input files to be passed through 3dFWHMx (-ACF method)}
-
-\item{\code{fwhmx_mask_files}}{A character vector of masks containing the volume over which to estimate the ACF in 3dFWHMx. 
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{out_dir}}{the intended output directory for 3dClustSim files}
+      \item{\code{prefix}}{the prefix to be included in the names of 3dClustSim output files}
+      \item{\code{fwhmx_input_files}}{A character vector of input files to be passed through 3dFWHMx (-ACF method)}
+      \item{\code{fwhmx_mask_files}}{A character vector of masks containing the volume over which to estimate the ACF in 3dFWHMx. 
 Must match 1:1 with \code{fwhmx_input_files}.}
-
-\item{\code{residuals_file}}{The filename of the group residuals file to be used in null dataset generation (permutation approach).}
-
-\item{\code{residuals_mask_file}}{The volume over which null datasets should be generated from the residuals}
-
-\item{\code{residuals_njobs}}{The number of independent jobs for splitting up the residuals permutations. If NULL, 32 jobs will be used.}
-
-\item{\code{inset_files}}{A character vector of dataset files to pass directly to 3dClustSim via -inset.}
-
-\item{\code{insdat_file}}{An sdat file containing null datasets to be passed to 3dClustSim via -insdat.}
-
-\item{\code{insdat_mask_file}}{A mask file corresponding to the insdat_file that maps values to space.}
-
-\item{\code{dxyz}}{the size of voxels in x y z (vector of 3 numbers)}
-
-\item{\code{nxyz}}{the number of voxels along x y z (vector of 3 positive integers)}
-
-\item{\code{clustsim_mask}}{This controls the volume over which to correct for FWE using 3dClustSim. If you give a whole-brain mask,
+      \item{\code{residuals_file}}{The filename of the group residuals file to be used in null dataset generation (permutation approach).}
+      \item{\code{residuals_mask_file}}{The volume over which null datasets should be generated from the residuals}
+      \item{\code{residuals_njobs}}{The number of independent jobs for splitting up the residuals permutations. If NULL, 32 jobs will be used.}
+      \item{\code{inset_files}}{A character vector of dataset files to pass directly to 3dClustSim via -inset.}
+      \item{\code{insdat_file}}{An sdat file containing null datasets to be passed to 3dClustSim via -insdat.}
+      \item{\code{insdat_mask_file}}{A mask file corresponding to the insdat_file that maps values to space.}
+      \item{\code{dxyz}}{the size of voxels in x y z (vector of 3 numbers)}
+      \item{\code{nxyz}}{the number of voxels along x y z (vector of 3 positive integers)}
+      \item{\code{clustsim_mask}}{This controls the volume over which to correct for FWE using 3dClustSim. If you give a whole-brain mask,
 then your cluster thresholds reflect whole-brain FWE correction. If you give a smaller mask (e.g., a single region or network),
 you are correcting only over that volume (i.e., a small-volume correction).}
-
-\item{\code{acf_params}}{a vector of 3 autocorrelation parameters (a, b, c) to be used to simulate smoothness. Usually produced by 3dFWHMx. 
+      \item{\code{acf_params}}{a vector of 3 autocorrelation parameters (a, b, c) to be used to simulate smoothness. Usually produced by 3dFWHMx. 
 The 'a' parameter must be between 0 and 1. The 'b' and 'c' parameters (scale radii) must be positive. The spatial autocorrelation function 
 is given by: `ACF(r) = a * exp(-r*r/(2*b*b)) + (1-a)*exp(-r/c)`}
-
-\item{\code{nopad}}{If TRUE, disable 3dClustSim's default 'padding' slices along each face to allow for edge effects of the smoothing process. Default: FALSE}
-
-\item{\code{pthr}}{A vector of voxelwise p-values to be tested in 3dClustSim (-pthr). Can be a space-separated string or
+      \item{\code{nopad}}{If TRUE, disable 3dClustSim's default 'padding' slices along each face to allow for edge effects of the smoothing process. Default: FALSE}
+      \item{\code{pthr}}{A vector of voxelwise p-values to be tested in 3dClustSim (-pthr). Can be a space-separated string or
 a numeric vector. Default: ".01 .005 .002 .001 .0005 .0002 .0001".}
-
-\item{\code{athr}}{A vector of cluster p-values to be tested in 3dClustSim (-athr). Can be a space-separated string or
+      \item{\code{athr}}{A vector of cluster p-values to be tested in 3dClustSim (-athr). Can be a space-separated string or
 a numeric vector. Default: ".05 .02 .01 .005 .002 .001 .0005 .0002 .0001".}
-
-\item{\code{iter}}{The number of iterations to use in simulating null datasets in 3dClustSim. Default: 30000.}
-
-\item{\code{nodec}}{If TRUE, clusters will be printed without decimal places, rounding up (e.g., 27.2 becomes 28). Default: FALSE.}
-
-\item{\code{seed}}{The seed to use when starting 3dClustSim random number generation. Default: 0 (sets a random seed)}
-
-\item{\code{scheduler}}{The HPC scheduler to use. Can be 'local', 'slurm', or 'torque'.}
-
-\item{\code{ncpus}}{The number of cores to use in the 3dClustSim job. This sets OMP_NUM_THREADS in the 3dClustSim job to 
+      \item{\code{iter}}{The number of iterations to use in simulating null datasets in 3dClustSim. Default: 30000.}
+      \item{\code{nodec}}{If TRUE, clusters will be printed without decimal places, rounding up (e.g., 27.2 becomes 28). Default: FALSE.}
+      \item{\code{seed}}{The seed to use when starting 3dClustSim random number generation. Default: 0 (sets a random seed)}
+      \item{\code{scheduler}}{The HPC scheduler to use. Can be 'local', 'slurm', or 'torque'.}
+      \item{\code{ncpus}}{The number of cores to use in the 3dClustSim job. This sets OMP_NUM_THREADS in the 3dClustSim job to 
 speed up computation.}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
-\if{html}{\out{</div>}}
-}
-}
+
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-afni_3dclustsim-submit"></a>}}
 \if{latex}{\out{\hypertarget{method-afni_3dclustsim-submit}{}}}
-\subsection{Method \code{submit()}}{
-submit the 3dClustSim compute job to the cluster
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$submit(force = FALSE)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{force}}{if TRUE, re-estimate 3dClustSim even though its output files already exist}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Details}{
-Note that if fwhmx_input_files are provided at the corresponding 3dFWHMx has not been run yet,
+\subsection{\code{afni_3dclustsim$submit()}}{
+  submit the 3dClustSim compute job to the cluster
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{afni_3dclustsim$submit(force = FALSE)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{force}}{if TRUE, re-estimate 3dClustSim even though its output files already exist}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Details}{
+    Note that if fwhmx_input_files are provided at the corresponding 3dFWHMx has not been run yet,
   this job will be submitted and serve as a dependency for the 3dClustsim job. Likewise, if a residuals_file is
   provided, then the 3dttest++ permutation step will be submitted as a job and 3dClustSim will be dependent on this finishing.
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-afni_3dclustsim-get_clustsim_df"></a>}}
 \if{latex}{\out{\hypertarget{method-afni_3dclustsim-get_clustsim_df}{}}}
-\subsection{Method \code{get_clustsim_df()}}{
-return a data.frame containing the results of the 3dClustSim for all NN levels and sidedness.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$get_clustsim_df()}\if{html}{\out{</div>}}
+\subsection{\code{afni_3dclustsim$get_clustsim_df()}}{
+  return a data.frame containing the results of the 3dClustSim for all NN levels and sidedness.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{afni_3dclustsim$get_clustsim_df()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-afni_3dclustsim-get_clustsim_output_files"></a>}}
 \if{latex}{\out{\hypertarget{method-afni_3dclustsim-get_clustsim_output_files}{}}}
-\subsection{Method \code{get_clustsim_output_files()}}{
-return a character vector of output text files generated by 3dClustSim
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$get_clustsim_output_files()}\if{html}{\out{</div>}}
+\subsection{\code{afni_3dclustsim$get_clustsim_output_files()}}{
+  return a character vector of output text files generated by 3dClustSim
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{afni_3dclustsim$get_clustsim_output_files()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-afni_3dclustsim-get_call"></a>}}
 \if{latex}{\out{\hypertarget{method-afni_3dclustsim-get_call}{}}}
-\subsection{Method \code{get_call()}}{
-return the 3dClustSim call related to these inputs. This is what will be passed to the scheduler.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$get_call()}\if{html}{\out{</div>}}
+\subsection{\code{afni_3dclustsim$get_call()}}{
+  return the 3dClustSim call related to these inputs. This is what will be passed to the scheduler.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{afni_3dclustsim$get_call()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-afni_3dclustsim-get_out_dir"></a>}}
 \if{latex}{\out{\hypertarget{method-afni_3dclustsim-get_out_dir}{}}}
-\subsection{Method \code{get_out_dir()}}{
-return the output directory for 3dClustSim files
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$get_out_dir()}\if{html}{\out{</div>}}
+\subsection{\code{afni_3dclustsim$get_out_dir()}}{
+  return the output directory for 3dClustSim files
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{afni_3dclustsim$get_out_dir()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-afni_3dclustsim-get_ncpus"></a>}}
 \if{latex}{\out{\hypertarget{method-afni_3dclustsim-get_ncpus}{}}}
-\subsection{Method \code{get_ncpus()}}{
-return the number of cpus (cores) to be used by 3dClustsim (via OMP_NUM_THREADS)
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$get_ncpus()}\if{html}{\out{</div>}}
+\subsection{\code{afni_3dclustsim$get_ncpus()}}{
+  return the number of cpus (cores) to be used by 3dClustsim (via OMP_NUM_THREADS)
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{afni_3dclustsim$get_ncpus()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-afni_3dclustsim-use_fwhmx_acf"></a>}}
 \if{latex}{\out{\hypertarget{method-afni_3dclustsim-use_fwhmx_acf}{}}}
-\subsection{Method \code{use_fwhmx_acf()}}{
-return TRUE/FALSE for whether this clustsim relies on the ACF estimates from 3dFWHMx
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$use_fwhmx_acf()}\if{html}{\out{</div>}}
+\subsection{\code{afni_3dclustsim$use_fwhmx_acf()}}{
+  return TRUE/FALSE for whether this clustsim relies on the ACF estimates from 3dFWHMx
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{afni_3dclustsim$use_fwhmx_acf()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-afni_3dclustsim-is_complete"></a>}}
 \if{latex}{\out{\hypertarget{method-afni_3dclustsim-is_complete}{}}}
-\subsection{Method \code{is_complete()}}{
-return whether 3dClustSim has completed for this input
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$is_complete()}\if{html}{\out{</div>}}
+\subsection{\code{afni_3dclustsim$is_complete()}}{
+  return whether 3dClustSim has completed for this input
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{afni_3dclustsim$is_complete()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-afni_3dclustsim-refresh"></a>}}
 \if{latex}{\out{\hypertarget{method-afni_3dclustsim-refresh}{}}}
-\subsection{Method \code{refresh()}}{
-Simple method to refresh the clustsim_df, fwhmx files, and 3dttest++ permutation files
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$refresh()}\if{html}{\out{</div>}}
-}
-
-\subsection{Details}{
-The refresh is useful if the object needs to be updated just in time to determine whether permutations 
+\subsection{\code{afni_3dclustsim$refresh()}}{
+  Simple method to refresh the clustsim_df, fwhmx files, and 3dttest++ permutation files
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{afni_3dclustsim$refresh()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Details}{
+    The refresh is useful if the object needs to be updated just in time to determine whether permutations 
   or ACF params are available.
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-afni_3dclustsim-apply_clustsim"></a>}}
 \if{latex}{\out{\hypertarget{method-afni_3dclustsim-apply_clustsim}{}}}
-\subsection{Method \code{apply_clustsim()}}{
-method to apply 3dClustSim results to a statistic image to create an integer-valued cluster mask and/or a thresholded
+\subsection{\code{afni_3dclustsim$apply_clustsim()}}{
+  method to apply 3dClustSim results to a statistic image to create an integer-valued cluster mask and/or a thresholded
   statistic image
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$apply_clustsim(
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{afni_3dclustsim$apply_clustsim(
   statistic_nifti = NULL,
   NN = 1,
   sided = "bi",
@@ -256,58 +252,52 @@ method to apply 3dClustSim results to a statistic image to create an integer-val
   output_thresholded_image = FALSE,
   add_whereami = TRUE,
   whereami_atlases = NULL
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{statistic_nifti}}{A filename to a NIfTI image containing voxelwise statistics that should be used to calculate the threshold for pthr}
-
-\item{\code{NN}}{The cluster definition from 3dClustSim to be applied when thresholding the image (1, 2, or 3)}
-
-\item{\code{sided}}{Whether to apply the cluster threshold for one-sided, two-sided, or bi-sided tests ('1', '2', or 'bi')}
-
-\item{\code{athr}}{The clusterwise p-value to be applied. Default: .05}
-
-\item{\code{pthr}}{The voxelwise threshold to be applied to the statistic_file. Default: .001.}
-
-\item{\code{voxelwise_stat}}{A list object specifying the statistic contained in the \code{statistic_nifti}.
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{statistic_nifti}}{A filename to a NIfTI image containing voxelwise statistics that should be used to calculate the threshold for pthr}
+      \item{\code{NN}}{The cluster definition from 3dClustSim to be applied when thresholding the image (1, 2, or 3)}
+      \item{\code{sided}}{Whether to apply the cluster threshold for one-sided, two-sided, or bi-sided tests ('1', '2', or 'bi')}
+      \item{\code{athr}}{The clusterwise p-value to be applied. Default: .05}
+      \item{\code{pthr}}{The voxelwise threshold to be applied to the statistic_file. Default: .001.}
+      \item{\code{voxelwise_stat}}{A list object specifying the statistic contained in the \code{statistic_nifti}.
 At present, this consists of the \code{stat_type}: 'z', 't', or 'p'. If a 't' statistic is passed,
 also include $df in the list specifying the degrees of freedom.}
-
-\item{\code{output_cluster_mask}}{If \code{TRUE}, output an integer-valued mask containing any whole brain-significant clusters
+      \item{\code{output_cluster_mask}}{If \code{TRUE}, output an integer-valued mask containing any whole brain-significant clusters
 (calculated by 3dClusterize).}
-
-\item{\code{output_thresholded_image}}{If \code{TRUE}, output a copy of \code{statistic_nifti} that has been thresholded
+      \item{\code{output_thresholded_image}}{If \code{TRUE}, output a copy of \code{statistic_nifti} that has been thresholded
 according to the settings specified here.}
-
-\item{\code{add_whereami}}{Whether to also call AFNI whereami to get anatomical landmarks of interest. Default: TRUE}
-
-\item{\code{whereami_atlases}}{An optional character vector of atlases to be requested in whereami.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-an afni_3dclusterize object containing clusters in \code{statistic_nifti} that survive the 3dClustSim
+      \item{\code{add_whereami}}{Whether to also call AFNI whereami to get anatomical landmarks of interest. Default: TRUE}
+      \item{\code{whereami_atlases}}{An optional character vector of atlases to be requested in whereami.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    an afni_3dclusterize object containing clusters in \code{statistic_nifti} that survive the 3dClustSim
   correction requested.
+  }
 }
-}
+
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-afni_3dclustsim-clone"></a>}}
 \if{latex}{\out{\hypertarget{method-afni_3dclustsim-clone}{}}}
-\subsection{Method \code{clone()}}{
-The objects of this class are cloneable with this method.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{afni_3dclustsim$clone(deep = FALSE)}\if{html}{\out{</div>}}
+\subsection{\code{afni_3dclustsim$clone()}}{
+  The objects of this class are cloneable with this method.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{afni_3dclustsim$clone(deep = FALSE)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{deep}}{Whether to make a deep clone.}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{deep}}{Whether to make a deep clone.}
-}
-\if{html}{\out{</div>}}
-}
-}
 }

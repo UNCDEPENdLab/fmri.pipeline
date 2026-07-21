@@ -2,17 +2,17 @@
 % Please edit documentation in R/afni_3dlmer.R
 \name{sanitize_3dlmer_model_formula}
 \alias{sanitize_3dlmer_model_formula}
-\title{Internal function to construct the 3dLMEr command string}
+\title{Normalize an AFNI 3dLMEr model formula}
 \usage{
 sanitize_3dlmer_model_formula(model_formula)
 }
 \arguments{
-\item{model_formula}{fixed effects formula string}
+\item{model_formula}{fixed-effects formula string.}
 }
 \value{
-a compact 3dLMEr formula string
+A character string with whitespace removed.
 }
 \description{
-Internal function to construct the 3dLMEr command string
+Normalize an AFNI 3dLMEr model formula
 }
 \keyword{internal}

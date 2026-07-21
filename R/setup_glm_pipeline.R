@@ -25,8 +25,6 @@ setOldClass(c("bg_subtrial_data", "data.frame"))
 #'   distilled from \code{trial_data} by looking for variables that vary at the same level as \code{vm["run_number"]}.
 #'   Columns that are constant within each \code{id}/\code{session} are copied into the internally derived
 #'   \code{gpa$session_data}.
-#' @param block_data An optional data.frame containing information about design features in the task that vary at
-#'   block level (typically, longer periods of time such as 10-30s). Blocks are superordinate to trials and subordinate to runs.
 #' @param trial_data A data.frame containing trial-level statistics for all subjects. Data should be stacked in long
 #'   form such that each row represents a single trial for a given subject and the number of total rows is subjects x trials.
 #'   If you wish, you can pass a single trial-level data frame that also contains all run-level and subject-level covariates
@@ -41,10 +39,12 @@ setOldClass(c("bg_subtrial_data", "data.frame"))
 #' @param vm A named character vector containing key identifying columns in \code{subject_data} and
 #'   \code{trial_data}. Minimally, this vector should contain the elements 'id'
 #' @param bad_ids An optional vector of ids in \code{subject_data} and \code{trial_data} that should be excluded from analysis.
-#' @param mr_dir_column A character string indicating the column name in \code{subject_data} containing the folder for each
-#'   subject's data. Default is "mr_dir".
 #' @param fmri_file_regex A character string containing a Perl-compatible regular expression for the subfolder and filename
 #'   within the \code{mr_dir} field in \code{subject_data}.
+#' @param group_output_directory Group-level output directory policy.
+#' @param output_locations Output location template settings.
+#' @param fmri_path_regex Optional regular expression for extracting fMRI paths.
+#' @param run_number_regex Optional regular expression for extracting run numbers.
 #' @param tr The repetition time of the scanning sequence in seconds. Used for setting up design matrices. If this is NULL, the
 #'   function will look for a \code{tr} field in the \code{run_data} object, which specifies TR at run level (e.g., if varies).
 #' @param output_directory The output directory for all configuration and job submission files for this analysis.
@@ -74,15 +74,20 @@ setOldClass(c("bg_subtrial_data", "data.frame"))
 #' @param additional A list of additional metadata that will be added to the \code{glm.pipeline} object returned
 #'   by the function. This can be useful if there are other identifiers that you want for long-term storage or
 #'   off-shoot functions.
+#' @param glm_settings GLM backend settings.
+#' @param confound_settings Confound-file and censoring settings.
+#' @param parallel Parallelization and scheduler settings.
 #' @param lgr_threshold The logging threshold used to determine whether to output messages of different severity to
 #'   the screen and to log files. Default is "info", which produces all messages, warnings, and errors, but not debug
 #'   or trace statements. To output only concerning errors, change to "error". See: 
 #'   \url{https://s-fleck.github.io/lgr/articles/lgr.html} for details.
 #'
-#' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish assert_list assert_logical
-#'    test_string test_class
+#' @importFrom checkmate assert_subset assert_data_frame assert_number assert_integerish 
+#' @importFrom checkmate assert_list assert_logical test_string test_class
 #' @importFrom dplyr mutate_at group_by select vars inner_join filter count is_grouped_df ungroup n_distinct
+#' @importFrom stats aggregate
 #' @importFrom tidyselect everything
+#' @importFrom utils capture.output menu
 #' @export
 setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slurm",
                                output_directory = file.path(getwd(), analysis_name),
@@ -320,12 +325,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   if (!is.null(l2_models)) {
     if (checkmate::test_string(l2_models)) {
-      if (l2_models == "prompt") {
-        l2_models <- build_l2_models(trial_data = trial_data)
-      } else if (checkmate::test_file_exists(l2_models)) {
-        l2_models <- build_l2_models(from_spec_file = l2_models)
-      } # treat input as YAML spec file
-      else {
+      if (l2_models != "prompt" && !checkmate::test_file_exists(l2_models)) {
         stop("Don't know how to interpret l2_models argument: ", l2_models)
       }
     } else if (!checkmate::test_class(l2_models, "hi_model_set")) {
@@ -335,9 +335,9 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   
   if (!is.null(l3_models)) {
     if (checkmate::test_string(l3_models)) {
-      if (l3_models == "prompt") l3_models <- build_l3_models(trial_data = trial_data)
-      else if (checkmate::test_file_exists(l3_models)) l3_models <- build_l3_models(from_spec_file = l3_models) # treat input as YAML spec file
-      else stop("Don't know how to interpret l3_models argument: ", l3_models)
+      if (l3_models != "prompt" && !checkmate::test_file_exists(l3_models)) {
+        stop("Don't know how to interpret l3_models argument: ", l3_models)
+      }
     } else if (!checkmate::test_class(l3_models, "hi_model_set")) {
       stop("l3_models argument is not of class hi_model_set. Use build_l3_models to create this.")
     }
@@ -398,6 +398,22 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
 
   # populate $parallel
   gpa <- setup_parallel_settings(gpa, lg)
+
+  if (checkmate::test_string(gpa$l2_models)) {
+    if (gpa$l2_models == "prompt") {
+      gpa <- build_l2_models(gpa)
+    } else if (checkmate::test_file_exists(gpa$l2_models)) {
+      gpa <- build_l2_models(gpa, from_spec_file = gpa$l2_models)
+    }
+  }
+
+  if (checkmate::test_string(gpa$l3_models)) {
+    if (gpa$l3_models == "prompt") {
+      gpa <- build_l3_models(gpa)
+    } else if (checkmate::test_file_exists(gpa$l3_models)) {
+      gpa <- build_l3_models(gpa, from_spec_file = gpa$l3_models)
+    }
+  }
 
   # ensure glm_settings is a list before any compute environment checks
   if (is.null(gpa$glm_settings) || identical(gpa$glm_settings, "default")) {
@@ -520,6 +536,7 @@ derive_session_data <- function(run_data, subject_data, lg) {
 #' Helper function for setting up and modifying the compute environment for scripts generated by the pipeline
 #'
 #' @param gpa a \code{glm_pipeline_arguments} object
+#' @param preselect_action optional menu action to apply without prompting.
 #' @return a modified gpa object containing settings for the compute environment
 #' @export
 setup_compute_environment <- function(gpa, preselect_action = NULL) {
@@ -812,21 +829,23 @@ validate_block_data <- function(df) {
 }
 
 #' Summarize the contents of the subject data
-#' @param df A \code{bg_subject_data} object containing subject/session-level data.
+#' @param object A \code{bg_subject_data} object containing subject/session-level data.
+#' @param ... ignored.
 #' @details This is typically run using \code{summary(gpa$trial_data)}
 #' @export
-summary.bg_subject_data <- function(df) {
+summary.bg_subject_data <- function(object, ...) {
 
 
 }
 
 #' Summarize the contents of the subject data
-#' @param df A \code{bg_block_data} object containing block-level data.
+#' @param object A \code{bg_block_data} object containing block-level data.
+#' @param ... ignored.
 #' @details This is typically run using \code{summary(gpa$block_data)}
 #' @export
-summary.bg_block_data <- function(df) {
+summary.bg_block_data <- function(object, ...) {
   cat(
     "Summary of block data:",
-    "Number of ids: ", length(unique(df$id)), "\n"
+    "Number of ids: ", length(unique(object$id)), "\n"
   )
 }

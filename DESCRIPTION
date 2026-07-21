@@ -13,7 +13,6 @@ BugReports: https://github.com/UNCDEPENdLab/fmri.pipeline/issues
 Encoding: UTF-8
 LazyLoad: yes
 LazyData: yes
-RoxygenNote: 7.3.3
 Depends: R (>= 4.1.0)
 Imports:
     DBI,
@@ -86,3 +85,4 @@ LinkingTo:
 Config/testthat/edition: 3
 URL: https://uncdependlab.github.io/fmri.pipeline/
 VignetteBuilder: knitr
+Config/roxygen2/version: 8.0.0

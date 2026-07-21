@@ -5,111 +5,119 @@
 \title{Description of R_batch_sequence R6 class}
 \description{
 Description of R_batch_sequence R6 class
-
-Description of R_batch_sequence R6 class
 }
 \section{Public fields}{
-\if{html}{\out{<div class="r6-fields">}}
-\describe{
-\item{\code{sequence_id}}{Optional identifier for all jobs in this sequence, used for job tracking}
-}
-\if{html}{\out{</div>}}
+  \if{html}{\out{<div class="r6-fields">}}
+  \describe{
+    \item{\code{sequence_id}}{Optional identifier for all jobs in this sequence, used for job tracking}
+  }
+  \if{html}{\out{</div>}}
 }
 \section{Methods}{
 \subsection{Public methods}{
-\itemize{
-\item \href{#method-batch_sequence-new}{\code{R_batch_sequence$new()}}
-\item \href{#method-batch_sequence-add}{\code{R_batch_sequence$add()}}
-\item \href{#method-batch_sequence-submit}{\code{R_batch_sequence$submit()}}
-\item \href{#method-batch_sequence-generate}{\code{R_batch_sequence$generate()}}
-\item \href{#method-batch_sequence-get_job_ids}{\code{R_batch_sequence$get_job_ids()}}
-\item \href{#method-batch_sequence-clone}{\code{R_batch_sequence$clone()}}
-}
+  \itemize{
+    \item \href{#method-batch_sequence-initialize}{\code{batch_sequence$new()}}
+    \item \href{#method-batch_sequence-add}{\code{batch_sequence$add()}}
+    \item \href{#method-batch_sequence-submit}{\code{batch_sequence$submit()}}
+    \item \href{#method-batch_sequence-generate}{\code{batch_sequence$generate()}}
+    \item \href{#method-batch_sequence-get_job_ids}{\code{batch_sequence$get_job_ids()}}
+    \item \href{#method-batch_sequence-clone}{\code{batch_sequence$clone()}}
+  }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-batch_sequence-new"></a>}}
-\if{latex}{\out{\hypertarget{method-batch_sequence-new}{}}}
-\subsection{Method \code{new()}}{
-create a new R_batch_sequence object
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$new(..., joblist = NULL, sequence_id = NULL)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{...}}{One or more R_batch_job objects to be run in sequence}
-
-\item{\code{joblist}}{Optional list of jobs to be used instead of ...}
-
-\item{\code{sequence_id}}{Optional identifier for all jobs in this sequence;
+\if{html}{\out{<a id="method-batch_sequence-initialize"></a>}}
+\if{latex}{\out{\hypertarget{method-batch_sequence-initialize}{}}}
+\subsection{\code{batch_sequence$new()}}{
+  create a new R_batch_sequence object
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_sequence$new(..., joblist = NULL, sequence_id = NULL)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{...}}{One or more R_batch_job objects to be run in sequence}
+      \item{\code{joblist}}{Optional list of jobs to be used instead of ...}
+      \item{\code{sequence_id}}{Optional identifier for all jobs in this sequence;
 used for job tracking}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
-\if{html}{\out{</div>}}
-}
-}
+
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-batch_sequence-add"></a>}}
 \if{latex}{\out{\hypertarget{method-batch_sequence-add}{}}}
-\subsection{Method \code{add()}}{
-add one or more R_batch_job objects to the sequence
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$add(...)}\if{html}{\out{</div>}}
+\subsection{\code{batch_sequence$add()}}{
+  add one or more R_batch_job objects to the sequence
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_sequence$add(...)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{...}}{One or more R_batch_job objects to be added to sequence}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{...}}{One or more R_batch_job objects to be added to sequence}
-}
-\if{html}{\out{</div>}}
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-batch_sequence-submit"></a>}}
 \if{latex}{\out{\hypertarget{method-batch_sequence-submit}{}}}
-\subsection{Method \code{submit()}}{
-submit the job sequence to the scheduler or local compute
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$submit()}\if{html}{\out{</div>}}
+\subsection{\code{batch_sequence$submit()}}{
+  submit the job sequence to the scheduler or local compute
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_sequence$submit()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-batch_sequence-generate"></a>}}
 \if{latex}{\out{\hypertarget{method-batch_sequence-generate}{}}}
-\subsection{Method \code{generate()}}{
-Calls each job's $generate() method so that scripts can be examined without running the sequence
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$generate()}\if{html}{\out{</div>}}
+\subsection{\code{batch_sequence$generate()}}{
+  Calls each job's $generate() method so that scripts can be examined without running the sequence
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_sequence$generate()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-batch_sequence-get_job_ids"></a>}}
 \if{latex}{\out{\hypertarget{method-batch_sequence-get_job_ids}{}}}
-\subsection{Method \code{get_job_ids()}}{
-Return a named vector of the job ids for all jobs in this sequence
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$get_job_ids()}\if{html}{\out{</div>}}
+\subsection{\code{batch_sequence$get_job_ids()}}{
+  Return a named vector of the job ids for all jobs in this sequence
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_sequence$get_job_ids()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-batch_sequence-clone"></a>}}
 \if{latex}{\out{\hypertarget{method-batch_sequence-clone}{}}}
-\subsection{Method \code{clone()}}{
-The objects of this class are cloneable with this method.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{R_batch_sequence$clone(deep = FALSE)}\if{html}{\out{</div>}}
+\subsection{\code{batch_sequence$clone()}}{
+  The objects of this class are cloneable with this method.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{batch_sequence$clone(deep = FALSE)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{deep}}{Whether to make a deep clone.}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{deep}}{Whether to make a deep clone.}
-}
-\if{html}{\out{</div>}}
-}
-}
 }

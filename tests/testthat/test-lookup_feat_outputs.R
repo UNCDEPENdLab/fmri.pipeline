@@ -258,3 +258,53 @@ test_that("lookup_feat_outputs can crawl L1 FEAT folders without setup tables", 
   expect_equal(sort(out$l1_cope_name), c("EV_face", "EV_house"))
   expect_true(all(out$image_exists))
 })
+
+test_that("filesystem lookup scans requested statistics independently", {
+  root <- tempfile("lookup_feat_outputs_")
+  l1_feat <- file.path(root, "feat_l1", "sub-01", "ses-1", "facehouse", "FEAT_LVL1_run1.feat")
+  stats_dir <- file.path(l1_feat, "stats")
+  dir.create(stats_dir, recursive = TRUE)
+  file.create(file.path(stats_dir, "cope1.nii.gz"))
+  file.create(file.path(stats_dir, "zstat2.nii.gz"))
+  writeLines(
+    c(
+      "/ContrastName1\tface-house interaction",
+      "/ContrastName2\tcontrol",
+      "/NumContrasts\t2"
+    ),
+    file.path(l1_feat, "design.con")
+  )
+
+  gpa <- make_lookup_feat_outputs_gpa(root, l1_feat = l1_feat)
+  gpa$l1_model_setup <- NULL
+  gpa$l2_model_setup <- NULL
+  gpa$l3_model_setup <- NULL
+
+  out <- lookup_feat_outputs(
+    gpa, level = 1L, what = "cope",
+    source = "filesystem", include_missing = TRUE
+  )
+
+  expect_equal(nrow(out), 2L)
+  expect_equal(out$l1_cope_name, c("face-house interaction", "control"))
+  expect_equal(out$image_exists, c(TRUE, FALSE))
+  expect_equal(
+    out$image_file,
+    file.path(stats_dir, paste0("cope", 1:2, ".nii.gz"))
+  )
+
+  existing <- lookup_feat_outputs(
+    gpa, level = 1L, what = "cope",
+    source = "filesystem", include_missing = FALSE
+  )
+  expect_equal(nrow(existing), 1L)
+  expect_equal(existing$l1_cope_name, "face-house interaction")
+
+  zstat <- lookup_feat_outputs(
+    gpa, level = 1L, what = "zstat",
+    source = "filesystem", include_missing = FALSE
+  )
+  expect_equal(nrow(zstat), 1L)
+  expect_equal(zstat$l1_cope_name, "control")
+  expect_equal(zstat$image_file, file.path(stats_dir, "zstat2.nii.gz"))
+})

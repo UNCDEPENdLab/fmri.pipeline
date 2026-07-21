@@ -5,62 +5,65 @@
 \title{R6 class for an FWE correction method that can apply to one or more models}
 \description{
 R6 class for an FWE correction method that can apply to one or more models
-
-R6 class for an FWE correction method that can apply to one or more models
 }
 \keyword{internal}
 \section{Methods}{
 \subsection{Public methods}{
-\itemize{
-\item \href{#method-fwe_spec-new}{\code{fwe_spec$new()}}
-\item \href{#method-fwe_spec-submit}{\code{fwe_spec$submit()}}
-\item \href{#method-fwe_spec-clone}{\code{fwe_spec$clone()}}
-}
+  \itemize{
+    \item \href{#method-fwe_spec-initialize}{\code{fwe_spec$new()}}
+    \item \href{#method-fwe_spec-submit}{\code{fwe_spec$submit()}}
+    \item \href{#method-fwe_spec-clone}{\code{fwe_spec$clone()}}
+  }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-fwe_spec-new"></a>}}
-\if{latex}{\out{\hypertarget{method-fwe_spec-new}{}}}
-\subsection{Method \code{new()}}{
-create a new FWE correction instance
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{fwe_spec$new(..., fwe_data = NULL)}\if{html}{\out{</div>}}
+\if{html}{\out{<a id="method-fwe_spec-initialize"></a>}}
+\if{latex}{\out{\hypertarget{method-fwe_spec-initialize}{}}}
+\subsection{\code{fwe_spec$new()}}{
+  create a new FWE correction instance
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{fwe_spec$new(..., fwe_data = NULL)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{...}}{not used yet}
+      \item{\code{fwe_data}}{not used yet}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{...}}{not used yet}
-
-\item{\code{fwe_data}}{not used yet}
-}
-\if{html}{\out{</div>}}
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fwe_spec-submit"></a>}}
 \if{latex}{\out{\hypertarget{method-fwe_spec-submit}{}}}
-\subsection{Method \code{submit()}}{
-submit FWE estimation to the cluster
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{fwe_spec$submit()}\if{html}{\out{</div>}}
+\subsection{\code{fwe_spec$submit()}}{
+  submit FWE estimation to the cluster
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{fwe_spec$submit()}
+    \if{html}{\out{</div>}}
+  }
 }
 
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-fwe_spec-clone"></a>}}
 \if{latex}{\out{\hypertarget{method-fwe_spec-clone}{}}}
-\subsection{Method \code{clone()}}{
-The objects of this class are cloneable with this method.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{fwe_spec$clone(deep = FALSE)}\if{html}{\out{</div>}}
+\subsection{\code{fwe_spec$clone()}}{
+  The objects of this class are cloneable with this method.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{fwe_spec$clone(deep = FALSE)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{deep}}{Whether to make a deep clone.}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{deep}}{Whether to make a deep clone.}
-}
-\if{html}{\out{</div>}}
-}
-}
 }

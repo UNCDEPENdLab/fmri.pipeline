@@ -19,5 +19,10 @@ Useful links:
 \author{
 \strong{Maintainer}: Michael Hallquist \email{michael.hallquist@gmail.com}
 
+Authors:
+\itemize{
+  \item Michael Hallquist \email{michael.hallquist@gmail.com}
+}
+
 }
 \keyword{internal}

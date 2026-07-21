@@ -5,30 +5,29 @@
 \title{helper class to generate 3dttest++ null datasets using -randomsign}
 \description{
 helper class to generate 3dttest++ null datasets using -randomsign
-
-helper class to generate 3dttest++ null datasets using -randomsign
 }
 \keyword{internal}
 \section{Methods}{
 \subsection{Public methods}{
-\itemize{
-\item \href{#method-simulate_null_3dttest-new}{\code{simulate_null_3dttest$new()}}
-\item \href{#method-simulate_null_3dttest-is_complete}{\code{simulate_null_3dttest$is_complete()}}
-\item \href{#method-simulate_null_3dttest-submit}{\code{simulate_null_3dttest$submit()}}
-\item \href{#method-simulate_null_3dttest-get_3dttest_calls}{\code{simulate_null_3dttest$get_3dttest_calls()}}
-\item \href{#method-simulate_null_3dttest-get_permutation_files}{\code{simulate_null_3dttest$get_permutation_files()}}
-\item \href{#method-simulate_null_3dttest-get_batch}{\code{simulate_null_3dttest$get_batch()}}
-\item \href{#method-simulate_null_3dttest-get_use_sdat}{\code{simulate_null_3dttest$get_use_sdat()}}
-\item \href{#method-simulate_null_3dttest-clone}{\code{simulate_null_3dttest$clone()}}
-}
+  \itemize{
+    \item \href{#method-simulate_null_3dttest-initialize}{\code{simulate_null_3dttest$new()}}
+    \item \href{#method-simulate_null_3dttest-is_complete}{\code{simulate_null_3dttest$is_complete()}}
+    \item \href{#method-simulate_null_3dttest-submit}{\code{simulate_null_3dttest$submit()}}
+    \item \href{#method-simulate_null_3dttest-get_3dttest_calls}{\code{simulate_null_3dttest$get_3dttest_calls()}}
+    \item \href{#method-simulate_null_3dttest-get_permutation_files}{\code{simulate_null_3dttest$get_permutation_files()}}
+    \item \href{#method-simulate_null_3dttest-get_batch}{\code{simulate_null_3dttest$get_batch()}}
+    \item \href{#method-simulate_null_3dttest-get_use_sdat}{\code{simulate_null_3dttest$get_use_sdat()}}
+    \item \href{#method-simulate_null_3dttest-clone}{\code{simulate_null_3dttest$clone()}}
+  }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-simulate_null_3dttest-new"></a>}}
-\if{latex}{\out{\hypertarget{method-simulate_null_3dttest-new}{}}}
-\subsection{Method \code{new()}}{
-initialize a simulate_null_3dttest object to support 3dttest++ -randomsign
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$new(
+\if{html}{\out{<a id="method-simulate_null_3dttest-initialize"></a>}}
+\if{latex}{\out{\hypertarget{method-simulate_null_3dttest-initialize}{}}}
+\subsection{\code{simulate_null_3dttest$new()}}{
+  initialize a simulate_null_3dttest object to support 3dttest++ -randomsign
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{simulate_null_3dttest$new(
   residuals_file = NULL,
   mask_file = NULL,
   njobs = NULL,
@@ -37,136 +36,144 @@ initialize a simulate_null_3dttest object to support 3dttest++ -randomsign
   wall_time = NULL,
   memgb_per_3dttest = NULL,
   memgb_combine = NULL
-)}\if{html}{\out{</div>}}
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{residuals_file}}{the 4D file containing voxelwise residuals for all subjects (e.g., res4d.nii.gz in FEAT)}
+      \item{\code{mask_file}}{A mask file used to specify which voxels should be analyzed/permuted}
+      \item{\code{njobs}}{The number of independent jobs across which permutations are distributed}
+      \item{\code{n_permutations}}{The total number of null datasets to be computed by sign-flipping}
+      \item{\code{use_sdat}}{a logical indicating whether to output null datasets in sdat format (single-precision, serialized, I think)}
+      \item{\code{wall_time}}{The amount of compute time needed for this job as a dd-hh:mm:ss string}
+      \item{\code{memgb_per_3dttest}}{The number of gigabytes of memory requested for each 3dttest++ permutation process. If not specified, 8 will be requested}
+      \item{\code{memgb_combine}}{The number of gigabytes of memory requested for the parent 3dttest++ job that combines permutation outputs. If not specified, 32 will be requested}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{residuals_file}}{the 4D file containing voxelwise residuals for all subjects (e.g., res4d.nii.gz in FEAT)}
-
-\item{\code{mask_file}}{A mask file used to specify which voxels should be analyzed/permuted}
-
-\item{\code{njobs}}{The number of independent jobs across which permutations are distributed}
-
-\item{\code{n_permutations}}{The total number of null datasets to be computed by sign-flipping}
-
-\item{\code{use_sdat}}{a logical indicating whether to output null datasets in sdat format (single-precision, serialized, I think)}
-
-\item{\code{wall_time}}{The amount of compute time needed for this job as a dd-hh:mm:ss string}
-
-\item{\code{memgb_per_3dttest}}{The number of gigabytes of memory requested for each 3dttest++ permutation process. If not specified, 8 will be requested}
-
-\item{\code{memgb_combine}}{The number of gigabytes of memory requested for the parent 3dttest++ job that combines permutation outputs. If not specified, 32 will be requested}
-}
-\if{html}{\out{</div>}}
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-is_complete"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-is_complete}{}}}
-\subsection{Method \code{is_complete()}}{
-test whether the expected outputs of the permutation are complete
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$is_complete()}\if{html}{\out{</div>}}
+\subsection{\code{simulate_null_3dttest$is_complete()}}{
+  test whether the expected outputs of the permutation are complete
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{simulate_null_3dttest$is_complete()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    a boolean indicating whether the expected output file exists
+  }
 }
 
-\subsection{Returns}{
-a boolean indicating whether the expected output file exists
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-submit"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-submit}{}}}
-\subsection{Method \code{submit()}}{
-submit the permutation job to the cluster
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$submit(force = FALSE)}\if{html}{\out{</div>}}
+\subsection{\code{simulate_null_3dttest$submit()}}{
+  submit the permutation job to the cluster
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{simulate_null_3dttest$submit(force = FALSE)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{force}}{whether to run the permutation job even if the outputs are already complete}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{force}}{whether to run the permutation job even if the outputs are already complete}
-}
-\if{html}{\out{</div>}}
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-get_3dttest_calls"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-get_3dttest_calls}{}}}
-\subsection{Method \code{get_3dttest_calls()}}{
-build the 3dttest++ command strings for each permutation job
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$get_3dttest_calls(include_complete = FALSE)}\if{html}{\out{</div>}}
+\subsection{\code{simulate_null_3dttest$get_3dttest_calls()}}{
+  build the 3dttest++ command strings for each permutation job
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{simulate_null_3dttest$get_3dttest_calls(include_complete = FALSE)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{include_complete}}{If TRUE, include calls whose output files already exist.
+If FALSE, return only calls with missing outputs.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A character vector of 3dttest++ calls.
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{include_complete}}{If TRUE, include calls whose output files already exist.
-If FALSE, return only calls with missing outputs.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A character vector of 3dttest++ calls.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-get_permutation_files"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-get_permutation_files}{}}}
-\subsection{Method \code{get_permutation_files()}}{
-return the permutation output files once available
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$get_permutation_files()}\if{html}{\out{</div>}}
+\subsection{\code{simulate_null_3dttest$get_permutation_files()}}{
+  return the permutation output files once available
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{simulate_null_3dttest$get_permutation_files()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A named character vector with entries for the mask file and permutation file.
+  }
 }
 
-\subsection{Returns}{
-A named character vector with entries for the mask file and permutation file.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-get_batch"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-get_batch}{}}}
-\subsection{Method \code{get_batch()}}{
-return the R_batch_job used to run 3dttest permutations
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$get_batch()}\if{html}{\out{</div>}}
+\subsection{\code{simulate_null_3dttest$get_batch()}}{
+  return the R_batch_job used to run 3dttest permutations
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{simulate_null_3dttest$get_batch()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    An R_batch_job object.
+  }
 }
 
-\subsection{Returns}{
-An R_batch_job object.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-get_use_sdat"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-get_use_sdat}{}}}
-\subsection{Method \code{get_use_sdat()}}{
-indicate whether sdat output is enabled
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$get_use_sdat()}\if{html}{\out{</div>}}
+\subsection{\code{simulate_null_3dttest$get_use_sdat()}}{
+  indicate whether sdat output is enabled
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{simulate_null_3dttest$get_use_sdat()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A logical scalar.
+  }
 }
 
-\subsection{Returns}{
-A logical scalar.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-simulate_null_3dttest-clone"></a>}}
 \if{latex}{\out{\hypertarget{method-simulate_null_3dttest-clone}{}}}
-\subsection{Method \code{clone()}}{
-The objects of this class are cloneable with this method.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{simulate_null_3dttest$clone(deep = FALSE)}\if{html}{\out{</div>}}
+\subsection{\code{simulate_null_3dttest$clone()}}{
+  The objects of this class are cloneable with this method.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{simulate_null_3dttest$clone(deep = FALSE)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{deep}}{Whether to make a deep clone.}
+    }
+    \if{html}{\out{</div>}}
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{deep}}{Whether to make a deep clone.}
-}
-\if{html}{\out{</div>}}
-}
-}
 }
