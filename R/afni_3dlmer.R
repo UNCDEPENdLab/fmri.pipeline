@@ -64,7 +64,7 @@ build_3dlmer_datatable <- function(subject_data, input_files, model_variables) {
     dplyr::select(dplyr::all_of(c("id", "session", model_variables)))
 
   input_files <- input_files %>%
-    dplyr::select(dplyr::all_of(c("id", "session", "InputFile")))
+    dplyr::select("id", "session", "InputFile")
 
   if (nrow(input_files) == 0L) {
     stop("AFNI 3dLMEr dataTable has no input rows.", call. = FALSE)
@@ -141,7 +141,7 @@ build_3dlmer_datatable <- function(subject_data, input_files, model_variables) {
   }
 
   missing_subject_rows <- input_files %>%
-    dplyr::anti_join(subject_data %>% dplyr::select(dplyr::all_of(c("id", "session"))), by = c("id", "session"))
+    dplyr::anti_join(subject_data %>% dplyr::select("id", "session"), by = c("id", "session"))
   if (nrow(missing_subject_rows) > 0L) {
     stop(
       sprintf(
@@ -170,7 +170,7 @@ build_3dlmer_datatable <- function(subject_data, input_files, model_variables) {
   # Keep only necessary columns: Subj, model_variables, InputFile
   # 3dLMEr requires the column name 'Subj' for the subject ID
   dt <- dt %>%
-    dplyr::rename(Subj = id) %>%
+    dplyr::rename(Subj = "id") %>%
     dplyr::select(dplyr::all_of(c("Subj", "session", model_variables, "InputFile")))
 
   duplicate_final_keys <- find_3dlmer_duplicate_keys(dt, id_col = "Subj")

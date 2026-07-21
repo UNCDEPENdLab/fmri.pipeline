@@ -288,14 +288,14 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     lg$warn(glue("Dropped ids: {paste(setdiff(union_ids, match_ids), collapse=', ')}"))
   }
 
-  subject_data <- subject_data %>% dplyr::filter(id %in% !!match_ids)
-  run_data <- run_data %>% dplyr::filter(id %in% !!match_ids)
-  trial_data <- trial_data %>% dplyr::filter(id %in% !!match_ids)
+  subject_data <- subject_data %>% dplyr::filter(.data$id %in% !!match_ids)
+  run_data <- run_data %>% dplyr::filter(.data$id %in% !!match_ids)
+  trial_data <- trial_data %>% dplyr::filter(.data$id %in% !!match_ids)
 
   # enforce that subject id + session must be unique (only one row per combination)
-  subj_counts <- subject_data %>% count(id, session)
+  subj_counts <- subject_data %>% dplyr::count(.data$id, .data$session)
   if (any(subj_counts$n > 1)) {
-    subj_dupes <- subj_counts %>% dplyr::filter(n > 1)
+    subj_dupes <- subj_counts %>% dplyr::filter(.data$n > 1)
     msg <- "At least one id + session combination in subject_data is duplicated. All rows in subject_data must represent unique observations!"
     lg$error(msg)
     lg$error("Problematic entries: ")
@@ -460,7 +460,7 @@ derive_session_data <- function(run_data, subject_data, lg) {
 
   if (length(constant_cols) > 0L) {
     run_session_data <- run_data %>%
-      dplyr::group_by(id, session) %>%
+      dplyr::group_by(.data$id, .data$session) %>%
       dplyr::summarise(
         dplyr::across(dplyr::all_of(constant_cols), function(xx) {
           non_missing <- xx[!is.na(xx)]
@@ -469,10 +469,10 @@ derive_session_data <- function(run_data, subject_data, lg) {
         .groups = "drop"
       )
   } else {
-    run_session_data <- run_data %>% dplyr::distinct(id, session)
+    run_session_data <- run_data %>% dplyr::distinct(.data$id, .data$session)
   }
 
-  subject_session_data <- subject_data %>% dplyr::distinct(id, session, .keep_all = TRUE)
+  subject_session_data <- subject_data %>% dplyr::distinct(.data$id, .data$session, .keep_all = TRUE)
   shared_cols <- intersect(
     setdiff(names(run_session_data), c("id", "session")),
     setdiff(names(subject_session_data), c("id", "session"))
@@ -480,8 +480,8 @@ derive_session_data <- function(run_data, subject_data, lg) {
 
   if (length(shared_cols) > 0L) {
     cmp <- dplyr::left_join(
-      run_session_data %>% dplyr::select(id, session, dplyr::all_of(shared_cols)),
-      subject_session_data %>% dplyr::select(id, session, dplyr::all_of(shared_cols)),
+      run_session_data %>% dplyr::select("id", "session", dplyr::all_of(shared_cols)),
+      subject_session_data %>% dplyr::select("id", "session", dplyr::all_of(shared_cols)),
       by = c("id", "session"), suffix = c(".run", ".subject")
     )
 
@@ -517,7 +517,7 @@ derive_session_data <- function(run_data, subject_data, lg) {
     session_data <- session_data %>% dplyr::select(-dplyr::all_of(drop_cols))
   }
 
-  session_data <- session_data %>% dplyr::arrange(id, session)
+  session_data <- session_data %>% dplyr::arrange(.data$id, .data$session)
   class(session_data) <- c("bg_session_data", class(session_data))
 
   if (length(constant_cols) > 0L) {
@@ -797,8 +797,8 @@ validate_block_data <- function(df) {
 
   # check that a) there are no duplicate block_numbers in each run counts of 
   counts <- df %>%
-    group_by(id, session, run_number) %>%
-    summarise(n_blocks = n_distinct(block_number), n_rows=n(), duplicates=any(duplicated(block_number)), .groups="drop")
+    dplyr::group_by(.data$id, .data$session, .data$run_number) %>%
+    dplyr::summarise(n_blocks = dplyr::n_distinct(.data$block_number), n_rows = dplyr::n(), duplicates = any(duplicated(.data$block_number)), .groups = "drop")
 
   if (all(counts$n_rows) == 1L) {
     msg <- "All runs in block_data contain only a single block. It is unclear why block_data are provided."
@@ -808,7 +808,7 @@ validate_block_data <- function(df) {
   
   if (any(counts$n_blocks) == 1L) {
     single_block <- counts %>%
-      filter(n_blocks == 1L)
+      dplyr::filter(.data$n_blocks == 1L)
 
     msg <- sprintf("%d runs contained only a single block. Please verify that this matches your expectations!", nrow(single_block))
     lg$warn(msg)
@@ -818,7 +818,7 @@ validate_block_data <- function(df) {
 
   if (any(counts$duplicates)) {
     dupes <- counts %>%
-      filter(duplicates == TRUE)
+      dplyr::filter(.data$duplicates == TRUE)
     
     msg <- "Duplicate blocks identified for some runs. Unable to proceed until this is resolved."
     lg$error(msg)

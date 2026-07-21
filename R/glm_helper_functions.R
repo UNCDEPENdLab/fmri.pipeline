@@ -846,10 +846,10 @@ calculate_subject_exclusions <- function(gpa) {
   }
 
   n_good_runs_df <- gpa$run_data %>%
-    dplyr::group_by(id, session) %>%
-    dplyr::summarize(n_good_runs = sum(exclude_run == FALSE)) %>% # sum of non-excluded runs
+    dplyr::group_by(.data$id, .data$session) %>%
+    dplyr::summarize(n_good_runs = sum(.data$exclude_run == FALSE)) %>% # sum of non-excluded runs
     dplyr::ungroup() %>%
-    dplyr::select(id, session, n_good_runs)
+    dplyr::select("id", "session", "n_good_runs")
 
   gpa$subject_data <- gpa$subject_data %>%
     dplyr::left_join(n_good_runs_df, by = c("id", "session"))
@@ -876,7 +876,7 @@ calculate_subject_exclusions <- function(gpa) {
   # propagate subject exclusion down to $run_data
   gpa$run_data <- gpa$run_data %>%
     dplyr::left_join(
-      gpa$subject_data %>% dplyr::select(id, session, exclude_subject),
+      gpa$subject_data %>% dplyr::select("id", "session", "exclude_subject"),
       by = c("id", "session")
     )
 
@@ -913,13 +913,13 @@ populate_last_events <- function(gpa, lg) {
   }
 
   last_events <- m_events %>%
-    group_by(id, session, run_number) %>%
+    dplyr::group_by(.data$id, .data$session, .data$run_number) %>%
     dplyr::summarize(
-      last_event_idx = which.max(onset),
-      last_event = event[last_event_idx],
-      last_onset = max(onset, na.rm = TRUE), 
-      last_offset = max(onset + duration, na.rm = TRUE),
-      last_isi = isi[last_event_idx],
+      last_event_idx = which.max(.data$onset),
+      last_event = .data$event[which.max(.data$onset)],
+      last_onset = max(.data$onset, na.rm = TRUE),
+      last_offset = max(.data$onset + .data$duration, na.rm = TRUE),
+      last_isi = .data$isi[which.max(.data$onset)],
       .groups="drop")
 
   gpa$run_data <- gpa$run_data %>%
@@ -1367,8 +1367,8 @@ compose_l2_model_data <- function(gpa, lg = NULL) {
   checkmate::assert_subset(c("id", "session"), names(gpa$session_data))
 
   session_dupes <- gpa$session_data %>%
-    dplyr::count(id, session, name = "n") %>%
-    dplyr::filter(n > 1L)
+    dplyr::count(.data$id, .data$session, name = "n") %>%
+    dplyr::filter(.data$n > 1L)
   if (nrow(session_dupes) > 0L) {
     stop("session_data must have unique id/session rows", call. = FALSE)
   }
@@ -1402,8 +1402,8 @@ compose_l2_model_data <- function(gpa, lg = NULL) {
 
     for (cc in conflicts) {
       cmp <- dplyr::left_join(
-        l2_data %>% dplyr::select(id, session, run_value = dplyr::all_of(cc)),
-        sdat %>% dplyr::select(id, session, session_value = dplyr::all_of(cc)),
+        l2_data %>% dplyr::select("id", "session", run_value = dplyr::all_of(cc)),
+        sdat %>% dplyr::select("id", "session", session_value = dplyr::all_of(cc)),
         by = c("id", "session")
       )
 
@@ -1726,22 +1726,22 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
   # https://stackoverflow.com/questions/64287986/create-variable-that-captures-if-there-are-missing-fields-in-4-string-variables
   data <- data %>%
     dplyr::select(!!model_vars, !!id_cols) %>% # just keep model-relevant variables
-    dplyr::mutate(any_miss = rowSums(is.na(dplyr::select(., any_of(model_vars)))) > 0)
+    dplyr::mutate(any_miss = rowSums(is.na(dplyr::pick(dplyr::any_of(model_vars)))) > 0)
     #dplyr::mutate(across(all_of(model_vars), ~ +(is.na(.))))
 
   miss_data <- data %>%
-    dplyr::filter(any_miss == TRUE) %>%
-    dplyr::select(-any_miss)
+    dplyr::filter(.data$any_miss == TRUE) %>%
+    dplyr::select(-"any_miss")
 
   # retain non-missing data
   data <- data %>%
-    dplyr::filter(any_miss == FALSE) %>%
-    dplyr::select(-any_miss)
+    dplyr::filter(.data$any_miss == FALSE) %>%
+    dplyr::select(-"any_miss")
 
   if (nrow(miss_data) > 0L) {
     lg$warn("Model data contain missing values for one or more covariates.")
     lg$warn("These observations will be dropped from model outputs!")
-    lg$warn("%s", capture.output(print(miss_data %>% dplyr::select(-dummy))))
+    lg$warn("%s", capture.output(print(miss_data %>% dplyr::select(-"dummy"))))
   }
 
   # Add metadata, for merging model matrix against identifying columns
@@ -1869,7 +1869,7 @@ respecify_l3_model <- function(mobj, new_data) {
   }
   full_data <- cbind(mobj$metadata, model_data_subset)
 
-  new_data <- new_data %>% dplyr::select(id, session) #just metadata of interest
+  new_data <- new_data %>% dplyr::select("id", "session") #just metadata of interest
   new_data <- new_data %>%
     dplyr::left_join(full_data, by=c("id", "session"))
 
@@ -2486,13 +2486,13 @@ preprocess_all_functional <- function(run_df, output_directory = NULL, cleanup_f
     if (any(!run_df$mprage_bet_exists)) {
       warning("Cannot process some functional data because mprage_bet.nii.gz is not present (run preprocessMprage first?)")
       cat(run_df$expect_mprage_bet[!run_df$mprage_bet_exists], sep = "\n")
-      run_df <- run_df %>% dplyr::filter(mprage_bet_exists == TRUE)
+      run_df <- run_df %>% dplyr::filter(.data$mprage_bet_exists == TRUE)
     }
 
     if (any(!run_df$mprage_warpcoef_exists)) {
       warning("Cannot process some functional data because mprage_warpcoef_withgdc.nii.gz is not present (run preprocessMprage first?)")
       cat(run_df$expect_mprage_warpcoef[!run_df$mprage_warpcoef_exists], sep = "\n")
-      run_df <- run_df %>% dplyr::filter(mprage_warpcoef_exists == TRUE)
+      run_df <- run_df %>% dplyr::filter(.data$mprage_warpcoef_exists == TRUE)
     }
 
     # cleanup failed runs
@@ -2572,7 +2572,7 @@ preprocess_all_functional <- function(run_df, output_directory = NULL, cleanup_f
 preprocess_all_mprage <- function(run_df, output_directory = NULL, cleanup_failed = TRUE) {
   if (is.null(output_directory)) stop("Must specify the root directory for outputs")
   run_df <- run_df %>%
-    dplyr::distinct(t1w, .keep_all = TRUE) %>% # drop repeated t1 images
+    dplyr::distinct(.data$t1w, .keep_all = TRUE) %>% # drop repeated t1 images
     dplyr::mutate(
       expect_mprage_dir = glue::glue_data(., "{output_directory}/sub-{id}/anat"),
       expect_mprage_file = glue::glue_data(., "{output_directory}/sub-{id}/anat/sub-{id}_T1w.nii.gz"),

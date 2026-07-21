@@ -15,7 +15,6 @@
 #'   spans the window from \code{time_before} to \code{time_after}, but padding includes data points at the
 #'   boundary that can help to have sufficient data to interpolate early and late times within the epoch.
 #' @param pad_after Number of seconds to include in the epoch time window after the event of interest.
-#' @param logfile Name of log file containing event-locking problems
 #' @param time_audit If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing
 #'
 #' @importFrom dplyr filter pull
@@ -132,10 +131,10 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
 #'   than specified by \code{time_after}.
 #' @param pad_before Number of seconds to include in the epoch time window before the event of interest. Interpolation
 #'   spans the window from \code{time_before} to \code{time_after}, but padding includes data points at the
-#'   boundary that can help to have sufficient data to interpolate early and late times within the epoch.
+#'   boundary that can help provide sufficient data to interpolate early and late times within the epoch.
 #' @param pad_after Number of seconds to include in the epoch time window after the event of interest.
-#' @param output_resolution the sampling frequency (in seconds) of the interpolated data. Defaults to be
-#'   the same as \code{tr}.
+#' @param output_resolution Time step, in seconds, for the interpolated data. Defaults to the repetition time
+#'   stored in \code{fmri_obj}.
 #' @param group_by return interpolated time series for each combination of group_by variables. Default is
 #'   to provide one interpolated time series per trial.
 #' @param time_audit If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing
@@ -179,12 +178,6 @@ get_medusa_interpolated_ts <- function(fmri_obj, event=NULL, time_before=-3.0, t
 #' @param collide_after An optional vector of column names in \code{trial_df} that set a boundary on the latest
 #'   time point used in interpolation. This effectively truncates the time series for interpolation to a smaller window
 #'   than specified by \code{time_after}.
-#' @param pad_before Number of seconds to include in the epoch time window before the event of interest. Interpolation
-#'   spans the window from \code{time_before} to \code{time_after}, but padding includes data points at the
-#'   boundary that can help to have sufficient data to interpolate early and late times within the epoch.
-#' @param pad_after Number of seconds to include in the epoch time window after the event of interest.
-#' @param output_resolution the sampling frequency (in seconds) of the interpolated data. Defaults to be
-#'   the same as \code{tr}.
 #' @param group_by return interpolated time series for each combination of group_by variables. Default is
 #'   to provide one interpolated time series per trial.
 #'
@@ -210,7 +203,7 @@ get_medusa_compression_score <- function(fmri_obj, event=NULL, time_before=-3, t
     pad_before=0, pad_after=0, collide_before=collide_before, collide_after=collide_after)
 
   interp_dt <- talign$get_ts(orig_names=TRUE) %>%
-    melt(measure.vars=talign$vm$value, variable.name=".vkey", values.name="value")
+    data.table::melt(measure.vars=talign$vm$value, variable.name=".vkey", values.name="value")
 
   ## yy <- dcast(xx, evt_time ~ vnum, value.var="value")
   ## yy[,evt_time:=NULL]
@@ -410,12 +403,14 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
 #' @param atlas_files A character vector containing filenames of atlases that used for aggregating voxel-level deconvolved time series
 #' @param decon_dir The directory containing the deconvolved data from \code{voxelwise_deconvolution}. Should be the same as
 #'   \code{out_dir} from \code{voxelwise_deconvolution}.
+#' @param trial_df Trial-level data used for event alignment.
 #' @param alignments A list of alignment specifications, each of which will be computed by this function.
 #'   See \code{get_medusa_interpolated_ts} for help with arguments, and see Details.
 #' @param nbins For atlases with continuous values, how many bins should be used to discretize the mask values, leading to aggregation
 #'   by bin.
 #' @param aggregate_by The column name in the individual deconvolved files used for averaging repeated units (e.g., voxels) into single
 #'   event-aligned time series. Most commonly, this is "atlas_value", which will lead to averaging of voxels within each parcel in the mask.
+#' @param atlas_subset Optional subset of atlas values to retain.
 #' @param overwrite if TRUE, overwrite existing output files
 #' @param tr The repetition time of the scan in seconds
 #' @param ncpus The number of cores to use for each parallel job
@@ -572,6 +567,7 @@ run_decon_alignment <- function(atlas_files, decon_dir, trial_df, alignments = l
 #' @param atlas_subset An optional numeric vector containing values of \code{aggregate_by} 
 #' @param out_file The output file name (can include path) for the event-aligned csv file. If NULL, nothing is output 
 #'   (but the event-aligned data are always returned as a data.frame)
+#' @param ncpus Number of local worker processes to use.
 #' @param time_audit If TRUE, additional columns will be added to the output showing how alignment is calculated vis-a-vis event timing
 #' @importFrom doParallel registerDoParallel
 #' @importFrom parallel makeCluster stopCluster

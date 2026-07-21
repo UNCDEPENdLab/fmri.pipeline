@@ -228,8 +228,8 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
   }
 
   excluded_runs <- gpa$run_data %>%
-    dplyr::select(id, session, run_number, exclude_run, exclude_subject) %>%
-    dplyr::filter(exclude_run == TRUE | exclude_subject == TRUE)
+    dplyr::select("id", "session", "run_number", "exclude_run", "exclude_subject") %>%
+    dplyr::filter(.data$exclude_run == TRUE | .data$exclude_subject == TRUE)
 
   if (nrow(excluded_runs) > 1L) {
     lg$info("In setup_l3_models, the following runs will be excluded from L3 modeling: ")
@@ -262,7 +262,7 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
     }
     # only retain good runs and subjects
     run_data <- gpa$run_data %>%
-      dplyr::filter(exclude_run == FALSE & exclude_subject == FALSE)
+      dplyr::filter(.data$exclude_run == FALSE & .data$exclude_subject == FALSE)
 
     if (nrow(run_data) == 0L) {
       msg <- "In setup_l3_models, no runs survived the exclude_subject and exclude_run step."
@@ -280,8 +280,8 @@ setup_l3_models <- function(gpa, l3_model_names = NULL, l2_model_names = NULL, l
 
   # subjects and sessions to run at l3
   subj_df <- gpa$subject_data %>%
-    dplyr::filter(exclude_subject==FALSE) %>%
-    select(id, session)
+    dplyr::filter(.data$exclude_subject == FALSE) %>%
+    dplyr::select("id", "session")
 
   # loop over requested backends and setup all requested combinations of L1/L2/L3 models
   backend_results <- list()
@@ -432,8 +432,8 @@ setup_l3_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
   l3_cope_config <- get_fsl_l3_model_df(gpa, model_set, subj_df)
 
   l3_cope_input_df <- l3_cope_config %>%
-    dplyr::filter(l3_cope_number == 1L) %>%
-    dplyr::select(-l3_cope_number, -l3_cope_name)
+    dplyr::filter(.data$l3_cope_number == 1L) %>%
+    dplyr::select(-c("l3_cope_number", "l3_cope_name"))
 
   to_run <- get_feat_l3_inputs(gpa, l3_cope_input_df, lg)
 
@@ -500,8 +500,8 @@ setup_l3_backend_spm <- function(gpa, backend, lg, l1_model_names, l2_model_name
   spm_cope_config <- get_spm_l3_model_df(gpa, spm_model_set, subj_df)
 
   spm_cope_input_df <- spm_cope_config %>%
-    dplyr::filter(l3_cope_number == 1L) %>%
-    dplyr::select(-l3_cope_number, -l3_cope_name)
+    dplyr::filter(.data$l3_cope_number == 1L) %>%
+    dplyr::select(-c("l3_cope_number", "l3_cope_name"))
 
   spm_to_run <- get_spm_l3_inputs(gpa, spm_cope_input_df, lg)
 
@@ -619,7 +619,7 @@ afni_3dlmer_setup <- function(gpa, backend, lg, l1_model_names, l2_model_names, 
       dt <- harvested[[l3_name]][[con_name]]
 
       analysis_ids <- dt %>%
-        dplyr::select(id, session) %>%
+        dplyr::select("id", "session") %>%
         dplyr::distinct()
       l3_fit <- respecify_l3_model(l3_obj, analysis_ids)
 
@@ -636,7 +636,7 @@ afni_3dlmer_setup <- function(gpa, backend, lg, l1_model_names, l2_model_names, 
 
       datatable <- build_3dlmer_datatable(
         subject_data = subject_data,
-        input_files = dt %>% dplyr::select(id, session, InputFile),
+        input_files = dt %>% dplyr::select("id", "session", "InputFile"),
         model_variables = model_vars
       )
       validate_3dlmer_formula_datatable(
@@ -720,8 +720,8 @@ afni_3dlmer_setup <- function(gpa, backend, lg, l1_model_names, l2_model_names, 
 get_l1_cope_df <- function(gpa, model_set, subj_df=NULL) {
   if (is.null(subj_df)) {
     subj_df <- gpa$subject_data %>%
-      dplyr::filter(exclude_subject == FALSE) %>%
-      dplyr::select(id, session)
+      dplyr::filter(.data$exclude_subject == FALSE) %>%
+      dplyr::select("id", "session")
   }
   if (is.null(gpa$l1_cope_names) || !checkmate::test_list(gpa$l1_cope_names)) {
     gpa <- refresh_l1_cope_names(gpa)
@@ -786,7 +786,7 @@ get_l2_cope_df <- function(gpa, model_set, subj_df=NULL) {
   }
 
   l2_setup <- gpa$l2_model_setup$fsl %>%
-    dplyr::filter(l2_model %in% unique(model_set$l2_model))
+    dplyr::filter(.data$l2_model %in% unique(model_set$l2_model))
   bad_modes <- setdiff(unique(l2_setup$l2_input_mode), c("cope_files", "l1_cope_file_passthrough"))
   if (length(bad_modes) > 0L) {
     stop("Unsupported L2 input mode in per-cope L2 setup: ", paste(bad_modes, collapse = ", "), call. = FALSE)
@@ -827,8 +827,8 @@ get_l2_cope_df <- function(gpa, model_set, subj_df=NULL) {
 get_l3_cope_df <- function(gpa, model_set, subj_df=NULL) {
   if (is.null(subj_df)) {
     subj_df <- gpa$subject_data %>%
-      dplyr::filter(exclude_subject == FALSE) %>%
-      dplyr::select(id, session)
+      dplyr::filter(.data$exclude_subject == FALSE) %>%
+      dplyr::select("id", "session")
   }
   checkmate::assert_data_frame(model_set)
   dt <- dplyr::bind_rows(
@@ -870,8 +870,8 @@ get_l3_cope_df <- function(gpa, model_set, subj_df=NULL) {
 get_fsl_l3_model_df <- function(gpa, model_df, subj_df=NULL) {
   if (is.null(subj_df)) {
     subj_df <- gpa$subject_data %>%
-      dplyr::filter(exclude_subject == FALSE) %>%
-      dplyr::select(id, session)
+      dplyr::filter(.data$exclude_subject == FALSE) %>%
+      dplyr::select("id", "session")
   }
   if (!"l3_input_mode" %in% names(model_df)) {
     model_df$l3_input_mode <- vapply(
@@ -908,19 +908,19 @@ get_fsl_l3_model_df <- function(gpa, model_df, subj_df=NULL) {
     if (length(l2_id_scope_models) > 0L) {
       # For l2_scope="id", l2_df uses session=0L; join without session key
       l2_df_id <- l2_df %>%
-        dplyr::filter(l2_model %in% l2_id_scope_models) %>%
-        dplyr::select(-session)
+        dplyr::filter(.data$l2_model %in% l2_id_scope_models) %>%
+        dplyr::select(-"session")
       l2_df_session <- l2_df %>%
-        dplyr::filter(!l2_model %in% l2_id_scope_models)
+        dplyr::filter(!.data$l2_model %in% l2_id_scope_models)
 
       base_id <- base %>%
-        dplyr::filter(l2_model %in% l2_id_scope_models) %>%
+        dplyr::filter(.data$l2_model %in% l2_id_scope_models) %>%
         left_join(
           l2_df_id,
           by = c("id", l2_join_keys)
         )
       base_session <- base %>%
-        dplyr::filter(!l2_model %in% l2_id_scope_models)
+        dplyr::filter(!.data$l2_model %in% l2_id_scope_models)
 
       if (nrow(base_session) > 0L) {
         base_session <- base_session %>%
@@ -957,7 +957,7 @@ get_feat_l3_inputs <- function(gpa, l3_cope_config, lg=NULL) {
   if (isTRUE(gpa$multi_run)) {
     # feat directories in $l2_model_setup
     feat_inputs <- gpa$l2_model_setup$fsl %>%
-      dplyr::filter(feat_complete == TRUE)
+      dplyr::filter(.data$feat_complete == TRUE)
     required_cols <- c(
       "id", "session", "l1_model", "l1_cope_number", "l1_cope_name",
       "l2_model", "l2_scope", "l2_input_mode", "feat_dir",
@@ -988,22 +988,22 @@ get_feat_l3_inputs <- function(gpa, l3_cope_config, lg=NULL) {
 
     if (length(id_scope_models) > 0L) {
       feat_id <- feat_inputs %>%
-        dplyr::filter(l2_model %in% id_scope_models) %>%
-        dplyr::select(-session) %>%
+        dplyr::filter(.data$l2_model %in% id_scope_models) %>%
+        dplyr::select(-"session") %>%
         dplyr::inner_join(
-          l3_cope_config %>% dplyr::filter(l2_model %in% id_scope_models),
+          l3_cope_config %>% dplyr::filter(.data$l2_model %in% id_scope_models),
           by = c("id", "l1_model", "l1_cope_number", "l1_cope_name", "l2_model")
         ) %>%
-        dplyr::distinct(id, l1_model, l2_model, l3_model, l3_input_mode,
-          l1_cope_name, l2_cope_name, feat_dir, .keep_all = TRUE)
+        dplyr::distinct(.data$id, .data$l1_model, .data$l2_model, .data$l3_model, .data$l3_input_mode,
+          .data$l1_cope_name, .data$l2_cope_name, .data$feat_dir, .keep_all = TRUE)
 
       feat_non_id <- feat_inputs %>%
-        dplyr::filter(!l2_model %in% id_scope_models)
+        dplyr::filter(!.data$l2_model %in% id_scope_models)
 
       if (nrow(feat_non_id) > 0L) {
         feat_non_id <- feat_non_id %>%
           dplyr::inner_join(
-            l3_cope_config %>% dplyr::filter(!l2_model %in% id_scope_models),
+            l3_cope_config %>% dplyr::filter(!.data$l2_model %in% id_scope_models),
             by = c("id", "session", "l1_model", "l1_cope_number", "l1_cope_name", "l2_model")
           )
       }
@@ -1036,26 +1036,26 @@ get_feat_l3_inputs <- function(gpa, l3_cope_config, lg=NULL) {
         )
       ) %>%
       dplyr::select(
-        id, session, l1_model, l2_model, l3_model, l3_input_mode, l1_cope_name, l2_cope_name, feat_dir, cope_file
+        "id", "session", "l1_model", "l2_model", "l3_model", "l3_input_mode", "l1_cope_name", "l2_cope_name", "feat_dir", "cope_file"
       )
 
     split_on <- c("l1_cope_name", "l2_cope_name", "l1_model", "l2_model", "l3_model")
   } else {
     # feat directories in $l1_model_setup
     feat_inputs <- gpa$l1_model_setup$fsl %>%
-      dplyr::filter(feat_complete == TRUE)
+      dplyr::filter(.data$feat_complete == TRUE)
 
     feat_inputs <- feat_inputs %>%
       dplyr::inner_join(l3_cope_config, by = c("id", "session", "l1_model"))
 
     feat_inputs <- feat_inputs %>%
       dplyr::mutate(cope_file = file.path(
-        feat_dir,
+        .data$feat_dir,
         "stats",
-        paste0("cope", l1_cope_number, ".nii.gz")
+        paste0("cope", .data$l1_cope_number, ".nii.gz")
       )) %>%
       dplyr::select(
-        id, session, l1_model, l3_model, l3_input_mode, l1_cope_name, feat_dir, cope_file
+        "id", "session", "l1_model", "l3_model", "l3_input_mode", "l1_cope_name", "feat_dir", "cope_file"
       )
 
     split_on <- c("l1_cope_name", "l1_model", "l3_model")
@@ -1093,8 +1093,8 @@ get_spm_contrast_file <- function(spm_dir, cope_number) {
 get_spm_l3_model_df <- function(gpa, model_df, subj_df = NULL) {
   if (is.null(subj_df)) {
     subj_df <- gpa$subject_data %>%
-      dplyr::filter(exclude_subject == FALSE) %>%
-      dplyr::select(id, session)
+      dplyr::filter(.data$exclude_subject == FALSE) %>%
+      dplyr::select("id", "session")
   }
   if (!"l3_input_mode" %in% names(model_df)) {
     model_df$l3_input_mode <- vapply(
@@ -1137,14 +1137,14 @@ get_spm_l3_inputs <- function(gpa, l3_cope_config, lg = NULL) {
 
   if ("spm_complete" %in% names(spm_inputs)) {
     spm_inputs <- spm_inputs %>%
-      dplyr::filter(spm_complete == TRUE)
+      dplyr::filter(.data$spm_complete == TRUE)
   } else {
     lg$warn("No spm_complete column in gpa$l1_model_setup$spm. Proceeding without completion filter for L3 inputs.")
   }
 
   if ("spm_contrast_exists" %in% names(spm_inputs)) {
     spm_inputs <- spm_inputs %>%
-      dplyr::filter(spm_contrast_exists == TRUE)
+      dplyr::filter(.data$spm_contrast_exists == TRUE)
   }
 
   spm_inputs <- spm_inputs %>%
@@ -1155,22 +1155,22 @@ get_spm_l3_inputs <- function(gpa, l3_cope_config, lg = NULL) {
   }
 
   spm_inputs <- spm_inputs %>%
-    dplyr::mutate(con_file = mapply(get_spm_contrast_file, spm_dir, l1_cope_number, USE.NAMES = FALSE)) %>%
-    dplyr::select(id, session, l1_model, l3_model, l3_input_mode, l1_cope_name, spm_dir, con_file)
+    dplyr::mutate(con_file = mapply(get_spm_contrast_file, .data$spm_dir, .data$l1_cope_number, USE.NAMES = FALSE)) %>%
+    dplyr::select("id", "session", "l1_model", "l3_model", "l3_input_mode", "l1_cope_name", "spm_dir", "con_file")
 
   if (!is.character(spm_inputs$con_file)) {
     spm_inputs$con_file <- as.character(spm_inputs$con_file)
   }
 
   spm_inputs <- spm_inputs %>%
-    dplyr::filter(!is.na(con_file) & nzchar(con_file))
+    dplyr::filter(!is.na(.data$con_file) & nzchar(.data$con_file))
 
   if (nrow(spm_inputs) == 0L) {
     return(list())
   }
 
   spm_inputs <- spm_inputs %>%
-    dplyr::filter(file.exists(con_file))
+    dplyr::filter(file.exists(.data$con_file))
 
   if (!"l3_input_mode" %in% names(spm_inputs)) {
     spm_inputs$l3_input_mode <- "per_session"

@@ -122,8 +122,8 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, backe
   }
 
   excluded_runs <- gpa$run_data %>%
-    dplyr::select(id, session, run_number, exclude_run, exclude_subject) %>%
-    dplyr::filter(exclude_run == TRUE | exclude_subject == TRUE)
+    dplyr::select("id", "session", "run_number", "exclude_run", "exclude_subject") %>%
+    dplyr::filter(.data$exclude_run == TRUE | .data$exclude_subject == TRUE)
 
   if (nrow(excluded_runs) > 0L) {
     lg$info("In setup_l2_models, the following runs will be excluded from L2 modeling: ")
@@ -138,11 +138,11 @@ setup_l2_models <- function(gpa, l1_model_names=NULL, l2_model_names=NULL, backe
 
   # only retain good runs and subjects
   run_data <- l2_data %>%
-    dplyr::filter(exclude_run == FALSE & exclude_subject == FALSE)
+    dplyr::filter(.data$exclude_run == FALSE & .data$exclude_subject == FALSE)
 
   # subset basic metadata to merge against a given l1 model to enforce run/subject exclusions
   good_runs <- run_data %>%
-    dplyr::select(id, session, run_number, exclude_run, exclude_subject)
+    dplyr::select("id", "session", "run_number", "exclude_run", "exclude_subject")
 
   if (nrow(run_data) == 0L) {
     msg <- "In setup_l2_models, no runs survived the exclude_subject and exclude_run step."
@@ -672,9 +672,9 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
 
     # get list of runs to examine/include
     to_run <- gpa$l1_model_setup$fsl %>%
-      dplyr::filter(l1_model == !!this_l1_model) %>%
+      dplyr::filter(.data$l1_model == !!this_l1_model) %>%
       dplyr::select(
-        id, session, run_number, l1_model, feat_fsf, feat_dir,
+        "id", "session", "run_number", "l1_model", "feat_fsf", "feat_dir",
         dplyr::any_of(c("feat_complete", "feat_failed"))
       )
 
@@ -737,7 +737,7 @@ setup_l2_backend_fsl <- function(gpa, backend, lg, l1_model_names, l2_model_name
         l2_model = this_l2_model
       ) %>%
       dplyr::select(
-        id, session, run_number, l1_model, l1_cope_number, l1_cope_name, l2_model, feat_fsf, feat_dir, cope_file
+        "id", "session", "run_number", "l1_model", "l1_cope_number", "l1_cope_name", "l2_model", "feat_fsf", "feat_dir", "cope_file"
       )
 
     if (nrow(to_run) == 0L) {

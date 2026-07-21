@@ -367,7 +367,7 @@ align_signal_with_events <- function(s, events, lg = NULL) {
   
   # Determine join columns
   join_cols <- c("run_number", "trial")
-  df_events <- dplyr::filter(events, event == s$event)
+  df_events <- dplyr::filter(events, .data$event == s$event)
   
   # Check that the event type exists in events
   if (nrow(df_events) == 0L) {
@@ -406,7 +406,7 @@ align_signal_with_events <- function(s, events, lg = NULL) {
     # Parametric regressor: join on trial
     s_aligned <- df_signal %>%
       dplyr::left_join(df_events, by = join_cols) %>%
-      dplyr::arrange(run_number, trial)
+      dplyr::arrange(.data$run_number, .data$trial)
     
     # Check for join failures (NAs in onset after join)
     na_onsets <- sum(is.na(s_aligned$onset))
@@ -513,7 +513,7 @@ apply_signal_duration <- function(s_aligned, duration_spec, signal_name = "<unna
 split_signal_by_run <- function(s_aligned, event_runs, event_name, physio_only = FALSE) {
   retdf <- s_aligned %>%
     dplyr::select("run_number", "trial", "onset", "duration", "value") %>%
-    dplyr::mutate(run_number = factor(run_number, levels = event_runs)) %>%
+    dplyr::mutate(run_number = factor(.data$run_number, levels = event_runs)) %>%
     data.table::setDT()
   
   # Split by run, keeping all factor levels
@@ -1053,8 +1053,8 @@ merge_additional_regressors_to_dmat <- function(dmat_convolved, dmat_unconvolved
     runnum <- as.numeric(sub("run_number(\\d+)", "\\1", names(dmat_convolved)[i], perl = TRUE))
     
     additional_regressors_currun <- additional_regressors %>%
-      dplyr::filter(run_number == !!runnum) %>%
-      dplyr::select(-run_number)
+      dplyr::filter(.data$run_number == !!runnum) %>%
+      dplyr::select(-"run_number")
     
     # Mean-center additional regressors
     additional_regressors_currun <- as.data.frame(lapply(

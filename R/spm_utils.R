@@ -435,7 +435,7 @@ combine_spm_l3_to_afni <- function(gpa, spm_l3_combined_filename=NULL, spm_l3_co
   lg$set_threshold(gpa$lgr_threshold)
 
   meta_df <- gpa$l3_model_setup$spm %>%
-    dplyr::select(l1_model, l1_cope_name, l3_model, spm_dir)
+    dplyr::select("l1_model", "l1_cope_name", "l3_model", "spm_dir")
 
   meta_df$contrast_df <- lapply(meta_df$spm_dir, spm_l3_collect_contrasts, lg = lg)
   meta_df <- meta_df %>% unnest(contrast_df, keep_empty = FALSE)
@@ -485,7 +485,7 @@ combine_spm_l3_to_afni <- function(gpa, spm_l3_combined_filename=NULL, spm_l3_co
     )
 
     long_df <- long_df %>%
-      dplyr::filter(!is.na(nii_file) & file.exists(nii_file))
+      dplyr::filter(!is.na(.data$nii_file) & file.exists(.data$nii_file))
 
     if (nrow(long_df) == 0L) {
       lg$warn("No images found for AFNI combination in: %s", afni_out)

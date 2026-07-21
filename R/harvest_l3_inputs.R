@@ -131,8 +131,8 @@ harvest_l3_inputs_fsl <- function(gpa, l1_model_names = NULL, l2_model_names = N
     )
 
     subj_df <- gpa$subject_data %>%
-      dplyr::filter(exclude_subject == FALSE) %>%
-      dplyr::select(id, session)
+      dplyr::filter(.data$exclude_subject == FALSE) %>%
+      dplyr::select("id", "session")
 
     l3_cope_config <- get_fsl_l3_model_df(gpa, model_df, subj_df)
     if ("l3_cope_number" %in% names(l3_cope_config)) {
@@ -144,7 +144,7 @@ harvest_l3_inputs_fsl <- function(gpa, l1_model_names = NULL, l2_model_names = N
 
     for (nm in names(feat_inputs)) {
       feat_inputs[[nm]] <- feat_inputs[[nm]] %>%
-        dplyr::rename(InputFile = cope_file) %>%
+        dplyr::rename(InputFile = "cope_file") %>%
         dplyr::mutate(source_backend = "fsl")
     }
 

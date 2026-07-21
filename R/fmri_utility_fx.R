@@ -1076,12 +1076,7 @@ fmri.design <- function(stimulus, order = 2, cef = NULL, verbose = FALSE) {
 #' @keywords internal
 #' @details 
 #'   Adapted slightly from fs package. Added parentheses as illegal characters given FSL evaluates these in unquoted filenames
-#' @examples
-#' # potentially unsafe string
-#' str <- "~/.\u0001ssh/authorized_keys"
-#' path_sanitize(str)
-#'
-#' path_sanitize("..")
+#' @noRd
 path_sanitize <- function(filename, replacement = "") {
   illegal <- "[/\\?<>\\:*|\":()]"
   control <- "[[:cntrl:]]"

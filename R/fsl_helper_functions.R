@@ -210,15 +210,99 @@ add_custom_feat_syntax <- function(fsf_syntax, feat_args, lg=NULL) {
 
 }
 
+scan_feat_stat_files <- function(feat_dir,
+                                 statistics = c("cope", "varcope", "zstat", "tstat"),
+                                 include_missing = FALSE) {
+  stat_types <- c("cope", "varcope", "zstat", "tstat")
+  checkmate::assert_subset(statistics, stat_types)
+  checkmate::assert_logical(include_missing, len = 1L)
+  statistics <- unique(statistics)
+
+  stats_dir <- file.path(feat_dir, "stats")
+  if (!dir.exists(stats_dir)) return(NULL)
+
+  discovered <- lapply(stat_types, function(stat) {
+    pattern <- paste0("^", stat, "([0-9]+)\\.nii(?:\\.gz)?$")
+    files <- list.files(stats_dir, pattern = pattern, full.names = TRUE)
+    if (length(files) == 0L) return(stats::setNames(character(0), character(0)))
+
+    numbers <- sub(pattern, "\\1", basename(files), perl = TRUE)
+    keep <- !duplicated(numbers)
+    stats::setNames(files[keep], numbers[keep])
+  })
+  names(discovered) <- stat_types
+
+  contrast_numbers <- integer(0)
+  contrast_names <- character(0)
+  design_con <- file.path(feat_dir, "design.con")
+  if (file.exists(design_con)) {
+    design_lines <- readLines(design_con, warn = FALSE)
+    contrast_lines <- grep("^\\s*/ContrastName[0-9]+\\s+", design_lines, value = TRUE, perl = TRUE)
+    if (length(contrast_lines) > 0L) {
+      contrast_numbers <- as.integer(sub(
+        "^\\s*/ContrastName([0-9]+).*$", "\\1", contrast_lines, perl = TRUE
+      ))
+      contrast_names <- trimws(sub(
+        "^\\s*/ContrastName[0-9]+\\s+", "", contrast_lines, perl = TRUE
+      ))
+    }
+
+    n_contrast_line <- grep("^\\s*/NumContrasts\\s+[0-9]+", design_lines, value = TRUE, perl = TRUE)
+    if (length(n_contrast_line) > 0L) {
+      n_contrasts <- as.integer(sub(
+        "^\\s*/NumContrasts\\s+([0-9]+).*$", "\\1", n_contrast_line[1L], perl = TRUE
+      ))
+      contrast_numbers <- base::union(contrast_numbers, seq_len(n_contrasts))
+    }
+  }
+
+  file_numbers <- unlist(lapply(discovered, names), use.names = FALSE)
+  cope_numbers <- sort(unique(c(contrast_numbers, as.integer(file_numbers))))
+  cope_numbers <- cope_numbers[!is.na(cope_numbers)]
+  if (length(cope_numbers) == 0L) {
+    return(data.frame(
+      cope_number = integer(0), contrast_name = character(0),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  name_lookup <- stats::setNames(contrast_names, contrast_numbers[seq_along(contrast_names)])
+  out <- data.frame(
+    cope_number = cope_numbers,
+    contrast_name = unname(name_lookup[as.character(cope_numbers)]),
+    stringsAsFactors = FALSE
+  )
+
+  for (stat in statistics) {
+    stat_lookup <- discovered[[stat]]
+    paths <- unname(stat_lookup[as.character(cope_numbers)])
+    if (isTRUE(include_missing)) {
+      missing <- is.na(paths)
+      paths[missing] <- file.path(
+        stats_dir,
+        paste0(stat, cope_numbers[missing], ".nii.gz")
+      )
+    }
+    out[[stat]] <- paths
+  }
+
+  out
+}
+
 #' helper function to look up core stats outputs from a .gfeat folder
 #' @param gfeat_dir a .gfeat folder containing the outputs of an FSL analysis
 #' @param what What to parse in each folder. Currently just passed through to read_feat_dir
+#' @param statistics statistic image families to discover in each cope directory.
+#' @param include_missing if \code{TRUE}, include expected statistic paths when
+#'   the corresponding image does not yet exist.
 #' @return a list containing sorted vectors of each stat output
 #' @importFrom glue glue
 #' @importFrom checkmate assert_directory_exists assert_file_exists test_directory_exists
 #' @importFrom readr read_delim
 #' @export
-read_gfeat_dir <- function(gfeat_dir, what = "all") {
+read_gfeat_dir <- function(gfeat_dir, what = "all",
+                           statistics = c("cope", "varcope", "zstat", "tstat"),
+                           include_missing = FALSE) {
   gfeat_dir <- normalizePath(gfeat_dir) # convert to absolute path
 
   mask_file <- file.path(gfeat_dir, "mask.nii.gz")
@@ -233,7 +317,13 @@ read_gfeat_dir <- function(gfeat_dir, what = "all") {
   cope_nums <- as.numeric(sub(".*/cope(\\d+).feat", "\\1", cope_dirs, perl = TRUE))
   cope_dirs <- cope_dirs[order(cope_nums)]
 
-  cope_list <- lapply(cope_dirs, read_feat_dir, what = what)
+  cope_list <- lapply(
+    cope_dirs,
+    read_feat_dir,
+    what = what,
+    statistics = statistics,
+    include_missing = include_missing
+  )
   names(cope_list) <- basename(cope_dirs)
   ret_list <- list(cope_dirs = cope_list, design_files = get_design_files(gfeat_dir), mask_file = mask_file)
   class(ret_list) <- c("list", "gfeat_info")
@@ -281,13 +371,20 @@ get_design_files <- function(dir) {
 #' helper function to look up core stats outputs from a .feat folder
 #' @param feat_dir a .feat folder containing the outputs of an FSL analysis
 #' @param what which parts of the .feat folder should be parsed. If "all", extract everything.
+#' @param statistics statistic image families to discover. The returned object
+#'   retains all existing statistic fields; unrequested fields contain aligned
+#'   \code{NA} values.
+#' @param include_missing if \code{TRUE}, include expected statistic paths when
+#'   the corresponding image does not yet exist.
 #' @return a list containing sorted vectors of each stat output
 #' @importFrom glue glue
 #' @importFrom checkmate assert_directory_exists assert_file_exists test_directory_exists
 #' @importFrom readr read_delim
 #' @importFrom gsubfn strapply
 #' @export
-read_feat_dir <- function(feat_dir, what = "all") {
+read_feat_dir <- function(feat_dir, what = "all",
+                          statistics = c("cope", "varcope", "zstat", "tstat"),
+                          include_missing = FALSE) {
   if (!checkmate::test_directory_exists(feat_dir)) return(NULL)
   feat_dir <- normalizePath(feat_dir) # convert to absolute path
   stats_dir <- file.path(feat_dir, "stats")
@@ -298,25 +395,43 @@ read_feat_dir <- function(feat_dir, what = "all") {
     what <- c("stat_files", "aux_files", "parsed_txt")
   }
 
-  # inside the stats directory we will have pes, copes, varcopes, and zstats
-  z_files <- list.files(path = stats_dir, pattern = "zstat[0-9]+\\.nii.*", full.names = TRUE)
-  z_nums <- as.numeric(sub(".*zstat(\\d+)\\.nii.*$", "\\1", z_files, perl = TRUE))
-  z_files <- z_files[order(z_nums)] # need to sort stat files numerically for labeling to work appropriately
+  stat_df <- scan_feat_stat_files(
+    feat_dir,
+    statistics = statistics,
+    include_missing = include_missing
+  )
+  n_contrasts <- nrow(stat_df)
+  get_stat <- function(stat) {
+    if (stat %in% names(stat_df)) stat_df[[stat]] else rep(NA_character_, n_contrasts)
+  }
 
-  t_files <- file.path(dirname(z_files), sub("zstat", "tstat", basename(z_files), fixed = TRUE))
-  cope_files <- file.path(dirname(z_files), sub("zstat", "cope", basename(z_files), fixed = TRUE))
-  varcope_files <- file.path(dirname(z_files), sub("zstat", "varcope", basename(z_files), fixed = TRUE))
-  zptfce_files <- file.path(dirname(z_files), sub("zstat(\\d+)", "zstat\\1_ptfce", basename(z_files), perl = TRUE))
-  zptfce_exists <- sapply(zptfce_files, checkmate::test_file_exists)
-  zptfce_files[!zptfce_exists] <- NA_character_ # NA out the missing ptfce files
+  cope_files <- get_stat("cope")
+  varcope_files <- get_stat("varcope")
+  z_files <- get_stat("zstat")
+  t_files <- get_stat("tstat")
 
-  checkmate::assert_file_exists(t_files)
-  checkmate::assert_file_exists(cope_files)
-  checkmate::assert_file_exists(varcope_files)
-
-  #thresh files live in parent folder
-  zthresh_files <- file.path(feat_dir, sub("zstat", "thresh_zstat", basename(z_files), fixed = TRUE))
-  rendered_zthresh_files <- file.path(feat_dir, sub("zstat", "rendered_thresh_zstat", basename(z_files), fixed = TRUE))
+  # Thresholded files live in the parent FEAT folder and only apply to z statistics.
+  zthresh_files <- rep(NA_character_, n_contrasts)
+  rendered_zthresh_files <- rep(NA_character_, n_contrasts)
+  zptfce_files <- rep(NA_character_, n_contrasts)
+  has_z <- !is.na(z_files)
+  if (any(has_z)) {
+    z_basenames <- basename(z_files[has_z])
+    zthresh_files[has_z] <- file.path(
+      feat_dir,
+      sub("^zstat", "thresh_zstat", z_basenames)
+    )
+    rendered_zthresh_files[has_z] <- file.path(
+      feat_dir,
+      sub("^zstat", "rendered_thresh_zstat", z_basenames)
+    )
+    zptfce_candidates <- file.path(
+      stats_dir,
+      sub("^zstat([0-9]+)", "zstat\\1_ptfce", z_basenames, perl = TRUE)
+    )
+    zptfce_candidates[!file.exists(zptfce_candidates)] <- NA_character_
+    zptfce_files[has_z] <- zptfce_candidates
+  }
 
   # parameter estimate (PE) images
   pe_files <- list.files(path = stats_dir, pattern = "^pe[0-9]+\\.nii.*", full.names = TRUE)
@@ -420,13 +535,11 @@ read_feat_dir <- function(feat_dir, what = "all") {
   # get design files
   design_files <- get_design_files(feat_dir)
 
-  # lookup contrast names
+  # Preserve the established read_feat_dir convention of replacing whitespace
+  # in contrast labels with underscores.
   contrast_file <- design_files$design.con
   if (checkmate::test_file_exists(contrast_file)) {
-    # design.con contains names of contrasts
-    dcon <- readLines(contrast_file)
-    contrast_names <- sub("/ContrastName\\d+\\s+([\\w_.]+).*", "\\1", grep("/ContrastName", dcon, value = TRUE), perl = TRUE)
-    contrast_names <- gsub("\\s", "_", contrast_names, perl = TRUE) # replace spaces with underscores to make labels accurate in AFNI
+    contrast_names <- gsub("\\s", "_", stat_df$contrast_name, perl = TRUE)
   } else {
     contrast_names <- NULL
   }
@@ -436,26 +549,24 @@ read_feat_dir <- function(feat_dir, what = "all") {
     rendered_zthresh_files, t_files, contrast_names, aux_files, design_files, parsed_txt
   )
 
-  # create a combined data.frame of cope-level statistics
-  expect_length <- length(cope_files)
-
-  # these elements should all have the same length (one file per contrast)
-  to_stitch <- ret_list[c(
-    "contrast_names", "cope_files", "varcope_files", "z_files", "zthresh_files",
-    "rendered_zthresh_files", "t_files", "zptfce_files"
-  )]
-
-  to_stitch <- do.call(data.frame, lapply(to_stitch, function(x) {
-    if (length(x) != expect_length) {
-      return(rep(NA_character_, expect_length))
-    } else {
-      return(x)
-    }
-  })) %>% setNames(c("contrast_name", "cope", "varcope", "z", "zthresh", "rendered_zthresh", "t", "zptfce"))
-
-  to_stitch <- to_stitch %>%
-    dplyr::mutate(cope_number = 1:n()) %>%
-    dplyr::select(cope_number, contrast_name, everything())
+  # Keep the established cope_df column names and ordering.
+  cope_df_names <- if (is.null(contrast_names)) {
+    rep(NA_character_, n_contrasts)
+  } else {
+    contrast_names
+  }
+  to_stitch <- data.frame(
+    cope_number = stat_df$cope_number,
+    contrast_name = cope_df_names,
+    cope = cope_files,
+    varcope = varcope_files,
+    z = z_files,
+    zthresh = zthresh_files,
+    rendered_zthresh = rendered_zthresh_files,
+    t = t_files,
+    zptfce = zptfce_files,
+    stringsAsFactors = FALSE
+  )
 
   ret_list$cope_df <- to_stitch
 
@@ -592,15 +703,15 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
   l3_stats <- lapply(file.path(gpa$l3_model_setup$fsl$feat_dir, "cope1.feat"), read_feat_dir, what = "stat_files") #don't parse text files
 
   if (isTRUE(gpa$multi_run)) {
-    meta_df <- gpa$l3_model_setup$fsl %>% dplyr::select(l1_model, l1_cope_name, l2_model, l2_cope_name, l3_model, feat_dir)
+    meta_df <- gpa$l3_model_setup$fsl %>% dplyr::select("l1_model", "l1_cope_name", "l2_model", "l2_cope_name", "l3_model", "feat_dir")
   } else {
-    meta_df <- gpa$l3_model_setup$fsl %>% dplyr::select(l1_model, l1_cope_name, l3_model, feat_dir)
+    meta_df <- gpa$l3_model_setup$fsl %>% dplyr::select("l1_model", "l1_cope_name", "l3_model", "feat_dir")
   }
 
   # note that keep_empty = FALSE will drop any .feat folder that failed to be parsed (usually a failed run)
   meta_df$cope_df <- lapply(l3_stats, "[[", "cope_df") # add a list-column, then unnest to expand
   meta_df <- meta_df %>% unnest(cope_df, keep_empty = FALSE) %>% # expand so that multiple rows of copes in cope_df are added
-    dplyr::rename(l3_cope_name=contrast_name, l3_cope_number=cope_number)
+    dplyr::rename(l3_cope_name = "contrast_name", l3_cope_number = "cope_number")
 
   # use glue_data to evaluate the glue file and brik expressions for every row of the data.frame
   meta_df <- meta_df %>%

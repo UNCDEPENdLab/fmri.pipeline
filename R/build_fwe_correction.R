@@ -55,8 +55,8 @@ create_fwe_spec <- function(gpa, level = level, lg = NULL) {
 
   if (any(to_fwe$feat_complete == FALSE)) {
     lg$warn("Some L3 models requested are currently incompleted, preventing FWE correction.")
-    lg$warn("%s", capture.output(print(to_fwe %>% filter(feat_complete == FALSE))))
-    to_fwe <- to_fwe %>% dplyr::filter(feat_complete == TRUE)
+    lg$warn("%s", capture.output(print(to_fwe %>% dplyr::filter(.data$feat_complete == FALSE))))
+    to_fwe <- to_fwe %>% dplyr::filter(.data$feat_complete == TRUE)
     if (nrow(to_fwe) == 0L) {
       msg <-"All L3 models requested are incomplete and this function cannot continue."
       lg$error(msg)

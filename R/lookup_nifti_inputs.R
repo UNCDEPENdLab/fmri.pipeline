@@ -16,13 +16,13 @@ lookup_nifti_inputs <- function(gpa, add_run_volumes = TRUE, add_dim = TRUE) {
 
   # look at whether we have the number of expected runs for each subject
   n_subj_runs <- gpa$run_data %>%
-    group_by(id, session) %>%
-    count()
+    dplyr::group_by(.data$id, .data$session) %>%
+    dplyr::count()
 
   lg <- lgr::get_logger("glm_pipeline/pipeline_setup")
   lg$set_threshold(gpa$lgr_threshold)
 
-  not_expected <- n_subj_runs %>% dplyr::filter(n != gpa$n_expected_runs)
+  not_expected <- n_subj_runs %>% dplyr::filter(.data$n != gpa$n_expected_runs)
 
   if (nrow(not_expected) > 1L) {
     lg$warn("Found an unexpected number of runs for some subjects.")

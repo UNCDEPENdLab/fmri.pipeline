@@ -135,11 +135,11 @@ lookup_feat_outputs_l1 <- function(gpa, what, lg, warn_missing = TRUE) {
   if (nrow(setup) == 0L) return(lookup_feat_outputs_empty())
 
   subj_df <- setup %>%
-    dplyr::select(.data$id, .data$session) %>%
+    dplyr::select("id", "session") %>%
     dplyr::distinct()
 
   model_set <- setup %>%
-    dplyr::select(.data$l1_model) %>%
+    dplyr::select("l1_model") %>%
     dplyr::distinct()
 
   cope_df <- get_l1_cope_df(gpa, model_set = model_set, subj_df = subj_df)
@@ -170,7 +170,7 @@ lookup_feat_outputs_l2 <- function(gpa, what, lg, warn_missing = TRUE) {
   if (nrow(setup) == 0L) return(lookup_feat_outputs_empty())
 
   model_set <- setup %>%
-    dplyr::select(.data$l1_model, .data$l2_model) %>%
+    dplyr::select("l1_model", "l2_model") %>%
     dplyr::distinct()
 
   l2_df <- get_l2_cope_df(gpa, model_set = model_set)
@@ -350,9 +350,9 @@ lookup_feat_filesystem_l1 <- function(gpa, what, lg) {
     run_number <- as.integer(sub(".*FEAT_LVL1_run([0-9]+)\\.feat$", "\\1", feat_dir))
     model_idx <- max(which(!grepl("^(sub-|ses-|FEAT_LVL1_run)", rel)))
     l1_model <- if (is.finite(model_idx)) rel[model_idx] else NA_character_
-    info <- read_feat_dir(feat_dir, what = "stat_files")
+    cope_df <- scan_feat_stat_files(feat_dir, statistics = what, include_missing = TRUE)
     lookup_feat_rows_from_cope_df(
-      cope_df = info$cope_df, level = 1L, what = what,
+      cope_df = cope_df, level = 1L, what = what,
       feat_dir = feat_dir, feat_fsf = sub("\\.feat$", ".fsf", feat_dir),
       id = id, session = lookup_feat_as_integer(session), run_number = run_number,
       l1_model = l1_model,
@@ -376,9 +376,13 @@ lookup_feat_filesystem_l2 <- function(gpa, what, lg) {
     l1c <- lookup_feat_extract_part(rel, "^l1c-(.+)$")
     l1_info <- lookup_feat_parse_numbered_label(l1c)
     l2_model <- lookup_feat_strip_prefix(lookup_feat_extract_part(rel, "^L2m-(.+)\\.gfeat$|^L2m-(.+)$"), "L2m-")
-    info <- read_feat_dir(file.path(feat_dir, "cope1.feat"), what = "stat_files")
+    cope_df <- scan_feat_stat_files(
+      file.path(feat_dir, "cope1.feat"),
+      statistics = what,
+      include_missing = TRUE
+    )
     lookup_feat_rows_from_cope_df(
-      cope_df = info$cope_df, level = 2L, what = what,
+      cope_df = cope_df, level = 2L, what = what,
       feat_dir = feat_dir, feat_fsf = sub("\\.gfeat$", ".fsf", feat_dir),
       id = id, session = lookup_feat_as_integer(session), run_number = NA_integer_,
       l1_model = l1_model,
@@ -405,9 +409,13 @@ lookup_feat_filesystem_l3 <- function(gpa, what, lg) {
     l2_cope_name <- lookup_feat_strip_prefix(lookup_feat_extract_part(rel, "^l2c-(.+)$"), "l2c-")
     l1_cope_name <- sub("^FEAT_l1c-(.+)\\.gfeat$", "\\1", basename(feat_dir))
     if (identical(l1_cope_name, basename(feat_dir))) l1_cope_name <- NA_character_
-    info <- read_feat_dir(file.path(feat_dir, "cope1.feat"), what = "stat_files")
+    cope_df <- scan_feat_stat_files(
+      file.path(feat_dir, "cope1.feat"),
+      statistics = what,
+      include_missing = TRUE
+    )
     lookup_feat_rows_from_cope_df(
-      cope_df = info$cope_df, level = 3L, what = what,
+      cope_df = cope_df, level = 3L, what = what,
       feat_dir = feat_dir, feat_fsf = sub("\\.gfeat$", ".fsf", feat_dir),
       id = NA_character_, session = NA_integer_, run_number = NA_integer_,
       l1_model = l1_model, l1_cope_name = l1_cope_name,
@@ -544,13 +552,13 @@ lookup_feat_l3_metadata <- function(gpa, setup) {
     dplyr::distinct()
 
   l3_df <- get_l3_cope_df(gpa, model_set = model_set) %>%
-    dplyr::select(.data$l3_model, .data$l3_cope_number, .data$l3_cope_name) %>%
+    dplyr::select("l3_model", "l3_cope_number", "l3_cope_name") %>%
     dplyr::distinct()
 
   l1_df <- NULL
   if (all(c("l1_model", "l1_cope_name") %in% names(setup))) {
     l1_df <- get_l1_cope_df(gpa, model_set = model_set) %>%
-      dplyr::select(.data$l1_model, .data$l1_cope_number, .data$l1_cope_name) %>%
+      dplyr::select("l1_model", "l1_cope_number", "l1_cope_name") %>%
       dplyr::distinct()
   }
 
