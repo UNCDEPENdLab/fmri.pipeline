@@ -107,8 +107,12 @@ Michael Hallquist
 ``` r
 if (FALSE) { # \dontrun{
   #simple PBS submission
-  cluster_job_submit('myscript.bash', scheduler="torque", sched_args=c('-l walltime=10:00:00', '-l nodes=1:ppn=20'),
-     env_variables=c(RUN_INDEX=2, MODEL_NAME='FSE21'))
+  cluster_job_submit(
+    "myscript.bash",
+    scheduler = "torque",
+    sched_args = c("-l walltime=10:00:00", "-l nodes=1:ppn=20"),
+    env_variables = c(RUN_INDEX = 2, MODEL_NAME = "FSE21")
+  )
 
   #To forward environment variables without explicitly providing values. Note that these must
   #  be in R's system environment (cf. Sys.getenv) at execution time to forward as expected.

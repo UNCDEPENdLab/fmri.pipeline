@@ -140,8 +140,12 @@ submission fails. Defaults to FALSE (i.e., issue a warning).</p></dd>
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
 <span class="r-in"><span>  <span class="co">#simple PBS submission</span></span></span>
-<span class="r-in"><span>  <span class="fu">cluster_job_submit</span><span class="op">(</span><span class="st">'myscript.bash'</span>, scheduler<span class="op">=</span><span class="st">"torque"</span>, sched_args<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">'-l walltime=10:00:00'</span>, <span class="st">'-l nodes=1:ppn=20'</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>     env_variables<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>RUN_INDEX<span class="op">=</span><span class="fl">2</span>, MODEL_NAME<span class="op">=</span><span class="st">'FSE21'</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="fu">cluster_job_submit</span><span class="op">(</span></span></span>
+<span class="r-in"><span>    <span class="st">"myscript.bash"</span>,</span></span>
+<span class="r-in"><span>    scheduler <span class="op">=</span> <span class="st">"torque"</span>,</span></span>
+<span class="r-in"><span>    sched_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"-l walltime=10:00:00"</span>, <span class="st">"-l nodes=1:ppn=20"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>    env_variables <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>RUN_INDEX <span class="op">=</span> <span class="fl">2</span>, MODEL_NAME <span class="op">=</span> <span class="st">"FSE21"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span>  <span class="co">#To forward environment variables without explicitly providing values. Note that these must</span></span></span>
 <span class="r-in"><span>  <span class="co">#  be in R's system environment (cf. Sys.getenv) at execution time to forward as expected.</span></span></span>

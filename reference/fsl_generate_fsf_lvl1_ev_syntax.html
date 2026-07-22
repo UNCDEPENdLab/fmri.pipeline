@@ -116,9 +116,24 @@ Required elements of the list are:</p>
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span></span></span>
 <span class="r-in"><span>  <span class="va">regressors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>name<span class="op">=</span><span class="st">"cue_onset"</span>, waveform<span class="op">=</span><span class="st">"custom_3"</span>, timing_file<span class="op">=</span><span class="st">"r1_cue_onset_3col.txt"</span>, convolution<span class="op">=</span><span class="st">"double_gamma"</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>    <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>name<span class="op">=</span><span class="st">"feedback"</span>,  waveform<span class="op">=</span><span class="st">"custom_3"</span>, timing_file<span class="op">=</span><span class="st">"r1_feedback_3col.txt"</span>, convolution<span class="op">=</span><span class="st">"double_gamma"</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>    <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>name<span class="op">=</span><span class="st">"RPE"</span>, waveform<span class="op">=</span><span class="st">"custom_1"</span>, timing_file<span class="op">=</span><span class="st">"r1_RPEs.1D"</span>, convolution<span class="op">=</span><span class="st">"none"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>    <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>      name <span class="op">=</span> <span class="st">"cue_onset"</span>,</span></span>
+<span class="r-in"><span>      waveform <span class="op">=</span> <span class="st">"custom_3"</span>,</span></span>
+<span class="r-in"><span>      timing_file <span class="op">=</span> <span class="st">"r1_cue_onset_3col.txt"</span>,</span></span>
+<span class="r-in"><span>      convolution <span class="op">=</span> <span class="st">"double_gamma"</span></span></span>
+<span class="r-in"><span>    <span class="op">)</span>,</span></span>
+<span class="r-in"><span>    <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>      name <span class="op">=</span> <span class="st">"feedback"</span>,</span></span>
+<span class="r-in"><span>      waveform <span class="op">=</span> <span class="st">"custom_3"</span>,</span></span>
+<span class="r-in"><span>      timing_file <span class="op">=</span> <span class="st">"r1_feedback_3col.txt"</span>,</span></span>
+<span class="r-in"><span>      convolution <span class="op">=</span> <span class="st">"double_gamma"</span></span></span>
+<span class="r-in"><span>    <span class="op">)</span>,</span></span>
+<span class="r-in"><span>    <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>      name <span class="op">=</span> <span class="st">"RPE"</span>,</span></span>
+<span class="r-in"><span>      waveform <span class="op">=</span> <span class="st">"custom_1"</span>,</span></span>
+<span class="r-in"><span>      timing_file <span class="op">=</span> <span class="st">"r1_RPEs.1D"</span>,</span></span>
+<span class="r-in"><span>      convolution <span class="op">=</span> <span class="st">"none"</span></span></span>
+<span class="r-in"><span>    <span class="op">)</span></span></span>
 <span class="r-in"><span>  <span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span>  <span class="va">ev_syntax</span> <span class="op">&lt;-</span> <span class="fu">fsl_generate_fsf_lvl1_ev_syntax</span><span class="op">(</span><span class="va">regressors</span><span class="op">)</span></span></span>

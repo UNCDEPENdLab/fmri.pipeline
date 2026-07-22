@@ -110,11 +110,23 @@ image will be symbolically linked into each directory created by <code>combine_f
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span>  <span class="va">feat_l3_combined_filename</span> <span class="op">&lt;-</span> <span class="st">"{gpa$output_directory}/afni_combined/L1m-{l1_model}/l1c-{l1_cope_name}/L3m-{l3_model}_stats"</span></span></span>
+<span class="r-in"><span>  <span class="va">feat_l3_combined_filename</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>    <span class="st">"{gpa$output_directory}/afni_combined/"</span>,</span></span>
+<span class="r-in"><span>    <span class="st">"L1m-{l1_model}/l1c-{l1_cope_name}/L3m-{l3_model}_stats"</span></span></span>
+<span class="r-in"><span>  <span class="op">)</span></span></span>
 <span class="r-in"><span>  <span class="va">feat_l3_combined_briknames</span> <span class="op">=</span> <span class="st">"l2c-{l2_cope_name}_l3c-{l3_cope_name}"</span></span></span>
-<span class="r-in"><span>  <span class="va">template_brain</span> <span class="op">&lt;-</span> <span class="st">"/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_brain.nii"</span></span></span>
+<span class="r-in"><span>  <span class="va">template_brain</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>    <span class="st">"/proj/mnhallqlab/lab_resources/standard"</span>,</span></span>
+<span class="r-in"><span>    <span class="st">"mni_icbm152_nlin_asym_09c"</span>,</span></span>
+<span class="r-in"><span>    <span class="st">"mni_icbm152_t1_tal_nlin_asym_09c_brain.nii"</span></span></span>
+<span class="r-in"><span>  <span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span>  <span class="fu">combine_feat_l3_to_afni</span><span class="op">(</span><span class="va">gpa</span>, <span class="va">feat_l3_combined_filename</span>, <span class="va">feat_l3_combined_briknames</span>, <span class="va">template_brain</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="fu">combine_feat_l3_to_afni</span><span class="op">(</span></span></span>
+<span class="r-in"><span>    gpa <span class="op">=</span> <span class="va">gpa</span>,</span></span>
+<span class="r-in"><span>    feat_l3_combined_filename <span class="op">=</span> <span class="va">feat_l3_combined_filename</span>,</span></span>
+<span class="r-in"><span>    feat_l3_combined_briknames <span class="op">=</span> <span class="va">feat_l3_combined_briknames</span>,</span></span>
+<span class="r-in"><span>    template_brain <span class="op">=</span> <span class="va">template_brain</span></span></span>
+<span class="r-in"><span>  <span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
