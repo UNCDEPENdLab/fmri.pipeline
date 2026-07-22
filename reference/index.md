@@ -242,6 +242,8 @@
   : Fit a linear mixed model with Julia MixedModels
 
 - [`lookup_feat_outputs()`](https://uncdependlab.github.io/fmri.pipeline/reference/lookup_feat_outputs.md)
+  [`as.data.frame(`*`<feat_output_lookup>`*`)`](https://uncdependlab.github.io/fmri.pipeline/reference/lookup_feat_outputs.md)
+  [`print(`*`<feat_output_lookup>`*`)`](https://uncdependlab.github.io/fmri.pipeline/reference/lookup_feat_outputs.md)
   : Lookup FSL FEAT output images by model and contrast
 
 - [`meta_mixed_by()`](https://uncdependlab.github.io/fmri.pipeline/reference/meta_mixed_by.md)

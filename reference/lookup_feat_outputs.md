@@ -2,7 +2,10 @@
 
 Build a tidy lookup table that maps the human-readable pipeline model
 and contrast names onto the FEAT folder structure for level 1, 2, and/or
-3 FSL outputs.
+3 FSL outputs. The default result separates the structurally different
+FEAT levels into `$l1`, `$l2`, and `$l3` tables with stable
+level-specific schemas; levels that were not requested are present as
+empty tables.
 
 ## Usage
 
@@ -16,8 +19,15 @@ lookup_feat_outputs(
   source = c("auto", "setup", "cache", "filesystem"),
   cache_dir = NULL,
   refresh_status = FALSE,
-  lg = NULL
+  lg = NULL,
+  format = c("by_level", "long")
 )
+
+# S3 method for class 'feat_output_lookup'
+as.data.frame(x, row.names = NULL, optional = FALSE, ...)
+
+# S3 method for class 'feat_output_lookup'
+print(x, ...)
 ```
 
 ## Arguments
@@ -46,8 +56,14 @@ lookup_feat_outputs(
 - include_internal:
 
   if `TRUE`, retain setup/debug columns such as FEAT execution
-  timestamps and L2 input mode. The default `FALSE` returns a compact,
-  user-facing lookup table.
+  timestamps and raw FEAT status fields. The default `FALSE` returns
+  compact, level-specific user-facing tables.
+
+- format:
+
+  return format. `"by_level"` returns a `feat_output_lookup` object with
+  `$l1`, `$l2`, and `$l3` tables. `"long"` returns their combined
+  data.frame form.
 
 - source:
 
@@ -73,6 +89,32 @@ lookup_feat_outputs(
   [`lgr::Logger`](https://s-fleck.github.io/lgr/reference/Logger.html)
   object.
 
+- x:
+
+  a `feat_output_lookup` object.
+
+- row.names, optional:
+
+  standard `as.data.frame` arguments.
+
+- ...:
+
+  unused.
+
 ## Value
 
-a data.frame with one row per model/contrast/statistic image.
+With `format = "by_level"`, a `feat_output_lookup` object containing
+level-specific `$l1`, `$l2`, and `$l3` data.frames. With
+`format = "long"`, a data.frame with one row per analysis instance,
+contrast, and statistic image. The long form adds `output_model`,
+`output_cope_number`, and `output_cope_name` as level-independent
+convenience columns.
+
+## Details
+
+L2 passthroughs remain logical L2 rows (`output_level = 2`) but are
+marked with `is_passthrough = TRUE`, `materialized_level = 1`, and
+`analysis_status = "passthrough"`. Because no L2 FEAT analysis is
+materialized, `analysis_fsf` and `analysis_dir` are missing and
+`image_feat_dir` identifies the originating L1 FEAT directory. A
+passthrough has only a `"cope"` image row.

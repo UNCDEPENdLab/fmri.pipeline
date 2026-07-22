@@ -78,6 +78,8 @@
 <ul><li>Support for SPM-style concatenated run handling at Level 1</li>
 <li>AFNI <code>3dLMEr</code> Level 3 execution backend with automatic <code>-qVars</code> detection and <code>dataTable.txt</code> generation</li>
 <li>Backend specification defaults (<code>default_glm_backend_specs</code>) for FSL, SPM, and AFNI</li>
+<li>
+<code><a href="../reference/lookup_feat_outputs.html">lookup_feat_outputs()</a></code> now returns stable, level-specific <code>$l1</code>, <code>$l2</code>, and <code>$l3</code> tables by default, with an explicit <code>format = "long"</code> option. L2 passthroughs are represented as logical L2 rows and identify their L1 materialization and source image.</li>
 </ul></div>
 </div>
     <div class="section level2">
