@@ -153,13 +153,24 @@ test_that("lookup_feat_outputs maps L1 FEAT contrast outputs", {
 
   gpa <- make_lookup_feat_outputs_gpa(root, l1_feat = l1_feat)
 
-  out <- lookup_feat_outputs(gpa, level = 1L, what = c("cope", "zstat"))
+  result <- lookup_feat_outputs(gpa, level = 1L, what = c("cope", "zstat"))
+  out <- result$l1
 
+  expect_s3_class(result, "feat_output_lookup")
+  expect_named(result, c("l1", "l2", "l3"))
   expect_equal(nrow(out), 4L)
-  expect_equal(unique(out$level), 1L)
+  expect_equal(unique(out$output_level), 1L)
   expect_true(all(c("EV_face", "EV_house") %in% out$l1_cope_name))
   expect_true(any(out$image_exists))
   expect_true(file.path(l1_feat, "stats", "cope1.nii.gz") %in% out$image_file)
+
+  long <- lookup_feat_outputs(
+    gpa, level = 1L, what = c("cope", "zstat"), format = "long"
+  )
+  expect_s3_class(long, "data.frame")
+  expect_equal(nrow(long), 4L)
+  expect_equal(unique(long$output_model), "facehouse")
+  expect_equal(long, as.data.frame(result))
 })
 
 test_that("lookup_feat_outputs maps L2 FEAT cope-list outputs", {
@@ -173,17 +184,20 @@ test_that("lookup_feat_outputs maps L2 FEAT cope-list outputs", {
 
   gpa <- make_lookup_feat_outputs_gpa(root, l2_feat = l2_feat)
 
-  out <- lookup_feat_outputs(gpa, level = 2L, what = "zstat")
+  out <- lookup_feat_outputs(gpa, level = 2L, what = "zstat")$l2
 
   expect_equal(nrow(out), 2L)
-  expect_equal(unique(out$level), 2L)
+  expect_equal(unique(out$output_level), 2L)
   expect_equal(sort(out$l2_cope_name), c("overall", "stress"))
   expect_true(file.path(l2_feat, "cope1.feat", "stats", "zstat2.nii.gz") %in% out$image_file)
   expect_true(out$image_exists[out$l2_cope_name == "stress"])
   expect_false("cope_list" %in% names(out))
-  expect_false("l2_input_mode" %in% names(out))
+  expect_equal(unique(out$l2_input_mode), "cope_files")
+  expect_true(all(!out$is_passthrough))
 
-  debug_out <- lookup_feat_outputs(gpa, level = 2L, what = "zstat", include_internal = TRUE)
+  debug_out <- lookup_feat_outputs(
+    gpa, level = 2L, what = "zstat", include_internal = TRUE
+  )$l2
   expect_true("l2_input_mode" %in% names(debug_out))
   expect_false("cope_list" %in% names(debug_out))
 })
@@ -199,10 +213,10 @@ test_that("lookup_feat_outputs maps L3 FEAT metadata outputs", {
 
   gpa <- make_lookup_feat_outputs_gpa(root, l3_feat = l3_feat)
 
-  out <- lookup_feat_outputs(gpa, level = 3L, what = "zstat")
+  out <- lookup_feat_outputs(gpa, level = 3L, what = "zstat")$l3
 
   expect_equal(nrow(out), 2L)
-  expect_equal(unique(out$level), 3L)
+  expect_equal(unique(out$output_level), 3L)
   expect_equal(sort(out$l3_cope_name), c("age", "group"))
   expect_true(file.path(l3_feat, "cope1.feat", "stats", "zstat2.nii.gz") %in% out$image_file)
   expect_true(out$image_exists[out$l3_cope_name == "age"])
@@ -234,7 +248,9 @@ test_that("lookup_feat_outputs falls back to scheduler caches", {
   gpa$l2_model_setup <- NULL
   gpa$l3_model_setup <- NULL
 
-  out <- lookup_feat_outputs(gpa, level = 2L, what = "zstat", cache_dir = dirname(cache_dir))
+  out <- lookup_feat_outputs(
+    gpa, level = 2L, what = "zstat", cache_dir = dirname(cache_dir)
+  )$l2
 
   expect_equal(nrow(out), 2L)
   expect_equal(unique(out$lookup_source), "cache")
@@ -251,7 +267,9 @@ test_that("lookup_feat_outputs can crawl L1 FEAT folders without setup tables", 
   gpa$l2_model_setup <- NULL
   gpa$l3_model_setup <- NULL
 
-  out <- lookup_feat_outputs(gpa, level = 1L, what = "zstat", source = "filesystem")
+  out <- lookup_feat_outputs(
+    gpa, level = 1L, what = "zstat", source = "filesystem"
+  )$l1
 
   expect_equal(nrow(out), 2L)
   expect_equal(unique(out$lookup_source), "filesystem")
@@ -283,7 +301,7 @@ test_that("filesystem lookup scans requested statistics independently", {
   out <- lookup_feat_outputs(
     gpa, level = 1L, what = "cope",
     source = "filesystem", include_missing = TRUE
-  )
+  )$l1
 
   expect_equal(nrow(out), 2L)
   expect_equal(out$l1_cope_name, c("face-house interaction", "control"))
@@ -296,15 +314,103 @@ test_that("filesystem lookup scans requested statistics independently", {
   existing <- lookup_feat_outputs(
     gpa, level = 1L, what = "cope",
     source = "filesystem", include_missing = FALSE
-  )
+  )$l1
   expect_equal(nrow(existing), 1L)
   expect_equal(existing$l1_cope_name, "face-house interaction")
 
   zstat <- lookup_feat_outputs(
     gpa, level = 1L, what = "zstat",
     source = "filesystem", include_missing = FALSE
-  )
+  )$l1
   expect_equal(nrow(zstat), 1L)
   expect_equal(zstat$l1_cope_name, "control")
   expect_equal(zstat$image_file, file.path(stats_dir, "zstat2.nii.gz"))
+})
+
+test_that("L2 passthroughs are explicit logical L2 rows", {
+  root <- tempfile("lookup_feat_outputs_")
+  l1_feat <- file.path(
+    root, "feat_l1", "sub-01", "ses-1", "facehouse",
+    "FEAT_LVL1_run1.feat"
+  )
+  passthrough_file <- file.path(l1_feat, "stats", "cope1.nii.gz")
+  dir.create(dirname(passthrough_file), recursive = TRUE)
+  file.create(passthrough_file)
+
+  gpa <- make_lookup_feat_outputs_gpa(root, l1_feat = l1_feat)
+  pass_setup <- data.frame(
+    id = "01",
+    session = 0L,
+    l1_model = "facehouse",
+    l1_cope_number = 1L,
+    l1_cope_name = "EV_face",
+    l2_model = "l2_session",
+    l2_scope = "id",
+    l2_input_mode = "l1_cope_file_passthrough",
+    l2_passthrough = TRUE,
+    n_l2_copes = 1L,
+    n_input_files = 1L,
+    passthrough_cope_file = passthrough_file,
+    feat_fsf = NA_character_,
+    feat_dir = l1_feat,
+    feat_complete = TRUE,
+    feat_failed = FALSE,
+    feat_dir_exists = TRUE,
+    feat_fsf_exists = FALSE,
+    stringsAsFactors = FALSE
+  )
+  pass_setup$cope_list <- list(data.frame(
+    id = "01",
+    session = 0L,
+    l2_cope_number = 1L,
+    l2_cope_name = "EV_face",
+    stringsAsFactors = FALSE
+  ))
+  gpa$l2_model_setup <- structure(
+    list(fsl = pass_setup),
+    class = c("l2_setup", "list")
+  )
+
+  result <- lookup_feat_outputs(
+    gpa, level = 2L,
+    what = c("cope", "varcope", "zstat", "tstat"),
+    source = "setup"
+  )
+  out <- result$l2
+
+  expect_equal(nrow(out), 1L)
+  expect_equal(out$output_level, 2L)
+  expect_equal(out$materialized_level, 1L)
+  expect_true(out$is_passthrough)
+  expect_equal(out$l2_input_mode, "l1_cope_file_passthrough")
+  expect_equal(out$statistic, "cope")
+  expect_equal(out$image_cope_number, 1L)
+  expect_equal(out$image_file, passthrough_file)
+  expect_equal(out$image_feat_dir, l1_feat)
+  expect_true(is.na(out$session))
+  expect_true(is.na(out$analysis_fsf))
+  expect_true(is.na(out$analysis_dir))
+  expect_equal(out$analysis_status, "passthrough")
+})
+
+test_that("lookup results have stable empty level schemas", {
+  root <- tempfile("lookup_feat_outputs_")
+  gpa <- make_lookup_feat_outputs_gpa(root)
+  gpa$l1_model_setup <- NULL
+  gpa$l2_model_setup <- NULL
+  gpa$l3_model_setup <- NULL
+
+  result <- lookup_feat_outputs(
+    gpa, level = c(1L, 2L), what = "cope", source = "setup"
+  )
+
+  expect_s3_class(result, "feat_output_lookup")
+  expect_named(result, c("l1", "l2", "l3"))
+  expect_equal(nrow(result$l1), 0L)
+  expect_equal(nrow(result$l2), 0L)
+  expect_equal(nrow(result$l3), 0L)
+  expect_true(all(c("output_level", "l1_model", "image_file") %in% names(result$l1)))
+  expect_true(all(c("l2_input_mode", "is_passthrough") %in% names(result$l2)))
+  expect_true(all(c("l3_model", "l3_input_mode") %in% names(result$l3)))
+  expect_equal(nrow(as.data.frame(result)), 0L)
 })

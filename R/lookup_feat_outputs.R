@@ -2,7 +2,18 @@
 #'
 #' Build a tidy lookup table that maps the human-readable pipeline model and
 #' contrast names onto the FEAT folder structure for level 1, 2, and/or 3 FSL
-#' outputs.
+#' outputs. The default result separates the structurally different FEAT
+#' levels into \code{$l1}, \code{$l2}, and \code{$l3} tables with stable
+#' level-specific schemas; levels that were not requested are present as empty
+#' tables.
+#'
+#' L2 passthroughs remain logical L2 rows (\code{output_level = 2}) but are
+#' marked with \code{is_passthrough = TRUE},
+#' \code{materialized_level = 1}, and
+#' \code{analysis_status = "passthrough"}. Because no L2 FEAT analysis is
+#' materialized, \code{analysis_fsf} and \code{analysis_dir} are missing and
+#' \code{image_feat_dir} identifies the originating L1 FEAT directory. A
+#' passthrough has only a \code{"cope"} image row.
 #'
 #' @param gpa a \code{glm_pipeline_arguments} object. The function is most
 #'   informative when populated FSL setup tables are present, but \code{source =
@@ -14,8 +25,11 @@
 #' @param include_missing if \code{TRUE}, include expected output paths even when
 #'   the image does not exist. If \code{FALSE}, return only existing images.
 #' @param include_internal if \code{TRUE}, retain setup/debug columns such as
-#'   FEAT execution timestamps and L2 input mode. The default \code{FALSE}
-#'   returns a compact, user-facing lookup table.
+#'   FEAT execution timestamps and raw FEAT status fields. The default \code{FALSE}
+#'   returns compact, level-specific user-facing tables.
+#' @param format return format. \code{"by_level"} returns a
+#'   \code{feat_output_lookup} object with \code{$l1}, \code{$l2}, and
+#'   \code{$l3} tables. \code{"long"} returns their combined data.frame form.
 #' @param source where to look for output metadata. \code{"setup"} uses only the
 #'   \code{gpa$l*_model_setup$fsl} tables, \code{"cache"} searches scheduler
 #'   \code{run_pipeline_cache*.RData} files, \code{"filesystem"} crawls FEAT
@@ -27,7 +41,12 @@
 #'   setup table before building the lookup.
 #' @param lg optional \code{lgr::Logger} object.
 #'
-#' @return a data.frame with one row per model/contrast/statistic image.
+#' @return With \code{format = "by_level"}, a \code{feat_output_lookup}
+#'   object containing level-specific \code{$l1}, \code{$l2}, and \code{$l3}
+#'   data.frames. With \code{format = "long"}, a data.frame with one row per
+#'   analysis instance, contrast, and statistic image. The long form adds
+#'   \code{output_model}, \code{output_cope_number}, and
+#'   \code{output_cope_name} as level-independent convenience columns.
 #' @export
 lookup_feat_outputs <- function(gpa, level = c(1L, 2L, 3L),
                                 what = c("cope", "varcope", "zstat", "tstat"),
@@ -36,12 +55,14 @@ lookup_feat_outputs <- function(gpa, level = c(1L, 2L, 3L),
                                 source = c("auto", "setup", "cache", "filesystem"),
                                 cache_dir = NULL,
                                 refresh_status = FALSE,
-                                lg = NULL) {
+                                lg = NULL,
+                                format = c("by_level", "long")) {
   checkmate::assert_class(gpa, "glm_pipeline_arguments")
   checkmate::assert_integerish(level, lower = 1L, upper = 3L, any.missing = FALSE)
   checkmate::assert_subset(what, c("cope", "varcope", "zstat", "tstat"))
   checkmate::assert_logical(include_missing, len = 1L)
   checkmate::assert_logical(include_internal, len = 1L)
+  format <- match.arg(format)
   source <- match.arg(source)
   checkmate::assert_string(source)
   checkmate::assert_string(cache_dir, null.ok = TRUE)
@@ -98,24 +119,319 @@ lookup_feat_outputs <- function(gpa, level = c(1L, 2L, 3L),
   }
 
   out <- dplyr::bind_rows(out)
-  if (nrow(out) == 0L) return(out)
-
-  out$image_exists <- !is.na(out$image_file) & file.exists(out$image_file)
-  if (isFALSE(include_missing)) {
-    out <- out %>% dplyr::filter(.data$image_exists == TRUE)
+  if (nrow(out) > 0L) {
+    out$image_exists <- !is.na(out$image_file) & file.exists(out$image_file)
+    if (isFALSE(include_missing)) {
+      out <- out %>% dplyr::filter(.data$image_exists == TRUE)
+    }
+    out <- lookup_feat_add_public_fields(out)
   }
 
-  out <- lookup_feat_select_columns(out, include_internal = include_internal)
+  result <- new_feat_output_lookup(
+    out,
+    requested_levels = level,
+    include_internal = include_internal
+  )
+  if (identical(format, "long")) return(as.data.frame(result))
+  result
+}
 
-  out <- out %>%
-    dplyr::arrange(
-      .data$level, .data$l3_model, .data$l2_model, .data$l1_model,
-      .data$id, .data$session, .data$run_number,
-      .data$l1_cope_number, .data$l2_cope_number, .data$l3_cope_number,
-      .data$statistic
+lookup_feat_add_public_fields <- function(out) {
+  out <- as.data.frame(out)
+  out$output_level <- as.integer(out$level)
+
+  is_passthrough <- out$output_level == 2L &
+    out$l2_input_mode %in% "l1_cope_file_passthrough"
+  normal_l2 <- out$output_level == 2L & !is_passthrough
+  missing_l2_mode <- normal_l2 &
+    (is.na(out$l2_input_mode) | !nzchar(as.character(out$l2_input_mode)))
+  out$l2_input_mode[missing_l2_mode] <- "cope_files"
+
+  out$is_passthrough <- is_passthrough
+  out$materialized_level <- ifelse(is_passthrough, 1L, out$output_level)
+
+  out$output_model <- NA_character_
+  out$output_cope_number <- NA_integer_
+  out$output_cope_name <- NA_character_
+  for (ll in 1:3) {
+    use <- out$output_level == ll
+    out$output_model[use] <- as.character(out[[paste0("l", ll, "_model")]][use])
+    out$output_cope_number[use] <- as.integer(out[[paste0("l", ll, "_cope_number")]][use])
+    out$output_cope_name[use] <- as.character(out[[paste0("l", ll, "_cope_name")]][use])
+  }
+
+  out$analysis_fsf <- as.character(out$feat_fsf)
+  out$analysis_dir <- as.character(out$feat_dir)
+  out$analysis_fsf[is_passthrough] <- NA_character_
+  out$analysis_dir[is_passthrough] <- NA_character_
+
+  out$image_feat_dir <- as.character(out$feat_dir)
+  out$image_feat_dir[normal_l2] <- file.path(out$feat_dir[normal_l2], "cope1.feat")
+  is_l3 <- out$output_level == 3L
+  out$image_feat_dir[is_l3] <- file.path(out$feat_dir[is_l3], "cope1.feat")
+  out$image_stats_dir <- ifelse(
+    is.na(out$image_file),
+    NA_character_,
+    dirname(out$image_file)
+  )
+
+  out$image_cope_number <- NA_integer_
+  image_pattern <- "^.*(?:varcope|cope|zstat|tstat)([0-9]+)\\.nii(?:\\.gz)?$"
+  has_image_number <- !is.na(out$image_file) &
+    grepl(image_pattern, out$image_file, perl = TRUE)
+  out$image_cope_number[has_image_number] <- as.integer(sub(
+    image_pattern,
+    "\\1",
+    out$image_file[has_image_number],
+    perl = TRUE
+  ))
+  missing_image_number <- is.na(out$image_cope_number)
+  out$image_cope_number[missing_image_number] <-
+    out$output_cope_number[missing_image_number]
+
+  failed <- out$feat_failed %in% TRUE
+  complete <- out$feat_complete %in% TRUE
+  dir_exists <- out$feat_dir_exists %in% TRUE |
+    (!is.na(out$feat_dir) & dir.exists(out$feat_dir))
+  out$analysis_status <- rep("not_started", nrow(out))
+  out$analysis_status[dir_exists] <- "incomplete"
+  out$analysis_status[failed] <- "failed"
+  out$analysis_status[complete] <- "complete"
+  out$analysis_status[is_passthrough] <- "passthrough"
+
+  out
+}
+
+lookup_feat_level_user_columns <- function(level) {
+  image_cols <- c(
+    "materialized_level", "statistic", "image_cope_number",
+    "image_file", "image_exists",
+    "analysis_fsf", "analysis_dir", "image_feat_dir", "image_stats_dir",
+    "analysis_status", "lookup_source", "cache_file"
+  )
+
+  switch(as.character(level),
+    "1" = c(
+      "output_level", "id", "session", "run_number",
+      "l1_model", "l1_cope_number", "l1_cope_name",
+      image_cols
+    ),
+    "2" = c(
+      "output_level", "id", "session", "l2_scope",
+      "l1_model", "l1_cope_number", "l1_cope_name",
+      "l2_model", "l2_cope_number", "l2_cope_name",
+      "l2_input_mode", "is_passthrough",
+      image_cols
+    ),
+    "3" = c(
+      "output_level", "session",
+      "l1_model", "l1_cope_number", "l1_cope_name",
+      "l2_model", "l2_cope_number", "l2_cope_name",
+      "l3_model", "l3_cope_number", "l3_cope_name",
+      "l3_input_mode",
+      image_cols
     )
+  )
+}
 
-  as.data.frame(out)
+lookup_feat_level_internal_columns <- function(level) {
+  common <- c(
+    "feat_fsf", "feat_dir", "stats_dir",
+    "feat_complete", "feat_failed", "feat_dir_exists", "feat_fsf_exists",
+    "to_run", "feat_fsf_modified_date",
+    "feat_execution_start", "feat_execution_end", "feat_execution_min",
+    "feat_auto_retried"
+  )
+  level_specific <- switch(as.character(level),
+    "1" = c("run_volumes", "run_nifti", "l1_confound_file"),
+    "2" = c(
+      "l2_passthrough", "passthrough_cope_file", "l2_cope_dir",
+      "n_l2_copes", "n_input_files"
+    ),
+    "3" = character(0)
+  )
+  c(common, level_specific)
+}
+
+lookup_feat_column_type <- function(column) {
+  if (column %in% c(
+    "output_level", "session", "run_number",
+    "l1_cope_number", "l2_cope_number", "l3_cope_number",
+    "materialized_level", "image_cope_number",
+    "n_l2_copes", "n_input_files", "run_volumes"
+  )) return("integer")
+  if (column %in% c(
+    "is_passthrough", "image_exists",
+    "feat_complete", "feat_failed", "feat_dir_exists", "feat_fsf_exists",
+    "to_run", "feat_auto_retried", "l2_passthrough"
+  )) return("logical")
+  if (column %in% "feat_execution_min") return("numeric")
+  if (column %in% c(
+    "feat_fsf_modified_date", "feat_execution_start", "feat_execution_end"
+  )) return("POSIXct")
+  "character"
+}
+
+lookup_feat_typed_column <- function(column, n = 0L) {
+  switch(lookup_feat_column_type(column),
+    integer = rep(NA_integer_, n),
+    logical = rep(NA, n),
+    numeric = rep(NA_real_, n),
+    POSIXct = rep(as.POSIXct(NA), n),
+    character = rep(NA_character_, n)
+  )
+}
+
+lookup_feat_cast_column <- function(x, column) {
+  switch(lookup_feat_column_type(column),
+    integer = suppressWarnings(as.integer(x)),
+    logical = as.logical(x),
+    numeric = as.numeric(x),
+    POSIXct = {
+      if (inherits(x, "POSIXct")) x else as.POSIXct(x)
+    },
+    character = as.character(x)
+  )
+}
+
+lookup_feat_level_table <- function(out, level, include_internal = FALSE) {
+  user_cols <- lookup_feat_level_user_columns(level)
+  columns <- user_cols
+  if (isTRUE(include_internal)) {
+    columns <- unique(c(columns, lookup_feat_level_internal_columns(level)))
+  }
+
+  if (!is.data.frame(out) || nrow(out) == 0L) {
+    empty <- stats::setNames(
+      lapply(columns, lookup_feat_typed_column),
+      columns
+    )
+    return(as.data.frame(empty, optional = TRUE, stringsAsFactors = FALSE))
+  }
+
+  if (level == 2L) {
+    id_scope <- out$l2_scope %in% "id"
+    out$session[id_scope] <- NA_integer_
+  } else if (level == 3L) {
+    out$session[out$session %in% 0L] <- NA_integer_
+  }
+
+  for (column in columns) {
+    if (!column %in% names(out)) {
+      out[[column]] <- lookup_feat_typed_column(column, nrow(out))
+    } else {
+      out[[column]] <- lookup_feat_cast_column(out[[column]], column)
+    }
+  }
+
+  out <- out[, columns, drop = FALSE]
+  sort_cols <- intersect(
+    c(
+      "l3_model", "l2_model", "l1_model", "id", "session", "run_number",
+      "l1_cope_number", "l2_cope_number", "l3_cope_number", "statistic"
+    ),
+    names(out)
+  )
+  if (length(sort_cols) > 0L && nrow(out) > 1L) {
+    ord <- do.call(order, c(out[sort_cols], list(na.last = TRUE)))
+    out <- out[ord, , drop = FALSE]
+  }
+  rownames(out) <- NULL
+  out
+}
+
+new_feat_output_lookup <- function(out, requested_levels = 1:3,
+                                   include_internal = FALSE) {
+  tables <- lapply(1:3, function(level) {
+    level_rows <- if (is.data.frame(out) && nrow(out) > 0L) {
+      out[out$output_level == level, , drop = FALSE]
+    } else {
+      data.frame()
+    }
+    lookup_feat_level_table(
+      level_rows,
+      level = level,
+      include_internal = include_internal
+    )
+  })
+  names(tables) <- c("l1", "l2", "l3")
+  structure(
+    tables,
+    class = c("feat_output_lookup", "list"),
+    requested_levels = as.integer(requested_levels),
+    include_internal = isTRUE(include_internal)
+  )
+}
+
+#' @rdname lookup_feat_outputs
+#' @param x a \code{feat_output_lookup} object.
+#' @param row.names,optional standard \code{as.data.frame} arguments.
+#' @param ... unused.
+#' @export
+as.data.frame.feat_output_lookup <- function(x, row.names = NULL,
+                                             optional = FALSE, ...) {
+  out <- dplyr::bind_rows(lapply(x, as.data.frame))
+  n <- nrow(out)
+  out$output_model <- rep(NA_character_, n)
+  out$output_cope_number <- rep(NA_integer_, n)
+  out$output_cope_name <- rep(NA_character_, n)
+
+  for (ll in 1:3) {
+    use <- out$output_level == ll
+    model_col <- paste0("l", ll, "_model")
+    number_col <- paste0("l", ll, "_cope_number")
+    name_col <- paste0("l", ll, "_cope_name")
+    if (model_col %in% names(out)) {
+      out$output_model[use] <- out[[model_col]][use]
+      out$output_cope_number[use] <- out[[number_col]][use]
+      out$output_cope_name[use] <- out[[name_col]][use]
+    }
+  }
+
+  if ("is_passthrough" %in% names(out)) {
+    out$is_passthrough[is.na(out$is_passthrough)] <- FALSE
+  }
+
+  front <- c(
+    "output_level", "output_model", "output_cope_number", "output_cope_name"
+  )
+  out <- out[, c(front, setdiff(names(out), front)), drop = FALSE]
+  if (n > 1L) {
+    sort_cols <- intersect(
+      c(
+        "output_level", "l3_model", "l2_model", "l1_model",
+        "id", "session", "run_number",
+        "l1_cope_number", "l2_cope_number", "l3_cope_number", "statistic"
+      ),
+      names(out)
+    )
+    ord <- do.call(order, c(out[sort_cols], list(na.last = TRUE)))
+    out <- out[ord, , drop = FALSE]
+  }
+  rownames(out) <- row.names
+  as.data.frame(out, optional = optional)
+}
+
+#' @rdname lookup_feat_outputs
+#' @export
+print.feat_output_lookup <- function(x, ...) {
+  requested <- attr(x, "requested_levels")
+  cat("<feat_output_lookup>\n")
+  for (ll in 1:3) {
+    label <- paste0("  L", ll, ": ")
+    if (!ll %in% requested) {
+      cat(label, "not requested\n", sep = "")
+      next
+    }
+    tab <- x[[paste0("l", ll)]]
+    existing <- if ("image_exists" %in% names(tab)) {
+      sum(tab$image_exists %in% TRUE)
+    } else {
+      0L
+    }
+    cat(label, nrow(tab), " image row(s), ", existing, " existing\n", sep = "")
+  }
+  invisible(x)
 }
 
 lookup_feat_outputs_from_setup <- function(gpa, level, what, lg, warn_missing = TRUE) {
@@ -201,10 +517,12 @@ lookup_feat_outputs_l2 <- function(gpa, what, lg, warn_missing = TRUE) {
     name_col = "l2_cope_name"
   )
 
-  passthrough <- lookup$l2_input_mode == "l1_cope_file_passthrough" &
-    lookup$statistic == "cope" &
-    "passthrough_cope_file" %in% names(lookup)
-  lookup$image_file[passthrough] <- lookup$passthrough_cope_file[passthrough]
+  is_passthrough <- lookup$l2_input_mode %in% "l1_cope_file_passthrough"
+  lookup <- lookup[!is_passthrough | lookup$statistic == "cope", , drop = FALSE]
+  is_passthrough <- lookup$l2_input_mode %in% "l1_cope_file_passthrough"
+  if ("passthrough_cope_file" %in% names(lookup)) {
+    lookup$image_file[is_passthrough] <- lookup$passthrough_cope_file[is_passthrough]
+  }
 
   lookup
 }
@@ -381,7 +699,7 @@ lookup_feat_filesystem_l2 <- function(gpa, what, lg) {
       statistics = what,
       include_missing = TRUE
     )
-    lookup_feat_rows_from_cope_df(
+    rows <- lookup_feat_rows_from_cope_df(
       cope_df = cope_df, level = 2L, what = what,
       feat_dir = feat_dir, feat_fsf = sub("\\.gfeat$", ".fsf", feat_dir),
       id = id, session = lookup_feat_as_integer(session), run_number = NA_integer_,
@@ -391,6 +709,9 @@ lookup_feat_filesystem_l2 <- function(gpa, what, lg) {
       stats_dir = file.path(feat_dir, "cope1.feat", "stats"),
       contrast_level = 2L
     )
+    rows$l2_input_mode <- "cope_files"
+    rows$l2_passthrough <- FALSE
+    rows
   })
 
   dplyr::bind_rows(out)

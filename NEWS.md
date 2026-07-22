@@ -66,6 +66,10 @@
 * Support for SPM-style concatenated run handling at Level 1
 * AFNI `3dLMEr` Level 3 execution backend with automatic `-qVars` detection and `dataTable.txt` generation
 * Backend specification defaults (`default_glm_backend_specs`) for FSL, SPM, and AFNI
+* `lookup_feat_outputs()` now returns stable, level-specific `$l1`, `$l2`, and
+  `$l3` tables by default, with an explicit `format = "long"` option. L2
+  passthroughs are represented as logical L2 rows and identify their L1
+  materialization and source image.
 
 # fmri.pipeline 0.2-1
 

@@ -2,6 +2,8 @@
 % Please edit documentation in R/lookup_feat_outputs.R
 \name{lookup_feat_outputs}
 \alias{lookup_feat_outputs}
+\alias{as.data.frame.feat_output_lookup}
+\alias{print.feat_output_lookup}
 \title{Lookup FSL FEAT output images by model and contrast}
 \usage{
 lookup_feat_outputs(
@@ -13,8 +15,13 @@ lookup_feat_outputs(
   source = c("auto", "setup", "cache", "filesystem"),
   cache_dir = NULL,
   refresh_status = FALSE,
-  lg = NULL
+  lg = NULL,
+  format = c("by_level", "long")
 )
+
+\method{as.data.frame}{feat_output_lookup}(x, row.names = NULL, optional = FALSE, ...)
+
+\method{print}{feat_output_lookup}(x, ...)
 }
 \arguments{
 \item{gpa}{a \code{glm_pipeline_arguments} object. The function is most
@@ -31,8 +38,12 @@ informative when populated FSL setup tables are present, but \code{source =
 the image does not exist. If \code{FALSE}, return only existing images.}
 
 \item{include_internal}{if \code{TRUE}, retain setup/debug columns such as
-FEAT execution timestamps and L2 input mode. The default \code{FALSE}
-returns a compact, user-facing lookup table.}
+FEAT execution timestamps and raw FEAT status fields. The default \code{FALSE}
+returns compact, level-specific user-facing tables.}
+
+\item{format}{return format. \code{"by_level"} returns a
+\code{feat_output_lookup} object with \code{$l1}, \code{$l2}, and
+\code{$l3} tables. \code{"long"} returns their combined data.frame form.}
 
 \item{source}{where to look for output metadata. \code{"setup"} uses only the
 \code{gpa$l*_model_setup$fsl} tables, \code{"cache"} searches scheduler
@@ -47,12 +58,35 @@ folders, and \code{"auto"} tries these in that order.}
 setup table before building the lookup.}
 
 \item{lg}{optional \code{lgr::Logger} object.}
+
+\item{x}{a \code{feat_output_lookup} object.}
+
+\item{row.names, optional}{standard \code{as.data.frame} arguments.}
+
+\item{...}{unused.}
 }
 \value{
-a data.frame with one row per model/contrast/statistic image.
+With \code{format = "by_level"}, a \code{feat_output_lookup}
+  object containing level-specific \code{$l1}, \code{$l2}, and \code{$l3}
+  data.frames. With \code{format = "long"}, a data.frame with one row per
+  analysis instance, contrast, and statistic image. The long form adds
+  \code{output_model}, \code{output_cope_number}, and
+  \code{output_cope_name} as level-independent convenience columns.
 }
 \description{
 Build a tidy lookup table that maps the human-readable pipeline model and
 contrast names onto the FEAT folder structure for level 1, 2, and/or 3 FSL
-outputs.
+outputs. The default result separates the structurally different FEAT
+levels into \code{$l1}, \code{$l2}, and \code{$l3} tables with stable
+level-specific schemas; levels that were not requested are present as empty
+tables.
+}
+\details{
+L2 passthroughs remain logical L2 rows (\code{output_level = 2}) but are
+marked with \code{is_passthrough = TRUE},
+\code{materialized_level = 1}, and
+\code{analysis_status = "passthrough"}. Because no L2 FEAT analysis is
+materialized, \code{analysis_fsf} and \code{analysis_dir} are missing and
+\code{image_feat_dir} identifies the originating L1 FEAT directory. A
+passthrough has only a \code{"cope"} image row.
 }
