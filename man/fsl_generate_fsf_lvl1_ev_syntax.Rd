@@ -57,9 +57,24 @@ Optional elements of the list are:
 \examples{
 
   regressors <- list(
-    list(name="cue_onset", waveform="custom_3", timing_file="r1_cue_onset_3col.txt", convolution="double_gamma"),
-    list(name="feedback",  waveform="custom_3", timing_file="r1_feedback_3col.txt", convolution="double_gamma"),
-    list(name="RPE", waveform="custom_1", timing_file="r1_RPEs.1D", convolution="none")
+    list(
+      name = "cue_onset",
+      waveform = "custom_3",
+      timing_file = "r1_cue_onset_3col.txt",
+      convolution = "double_gamma"
+    ),
+    list(
+      name = "feedback",
+      waveform = "custom_3",
+      timing_file = "r1_feedback_3col.txt",
+      convolution = "double_gamma"
+    ),
+    list(
+      name = "RPE",
+      waveform = "custom_1",
+      timing_file = "r1_RPEs.1D",
+      convolution = "none"
+    )
   )
 
   ev_syntax <- fsl_generate_fsf_lvl1_ev_syntax(regressors)

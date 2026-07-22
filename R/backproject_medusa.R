@@ -80,7 +80,8 @@ backproject_medusa <- function(coef_df, brain_mask, plot_cols=NULL, parcel_col="
           pull(!!ii$pc)
         if (length(this_val) != 1L) { browser() }
 
-        to_fill <- imgpos %>% dplyr::filter(roi == !!mm) %>% dplyr::select(-roi) %>% as.matrix()
+        to_fill <- imgpos %>% dplyr::filter(.data$roi == !!mm) %>% 
+          dplyr::select(-"roi") %>% as.matrix()
         to_fill <- cbind(to_fill, tt, this_val) #4-D indices for this mask value and this timepoint plus the value to fill in col 5
         assign_mat[[paste(mm, tt, sep=".")]] <- to_fill
 

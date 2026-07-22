@@ -77,7 +77,7 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
 
     #add time on either side of interpolation grid to have preceding time points that inform linear interp
     #N.B. Occasionally, if the time series (fMRI run) ends before the late events, trial_ts will have 0 rows
-    trial_ts <- ts_data %>% filter(evt_time >= time_before + pad_before & evt_time <= time_after + pad_after)
+    trial_ts <- ts_data %>% filter(.data$evt_time >= time_before + pad_before & .data$evt_time <= time_after + pad_after)
 
     #enforce colliding preceding event
     if (evt_before > -Inf) trial_ts <- trial_ts %>% filter(!!sym(vm[["time"]]) > evt_before)
@@ -439,13 +439,25 @@ compress_mts_pca <- function(mts, pexp_target=0.9, scale_columns=TRUE) {
 #' @examples 
 #'
 #' \dontrun{
-#'   atlas_files <- c(
-#'     "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/bilateral_striatum_tight_7Networks_2.3mm.nii.gz",
-#'     "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/pauli_combined_integermask_2.3mm.nii.gz"
+#'   atlas_dir <- file.path(
+#'     "/proj/mnhallqlab/projects/clock_analysis/fmri",
+#'     "ph_da_striatum/masks"
+#'   )
+#'   atlas_files <- file.path(
+#'     atlas_dir,
+#'     c(
+#'       "bilateral_striatum_tight_7Networks_2.3mm.nii.gz",
+#'       "pauli_combined_integermask_2.3mm.nii.gz"
+#'     )
 #'   )
 #'
-#'   decon_dir <- "/proj/mnhallqlab/users/michael/sceptic_decon" # has the outputs of voxelwise_deconvolution for these atlases
-#'   trial_df <- get_trial_data(repo_directory = "/proj/mnhallqlab/projects/clock_analysis", dataset = "mmclock_fmri", groupfixed = TRUE) 
+#'   # Outputs of voxelwise_deconvolution() for these atlases.
+#'   decon_dir <- "/proj/mnhallqlab/users/michael/sceptic_decon"
+#'   trial_df <- get_trial_data(
+#'     repo_directory = "/proj/mnhallqlab/projects/clock_analysis",
+#'     dataset = "mmclock_fmri",
+#'     groupfixed = TRUE
+#'   )
 #'
 #'   alignments <- list(
 #'     clock_long = list(

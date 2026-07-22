@@ -52,6 +52,11 @@ The files should generally have a name like
 }
 \examples{
 \dontrun{
-  run_df <- generate_run_data_from_bids("/proj/mnhallqlab/no_backup/flanker-fmriprep", task_name = "flanker", desc = "postproc")
+  bids_dir <- "/proj/mnhallqlab/no_backup/flanker-fmriprep"
+  run_df <- generate_run_data_from_bids(
+    bids_dir,
+    task_name = "flanker",
+    desc = "postproc"
+  )
 }
 }

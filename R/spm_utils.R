@@ -438,7 +438,7 @@ combine_spm_l3_to_afni <- function(gpa, spm_l3_combined_filename=NULL, spm_l3_co
     dplyr::select("l1_model", "l1_cope_name", "l3_model", "spm_dir")
 
   meta_df$contrast_df <- lapply(meta_df$spm_dir, spm_l3_collect_contrasts, lg = lg)
-  meta_df <- meta_df %>% unnest(contrast_df, keep_empty = FALSE)
+  meta_df <- meta_df %>% unnest(cols="contrast_df", keep_empty = FALSE)
 
   if (nrow(meta_df) == 0L) {
     lg$warn("No SPM L3 contrasts found for AFNI combination.")

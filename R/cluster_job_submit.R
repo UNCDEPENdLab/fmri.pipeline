@@ -33,8 +33,12 @@
 #' @examples
 #' \dontrun{
 #'   #simple PBS submission
-#'   cluster_job_submit('myscript.bash', scheduler="torque", sched_args=c('-l walltime=10:00:00', '-l nodes=1:ppn=20'),
-#'      env_variables=c(RUN_INDEX=2, MODEL_NAME='FSE21'))
+#'   cluster_job_submit(
+#'     "myscript.bash",
+#'     scheduler = "torque",
+#'     sched_args = c("-l walltime=10:00:00", "-l nodes=1:ppn=20"),
+#'     env_variables = c(RUN_INDEX = 2, MODEL_NAME = "FSE21")
+#'   )
 #'
 #'   #To forward environment variables without explicitly providing values. Note that these must
 #'   #  be in R's system environment (cf. Sys.getenv) at execution time to forward as expected.
@@ -256,7 +260,7 @@ cluster_submit_shell_jobs <- function(job_list, commands_per_cpu = 1L, cpus_per_
     } else {
       # if we do not fork, the total time increases by a factor of cpus_per_job
       # this is useful if each command is a multithreaded job (e.g., MCMC sampling multiple chains).
-      time_per_job <- time_per_command * commands_per_cpus * cpus_per_job
+      time_per_job <- time_per_command * commands_per_cpu * cpus_per_job
     }
 
     # convert back to time string from period
@@ -349,7 +353,7 @@ cluster_submit_shell_jobs <- function(job_list, commands_per_cpu = 1L, cpus_per_
 
   # write job log to file
   if (is.list(job_list)) {
-    write.csv(job_df %>% unnest(cmd), file = log_file, row.names = FALSE)
+    write.csv(job_df %>% unnest(cols="cmd"), file = log_file, row.names = FALSE)
   } else {
     write.csv(job_df, file = log_file, row.names = FALSE)
   }

@@ -82,7 +82,15 @@ The Bush 2011 algorithm is implemented in a compiled binary called deconvolvefil
     xx <- voxelwise_deconvolution(
       niftis="/proj/mnhallqlab/user/michael/test_nifti.nii.gz",
       out_dir="/proj/mnhallqlab/user/michael/decon_outputs",
-      out_file_expression=expression(paste0(this_subj$subid, "_run", this_subj$run_num, "_", atlas_img_name))
+      out_file_expression = expression(
+        paste0(
+          this_subj$subid,
+          "_run",
+          this_subj$run_num,
+          "_",
+          atlas_img_name
+        )
+      )
     )
   }
 

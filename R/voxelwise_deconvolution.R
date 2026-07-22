@@ -39,7 +39,15 @@
 #'     xx <- voxelwise_deconvolution(
 #'       niftis="/proj/mnhallqlab/user/michael/test_nifti.nii.gz",
 #'       out_dir="/proj/mnhallqlab/user/michael/decon_outputs",
-#'       out_file_expression=expression(paste0(this_subj$subid, "_run", this_subj$run_num, "_", atlas_img_name))
+#'       out_file_expression = expression(
+#'         paste0(
+#'           this_subj$subid,
+#'           "_run",
+#'           this_subj$run_num,
+#'           "_",
+#'           atlas_img_name
+#'         )
+#'       )
 #'     )
 #'   }
 #'
@@ -320,10 +328,10 @@ voxelwise_deconvolution <- function(
       deconv_melt$time <- (deconv_melt$volume - 1)*TR + time_offset #convert back to seconds; first volume is time 0
 
       deconv_df <- deconv_melt %>% 
-        dplyr::mutate(vnum=as.numeric(vnum)) %>%
+        dplyr::mutate(vnum=as.numeric(.data$vnum)) %>%
         left_join(a_coordinates, by="vnum") %>%
         #mutate(nifti=niftis[si]) %>%
-        dplyr::select(-i, -j, -k) #omitting i, j, k for now
+        dplyr::select(-"i", -"j", -"k") #omitting i, j, k for now
 
       #add subject metadata, if relevant
       #if (!is.null(add_metadata)) { deconv_df <- deconv_df %>% cbind(this_subj) }

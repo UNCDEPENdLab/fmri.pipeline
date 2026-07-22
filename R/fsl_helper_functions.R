@@ -665,11 +665,23 @@ resolve_afni_output_dataset <- function(afni_out) {
 #' 
 #' @examples
 #' \dontrun{
-#'   feat_l3_combined_filename <- "{gpa$output_directory}/afni_combined/L1m-{l1_model}/l1c-{l1_cope_name}/L3m-{l3_model}_stats"
+#'   feat_l3_combined_filename <- paste0(
+#'     "{gpa$output_directory}/afni_combined/",
+#'     "L1m-{l1_model}/l1c-{l1_cope_name}/L3m-{l3_model}_stats"
+#'   )
 #'   feat_l3_combined_briknames = "l2c-{l2_cope_name}_l3c-{l3_cope_name}"
-#'   template_brain <- "/proj/mnhallqlab/lab_resources/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_brain.nii"
+#'   template_brain <- file.path(
+#'     "/proj/mnhallqlab/lab_resources/standard",
+#'     "mni_icbm152_nlin_asym_09c",
+#'     "mni_icbm152_t1_tal_nlin_asym_09c_brain.nii"
+#'   )
 #' 
-#'   combine_feat_l3_to_afni(gpa, feat_l3_combined_filename, feat_l3_combined_briknames, template_brain)
+#'   combine_feat_l3_to_afni(
+#'     gpa = gpa,
+#'     feat_l3_combined_filename = feat_l3_combined_filename,
+#'     feat_l3_combined_briknames = feat_l3_combined_briknames,
+#'     template_brain = template_brain
+#'   )
 #' }
 #'
 #' @export
@@ -710,7 +722,7 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
 
   # note that keep_empty = FALSE will drop any .feat folder that failed to be parsed (usually a failed run)
   meta_df$cope_df <- lapply(l3_stats, "[[", "cope_df") # add a list-column, then unnest to expand
-  meta_df <- meta_df %>% unnest(cope_df, keep_empty = FALSE) %>% # expand so that multiple rows of copes in cope_df are added
+  meta_df <- meta_df %>% unnest(cols="cope_df", keep_empty = FALSE) %>% # expand so that multiple rows of copes in cope_df are added
     dplyr::rename(l3_cope_name = "contrast_name", l3_cope_number = "cope_number")
 
   # use glue_data to evaluate the glue file and brik expressions for every row of the data.frame

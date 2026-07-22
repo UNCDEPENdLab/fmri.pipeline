@@ -77,13 +77,25 @@ This function will create a separate R batch job on the scheduler for each combi
 \examples{
 
 \dontrun{
-  atlas_files <- c(
-    "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/bilateral_striatum_tight_7Networks_2.3mm.nii.gz",
-    "/proj/mnhallqlab/projects/clock_analysis/fmri/ph_da_striatum/masks/pauli_combined_integermask_2.3mm.nii.gz"
+  atlas_dir <- file.path(
+    "/proj/mnhallqlab/projects/clock_analysis/fmri",
+    "ph_da_striatum/masks"
+  )
+  atlas_files <- file.path(
+    atlas_dir,
+    c(
+      "bilateral_striatum_tight_7Networks_2.3mm.nii.gz",
+      "pauli_combined_integermask_2.3mm.nii.gz"
+    )
   )
 
-  decon_dir <- "/proj/mnhallqlab/users/michael/sceptic_decon" # has the outputs of voxelwise_deconvolution for these atlases
-  trial_df <- get_trial_data(repo_directory = "/proj/mnhallqlab/projects/clock_analysis", dataset = "mmclock_fmri", groupfixed = TRUE) 
+  # Outputs of voxelwise_deconvolution() for these atlases.
+  decon_dir <- "/proj/mnhallqlab/users/michael/sceptic_decon"
+  trial_df <- get_trial_data(
+    repo_directory = "/proj/mnhallqlab/projects/clock_analysis",
+    dataset = "mmclock_fmri",
+    groupfixed = TRUE
+  )
 
   alignments <- list(
     clock_long = list(

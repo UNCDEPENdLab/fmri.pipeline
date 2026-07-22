@@ -78,7 +78,12 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
 #' @export
 #' @examples 
 #' \dontrun{
-#'   run_df <- generate_run_data_from_bids("/proj/mnhallqlab/no_backup/flanker-fmriprep", task_name = "flanker", desc = "postproc")
+#'   bids_dir <- "/proj/mnhallqlab/no_backup/flanker-fmriprep"
+#'   run_df <- generate_run_data_from_bids(
+#'     bids_dir,
+#'     task_name = "flanker",
+#'     desc = "postproc"
+#'   )
 #' }
 generate_run_data_from_bids <- function(bids_dir, modality="func", task_name="ridl", desc="postproc", suffix="bold", space=NULL, anat_root=NULL, fmap_root=NULL) {
   checkmate::assert_string(bids_dir)
@@ -265,7 +270,11 @@ generate_run_data_from_bids <- function(bids_dir, modality="func", task_name="ri
 #' @export
 #' @examples
 #' \dontrun{
-#'   df <- generate_trial_data_from_bids("/proj/mnhallqlab/no_backup/flanker-fmriprep", task_name = "flanker")
+#'   bids_dir <- "/proj/mnhallqlab/no_backup/flanker-fmriprep"
+#'   df <- generate_trial_data_from_bids(
+#'     bids_dir,
+#'     task_name = "flanker"
+#'   )
 #' }
 generate_trial_data_from_bids <- function(bids_dir, modality="func", task_name="ridl") {
   checkmate::assert_directory_exists(bids_dir)

@@ -298,15 +298,25 @@ This function was adapted from the fitclock package (https://github.com/PennStat
   data(example_signals)
 
   #basic convolved design matrix
-  d <- build_design_matrix(events = example_events, signals = example_signals, tr=1.0, plot=FALSE)
+  d <- build_design_matrix(
+    events = example_events,
+    signals = example_signals,
+    tr = 1.0,
+    plot = FALSE
+  )
 
   data(example_nuisrun1) #load demo additional signals
   data(example_nuisrun2)
 
   #design matrix with 0,1,2 polynomial baseline regressors and a set of additional regressors
   #this does not contain a 'taskness' regressor for cue or outcome
-  dnuis <- build_design_matrix(events = example_events, signals = example_signals, tr=1.0,
-    additional_regressors = list(example_nuisrun1, example_nuisrun2), baseline_coef_order = 2)
+  dnuis <- build_design_matrix(
+    events = example_events,
+    signals = example_signals,
+    tr = 1.0,
+    additional_regressors = list(example_nuisrun1, example_nuisrun2),
+    baseline_coef_order = 2
+  )
 
   #tweak the design to add temporal derivatives for both ev and pe
   example_signals$pe$add_deriv <- TRUE
@@ -322,8 +332,14 @@ This function was adapted from the fitclock package (https://github.com/PennStat
 
   #include up to quadratic drift terms in the design, drop 3 volumes from the beginning,
   #and write timing files in AFNI, FSL, and convolved formats (to the "run_timing" directory).
-  d_modified <- build_design_matrix(events = example_events, signals = example_signals, tr=1.0,
-    baseline_coef_order=2, drop_volumes=3, write_timing_files = c("convolved", "AFNI", "FSL"))
+  d_modified <- build_design_matrix(
+    events = example_events,
+    signals = example_signals,
+    tr = 1.0,
+    baseline_coef_order = 2,
+    drop_volumes = 3,
+    write_timing_files = c("convolved", "AFNI", "FSL")
+  )
 
   #show unconvolved design
   plot(visualize_design_matrix(concat_design_runs(d_modified, convolved=FALSE)))
@@ -333,8 +349,15 @@ This function was adapted from the fitclock package (https://github.com/PennStat
   example_signals$ev <- NULL
   example_signals$pe <- NULL
 
-  d_beta <- build_design_matrix(events = example_events, signals = example_signals, tr=1.0, plot=FALSE,
-    baseline_coef_order=2, drop_volumes=3, write_timing_files = c("convolved", "FSL"))
+  d_beta <- build_design_matrix(
+    events = example_events,
+    signals = example_signals,
+    tr = 1.0,
+    plot = FALSE,
+    baseline_coef_order = 2,
+    drop_volumes = 3,
+    write_timing_files = c("convolved", "FSL")
+  )
 
   #PPI example
 
