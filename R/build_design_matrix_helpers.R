@@ -130,12 +130,12 @@ validate_events <- function(events, lg = NULL) {
   if (any(is.na(events$duration))) {
     msg <- "Invalid missing (NA) durations included in events data.frame. Cannot continue."
     lg$error(msg)
-    lg$error("%s", capture.output(print(subset(events, is.na(duration)))))
+    lg$error("%s", capture.output(print(events[is.na(events[["duration"]]), , drop = FALSE])))
     stop(msg)
   } else if (any(events$duration < 0)) {
     msg <- "Invalid negative durations included in events data.frame. Cannot continue."
     lg$error(msg)
-    lg$error("%s", capture.output(print(subset(events, duration < 0))))
+    lg$error("%s", capture.output(print(events[events[["duration"]] < 0, , drop = FALSE])))
     stop(msg)
   }
   
@@ -143,12 +143,12 @@ validate_events <- function(events, lg = NULL) {
   if (any(is.na(events$onset))) {
     msg <- "Invalid missing (NA) onsets included in events data.frame. Cannot continue."
     lg$error(msg)
-    lg$error("%s", capture.output(print(subset(events, is.na(onset)))))
+    lg$error("%s", capture.output(print(events[is.na(events[["onset"]]), , drop = FALSE])))
     stop(msg)
   } else if (any(events$onset < 0)) {
     msg <- "Invalid negative onsets included in events data.frame"
     lg$error(msg)
-    lg$error("%s", capture.output(print(subset(events, onset < 0))))
+    lg$error("%s", capture.output(print(events[events[["onset"]] < 0, , drop = FALSE])))
     stop(msg)
   }
   

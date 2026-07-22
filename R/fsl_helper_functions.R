@@ -732,7 +732,7 @@ combine_feat_l3_to_afni <- function(gpa, feat_l3_combined_filename=NULL, feat_l3
   meta_split <- split(meta_df, meta_df$afni_out)
 
   lapply(meta_split, function(ss) {
-    ss <- ss %>% pivot_longer(cols = c(cope, z), names_to = "image_type", values_to = "nii_file") # varcope, [leave out for now]
+    ss <- ss %>% pivot_longer(cols = c("cope", "z"), names_to = "image_type", values_to = "nii_file") # varcope, [leave out for now]
     afni_out <- sub("(\\+tlrc)*$", "+tlrc", ss$afni_out[1]) # force +tlrc extension
     afni_dir <- dirname(afni_out)
     if (!dir.exists(afni_dir)) {

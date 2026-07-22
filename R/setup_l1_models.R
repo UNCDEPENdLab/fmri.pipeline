@@ -417,7 +417,7 @@ drop_runs_without_events <- function(run_df, events, subj_id, subj_session = NUL
 
   run_df <- run_df[keep_runs, , drop = FALSE]
   if (is.data.frame(events) && nrow(events) > 0L && "run_number" %in% names(events)) {
-    events <- events %>% dplyr::filter(run_number %in% !!run_df$run_number)
+    events <- events %>% dplyr::filter(.data$run_number %in% !!run_df$run_number)
   }
 
   list(run_df = run_df, events = events)

@@ -307,7 +307,7 @@ generate_trial_data_from_bids <- function(bids_dir, modality="func", task_name="
 
   })
 
-  dplyr::bind_rows(slist) %>% tidyr::unnest(data) %>% dplyr::select(-events_file)
+  dplyr::bind_rows(slist) %>% tidyr::unnest(cols = "data") %>% dplyr::select(-"events_file")
 }
 
 #' Function to generate a subject_data object from a BIDS-compliant folder

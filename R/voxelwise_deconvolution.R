@@ -344,10 +344,10 @@ voxelwise_deconvolution <- function(
         to_deconvolve_melt$time <- (to_deconvolve_melt$time - 1)*TR + time_offset #convert back to seconds; first volume is time 0
 
         orig_df <- to_deconvolve_melt %>% 
-          dplyr::mutate(vnum=as.numeric(vnum)) %>%
+          dplyr::mutate(vnum=as.numeric(.data$vnum)) %>%
           left_join(a_coordinates, by="vnum") %>%
           #mutate(nifti=niftis[si]) %>%
-          dplyr::select(-i, -j, -k) #omitting i, j, k for now
+          dplyr::select(-"i", -"j", -"k") #omitting i, j, k for now
 
         #if (!is.null(add_metadata)) { orig_df <- orig_df %>% cbind(this_subj) }
 

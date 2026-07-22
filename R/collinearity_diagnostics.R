@@ -292,16 +292,16 @@ summarize_vif_by_regressor <- function(collin_summary, by_model = FALSE) {
   result <- collin_summary$vif_summary |>
     dplyr::group_by(dplyr::across(dplyr::all_of(group_vars))) |>
     dplyr::summarize(
-      mean_vif = mean(vif, na.rm = TRUE),
-      sd_vif = sd(vif, na.rm = TRUE),
-      min_vif = min(vif, na.rm = TRUE),
-      max_vif = max(vif, na.rm = TRUE),
+      mean_vif = mean(.data$vif, na.rm = TRUE),
+      sd_vif = sd(.data$vif, na.rm = TRUE),
+      min_vif = min(.data$vif, na.rm = TRUE),
+      max_vif = max(.data$vif, na.rm = TRUE),
       n_runs = dplyr::n(),
-      n_flagged = sum(high_vif, na.rm = TRUE),
+      n_flagged = sum(.data$high_vif, na.rm = TRUE),
       .groups = "drop"
     ) |>
-    dplyr::mutate(pct_flagged = 100 * n_flagged / n_runs) |>
-    dplyr::arrange(dplyr::desc(mean_vif)) |>
+    dplyr::mutate(pct_flagged = 100 * .data$n_flagged / .data$n_runs) |>
+    dplyr::arrange(dplyr::desc(.data$mean_vif)) |>
     as.data.frame()
   
   return(result)
@@ -335,17 +335,17 @@ summarize_correlations_by_pair <- function(collin_summary, by_model = FALSE) {
   result <- collin_summary$correlation_summary |>
     dplyr::group_by(dplyr::across(dplyr::all_of(group_vars))) |>
     dplyr::summarize(
-      mean_cor = mean(correlation, na.rm = TRUE),
-      sd_cor = sd(correlation, na.rm = TRUE),
-      min_cor = min(correlation, na.rm = TRUE),
-      max_cor = max(correlation, na.rm = TRUE),
-      mean_abs_cor = mean(abs_correlation, na.rm = TRUE),
+      mean_cor = mean(.data$correlation, na.rm = TRUE),
+      sd_cor = sd(.data$correlation, na.rm = TRUE),
+      min_cor = min(.data$correlation, na.rm = TRUE),
+      max_cor = max(.data$correlation, na.rm = TRUE),
+      mean_abs_cor = mean(.data$abs_correlation, na.rm = TRUE),
       n_runs = dplyr::n(),
-      n_flagged = sum(high_correlation, na.rm = TRUE),
+      n_flagged = sum(.data$high_correlation, na.rm = TRUE),
       .groups = "drop"
     ) |>
-    dplyr::mutate(pct_flagged = 100 * n_flagged / n_runs) |>
-    dplyr::arrange(dplyr::desc(mean_abs_cor)) |>
+    dplyr::mutate(pct_flagged = 100 * .data$n_flagged / .data$n_runs) |>
+    dplyr::arrange(dplyr::desc(.data$mean_abs_cor)) |>
     as.data.frame()
   
   return(result)
@@ -445,7 +445,7 @@ plot_collinearity <- function(collin_summary, plot_type = "both") {
   # VIF boxplot
   if (plot_type %in% c("vif", "both") && nrow(collin_summary$vif_summary) > 0) {
     p_vif <- ggplot2::ggplot(collin_summary$vif_summary, 
-                              ggplot2::aes(x = stats::reorder(regressor, vif, FUN = stats::median), y = vif)) +
+                              ggplot2::aes(x = stats::reorder(.data$regressor, .data$vif, FUN = stats::median), y = .data$vif)) +
       ggplot2::geom_boxplot(fill = "steelblue", alpha = 0.7) +
       ggplot2::geom_hline(yintercept = collin_summary$thresholds$vif, 
                           linetype = "dashed", color = "red", linewidth = 1) +
@@ -480,7 +480,7 @@ plot_collinearity <- function(collin_summary, plot_type = "both") {
     )
     
     p_cor <- ggplot2::ggplot(heatmap_data, 
-                              ggplot2::aes(x = regressor1, y = regressor2, fill = mean_cor)) +
+                              ggplot2::aes(x = .data$regressor1, y = .data$regressor2, fill = .data$mean_cor)) +
       ggplot2::geom_tile() +
       ggplot2::scale_fill_gradient2(
         low = "blue", mid = "white", high = "red",

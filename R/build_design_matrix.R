@@ -464,7 +464,7 @@ build_design_matrix <- function(
       )
     )
   }
-  run_data <- run_data %>% dplyr::filter(run_number %in% !!runs_to_output)
+  run_data <- run_data %>% dplyr::filter(.data$run_number %in% !!runs_to_output)
 
   available_dmat_runs <- sub("^run_number", "", rownames(dmat))
   missing_dmat_runs <- setdiff(as.character(runs_to_output), available_dmat_runs)
@@ -487,7 +487,7 @@ build_design_matrix <- function(
 
   # Filter ts_multipliers to only include runs_to_output, then rebuild bdm_args$ts_multiplier
   if (!is.null(ts_multipliers_df)) {
-    ts_multipliers_df <- ts_multipliers_df %>% dplyr::filter(run_number %in% !!runs_to_output)
+    ts_multipliers_df <- ts_multipliers_df %>% dplyr::filter(.data$run_number %in% !!runs_to_output)
     bdm_args$ts_multiplier <- lapply(signals_expanded, function(s) {
       if (is.null(s$ts_multiplier) || isFALSE(s$ts_multiplier)) {
         return(NULL)
@@ -546,8 +546,8 @@ build_design_matrix <- function(
       # (would need to refactor dmat_convolved to get it less clunky)
       runnum <- as.numeric(sub("run_number(\\d+)", "\\1", names(dmat_convolved)[i], perl=TRUE))
       additional_regressors_currun <- additional_regressors %>% 
-        dplyr::filter(run_number == !!runnum) %>%
-        dplyr::select(-run_number)
+        dplyr::filter(.data$run_number == !!runnum) %>%
+        dplyr::select(-"run_number")
 
       #ensure that additional regressors are mean-centered
       additional_regressors_currun <- as.data.frame(lapply(additional_regressors_currun, function(x) { x - mean(x, na.rm=TRUE) } ))
