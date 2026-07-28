@@ -151,6 +151,66 @@ Onsets and durations should be in seconds. If an event has a constant
 duration, you can either include a constant duration column or specify
 the fixed duration in the model specification.
 
+#### Repeated timing rows
+
+`trial_data` may contain repeated rows for a trial when a task has
+additional timing records, such as free button presses. A timing record
+may use `trial = NA` when it is not attached to a trial. A missing value
+in an event’s selected onset column means that row has no occurrence of
+that event. For each signal, the pipeline collapses exact duplicate
+timing records before centering and convolution. A duplicate is defined
+by its run, trial (when non-missing), onset, duration, and
+pre-convolution value. This prevents trial timing copied onto auxiliary
+rows from inflating its regressor while retaining distinct onsets,
+durations, or modeled values.
+
+The first within-trial record can share its row with the trial-level
+timing. For example, this encodes one cue, one feedback event, and two
+presses in trial 1:
+
+| id | session | run_number | trial | cue_onset | cue_duration | feedback_onset | feedback_duration | button_press_onset |
+|:---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 10637 | 1 | 1 | 1 | 0 | 1 | 5 | 1 | 1.2 |
+| 10637 | 1 | 1 | 1 | NA | NA | NA | NA | 3.7 |
+
+Timing rows for one trial with two button presses {.table
+style="width:100%;"}
+
+The first row yields the cue, feedback, and first press; the second
+yields only the second press. Model each timing column through the usual
+event definitions. If copied trial timing is retained on additional rows
+instead of set to `NA`, exact duplicate timing records are still
+collapsed by default.
+
+For parametric modulators and within-subject factors, put the value or
+factor level on every timing row for the occurrence it should model. For
+example, `press_force = c(2, 5)` on the two rows above modulates the
+first and second presses separately. A missing value omits that
+occurrence from the corresponding parametric signal. No trial-level
+value propagation is performed automatically.
+
+Beta-series signals are deliberately stricter: after duplicate timing
+records are collapsed, each `id`/`session`/`run_number`/`trial`
+combination must have exactly one timing occurrence. A trial with
+multiple distinct occurrences stops beta-series setup rather than
+silently choosing one. Use a non-beta-series signal for all occurrences,
+or define a timing column that identifies the single occurrence intended
+for each trial.
+
+If identical rows are intentionally separate neural occurrences, retain
+them for a specific signal in the YAML specification:
+
+``` yaml
+signals:
+  button_press:
+    event: button_press
+    value_fixed: 1
+    keep_duplicate_occurrences: true
+```
+
+The pipeline logs every duplicate collapse so that this default is
+auditable.
+
 ### Run Data
 
 `run_data` has one row per fMRI acquisition. It connects the task design

@@ -65,6 +65,9 @@
   : helper function to submit a set of shell jobs that are independent
   of one another
 
+- [`collect_fwe_results()`](https://uncdependlab.github.io/fmri.pipeline/reference/collect_fwe_results.md)
+  : Collect FWE results and persist the artifact manifest
+
 - [`collinearity_diagnostics`](https://uncdependlab.github.io/fmri.pipeline/reference/collinearity_diagnostics.md)
   : Functions for extracting and summarizing collinearity diagnostics
   across the GLM pipeline
@@ -177,6 +180,12 @@
   : This function specifies a first-level GLM model in FSL based on a
   build_design_matrix bdm object.
 
+- [`fwe_result_artifacts()`](https://uncdependlab.github.io/fmri.pipeline/reference/fwe_result_artifacts.md)
+  : Select artifacts from a collected FWE result
+
+- [`fwe_spec()`](https://uncdependlab.github.io/fmri.pipeline/reference/fwe_spec.md)
+  : Create a familywise-error correction specification
+
 - [`generate_feature`](https://uncdependlab.github.io/fmri.pipeline/reference/generate_feature.md)
   : This function creates K shifts of a neural events vector according
   to the kernel length, K.
@@ -255,6 +264,9 @@
   a set of factors. Its primary use is to run the same model on
   different splits of the data.
 
+- [`plan_fwe_correction()`](https://uncdependlab.github.io/fmri.pipeline/reference/plan_fwe_correction.md)
+  : Compile an FWE specification into an executable plan
+
 - [`plot_collinearity()`](https://uncdependlab.github.io/fmri.pipeline/reference/plot_collinearity.md)
   : Create a visualization of collinearity diagnostics
 
@@ -278,11 +290,21 @@
   : This is a small helper function that returns the inputs provided in
   the feat_files field for a set of .fsf files.
 
+- [`read_fwe_result()`](https://uncdependlab.github.io/fmri.pipeline/reference/read_fwe_result.md)
+  [`read_fwe_artifact_manifest()`](https://uncdependlab.github.io/fmri.pipeline/reference/read_fwe_result.md)
+  : Read a collected FWE result or artifact manifest
+
 - [`read_gfeat_dir()`](https://uncdependlab.github.io/fmri.pipeline/reference/read_gfeat_dir.md)
   : helper function to look up core stats outputs from a .gfeat folder
 
+- [`refresh_fwe_plan()`](https://uncdependlab.github.io/fmri.pipeline/reference/refresh_fwe_plan.md)
+  : Refresh the state of a compiled FWE plan
+
 - [`refresh_glm_status()`](https://uncdependlab.github.io/fmri.pipeline/reference/refresh_glm_status.md)
   : Refresh GLM backend status for a given analysis level
+
+- [`resolve_fwe_targets()`](https://uncdependlab.github.io/fmri.pipeline/reference/resolve_fwe_targets.md)
+  : Resolve an FWE specification to concrete group-analysis targets
 
 - [`rle_dt`](https://uncdependlab.github.io/fmri.pipeline/reference/rle_dt.md)
   : R6 class for a keyed data.table object that uses run-length encoding
@@ -306,6 +328,9 @@
 
 - [`run_fsl_command()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_fsl_command.md)
   : Wrapper for running an FSL command safely within R
+
+- [`run_fwe_plan()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_fwe_plan.md)
+  : Execute a compiled FWE plan
 
 - [`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
   : primary function for running a GLM analysis pipeline
@@ -377,6 +402,9 @@
 - [`update_tracked_job_status()`](https://uncdependlab.github.io/fmri.pipeline/reference/update_tracked_job_status.md)
   : Update job status in tracking SQLite database
 
+- [`validate_fwe_spec()`](https://uncdependlab.github.io/fmri.pipeline/reference/validate_fwe_spec.md)
+  : Validate an FWE correction specification
+
 - [`view_log()`](https://uncdependlab.github.io/fmri.pipeline/reference/view_log.md)
   : Function for quick viewing of log files in the command line
 
@@ -391,3 +419,11 @@
 - [`wait_for_job()`](https://uncdependlab.github.io/fmri.pipeline/reference/wait_for_job.md)
   : This function pauses execution of an R script while a scheduled qsub
   job is not yet complete.
+
+- [`write_fwe_plan()`](https://uncdependlab.github.io/fmri.pipeline/reference/write_fwe_plan.md)
+  [`read_fwe_plan()`](https://uncdependlab.github.io/fmri.pipeline/reference/write_fwe_plan.md)
+  : Write or read a compiled FWE plan
+
+- [`write_fwe_spec()`](https://uncdependlab.github.io/fmri.pipeline/reference/write_fwe_spec.md)
+  [`read_fwe_spec()`](https://uncdependlab.github.io/fmri.pipeline/reference/write_fwe_spec.md)
+  : Write or read an FWE correction specification as YAML

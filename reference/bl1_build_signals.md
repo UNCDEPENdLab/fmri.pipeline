@@ -9,7 +9,6 @@ bl1_build_signals(
   l1_model_set,
   trial_data,
   block_data = NULL,
-  subtrial_data = NULL,
   ppi_data = NULL,
   lg = NULL
 )
@@ -28,10 +27,6 @@ bl1_build_signals(
 - block_data:
 
   An optional data.frame containing block-level signal information
-
-- subtrial_data:
-
-  An optional data.frame containing subtrial-level signal information
 
 - ppi_data:
 

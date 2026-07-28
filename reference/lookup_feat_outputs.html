@@ -114,12 +114,6 @@ FEAT execution timestamps and raw FEAT status fields. The default <code>FALSE</c
 returns compact, level-specific user-facing tables.</p></dd>
 
 
-<dt id="arg-format">format<a class="anchor" aria-label="anchor" href="#arg-format"></a></dt>
-<dd><p>return format. <code>"by_level"</code> returns a
-<code>feat_output_lookup</code> object with <code>$l1</code>, <code>$l2</code>, and
-<code>$l3</code> tables. <code>"long"</code> returns their combined data.frame form.</p></dd>
-
-
 <dt id="arg-source">source<a class="anchor" aria-label="anchor" href="#arg-source"></a></dt>
 <dd><p>where to look for output metadata. <code>"setup"</code> uses only the
 <code>gpa$l*_model_setup$fsl</code> tables, <code>"cache"</code> searches scheduler
@@ -140,6 +134,12 @@ setup table before building the lookup.</p></dd>
 
 <dt id="arg-lg">lg<a class="anchor" aria-label="anchor" href="#arg-lg"></a></dt>
 <dd><p>optional <code><a href="https://s-fleck.github.io/lgr/reference/Logger.html" class="external-link">lgr::Logger</a></code> object.</p></dd>
+
+
+<dt id="arg-format">format<a class="anchor" aria-label="anchor" href="#arg-format"></a></dt>
+<dd><p>return format. <code>"by_level"</code> returns a
+<code>feat_output_lookup</code> object with <code>$l1</code>, <code>$l2</code>, and
+<code>$l3</code> tables. <code>"long"</code> returns their combined data.frame form.</p></dd>
 
 
 <dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>

@@ -1,60 +1,68 @@
-# R6 class for an FWE correction method that can apply to one or more models
+# Create a familywise-error correction specification
 
-R6 class for an FWE correction method that can apply to one or more
-models
+Create a declarative, serializable specification describing which
+completed group-analysis contrasts should receive a familywise-error
+correction and which correction method should be used. The specification
+contains no live execution objects and can therefore be stored safely in
+a pipeline object or YAML file.
 
-## Methods
+## Usage
 
-### Public methods
+``` r
+fwe_spec(
+  name,
+  targets,
+  method = "ptfce",
+  level = 3L,
+  correction_mask = "model",
+  compute = list(scheduler = "inherit"),
+  schema_version = fwe_spec_schema_version(),
+  ...
+)
+```
 
-- [`fwe_spec$new()`](#method-fwe_spec-initialize)
+## Arguments
 
-- [`fwe_spec$submit()`](#method-fwe_spec-submit)
+- name:
 
-- [`fwe_spec$clone()`](#method-fwe_spec-clone)
+  unique name for this correction.
 
-------------------------------------------------------------------------
+- targets:
 
-### `fwe_spec$new()`
+  non-empty named list selecting level-3 model and contrast fields.
+  Valid fields are `session`, `l1_model`, `l1_cope_number`,
+  `l1_cope_name`, `l2_model`, `l2_cope_number`, `l2_cope_name`,
+  `l3_model`, `l3_cope_number`, and `l3_cope_name`. Values may be
+  vectors.
 
-create a new FWE correction instance
+- method:
 
-#### Usage
+  correction method name or named method configuration. Currently
+  supported specifications are `"ptfce"` and
+  `"afni_3dclustsim_permutation"`.
 
-    fwe_spec$new(..., fwe_data = NULL)
+- level:
 
-#### Arguments
+  GLM level to correct. Only level 3 is currently supported.
 
-- `...`:
+- correction_mask:
 
-  not used yet
+  `"model"` to use each analysis mask, a NIfTI path, or a list with
+  `source` equal to `"model"` or `"file"` (and `path` for the latter).
 
-- `fwe_data`:
+- compute:
 
-  not used yet
+  named list of compute settings. By default the scheduler is inherited
+  from the pipeline.
 
-------------------------------------------------------------------------
+- schema_version:
 
-### `fwe_spec$submit()`
+  specification schema version. Normally left at its default.
 
-submit FWE estimation to the cluster
+- ...:
 
-#### Usage
+  named method-specific options overriding method defaults.
 
-    fwe_spec$submit()
+## Value
 
-------------------------------------------------------------------------
-
-### `fwe_spec$clone()`
-
-The objects of this class are cloneable with this method.
-
-#### Usage
-
-    fwe_spec$clone(deep = FALSE)
-
-#### Arguments
-
-- `deep`:
-
-  Whether to make a deep clone.
+an object of class `fwe_spec`.

@@ -1,7 +1,7 @@
-# helper function to verify contents of subject, run, block, trial, and subtrial data
+# helper function to verify contents of subject, run, block, and trial data
 
-helper function to verify contents of subject, run, block, trial, and
-subtrial data
+helper function to verify contents of subject, run, block, and trial
+data
 
 ## Usage
 

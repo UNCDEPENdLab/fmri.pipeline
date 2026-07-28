@@ -59,12 +59,6 @@ print(x, ...)
   timestamps and raw FEAT status fields. The default `FALSE` returns
   compact, level-specific user-facing tables.
 
-- format:
-
-  return format. `"by_level"` returns a `feat_output_lookup` object with
-  `$l1`, `$l2`, and `$l3` tables. `"long"` returns their combined
-  data.frame form.
-
 - source:
 
   where to look for output metadata. `"setup"` uses only the
@@ -88,6 +82,12 @@ print(x, ...)
   optional
   [`lgr::Logger`](https://s-fleck.github.io/lgr/reference/Logger.html)
   object.
+
+- format:
+
+  return format. `"by_level"` returns a `feat_output_lookup` object with
+  `$l1`, `$l2`, and `$l3` tables. `"long"` returns their combined
+  data.frame form.
 
 - x:
 

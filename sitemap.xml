@@ -48,6 +48,7 @@
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/cleanup_regressor.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/cluster_job_submit.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/cluster_submit_shell_jobs.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/collect_fwe_results.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/collinearity_diagnostics.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/combine_feat_l3_to_afni.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/combine_spm_l3_to_afni.html</loc></url>
@@ -97,6 +98,7 @@
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/fsl_l1_model.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/fsl_l2_model.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/fsl_l3_model.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/fwe_result_artifacts.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/fwe_spec.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/generate_feature.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/generate_feature_armadillo.html</loc></url>
@@ -153,6 +155,7 @@
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/ol_unique.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/pca_motion.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/place_dmat_on_time_grid.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/plan_fwe_correction.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/plot_collinearity.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/populate_defaults.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/populate_last_events.html</loc></url>
@@ -165,9 +168,12 @@
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/read_df_sqlite.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/read_feat_dir.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/read_feat_inputs.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/read_fwe_result.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/read_gfeat_dir.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/refresh_fwe_plan.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/refresh_glm_status.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/reset_tracking_sqlite_db.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/resolve_fwe_targets.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/respecify_l2_models_by_subject.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/rle_dt.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/run_3dlmer_sepjobs.html</loc></url>
@@ -175,6 +181,7 @@
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/run_decon_alignment.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/run_feat_sepjobs.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/run_fsl_command.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/run_fwe_plan.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/run_spm_sepjobs.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/runmean.html</loc></url>
@@ -214,6 +221,10 @@
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/update_tracked_job_status.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/validate_block_data.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/validate_dhms.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/validate_fwe_artifact_manifest.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/validate_fwe_plan.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/validate_fwe_result.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/validate_fwe_spec.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/validate_input_data.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/validate_signals.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/view_log.html</loc></url>
@@ -222,5 +233,7 @@
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/wait_for_job.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/write_3dlmer_files.html</loc></url>
 <url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/write_fsl_timing_files.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/write_fwe_plan.html</loc></url>
+<url><loc>https://uncdependlab.github.io/fmri.pipeline/reference/write_fwe_spec.html</loc></url>
 </urlset>
 

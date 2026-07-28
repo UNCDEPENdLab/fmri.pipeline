@@ -2,6 +2,31 @@
 
 ## fmri.pipeline 0.4
 
+### Declarative FWE correction workflow
+
+- Added a serializable
+  [`fwe_spec()`](https://uncdependlab.github.io/fmri.pipeline/reference/fwe_spec.md)
+  API for describing level-3 FWE corrections with semantic
+  model/contrast selectors, method options, correction masks, and
+  scheduler settings. Specifications can be read from and written to
+  YAML.
+
+- Added pTFCE plan and execution support through
+  [`plan_fwe_correction()`](https://uncdependlab.github.io/fmri.pipeline/reference/plan_fwe_correction.md),
+  [`run_fwe_plan()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_fwe_plan.md),
+  and
+  [`refresh_fwe_plan()`](https://uncdependlab.github.io/fmri.pipeline/reference/refresh_fwe_plan.md).
+  A single specification can fan out across all selected level-3
+  z-statistic maps, with explicit preflight status for required inputs
+  and optional dry-run command inspection.
+
+- Added persistent FWE result snapshots and artifact manifests via
+  [`collect_fwe_results()`](https://uncdependlab.github.io/fmri.pipeline/reference/collect_fwe_results.md)
+  and
+  [`fwe_result_artifacts()`](https://uncdependlab.github.io/fmri.pipeline/reference/fwe_result_artifacts.md),
+  providing stable, semantically selectable output paths for downstream
+  analyses.
+
 ### Bug fixes in `build_design_matrix` / `fmri.stimulus` convolution
 
 - **Fix: overlapping events silently overwritten during stimulus
@@ -42,6 +67,30 @@
   30 seconds of absolute time padding regardless of TR, preventing
   circular convolution artifacts near run boundaries in multiband
   acquisitions.
+
+### Repeated timing rows and within-trial occurrences
+
+- `trial_data` now supports ragged timing rows: a row may contain
+  trial-level timings alongside a within-trial occurrence, and sparse
+  onset columns use `NA` to indicate no occurrence on that row. Trial
+  identifiers may be `NA` for free-running occurrences.
+
+- Exact duplicate timing/value records are collapsed before convolution
+  to prevent copied trial rows from inflating regressors. Set
+  `keep_duplicate_occurrences: true` on a YAML signal to retain them.
+
+- Parametric modulators and within-subject factors now align to an
+  internal timing-occurrence key, rather than `run_number + trial`, so
+  repeated trials do not create many-to-many joins. Modulator values
+  must be present on each modeled timing row; missing values omit that
+  occurrence.
+
+- Beta-series signals now require exactly one distinct timing occurrence
+  per trial after duplicate collapse and reject missing trial
+  identifiers or ambiguous multi-occurrence trials.
+
+- Removed unused `subtrial` classes, mappings, arguments, and
+  documentation.
 
 ### Backend system overhaul
 
