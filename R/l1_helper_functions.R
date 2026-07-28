@@ -145,6 +145,12 @@ expand_signal <- function(sig) {
     # for now, only support data.frame inputs for signal value
     # in general, these are expanded in setup_l1_models
     checkmate::assert_data_frame(sig$value)
+    if (!"trial" %in% names(sig$value)) {
+      stop("Beta-series signals require a trial column in their value data.")
+    }
+    if (anyNA(sig$value$trial)) {
+      stop("Beta-series signals require non-missing trial identifiers.")
+    }
     trials <- sort(unique(sig$value$trial)) # vector of trials for parametric signal
     exp_names <- paste(sig$name, sprintf("%03d", trials), sep = "_t") # signal_t001 etc.
     s_list <- lapply(seq_along(exp_names), function(ee) {
@@ -156,6 +162,7 @@ expand_signal <- function(sig) {
       # copy across relevant data.frame for this level
       sig_copy$value <- sig$value %>% filter(trial == !!trials[ee])
       sig_copy$beta_series <- FALSE # each copy is a single-trial event
+      sig_copy$beta_series_trial <- trials[ee] # validate one modeled occurrence after alignment
       return(sig_copy)
     })
   }

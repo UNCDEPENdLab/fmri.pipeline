@@ -10,7 +10,10 @@ test_that("YAML contrasts are nested and roundtrip into contrast_spec", {
       stim = list(onset = "onset", duration = "duration")
     ),
     signals = list(
-      stim = list(event = "stim", normalization = "none", value_fixed = 1)
+      stim = list(
+        event = "stim", normalization = "none", value_fixed = 1,
+        keep_duplicate_occurrences = TRUE
+      )
     ),
     l1_models = list(
       basic = list(
@@ -26,6 +29,7 @@ test_that("YAML contrasts are nested and roundtrip into contrast_spec", {
   gpa <- build_l1_models(gpa, from_spec_file = spec_file)
   mm <- gpa$l1_models$models$basic
   expect_true(isTRUE(mm$contrast_spec$diagonal))
+  expect_true(isTRUE(gpa$l1_models$signals$stim$keep_duplicate_occurrences))
 
   out_file <- tempfile(fileext = ".yaml")
   l1_cfg <- fmri.pipeline:::get_l1_config(gpa)
@@ -35,6 +39,7 @@ test_that("YAML contrasts are nested and roundtrip into contrast_spec", {
   expect_true("contrasts" %in% names(out_list$l1_models$basic))
   expect_true(isTRUE(out_list$l1_models$basic$contrasts$diagonal))
   expect_false("diagonal" %in% names(out_list$l1_models$basic))
+  expect_true(isTRUE(out_list$signals$stim$keep_duplicate_occurrences))
 
   gpa2 <- create_mock_gpa(n_subjects = 1, n_runs = 1, n_trials = 5, output_directory = tempdir())
   gpa2 <- build_l1_models(gpa2, from_spec_file = out_file)

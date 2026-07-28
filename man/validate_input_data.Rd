@@ -2,11 +2,11 @@
 % Please edit documentation in R/setup_glm_pipeline.R
 \name{validate_input_data}
 \alias{validate_input_data}
-\title{helper function to verify contents of subject, run, block, trial, and subtrial data}
+\title{helper function to verify contents of subject, run, block, and trial data}
 \usage{
 validate_input_data(df, vm, lg, level = "trial")
 }
 \description{
-helper function to verify contents of subject, run, block, trial, and subtrial data
+helper function to verify contents of subject, run, block, and trial data
 }
 \keyword{internal}

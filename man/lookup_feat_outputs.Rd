@@ -41,10 +41,6 @@ the image does not exist. If \code{FALSE}, return only existing images.}
 FEAT execution timestamps and raw FEAT status fields. The default \code{FALSE}
 returns compact, level-specific user-facing tables.}
 
-\item{format}{return format. \code{"by_level"} returns a
-\code{feat_output_lookup} object with \code{$l1}, \code{$l2}, and
-\code{$l3} tables. \code{"long"} returns their combined data.frame form.}
-
 \item{source}{where to look for output metadata. \code{"setup"} uses only the
 \code{gpa$l*_model_setup$fsl} tables, \code{"cache"} searches scheduler
 \code{run_pipeline_cache*.RData} files, \code{"filesystem"} crawls FEAT
@@ -58,6 +54,10 @@ folders, and \code{"auto"} tries these in that order.}
 setup table before building the lookup.}
 
 \item{lg}{optional \code{lgr::Logger} object.}
+
+\item{format}{return format. \code{"by_level"} returns a
+\code{feat_output_lookup} object with \code{$l1}, \code{$l2}, and
+\code{$l3} tables. \code{"long"} returns their combined data.frame form.}
 
 \item{x}{a \code{feat_output_lookup} object.}
 

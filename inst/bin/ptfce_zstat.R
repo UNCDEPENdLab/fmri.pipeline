@@ -9,6 +9,7 @@ print_help <- function() {
     "Options:",
     "  --zstat <z_img>: A NIfTI file containing a z-statistic map.",
     "  --mask <mask_img>: A required NIfTI file containing the brain mask for the --zstat input",
+    "  --out_dir <directory>: Directory for pTFCE outputs. Defaults to the z-statistic directory.",
     "  --help: print the help",
     "  --residuals <residuals_img>: Estimate smoothness from an image containing GLM residuals.",
     "  --dof <integer>: The degrees of freedom for the corresponding GLM analysis.",
@@ -52,6 +53,7 @@ mask_img <- NA_character_
 residuals_img <- NA_character_
 dof <- NA_integer_
 fsl_smoothest <- NA_character_
+out_dir <- NA_character_
 two_sided <- TRUE
 fwe_p <- .05
 write_thresh_imgs <- FALSE # whether to write hard-thresholded images at each FWE p-value
@@ -73,6 +75,9 @@ while (argpos <= length(args)) {
   } else if (args[argpos] == "--fsl_smoothest") {
     fsl_smoothest <- args[argpos + 1]
     checkmate::assert_file_exists(fsl_smoothest)
+    argpos <- argpos + 2
+  } else if (args[argpos] == "--out_dir") {
+    out_dir <- args[argpos + 1]
     argpos <- argpos + 2
   } else if (args[argpos] == "--help") {
     print_help()
@@ -133,8 +138,16 @@ checkmate::assert_file_exists(z_img)
 checkmate::assert_file_exists(mask_img)
 
 z_dir <- normalizePath(dirname(z_img))
+if (is.na(out_dir)) {
+  out_dir <- z_dir
+} else {
+  checkmate::assert_string(out_dir, min.chars = 1L)
+  if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+  out_dir <- normalizePath(out_dir, mustWork = TRUE)
+}
 ext <- sub(".*(\\.nii(\\.gz)?)$", "\\1", z_img, perl = TRUE)
 base <- sub(ext, "", basename(z_img), fixed = TRUE)
+gzip_output <- identical(tolower(ext), ".nii.gz")
 
 if (!is.na(residuals_img)) {
   if (is.na(dof)) {
@@ -215,7 +228,11 @@ for (pv in seq_along(fwe_p)) {
   if (isTRUE(write_thresh_imgs)) {
     zi <- ptfce_obj
     zi[abs(zi) < z_thresh] <- 0 # zero out below-threshold values
-    writeNIfTI(zi, file.path(z_dir, paste0(base, "_ptfce_fwep_", round(fwe_p[pv], 3))))
+    writeNIfTI(
+      zi,
+      file.path(out_dir, paste0(base, "_ptfce_fwep_", round(fwe_p[pv], 3))),
+      gzipped = gzip_output
+    )
   }
   p_list[[pv]] <- data.frame(
     z_ptfce = round(z_thresh, 4), p_value = fwe_p[pv], two_sided = two_sided,
@@ -226,8 +243,16 @@ for (pv in seq_along(fwe_p)) {
 p_df <- dplyr::bind_rows(p_list)
 
 # write overall pTFCE image here
-writeNIfTI(ptfce_obj, file.path(z_dir, paste0(base, "_ptfce")))
-write.csv(p_df, file.path(z_dir, paste0(base, "_ptfce_zthresh.csv")), row.names=FALSE)
+writeNIfTI(
+  ptfce_obj,
+  file.path(out_dir, paste0(base, "_ptfce")),
+  gzipped = gzip_output
+)
+write.csv(
+  p_df,
+  file.path(out_dir, paste0(base, "_ptfce_zthresh.csv")),
+  row.names = FALSE
+)
 
 cat("pTFCE completed: ", as.character(Sys.time()), "\n")
 

@@ -30,6 +30,158 @@ options(digits=3)
 
 This vignette provides an overview of familywise error correction for voxelwise GLM analyses in fmri.pipeline.
 
+# Preferred workflow: declarative pTFCE planning and execution
+
+For completed level-3 FSL/FEAT analyses, the preferred workflow is to describe
+the intended correction once, compile that description into an inspectable plan,
+and execute the plan locally or through the configured scheduler. The plan
+resolves model and contrast names through the pipeline output inventory, rather
+than requiring you to construct GFEAT paths or call a correction method for each
+map yourself.
+
+At present, pTFCE is the FWE method with a plan-and-execution adapter. A pTFCE
+plan needs, for every selected level-3 statistic map, the `zstat` image, the
+correction mask, and the FEAT `stats/smoothness` file. By default, the
+analysis-specific FEAT mask is used for correction. The R interpreter used on
+the execution host must also be able to load the `pTFCE` package and its image
+I/O dependencies.
+
+## 1. Describe the correction
+
+Create an `fwe_spec` from semantic selectors. For example, the following
+specification applies pTFCE to every level-3 z-statistic map from
+`l3_group`. Narrow the scope by adding selectors such as `l3_cope_name`,
+`l2_model`, or `l1_model`; selector values may be vectors.
+
+```{r preferred-fwe-spec}
+all_l3_spec <- fwe_spec(
+  name = "l3_group_ptfce",
+  targets = list(l3_model = "l3_group"),
+  method = "ptfce",
+  fwe_alpha = c(0.05, 0.01),
+  two_sided = TRUE,
+  write_threshold_images = TRUE,
+  correction_mask = "model",
+  compute = list(scheduler = "slurm")
+)
+
+all_l3_spec
+```
+
+`fwe_alpha` controls the FWE thresholds reported and, when
+`write_threshold_images = TRUE`, the thresholded pTFCE images written for each
+selected map. With `two_sided = TRUE`, pTFCE corrects positive and negative
+tails separately and uses half of each requested FWE alpha for the per-tail
+threshold. Set `two_sided = FALSE` when a one-sided positive-tail analysis is
+the intended inferential test.
+
+Use `correction_mask = "model"` for the FEAT mask associated with each target,
+or supply one explicit NIfTI mask when the same small-volume mask should be
+used for every selected map. Specifications are ordinary serializable objects,
+so they can be kept under version control as YAML.
+
+```{r preferred-fwe-spec-yaml}
+write_fwe_spec(all_l3_spec, "config/fwe/l3_group_ptfce.yaml")
+
+# In a later R session:
+all_l3_spec <- read_fwe_spec("config/fwe/l3_group_ptfce.yaml")
+```
+
+## 2. Compile and inspect the plan
+
+Compile the specification against a `glm_pipeline_arguments` object after the
+selected level-3 FEAT analyses have completed. Planning is side-effect free: it
+does not create output directories, submit jobs, or run pTFCE.
+
+```{r preferred-fwe-plan}
+fwe_plan <- plan_fwe_correction(gpa, all_l3_spec)
+fwe_plan
+
+# One ready task per selected level-3 z-statistic map.
+fwe_plan$tasks[, c(
+  "task_id", "l3_cope_name", "zstat_file",
+  "correction_mask_file", "smoothness_file", "status"
+)]
+
+# Expected pTFCE image, threshold table, and thresholded maps.
+fwe_plan$artifacts[, c("task_id", "artifact_role", "fwe_alpha", "artifact_file")]
+```
+
+If you are planning before all inputs exist, use a non-strict preview. Blocked
+tasks identify the missing input instead of running with an incomplete setup.
+
+```{r preferred-fwe-plan-preview}
+fwe_plan <- plan_fwe_correction(
+  gpa, all_l3_spec, require_inputs = FALSE
+)
+fwe_plan$tasks[, c("task_id", "l3_cope_name", "status", "missing_inputs")]
+```
+
+Once the plan is ready, it may also be saved and executed from another R
+session or submission script.
+
+```{r preferred-fwe-plan-rds}
+write_fwe_plan(fwe_plan, "derivatives/fwe/l3_group_ptfce/plan.rds")
+```
+
+## 3. Preview, execute, and collect results
+
+First use a dry run to inspect the generated command for each task without
+creating files or submitting work.
+
+```{r preferred-fwe-dry-run}
+dry_run <- run_fwe_plan(fwe_plan, dry_run = TRUE)
+dry_run$execution[, c("task_id", "execution_status", "command")]
+```
+
+For a small analysis, run pTFCE synchronously on the current host. Otherwise,
+omit `scheduler` to use the scheduler compiled into the plan, or set it
+explicitly to `"slurm"` or `"torque"` and provide task-appropriate resources.
+
+```{r preferred-fwe-run}
+# Local execution
+fwe_run <- run_fwe_plan(fwe_plan, scheduler = "local")
+
+# Example scheduler submission (use this instead of the local call above).
+# fwe_run <- run_fwe_plan(
+#   fwe_plan,
+#   scheduler = "slurm",
+#   commands_per_cpu = 1L,
+#   cpus_per_job = 1L,
+#   memgb_per_command = 8,
+#   time_per_command = "00:30"
+# )
+```
+
+Local execution returns after pTFCE has finished. Scheduler execution returns
+after submission, so refresh and collect after those jobs have completed. Real
+runs automatically persist a result snapshot and `manifest/artifacts.csv` in
+the correction output directory; collecting again updates those canonical
+files with the current artifact state.
+
+```{r preferred-fwe-results}
+fwe_plan <- refresh_fwe_plan(fwe_run$plan)
+fwe_result <- collect_fwe_results(
+  fwe_plan,
+  require_complete = TRUE
+)
+
+# Select thresholded pTFCE maps by their semantic contrast and FWE alpha.
+fwe_masks <- fwe_result_artifacts(
+  fwe_result,
+  artifact_role = "thresholded_statistic",
+  l3_cope_name = "age",
+  fwe_alpha = 0.05
+)
+fwe_masks[, c("target_id", "artifact_file", "can_use_as_mask")]
+```
+
+The artifact manifest retains the target, method, threshold, and source-map
+metadata alongside each output path. It is therefore the stable handoff point
+for downstream analysis: select the desired `artifact_file` rather than
+reconstructing a path from a GFEAT directory. The legacy sections below remain
+available for manually configuring and running the earlier correction tools.
+
 # AFNI 3dClustSim
 
 As outlined in Cox et al. (2017, Brain Connectivity), the conventional Gaussian random field theory approach to cluster correction in fMRI 

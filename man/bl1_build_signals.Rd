@@ -8,7 +8,6 @@ bl1_build_signals(
   l1_model_set,
   trial_data,
   block_data = NULL,
-  subtrial_data = NULL,
   ppi_data = NULL,
   lg = NULL
 )
@@ -19,8 +18,6 @@ bl1_build_signals(
 \item{trial_data}{A data.frame containing trial-level signal information}
 
 \item{block_data}{An optional data.frame containing block-level signal information}
-
-\item{subtrial_data}{An optional data.frame containing subtrial-level signal information}
 
 \item{ppi_data}{An optional data.frame containing physiological signals for PPI analysis}
 

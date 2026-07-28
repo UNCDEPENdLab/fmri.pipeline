@@ -4,7 +4,6 @@ setOldClass(c("bg_run_data", "data.frame"))
 setOldClass(c("bg_session_data", "data.frame"))
 setOldClass(c("bg_block_data", "data.frame"))
 setOldClass(c("bg_trial_data", "data.frame"))
-setOldClass(c("bg_subtrial_data", "data.frame"))
 
 #' Main worker function for setting up an analysis pipeline
 #'
@@ -97,7 +96,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
                                output_locations = "default",
                                vm = c(
                                  id = "id", session = "session", run_number = "run_number", block_number = "block_number", trial = "trial",
-                                 run_trial = "run_trial", subtrial = "subtrial", mr_dir = "mr_dir", run_nifti = "run_nifti",
+                                 run_trial = "run_trial", mr_dir = "mr_dir", run_nifti = "run_nifti",
                                  exclude_subject = "exclude_subject"
                                ),
                                bad_ids = NULL, tr = NULL,
@@ -177,7 +176,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
   # validate and fill in variable mapping vector (if user only passes some fields)
   default_vm <- c(
     id = "id", session = "session",  run_number = "run_number", block_number = "block_number", trial = "trial", 
-    run_trial = "run_trial", subtrial = "subtrial",  mr_dir = "mr_dir", run_nifti = "run_nifti"
+    run_trial = "run_trial", mr_dir = "mr_dir", run_nifti = "run_nifti"
   )
 
   default_vm[names(vm)] <- vm # override defaults with user inputs
@@ -720,7 +719,7 @@ setup_compute_environment <- function(gpa, preselect_action = NULL) {
 
 
 
-#' helper function to verify contents of subject, run, block, trial, and subtrial data
+#' helper function to verify contents of subject, run, block, and trial data
 #' @importFrom dplyr is_grouped_df ungroup
 #' @keywords internal
 validate_input_data <- function(df, vm, lg, level = "trial") {
@@ -780,8 +779,6 @@ validate_input_data <- function(df, vm, lg, level = "trial") {
     class(df) <- c("bg_block_data", class(df))
   } else if (level == "trial" & !inherits(df, "bg_trial_data")) {
     class(df) <- c("bg_trial_data", class(df)) 
-  } else if (level == "subtrial" & !inherits(df, "bg_subtrial_data")) {
-    class(df) <- c("bg_subtrial_data", class(df))
   } else if (level == "ppi" & !inherits(df, "bg_ppi_data")) {
     class(df) <- c("bg_ppi_data", class(df))
   }

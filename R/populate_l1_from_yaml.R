@@ -84,7 +84,8 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
     # initialize defaults
     sobj <- list(
       normalization = "none", trial_subset = FALSE, add_deriv = FALSE, ts_multiplier = FALSE,
-      demean_convolved = TRUE, beta_series = FALSE, value_type = "unit", value_fixed = 1
+      demean_convolved = TRUE, beta_series = FALSE, value_type = "unit", value_fixed = 1,
+      keep_duplicate_occurrences = FALSE
     )
     checkmate::assert_string(ss$name)
     checkmate::assert_string(ss$event)
@@ -142,6 +143,11 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
       sobj$add_deriv <- ss$add_deriv
     }
 
+    if (!is.null(ss$keep_duplicate_occurrences)) {
+      checkmate::assert_logical(ss$keep_duplicate_occurrences, len = 1L)
+      sobj$keep_duplicate_occurrences <- ss$keep_duplicate_occurrences
+    }
+
     # TODO: this is a bit redundant with parts of bl1_specify_wi_factors... would be nice to unify
     if (!is.null(ss$wi_factors)) {
       checkmate::assert_subset(ss$wi_factors, l1_model_set$wi_factors)
@@ -170,12 +176,17 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
         sobj$wi_factors <- union(sobj$wi_factors, model_vars)
       }
 
-      sobj$value <- get_value_df(sobj, trial_data, wi_factors = sobj$wi_factors)
+      sobj$value <- get_value_df(
+        sobj, trial_data, wi_factors = sobj$wi_factors,
+        event_data = l1_model_set$events[[sobj$event]]$data
+      )
 
       # fit dummy model to populate a set of dummy coefficients, then save those to the object
       sobj <- fit_wi_model(sobj)
     } else {
-      sobj$value <- get_value_df(sobj, trial_data)
+      sobj$value <- get_value_df(
+        sobj, trial_data, event_data = l1_model_set$events[[sobj$event]]$data
+      )
     }
 
     signal_list[[sobj$name]] <- sobj # this will overwrite existing specification
@@ -190,15 +201,16 @@ signals_from_spec <- function(l1_model_set, slist, trial_data, lg=NULL) {
 populate_event_data <- function(eobj, trial_data) {
   # basal columns for each event
   meta_cols <- c("id", "session", "run_number", "trial")
+  timing_rows <- trial_data %>% dplyr::mutate(occurrence_id = dplyr::row_number())
 
   if (is.numeric(eobj$duration)) {
-    edata <- trial_data %>%
-      dplyr::select(!!meta_cols, onset = !!eobj$onset) %>%
+    edata <- timing_rows %>%
+      dplyr::select(!!meta_cols, occurrence_id, onset = !!eobj$onset) %>%
       #setNames(c("onset")) %>%
       dplyr::mutate(duration = !!eobj$duration, event = !!eobj$name)
   } else {
-    edata <- trial_data %>%
-      dplyr::select(!!meta_cols, onset = !!eobj$onset, duration = !!eobj$duration) %>%
+    edata <- timing_rows %>%
+      dplyr::select(!!meta_cols, occurrence_id, onset = !!eobj$onset, duration = !!eobj$duration) %>%
       #setNames(c("onset", "duration")) %>%
       dplyr::mutate(event = !!eobj$name)
   }
@@ -215,6 +227,12 @@ populate_event_data <- function(eobj, trial_data) {
   } else {
     edata$isi <- NA_real_ # populate NA
   }
+
+  # A timing column can be sparse when trial rows are repeated to carry
+  # additional within-run records (for example, free button presses). A
+  # missing selected onset denotes no occurrence of this design event on that
+  # row; retain missing durations on selected rows as an input-validation error.
+  edata <- edata %>% dplyr::filter(!is.na(.data$onset))
 
   eobj$data <- edata #metadata_df %>% dplyr::bind_cols(edata)
   return(eobj)

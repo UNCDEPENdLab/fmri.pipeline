@@ -15,8 +15,8 @@ setup_glm_pipeline(
   group_output_directory = "default",
   output_locations = "default",
   vm = c(id = "id", session = "session", run_number = "run_number", block_number =
-    "block_number", trial = "trial", run_trial = "run_trial", subtrial = "subtrial",
-    mr_dir = "mr_dir", run_nifti = "run_nifti", exclude_subject = "exclude_subject"),
+    "block_number", trial = "trial", run_trial = "run_trial", mr_dir = "mr_dir",
+    run_nifti = "run_nifti", exclude_subject = "exclude_subject"),
   bad_ids = NULL,
   tr = NULL,
   fmri_file_regex = ".*\\\\.nii(\\\\.gz)?",

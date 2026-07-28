@@ -334,6 +334,98 @@ expand_signals_list <- function(signals) {
   return(signals_expanded)
 }
 
+#' Collapse exact duplicate neural-predictor occurrences
+#'
+#' Removes repeated occurrence records that would produce the same neural
+#' predictor. Set \code{keep_duplicate_occurrences = TRUE} on a signal to
+#' preserve repeated records.
+#'
+#' @param s_aligned data.frame of timing records after signal alignment
+#' @param s signal specification list
+#' @param signal_name name used in diagnostic logging
+#' @param lg logger object for error/info messages
+#' @return a data.frame with exact duplicate records removed
+#' @keywords internal
+#' @noRd
+collapse_duplicate_occurrences <- function(s_aligned, s, signal_name, lg = NULL) {
+  if (is.null(lg)) lg <- lgr::get_logger()
+
+  keep_duplicates <- if (is.null(s$keep_duplicate_occurrences)) {
+    FALSE
+  } else {
+    checkmate::assert_flag(s$keep_duplicate_occurrences)
+    s$keep_duplicate_occurrences
+  }
+  if (isTRUE(keep_duplicates) || nrow(s_aligned) < 2L) return(s_aligned)
+
+  # A signal's neural predictor is fully determined by its run, optional trial
+  # parent, timing, and pre-convolution amplitude.  Collapse exact duplicates
+  # here, after signal-specific duration has been applied and before any
+  # centering or convolution.  This protects wide trial data that have been
+  # repeated to carry additional within-trial timing records.
+  key_cols <- intersect(
+    c("id", "session", "run_number", "trial", "onset", "duration", "value"),
+    names(s_aligned)
+  )
+  duplicate_rows <- duplicated(s_aligned[, key_cols, drop = FALSE])
+  n_duplicates <- sum(duplicate_rows)
+  if (n_duplicates == 0L) return(s_aligned)
+
+  s_aligned <- s_aligned[!duplicate_rows, , drop = FALSE]
+  lg$info(
+    "Signal '%s': collapsed %d exact duplicate occurrence record(s) (%d input records -> %d modeled occurrences). Set keep_duplicate_occurrences: true to retain them.",
+    signal_name, n_duplicates, n_duplicates + nrow(s_aligned), nrow(s_aligned)
+  )
+  s_aligned
+}
+
+#' Validate beta-series occurrence cardinality
+#'
+#' Beta-series expansion creates one regressor for each trial and therefore
+#' requires exactly one distinct timing occurrence per trial after duplicate
+#' timing records have been collapsed.
+#'
+#' @param s_aligned data.frame of timing records after duplicate collapse
+#' @param s expanded signal specification list
+#' @param signal_name name used in error messages
+#' @return invisibly TRUE when the signal is not beta-series-expanded or valid
+#' @keywords internal
+#' @noRd
+validate_beta_series_occurrences <- function(s_aligned, s, signal_name) {
+  if (is.null(s$beta_series_trial)) return(invisible(TRUE))
+
+  if (nrow(s_aligned) == 0L) {
+    stop(
+      "Beta-series signal '", signal_name,
+      "' requires exactly one distinct timing occurrence per id/session/run/trial after duplicate collapse, but none remained."
+    )
+  }
+
+  required_cols <- c("run_number", "trial")
+  missing_cols <- setdiff(required_cols, names(s_aligned))
+  if (length(missing_cols) > 0L || anyNA(s_aligned$trial)) {
+    stop(
+      "Beta-series signal '", signal_name,
+      "' requires a non-missing trial identifier for every modeled occurrence."
+    )
+  }
+
+  group_cols <- intersect(c("id", "session", "run_number", "trial"), names(s_aligned))
+  group_values <- lapply(s_aligned[, group_cols, drop = FALSE], as.character)
+  group_key <- do.call(paste, c(group_values, sep = "\r"))
+  occurrence_counts <- table(group_key)
+  if (any(occurrence_counts != 1L)) {
+    bad_keys <- names(occurrence_counts)[occurrence_counts != 1L]
+    stop(
+      "Beta-series signal '", signal_name,
+      "' requires exactly one distinct timing occurrence per id/session/run/trial after duplicate collapse. ",
+      "Multiple occurrences were found for: ", paste(bad_keys, collapse = "; "), "."
+    )
+  }
+
+  invisible(TRUE)
+}
+
 #' Align a single signal with events
 #'
 #' Merges a trial-indexed signal with the time-indexed events data.frame,
@@ -365,7 +457,9 @@ align_signal_with_events <- function(s, events, lg = NULL) {
     s$value <- 1
   }
   
-  # Determine join columns
+  # Determine join columns. Pipeline-generated timing records carry an
+  # occurrence_id that identifies their source timing row; this prevents
+  # many-to-many joins when a trial has multiple timing occurrences.
   join_cols <- c("run_number", "trial")
   df_events <- dplyr::filter(events, .data$event == s$event)
   
@@ -379,6 +473,11 @@ align_signal_with_events <- function(s, events, lg = NULL) {
   
   event_runs <- factor(sort(unique(df_events$run_number)))
   df_signal <- s$value
+
+  use_occurrence_id <- is.data.frame(df_signal) &&
+    "occurrence_id" %in% names(df_signal) &&
+    "occurrence_id" %in% names(df_events)
+  if (use_occurrence_id) join_cols <- c("run_number", "occurrence_id")
   
   # Add additional join columns if present in events
   if ("id" %in% names(df_events)) join_cols <- c(join_cols, "id")
@@ -392,7 +491,7 @@ align_signal_with_events <- function(s, events, lg = NULL) {
     s_aligned$value <- df_signal
   } else if (is.data.frame(df_signal)) {
     # Validate that signal data.frame has required join columns
-    missing_join_cols <- setdiff(c("run_number", "trial"), names(df_signal))
+    missing_join_cols <- setdiff(join_cols, names(df_signal))
     if (length(missing_join_cols) > 0L) {
       stop("Signal '", signal_name, "' value data.frame is missing required columns: ",
            paste(missing_join_cols, collapse = ", "))
@@ -402,17 +501,39 @@ align_signal_with_events <- function(s, events, lg = NULL) {
     if (!"value" %in% names(df_signal)) {
       stop("Signal '", signal_name, "' value data.frame must have a 'value' column")
     }
+
+    if (use_occurrence_id && anyDuplicated(df_signal[, join_cols, drop = FALSE])) {
+      stop(
+        "Signal '", signal_name,
+        "' has duplicate occurrence-level value records. Each id/session/run/occurrence_id combination must be unique."
+      )
+    }
+    if (use_occurrence_id && anyDuplicated(df_events[, join_cols, drop = FALSE])) {
+      stop(
+        "Signal '", signal_name,
+        "' has duplicate occurrence identifiers in its timing records. Each id/session/run/occurrence_id combination must be unique."
+      )
+    }
     
-    # Parametric regressor: join on trial
-    s_aligned <- df_signal %>%
+    # Parametric/factor signals from pipeline timing rows join by occurrence.
+    # The trial-key fallback preserves the public legacy build_design_matrix API.
+    signal_for_join <- df_signal
+    if (use_occurrence_id && "trial" %in% names(signal_for_join)) {
+      # The event timing table supplies the parent trial metadata. Keeping the
+      # duplicate trial column from the value table would create trial.x/y
+      # suffixes even though alignment is intentionally occurrence-based.
+      signal_for_join <- signal_for_join %>% dplyr::select(-.data$trial)
+    }
+    s_aligned <- signal_for_join %>%
       dplyr::left_join(df_events, by = join_cols) %>%
       dplyr::arrange(.data$run_number, .data$trial)
     
     # Check for join failures (NAs in onset after join)
     na_onsets <- sum(is.na(s_aligned$onset))
     if (na_onsets > 0L) {
-      warn_msg <- sprintf("Signal '%s': %d trial(s) in signal did not match events (NA onsets after join). These will be excluded.",
-                          signal_name, na_onsets)
+      unit_label <- if (use_occurrence_id) "occurrence(s)" else "trial(s)"
+      warn_msg <- sprintf("Signal '%s': %d %s in signal did not match events (NA onsets after join). These will be excluded.",
+                          signal_name, na_onsets, unit_label)
       lg$warn(warn_msg)
       warning(warn_msg, call. = FALSE)
       s_aligned <- s_aligned[!is.na(s_aligned$onset), , drop = FALSE]
@@ -427,6 +548,19 @@ align_signal_with_events <- function(s, events, lg = NULL) {
   
   # Handle duration specification
   s_aligned <- apply_signal_duration(s_aligned, s$duration, signal_name)
+
+  na_values <- sum(is.na(s_aligned$value))
+  if (na_values > 0L) {
+    lg$info(
+      "Signal '%s': %d occurrence(s) have missing values and will be omitted before convolution.",
+      signal_name, na_values
+    )
+  }
+
+  # By default, copied trial rows represent one timing occurrence, not repeated
+  # neural events. Exact duplicate records are removed before convolution.
+  s_aligned <- collapse_duplicate_occurrences(s_aligned, s, signal_name, lg)
+  validate_beta_series_occurrences(s_aligned, s, signal_name)
   
   # Split by run and format for dmat
   retsplit <- split_signal_by_run(s_aligned, event_runs, s$event, s$physio_only)

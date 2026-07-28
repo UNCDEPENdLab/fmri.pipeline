@@ -273,36 +273,6 @@ build_3dclustsim_permutation <- function(to_fwe) {
     return(clustsim_list)
 }
 
-#' R6 class for an FWE correction method that can apply to one or more models
-#'
-#' @importFrom R6 R6Class
-#' @importFrom data.table data.table
-#' @importFrom checkmate assert_data_frame assert_logical
-#' @keywords internal
-fwe_spec <- R6::R6Class("fwe_spec",
-  private = list(
-    # data: keyed data.table object
-    data = NULL,
-    fwe_obj_list = list()
-    #fwe_type = NULL
-  ), public = list(
-    #' @description create a new FWE correction instance
-    #' @param ... not used yet
-    #' @param fwe_data not used yet
-    initialize = function(..., fwe_data = NULL) {
-      objs <- list(...)
-      #checkmate::assert_subset(fwe_type, c("ptfce, 3dclustsim", "palm", "randomise"), empty.ok = FALSE)
-
-    },
-    #' @description submit FWE estimation to the cluster
-    submit = function() {
-      # run submit method for every fwe object
-      lapply(fwe_obj_list$submit())
-    }
-  )
-)
-
-
 #' Function to walk user through setting up FWE corrections for model outputs
 #' @param gpa a \code{glm_pipeline_arguments} object containing model outputs in l3_model_setup
 #' @param lg a logger object for logging messages

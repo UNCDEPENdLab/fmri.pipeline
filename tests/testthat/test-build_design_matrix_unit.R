@@ -679,6 +679,367 @@ test_that("align_signal_with_events adds default value of 1 when missing", {
   expect_equal(as.numeric(result$run_number1$value), 1)
 })
 
+test_that("align_signal_with_events collapses exact duplicate occurrences by default", {
+  events <- data.frame(
+    event = rep("cue", 3),
+    run_number = 1,
+    trial = 1,
+    onset = 0,
+    duration = 1
+  )
+  s <- list(name = "cue_evt", event = "cue", value = 1)
+
+  result <- fmri.pipeline:::align_signal_with_events(s, events)
+
+  expect_equal(nrow(result$run_number1), 1)
+  expect_equal(as.numeric(result$run_number1$value), 1)
+})
+
+test_that("keep_duplicate_occurrences retains exact duplicate occurrences", {
+  events <- data.frame(
+    event = rep("button_press", 3),
+    run_number = 1,
+    trial = 1,
+    onset = 0,
+    duration = 0
+  )
+  s <- list(
+    name = "button_press_evt", event = "button_press", value = 1,
+    keep_duplicate_occurrences = TRUE
+  )
+
+  result <- fmri.pipeline:::align_signal_with_events(s, events)
+
+  expect_equal(nrow(result$run_number1), 3)
+})
+
+test_that("trial-free occurrence records can use an NA trial identifier", {
+  events <- data.frame(
+    event = c("button_press", "button_press"),
+    run_number = 1,
+    trial = NA_integer_,
+    onset = c(1.2, 3.7),
+    duration = 0
+  )
+  s <- list(name = "button_press_evt", event = "button_press", value = 1)
+
+  result <- fmri.pipeline:::align_signal_with_events(s, events)
+
+  expect_equal(nrow(result$run_number1), 2)
+  expect_equal(as.numeric(result$run_number1$onset), c(1.2, 3.7))
+})
+
+test_that("copied trial timing does not inflate cue or feedback around free presses", {
+  trial_data <- data.frame(
+    id = "s1", session = 1, run_number = 1,
+    trial = c(1, 1, NA_integer_),
+    cue_onset = c(0, 0, NA),
+    cue_duration = c(1, 1, NA),
+    feedback_onset = c(5, 5, NA),
+    feedback_duration = c(1, 1, NA),
+    button_press_onset = c(NA, 1.2, 3.7)
+  )
+  cue_event <- fmri.pipeline:::populate_event_data(
+    list(name = "cue", onset = "cue_onset", duration = "cue_duration"), trial_data
+  )
+  feedback_event <- fmri.pipeline:::populate_event_data(
+    list(name = "feedback", onset = "feedback_onset", duration = "feedback_duration"), trial_data
+  )
+  press_event <- fmri.pipeline:::populate_event_data(
+    list(name = "button_press", onset = "button_press_onset", duration = 0), trial_data
+  )
+  events <- do.call(rbind, list(cue_event$data, feedback_event$data, press_event$data))
+
+  cue <- fmri.pipeline:::align_signal_with_events(
+    list(name = "cue", event = "cue", value = 1), events
+  )
+  feedback <- fmri.pipeline:::align_signal_with_events(
+    list(name = "feedback", event = "feedback", value = 1), events
+  )
+  presses <- fmri.pipeline:::align_signal_with_events(
+    list(name = "press", event = "button_press", value = 1), events
+  )
+
+  expect_equal(nrow(cue$run_number1), 1)
+  expect_equal(nrow(feedback$run_number1), 1)
+  expect_equal(as.numeric(presses$run_number1$onset), c(1.2, 3.7))
+})
+
+test_that("a trial row can also contain its first within-trial occurrence", {
+  trial_data <- data.frame(
+    id = "s1", session = 1, run_number = 1, trial = 1,
+    cue_onset = c(0, NA),
+    cue_duration = c(1, NA),
+    feedback_onset = c(5, NA),
+    feedback_duration = c(1, NA),
+    button_press_onset = c(1.2, 3.7)
+  )
+  cue_event <- fmri.pipeline:::populate_event_data(
+    list(name = "cue", onset = "cue_onset", duration = "cue_duration"), trial_data
+  )
+  feedback_event <- fmri.pipeline:::populate_event_data(
+    list(name = "feedback", onset = "feedback_onset", duration = "feedback_duration"), trial_data
+  )
+  press_event <- fmri.pipeline:::populate_event_data(
+    list(name = "button_press", onset = "button_press_onset", duration = 0), trial_data
+  )
+  events <- do.call(rbind, list(cue_event$data, feedback_event$data, press_event$data))
+  unit_values <- fmri.pipeline:::get_value_df(
+    list(trial_subset = FALSE, value_type = "unit", value_fixed = 1), trial_data
+  )
+
+  cue <- fmri.pipeline:::align_signal_with_events(
+    list(name = "cue", event = "cue", value = unit_values), events
+  )
+  feedback <- fmri.pipeline:::align_signal_with_events(
+    list(name = "feedback", event = "feedback", value = unit_values), events
+  )
+  presses <- fmri.pipeline:::align_signal_with_events(
+    list(name = "press", event = "button_press", value = unit_values), events
+  )
+
+  expect_equal(nrow(cue$run_number1), 1)
+  expect_equal(nrow(feedback$run_number1), 1)
+  expect_equal(as.numeric(presses$run_number1$onset), c(1.2, 3.7))
+})
+
+test_that("duplicate collapse retains records with distinct modeled amplitudes", {
+  events <- data.frame(
+    event = rep("cue", 2),
+    run_number = 1,
+    trial = 1,
+    onset = 0,
+    duration = 1
+  )
+  s <- list(
+    name = "cue_param", event = "cue",
+    value = data.frame(run_number = c(1, 1), trial = c(1, 1), value = c(2, 5))
+  )
+
+  result <- fmri.pipeline:::align_signal_with_events(s, events)
+
+  expect_equal(nrow(result$run_number1), 2)
+  expect_equal(sort(as.numeric(result$run_number1$value)), c(2, 5))
+})
+
+test_that("occurrence keys align distinct press-level modulators within a trial", {
+  timing_rows <- data.frame(
+    id = "s1", session = 1, run_number = 1, trial = c(1, 1),
+    button_press_onset = c(1.2, 3.7),
+    press_force = c(2, 5)
+  )
+  press_event <- fmri.pipeline:::populate_event_data(
+    list(name = "button_press", onset = "button_press_onset", duration = 0), timing_rows
+  )
+  signal <- list(
+    name = "press_force", event = "button_press", trial_subset = FALSE,
+    value_type = "parametric", parametric_modulator = "press_force"
+  )
+  values <- fmri.pipeline:::get_value_df(signal, timing_rows, event_data = press_event$data)
+
+  expect_equal(values$occurrence_id, c(1, 2))
+  result <- fmri.pipeline:::align_signal_with_events(
+    c(signal, list(value = values)), press_event$data
+  )
+
+  expect_equal(nrow(result$run_number1), 2)
+  expect_equal(as.numeric(result$run_number1$onset), c(1.2, 3.7))
+  expect_equal(as.numeric(result$run_number1$value), c(2, 5))
+})
+
+test_that("missing occurrence-level modulator values omit only that occurrence", {
+  timing_rows <- data.frame(
+    id = "s1", session = 1, run_number = 1, trial = c(1, 1),
+    button_press_onset = c(1.2, 3.7),
+    press_force = c(2, NA)
+  )
+  press_event <- fmri.pipeline:::populate_event_data(
+    list(name = "button_press", onset = "button_press_onset", duration = 0), timing_rows
+  )
+  signal <- list(
+    name = "press_force", event = "button_press", trial_subset = FALSE,
+    value_type = "parametric", parametric_modulator = "press_force"
+  )
+  values <- fmri.pipeline:::get_value_df(signal, timing_rows, event_data = press_event$data)
+  result <- fmri.pipeline:::align_signal_with_events(
+    c(signal, list(value = values)), press_event$data
+  )
+  aligned <- result$run_number1
+  cleaned <- fmri.pipeline:::cleanup_regressor(
+    aligned$onset, aligned$duration, aligned$value
+  )
+
+  expect_equal(nrow(aligned), 2)
+  expect_equal(cleaned$times, 1.2)
+  expect_equal(cleaned$values, 2)
+})
+
+test_that("occurrence keys support trial-free press-level modulators", {
+  timing_rows <- data.frame(
+    id = "s1", session = 1, run_number = 1, trial = c(NA_integer_, NA_integer_),
+    button_press_onset = c(1.2, 3.7),
+    press_force = c(2, 5)
+  )
+  press_event <- fmri.pipeline:::populate_event_data(
+    list(name = "button_press", onset = "button_press_onset", duration = 0), timing_rows
+  )
+  signal <- list(
+    name = "press_force", event = "button_press", trial_subset = FALSE,
+    value_type = "parametric", parametric_modulator = "press_force"
+  )
+  values <- fmri.pipeline:::get_value_df(signal, timing_rows, event_data = press_event$data)
+  result <- fmri.pipeline:::align_signal_with_events(
+    c(signal, list(value = values)), press_event$data
+  )
+
+  expect_equal(as.numeric(result$run_number1$value), c(2, 5))
+})
+
+test_that("occurrence-level factor expansion keeps each press on its own factor level", {
+  timing_rows <- data.frame(
+    id = "s1", session = 1, run_number = 1, trial = c(1, 1),
+    button_press_onset = c(1.2, 3.7),
+    press_hand = c("left", "right")
+  )
+  press_event <- fmri.pipeline:::populate_event_data(
+    list(name = "button_press", onset = "button_press_onset", duration = 0), timing_rows
+  )
+  signal <- list(
+    name = "press_hand", event = "button_press", trial_subset = FALSE,
+    value_type = "unit", value_fixed = 1,
+    wi_factors = "press_hand", wi_formula = "~ press_hand - 1"
+  )
+  signal$value <- fmri.pipeline:::get_value_df(
+    signal, timing_rows, wi_factors = "press_hand", event_data = press_event$data
+  )
+  expanded <- fmri.pipeline:::expand_signal(fmri.pipeline:::fit_wi_model(signal))
+  aligned <- lapply(expanded, function(this_signal) {
+    fmri.pipeline:::align_signal_with_events(this_signal, press_event$data)$run_number1
+  })
+
+  expect_equal(sort(vapply(aligned, function(x) x$onset, numeric(1))), c(1.2, 3.7))
+  expect_true(all(vapply(aligned, nrow, integer(1)) == 1L))
+})
+
+test_that("exact copied timing/value rows still collapse after occurrence alignment", {
+  timing_rows <- data.frame(
+    id = "s1", session = 1, run_number = 1, trial = c(1, 1),
+    button_press_onset = c(1.2, 1.2),
+    press_force = c(2, 2)
+  )
+  press_event <- fmri.pipeline:::populate_event_data(
+    list(name = "button_press", onset = "button_press_onset", duration = 0), timing_rows
+  )
+  signal <- list(
+    name = "press_force", event = "button_press", trial_subset = FALSE,
+    value_type = "parametric", parametric_modulator = "press_force"
+  )
+  values <- fmri.pipeline:::get_value_df(signal, timing_rows, event_data = press_event$data)
+  result <- fmri.pipeline:::align_signal_with_events(
+    c(signal, list(value = values)), press_event$data
+  )
+
+  expect_equal(nrow(result$run_number1), 1)
+  expect_equal(as.numeric(result$run_number1$value), 2)
+})
+
+test_that("occurrence-level values must be unique", {
+  events <- data.frame(
+    event = "button_press", id = "s1", session = 1, run_number = 1,
+    trial = 1, occurrence_id = 1, onset = 1.2, duration = 0
+  )
+  signal <- list(
+    name = "press_force", event = "button_press",
+    value = data.frame(
+      id = c("s1", "s1"), session = 1, run_number = 1,
+      occurrence_id = c(1, 1), value = c(2, 5)
+    )
+  )
+
+  expect_error(
+    fmri.pipeline:::align_signal_with_events(signal, events),
+    "duplicate occurrence-level value records"
+  )
+})
+
+test_that("occurrence-key construction does not alter the user timing table", {
+  timing_rows <- data.frame(
+    id = "s1", session = 1, run_number = 1, trial = c(1, 1),
+    button_press_onset = c(1.2, 3.7),
+    press_force = c(2, 5)
+  )
+  original_timing_rows <- timing_rows
+  press_event <- fmri.pipeline:::populate_event_data(
+    list(name = "button_press", onset = "button_press_onset", duration = 0), timing_rows
+  )
+  signal <- list(
+    trial_subset = FALSE, value_type = "parametric",
+    parametric_modulator = "press_force"
+  )
+  fmri.pipeline:::get_value_df(signal, timing_rows, event_data = press_event$data)
+
+  expect_identical(timing_rows, original_timing_rows)
+  expect_false("occurrence_id" %in% names(timing_rows))
+})
+
+test_that("one-row-per-trial data retain their legacy predictor values", {
+  events <- data.frame(
+    event = "cue", run_number = 1, trial = 1:2,
+    onset = c(0, 5), duration = 1
+  )
+  legacy_signal <- list(
+    name = "cue_param", event = "cue",
+    value = data.frame(run_number = 1, trial = 1:2, value = c(2, 5))
+  )
+  occurrence_events <- cbind(events, occurrence_id = 1:2)
+  occurrence_signal <- list(
+    name = "cue_param", event = "cue",
+    value = data.frame(run_number = 1, trial = 1:2, occurrence_id = 1:2, value = c(2, 5))
+  )
+
+  legacy <- fmri.pipeline:::align_signal_with_events(legacy_signal, events)$run_number1
+  occurrence <- fmri.pipeline:::align_signal_with_events(occurrence_signal, occurrence_events)$run_number1
+
+  expect_equal(as.matrix(occurrence), as.matrix(legacy))
+})
+
+test_that("beta-series signals reject multiple distinct occurrences in one trial", {
+  events <- data.frame(
+    event = c("cue", "cue"),
+    run_number = 1,
+    trial = 1,
+    onset = c(0, 2),
+    duration = 1
+  )
+  s <- list(
+    name = "cue_t001", event = "cue", value = 1,
+    beta_series_trial = 1
+  )
+
+  expect_error(
+    fmri.pipeline:::align_signal_with_events(s, events),
+    "requires exactly one distinct timing occurrence"
+  )
+})
+
+test_that("beta-series signals allow copied duplicate timing records", {
+  events <- data.frame(
+    event = c("cue", "cue"),
+    run_number = 1,
+    trial = 1,
+    onset = 0,
+    duration = 1
+  )
+  s <- list(
+    name = "cue_t001", event = "cue", value = 1,
+    beta_series_trial = 1
+  )
+
+  result <- fmri.pipeline:::align_signal_with_events(s, events)
+
+  expect_equal(nrow(result$run_number1), 1)
+})
+
 # --- Robustness tests for Stage 2 helpers ---
 
 test_that("prepare_signals_for_expansion errors on empty signals list", {
@@ -1675,6 +2036,23 @@ test_that("expand_signal handles beta_series expansion", {
   signal_names <- sapply(result, function(x) x$name)
   expect_true("cue_t001" %in% signal_names)
   expect_true("cue_t005" %in% signal_names)
+  expect_equal(result[[1]]$beta_series_trial, 1)
+})
+
+test_that("expand_signal rejects beta-series inputs with missing trial identifiers", {
+  sig <- list(
+    name = "cue",
+    event = "cue",
+    value = data.frame(run_number = 1, trial = NA_integer_, value = 1),
+    normalization = "none",
+    beta_series = TRUE,
+    wi_factors = NULL
+  )
+
+  expect_error(
+    fmri.pipeline:::expand_signal(sig),
+    "require non-missing trial identifiers"
+  )
 })
 
 # ==============================================================================

@@ -196,6 +196,11 @@ get_l1_config <- function(gpa) {
       sobj$add_deriv <- ss$add_deriv
     }
 
+    if (!is.null(ss$keep_duplicate_occurrences)) {
+      checkmate::assert_flag(ss$keep_duplicate_occurrences)
+      sobj$keep_duplicate_occurrences <- ss$keep_duplicate_occurrences
+    }
+
     if (!is.null(ss$beta_series)) {
       checkmate::assert_flag(ss$beta_series)
       sobj$beta_series <- ss$beta_series

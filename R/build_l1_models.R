@@ -560,13 +560,12 @@ summarize_l1_models <- function(ml) {
 #' @param l1_model_set An \code{l1_model_set} object whose signals should be created or modified
 #' @param trial_data A data.frame containing trial-level signal information
 #' @param block_data An optional data.frame containing block-level signal information
-#' @param subtrial_data An optional data.frame containing subtrial-level signal information
 #' @param ppi_data An optional data.frame containing physiological signals for PPI analysis
 #' @param lg an lgr logger used for status and warning messages
 #'
 #' @return a modified version of \code{l1_model_set} with updated \code{$signals}
 #' @keywords internal
-bl1_build_signals <- function(l1_model_set, trial_data, block_data = NULL, subtrial_data = NULL, ppi_data = NULL, lg=NULL) {
+bl1_build_signals <- function(l1_model_set, trial_data, block_data = NULL, ppi_data = NULL, lg=NULL) {
   cat("\nNow, we will build up a set of signals that can be included as regressors in the level 1 model.\n")
 
   checkmate::assert_class(lg, "Logger")
@@ -700,7 +699,9 @@ bl1_build_signals <- function(l1_model_set, trial_data, block_data = NULL, subtr
       ### ---- value of regressor ----
       if (isTRUE(modify)) {
         # repopulate value data.frame in case subset has changed
-        ss$value <- get_value_df(ss, trial_data)
+        ss$value <- get_value_df(
+          ss, trial_data, event_data = l1_model_set$events[[ss$event]]$data
+        )
 
         cat(
           "Current signal value:",
@@ -755,7 +756,9 @@ bl1_build_signals <- function(l1_model_set, trial_data, block_data = NULL, subtr
         }
 
         # populate value data frame for this signal
-        ss$value <- get_value_df(ss, trial_data)
+        ss$value <- get_value_df(
+          ss, trial_data, event_data = l1_model_set$events[[ss$event]]$data
+        )
       }
 
       ### ---- within-subject factor modulation ----
@@ -1112,7 +1115,10 @@ bl1_specify_wi_factors <- function(ss, l1_model_set, trial_data, modify) {
   }
 
   # repopulate trial data for this signal, including the selected wi_factors
-  ss$value <- get_value_df(ss, trial_data, wi_factors = wi_vars)
+  ss$value <- get_value_df(
+    ss, trial_data, wi_factors = wi_vars,
+    event_data = l1_model_set$events[[ss$event]]$data
+  )
 
   # fit dummy model to populate a set of dummy coefficients, then save those to the object
   ss <- fit_wi_model(ss)
@@ -1121,10 +1127,11 @@ bl1_specify_wi_factors <- function(ss, l1_model_set, trial_data, modify) {
 }
 
 
-get_value_df <- function(signal, trial_data, wi_factors = NULL) {
+get_value_df <- function(signal, trial_data, wi_factors = NULL, event_data = NULL) {
   trial_set <- get_trial_set_from_signal(signal, trial_data)
   value_df <- trial_data %>%
-    dplyr::select(id, session, run_number, trial, !!wi_factors)
+    dplyr::mutate(occurrence_id = dplyr::row_number()) %>%
+    dplyr::select(id, session, run_number, trial, occurrence_id, !!wi_factors)
 
   if (!is.null(trial_set)) {
     stopifnot(length(trial_set) == nrow(trial_data))
@@ -1138,6 +1145,15 @@ get_value_df <- function(signal, trial_data, wi_factors = NULL) {
     value_df$value <- trial_data[[signal$parametric_modulator]][trial_set]
   } else {
     stop("Failing to populate value column")
+  }
+
+  if (!is.null(event_data)) {
+    if (!"occurrence_id" %in% names(event_data)) {
+      stop("Event data are missing the internal occurrence_id needed for occurrence-level signal alignment.")
+    }
+    value_df <- value_df %>% dplyr::filter(.data$occurrence_id %in% !!event_data$occurrence_id)
+  } else {
+    value_df <- value_df %>% dplyr::select(-.data$occurrence_id)
   }
 
   return(value_df)
