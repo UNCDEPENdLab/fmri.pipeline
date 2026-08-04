@@ -19,6 +19,9 @@ test_that("FLAME fallback TSV records are promoted to lgr estimation logs", {
 
   log_txt <- file.path(tmp, "logs", "l3_estimation.txt")
   script <- source_tree_file("inst", "bin", "log_flame_runner_fallbacks.R")
+  r_tests <- file.path(tmp, "child_r_tests.R")
+  writeLines("stop('R_TESTS leaked into the FLAME logging script')", r_tests)
+  withr::local_envvar(c(R_TESTS = r_tests))
 
   status <- system2(
     "Rscript",
@@ -31,10 +34,11 @@ test_that("FLAME fallback TSV records are promoted to lgr estimation logs", {
       "--threshold", "warn"
     ),
     stdout = TRUE,
-    stderr = TRUE
+    stderr = TRUE,
+    env = "R_TESTS="
   )
 
-  expect_false(inherits(status, "status"))
+  expect_false(inherits(status, "status"), info = paste(status, collapse = "\n"))
   expect_true(file.exists(log_txt))
   log_lines <- readLines(log_txt, warn = FALSE)
   expect_true(any(grepl("FSL FLAME12 failed", log_lines, fixed = TRUE)))

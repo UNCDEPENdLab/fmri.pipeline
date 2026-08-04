@@ -125,6 +125,10 @@ test_that("local pTFCE execution refreshes artifacts and task completion", {
   )
   plan <- plan_fwe_correction(gpa, spec, source = "setup")
 
+  # A nested Rscript must not inherit the R CMD check test harness.
+  r_tests <- file.path(root, "child_r_tests.R")
+  writeLines("stop('R_TESTS leaked into the pTFCE worker')", r_tests)
+  withr::local_envvar(c(R_TESTS = r_tests))
   run <- run_fwe_plan(plan, scheduler = "local", worker_script = worker)
 
   expect_true(all(run$execution$execution_status == "completed"))

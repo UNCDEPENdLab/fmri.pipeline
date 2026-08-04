@@ -1,8 +1,21 @@
+run_spm_contrast_script <- function(script, arguments) {
+  system2(
+    "Rscript",
+    c("--no-save", "--no-restore", script, arguments),
+    stdout = TRUE,
+    stderr = TRUE,
+    env = "R_TESTS="
+  )
+}
+
 test_that("generate_spm_contrasts_from_model maps L1 contrasts to SPM columns", {
   skip_if_not_installed("R.matlab")
 
   tmp_dir <- tempfile("spm_contrast_model_")
   dir.create(tmp_dir, recursive = TRUE)
+  r_tests <- file.path(tmp_dir, "child_r_tests.R")
+  writeLines("stop('R_TESTS leaked into the SPM contrast script')", r_tests)
+  withr::local_envvar(c(R_TESTS = r_tests))
 
   # Fake SPM design columns (two runs, two conditions)
   mnames <- c(
@@ -41,15 +54,16 @@ test_that("generate_spm_contrasts_from_model maps L1 contrasts to SPM columns", 
   # Run contrast script directly with the prewritten .mat file
   setup_script <- system.file("Rscript", "setup_spm_contrasts_from_model.R", package = "fmri.pipeline")
   expect_true(file.exists(setup_script))
-  cmd <- paste(
-    "Rscript --no-save --no-restore",
-    shQuote(setup_script),
-    "-mat_file", shQuote(matfile),
-    "-contrast_rds", shQuote(spec_path),
-    "-average_across_runs TRUE",
-    "-spm_path", shQuote(tmp_dir)
+  status <- run_spm_contrast_script(
+    setup_script,
+    c(
+      "-mat_file", matfile,
+      "-contrast_rds", spec_path,
+      "-average_across_runs", "TRUE",
+      "-spm_path", tmp_dir
+    )
   )
-  system(cmd)
+  expect_false(inherits(status, "status"), info = paste(status, collapse = "\n"))
 
   mfile <- file.path(tmp_dir, "estimate_glm_contrasts.m")
   expect_true(file.exists(mfile))
@@ -112,15 +126,16 @@ test_that("generate_spm_contrasts_from_model matches compact SPM pmod labels", {
 
   spec_path <- file.path(tmp_dir, "spm_contrast_spec.rds")
   setup_script <- system.file("Rscript", "setup_spm_contrasts_from_model.R", package = "fmri.pipeline")
-  cmd <- paste(
-    "Rscript --no-save --no-restore",
-    shQuote(setup_script),
-    "-mat_file", shQuote(matfile),
-    "-contrast_rds", shQuote(spec_path),
-    "-average_across_runs TRUE",
-    "-spm_path", shQuote(tmp_dir)
+  status <- run_spm_contrast_script(
+    setup_script,
+    c(
+      "-mat_file", matfile,
+      "-contrast_rds", spec_path,
+      "-average_across_runs", "TRUE",
+      "-spm_path", tmp_dir
+    )
   )
-  system(cmd)
+  expect_false(inherits(status, "status"), info = paste(status, collapse = "\n"))
 
   mfile <- file.path(tmp_dir, "estimate_glm_contrasts.m")
   expect_true(file.exists(mfile))
@@ -174,15 +189,16 @@ test_that("generate_spm_contrasts_from_model adds session-specific and differenc
 
   spec_path <- file.path(tmp_dir, "spm_contrast_spec.rds")
   setup_script <- system.file("Rscript", "setup_spm_contrasts_from_model.R", package = "fmri.pipeline")
-  cmd <- paste(
-    "Rscript --no-save --no-restore",
-    shQuote(setup_script),
-    "-mat_file", shQuote(matfile),
-    "-contrast_rds", shQuote(spec_path),
-    "-average_across_runs TRUE",
-    "-spm_path", shQuote(tmp_dir)
+  status <- run_spm_contrast_script(
+    setup_script,
+    c(
+      "-mat_file", matfile,
+      "-contrast_rds", spec_path,
+      "-average_across_runs", "TRUE",
+      "-spm_path", tmp_dir
+    )
   )
-  system(cmd)
+  expect_false(inherits(status, "status"), info = paste(status, collapse = "\n"))
 
   mfile <- file.path(tmp_dir, "estimate_glm_contrasts.m")
   expect_true(file.exists(mfile))
@@ -247,15 +263,16 @@ test_that("generate_spm_contrasts_from_model adds centered projection main-effec
 
   spec_path <- file.path(tmp_dir, "spm_contrast_spec.rds")
   setup_script <- system.file("Rscript", "setup_spm_contrasts_from_model.R", package = "fmri.pipeline")
-  cmd <- paste(
-    "Rscript --no-save --no-restore",
-    shQuote(setup_script),
-    "-mat_file", shQuote(matfile),
-    "-contrast_rds", shQuote(spec_path),
-    "-average_across_runs TRUE",
-    "-spm_path", shQuote(tmp_dir)
+  status <- run_spm_contrast_script(
+    setup_script,
+    c(
+      "-mat_file", matfile,
+      "-contrast_rds", spec_path,
+      "-average_across_runs", "TRUE",
+      "-spm_path", tmp_dir
+    )
   )
-  system(cmd)
+  expect_false(inherits(status, "status"), info = paste(status, collapse = "\n"))
 
   mfile <- file.path(tmp_dir, "estimate_glm_contrasts.m")
   expect_true(file.exists(mfile))

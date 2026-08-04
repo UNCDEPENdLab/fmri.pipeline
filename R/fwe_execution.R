@@ -332,6 +332,12 @@ run_fwe_plan <- function(
 
   if (identical(scheduler, "local")) {
     local_env <- normalize_fwe_run_environment(env_variables)
+    # R CMD check sets R_TESTS to its test harness.  Do not let a nested
+    # Rscript worker inherit it, or R will run the harness before the worker.
+    local_env <- c(
+      local_env[!startsWith(local_env, "R_TESTS=")],
+      "R_TESTS="
+    )
     for (ii in run_rows) {
       script_file <- file.path(
         jobs_directory, paste0(execution$task_id[ii], ".bash")
