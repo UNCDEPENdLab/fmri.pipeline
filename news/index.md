@@ -1,6 +1,6 @@
 # Changelog
 
-## fmri.pipeline 0.4
+## fmri.pipeline 0.4-1
 
 ### Declarative FWE correction workflow
 
@@ -69,6 +69,30 @@
   acquisitions.
 
 ### Repeated timing rows and within-trial occurrences
+
+- Fixed L1 setup for occurrence-keyed signals when subject events are
+  aggregated as a `data.table`. The occurrence validation added in July
+  used data-frame column-selection syntax that `data.table` interpreted
+  as a request for a literal `join_cols` column, causing every affected
+  design build to fail and leaving an empty FSL setup table.
+
+- [`run_feat_sepjobs()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_feat_sepjobs.md)
+  now validates its FSL setup table before model filtering and reports a
+  clear upstream-setup diagnostic instead of the misleading
+  `object 'l1_model' not found` error.
+
+- Pipeline inputs and time-series multipliers now copy incoming
+  `data.table`s to ordinary `data.frame`s only when necessary. Fresh
+  `rbindlist()` aggregations are likewise normalized at data-frame API
+  boundaries without copying caller-owned objects or converting existing
+  data.frames.
+
+- [`mixed_by()`](https://uncdependlab.github.io/fmri.pipeline/reference/mixed_by.md)
+  and
+  [`fill_atlas_with_stats()`](https://uncdependlab.github.io/fmri.pipeline/reference/fill_atlas_with_stats.md)
+  now isolate their internal `data.table` operations from caller-owned
+  inputs. Keying, sorting, and conversion inside these functions no
+  longer change an input object’s class, key, or row order by reference.
 
 - `trial_data` now supports ragged timing rows: a row may contain
   trial-level timings alongside a within-trial occurrence, and sparse

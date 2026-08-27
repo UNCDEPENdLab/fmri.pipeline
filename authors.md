@@ -10,13 +10,13 @@ Source:
 [`DESCRIPTION`](https://github.com/UNCDEPENdLab/fmri.pipeline/blob/master/DESCRIPTION)
 
 Hallquist M (2026). *fmri.pipeline: Analysis of fMRI Data on HPC
-clusters*. R package version 0.4,
+clusters*. R package version 0.4-1,
 <https://uncdependlab.github.io/fmri.pipeline/>.
 
     @Manual{,
       title = {fmri.pipeline: Analysis of fMRI Data on HPC clusters},
       author = {Michael Hallquist},
       year = {2026},
-      note = {R package version 0.4},
+      note = {R package version 0.4-1},
       url = {https://uncdependlab.github.io/fmri.pipeline/},
     }
