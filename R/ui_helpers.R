@@ -64,7 +64,7 @@ ol_unique <- function(x, max_show = 5, max_allowed = 25, prespace = 0, showNA = 
     slice_max(Freq, n = max_show) %>%
     mutate(Freq = paste0("(n=", Freq, ")")) %>%
     tidyr::unite("val_n", c(x, Freq), sep = " ") %>%
-    pull(val_n) %>%
+    pull("val_n") %>%
     paste(collapse=", ")
 
   ret <- paste0(

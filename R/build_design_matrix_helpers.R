@@ -185,15 +185,41 @@ validate_tr <- function(tr) {
   return(tr)
 }
 
+#' Normalize data.table time-series multipliers to ordinary data.frames
+#'
+#' @param ts_multipliers NULL, a data.frame, a list of data.frames, or a
+#'   character vector of files.
+#' @return The input with data.table objects copied to ordinary data.frames.
+#' @keywords internal
+#' @noRd
+normalize_ts_multiplier_tables <- function(ts_multipliers) {
+  if (is.data.frame(ts_multipliers)) {
+    if (data.table::is.data.table(ts_multipliers)) {
+      return(as.data.frame(ts_multipliers))
+    }
+    return(ts_multipliers)
+  }
+
+  if (is.list(ts_multipliers)) {
+    return(lapply(ts_multipliers, function(df) {
+      if (data.table::is.data.table(df)) as.data.frame(df) else df
+    }))
+  }
+
+  ts_multipliers
+}
+
 #' Validate ts_multipliers structure and numeric content
 #'
 #' @param ts_multipliers NULL, data.frame, list of data.frames, or character vector of files
 #' @param run_data validated run_data data.frame
-#' @return ts_multipliers unchanged if valid
+#' @return validated ts_multipliers, with incoming data.tables copied to data.frames
 #' @keywords internal
 #' @noRd
 validate_ts_multipliers <- function(ts_multipliers, run_data) {
   if (is.null(ts_multipliers)) return(NULL)
+
+  ts_multipliers <- normalize_ts_multiplier_tables(ts_multipliers)
 
   checkmate::assert_data_frame(run_data)
   n_runs <- nrow(run_data)
@@ -249,7 +275,7 @@ validate_ts_multipliers <- function(ts_multipliers, run_data) {
     }
     checkmate::assert_file_exists(ts_multipliers)
     for (i in seq_along(ts_multipliers)) {
-      validate_numeric_cols(as.data.frame(utils::read.table(ts_multipliers[i])), paste0("(file run ", i, ")"))
+      validate_numeric_cols(utils::read.table(ts_multipliers[i]), paste0("(file run ", i, ")"))
     }
     return(ts_multipliers)
   }
@@ -462,6 +488,14 @@ align_signal_with_events <- function(s, events, lg = NULL) {
   # many-to-many joins when a trial has multiple timing occurrences.
   join_cols <- c("run_number", "trial")
   df_events <- dplyr::filter(events, .data$event == s$event)
+
+  # Internal callers normalize aggregated events at their creation boundary,
+  # but callers can still supply a data.table directly. Copy only in that
+  # defensive case: setDF() would unexpectedly change the caller's object by
+  # reference, while ordinary data.frames need no conversion at all.
+  if (data.table::is.data.table(df_events)) {
+    df_events <- as.data.frame(df_events)
+  }
   
   # Check that the event type exists in events
   if (nrow(df_events) == 0L) {
@@ -473,6 +507,9 @@ align_signal_with_events <- function(s, events, lg = NULL) {
   
   event_runs <- factor(sort(unique(df_events$run_number)))
   df_signal <- s$value
+  if (data.table::is.data.table(df_signal)) {
+    df_signal <- as.data.frame(df_signal)
+  }
 
   use_occurrence_id <- is.data.frame(df_signal) &&
     "occurrence_id" %in% names(df_signal) &&
@@ -522,7 +559,7 @@ align_signal_with_events <- function(s, events, lg = NULL) {
       # The event timing table supplies the parent trial metadata. Keeping the
       # duplicate trial column from the value table would create trial.x/y
       # suffixes even though alignment is intentionally occurrence-based.
-      signal_for_join <- signal_for_join %>% dplyr::select(-.data$trial)
+      signal_for_join <- signal_for_join %>% dplyr::select(-"trial")
     }
     s_aligned <- signal_for_join %>%
       dplyr::left_join(df_events, by = join_cols) %>%

@@ -146,8 +146,8 @@ voxelwise_deconvolution <- function(
     a_coordinates <- as.data.frame(a_coordinates) %>%
       setNames(c("i", "j", "k", "x", "y", "z")) %>%
       dplyr::mutate(vnum = 1:n(), atlas_value = aimg[a_indices], atlas_name = basename(atlas_files[ai])) %>%
-      mutate(across(c(x, y, z), ~round(.x, 2))) %>%
-      dplyr::select(vnum, atlas_value, everything())
+      mutate(across(c("x", "y", "z"), ~round(.x, 2))) %>%
+      dplyr::select("vnum", "atlas_value", everything())
     
     #setup output subdirectories for deconvolved files, named according to atlas
     atlas_img_name <- basename(sub(".nii(.gz)*", "", atlas_files[ai], perl=TRUE))

@@ -33,9 +33,11 @@ fill_atlas_with_stats <- function(atlas_nifti, stat_dt, stat_cols = c("t", "p"),
   #input validation
   checkmate::assert_file_exists(atlas_nifti)
 
-  if (!checkmate::test_data_table(stat_dt)) {
+  if (checkmate::test_data_table(stat_dt)) {
+    stat_dt <- data.table::copy(stat_dt)
+  } else {
     message("Coercing stat_dt to data.table object")
-    data.table::setDT(stat_dt)
+    stat_dt <- data.table::as.data.table(stat_dt)
   }
 
   checkmate::assert_subset(stat_cols, names(stat_dt))

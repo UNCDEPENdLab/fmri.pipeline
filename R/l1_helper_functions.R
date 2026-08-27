@@ -113,7 +113,7 @@ expand_signal <- function(sig) {
       which_1 <- which(abs(x - 1) < 1e-5)
       sig$value %>%
         dplyr::slice(!!which_1) %>%
-        dplyr::select(-!!sig$wi_factors)
+        dplyr::select(-dplyr::all_of(sig$wi_factors))
     })
 
     # coefficients to loop over
@@ -188,7 +188,7 @@ fit_wi_model <- function(sobj) {
 
   wi_df <- sobj$value %>%
     mutate(dummy = 1:n()) %>%
-    mutate(across(!!sobj$wi_factors, factor)) # always force wi_factors to be stored as factor to make contrasts straightforward
+    mutate(across(dplyr::all_of(sobj$wi_factors), factor)) # always force wi_factors to be stored as factor to make contrasts straightforward
   
   ffit <- stats::update.formula(as.formula(sobj$wi_formula), "dummy ~ .")
   sobj$wi_model <- lm(ffit, wi_df)
@@ -224,7 +224,7 @@ as.character.formula <- function(x, ...) {
 #         which_1 <- which(x == 1)
 #         ss$value %>%
 #           dplyr::slice(!!which_1) %>%
-#           dplyr::select(-!!ss$wi_factors)
+#           dplyr::select(-dplyr::all_of(ss$wi_factors))
 #       })
 
 #       # create a list of signals, one per dummy level, by copying the master signal

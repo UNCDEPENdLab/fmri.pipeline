@@ -332,11 +332,13 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
       external_df <- readRDS(external_df) # only supports .rds at the moment
     } else {
       checkmate::assert_data_frame(external_df)
-      if (!is.data.table(external_df)) {
-        data.table::setDT(external_df)
+      external_df <- if (is.data.table(external_df)) {
+        data.table::copy(external_df)
+      } else {
+        data.table::as.data.table(external_df)
       }
       checkmate::assert_subset(external_merge_by, names(external_df))
-      data.table::setkeyv(external_df, external_merge_by) # key external data by merge columns
+      data.table::setkeyv(external_df, external_merge_by) # key local external data by merge columns
     }
   }
 
@@ -391,13 +393,12 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
 
   # convert to data.table and nest
   if (isTRUE(single_df)) {
-    if (!is.data.table(data)) {
-      data.table::setDT(data)
-    } # convert to data.table by reference to avoid RAM copy
-    # bad idea -- will copy data and then original dataset is maintained in calling
-    # environment after rm() since it is not fully dereferenced
-    # dt <- data.table(data)
-    # rm(data) #avoid any lingering RAM demand
+    # Keep all subsequent by-reference operations local to this function.
+    data <- if (is.data.table(data)) {
+      data.table::copy(data)
+    } else {
+      data.table::as.data.table(data)
+    }
     df_set <- c("internal")
   } else {
     df_set <- data
@@ -569,8 +570,8 @@ mixed_by <- function(data, outcomes = NULL, rhs_model_formulae = NULL, model_for
     #     ff <- model_set$form[[mm]]
     #     vv <- all.vars(ff)
     #     miss_data <- data[rr, dt[[1]]] %>%
-    #       dplyr::select(!!vv) %>% # just keep model-relevant variables
-    #       mutate(any_miss = rowSums(is.na(dplyr::select(., any_of(!!vv)))) > 0)
+    #       dplyr::select(dplyr::all_of(vv)) %>% # just keep model-relevant variables
+    #       mutate(any_miss = rowSums(is.na(dplyr::select(., dplyr::any_of(vv)))) > 0)
     #     n_present <- miss_data %>%
     #       dplyr::filter(any_miss == FALSE) %>%
     #       nrow()

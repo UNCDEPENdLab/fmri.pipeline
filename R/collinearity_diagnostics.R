@@ -161,13 +161,13 @@ extract_l1_collinearity <- function(gpa, l1_model_names = NULL, vif_threshold = 
   
   # Combine all records
   vif_summary <- if (length(vif_records) > 0) {
-    data.table::rbindlist(vif_records) |> as.data.frame()
+    data.table::rbindlist(vif_records) |> data.table::setDF()
   } else {
     data.frame()
   }
   
   correlation_summary <- if (length(cor_records) > 0) {
-    data.table::rbindlist(cor_records) |> as.data.frame()
+    data.table::rbindlist(cor_records) |> data.table::setDF()
   } else {
     data.frame()
   }

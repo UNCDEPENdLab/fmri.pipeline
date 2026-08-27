@@ -55,6 +55,33 @@ test_that("prepare_subject_run_context drops runs without matching event rows", 
   expect_equal(subject_ctx$run_df$run_number, 1)
   expect_equal(subject_ctx$mr_df$run_number, 1)
   expect_equal(sort(unique(subject_ctx$m_events$run_number)), 1)
+  expect_s3_class(subject_ctx$m_events, "data.frame")
+  expect_false(data.table::is.data.table(subject_ctx$m_events))
+})
+
+
+test_that("combine_l1_subject_results returns ordinary data.frames", {
+  subject_results <- list(
+    list(
+      fsl = data.frame(id = "sub1", l1_model = "model1"),
+      spm = data.frame(id = "sub1", l1_model = "model1"),
+      metadata = data.frame(id = "sub1", session = 1L)
+    ),
+    list(
+      fsl = data.frame(id = "sub2", l1_model = "model1"),
+      spm = NULL,
+      metadata = data.frame(id = "sub2", session = 1L)
+    )
+  )
+
+  combined <- fmri.pipeline:::combine_l1_subject_results(subject_results)
+
+  expect_s3_class(combined, "l1_setup")
+  expect_true(all(vapply(combined, is.data.frame, logical(1L))))
+  expect_false(any(vapply(combined, data.table::is.data.table, logical(1L))))
+  expect_equal(nrow(combined$fsl), 2L)
+  expect_equal(nrow(combined$spm), 1L)
+  expect_equal(nrow(combined$metadata), 2L)
 })
 
 

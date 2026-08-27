@@ -52,7 +52,7 @@ build_l2_models <- function(gpa, from_spec_file = NULL, regressor_cols = NULL) {
   data <- data %>% dplyr::select(all_of(possible_cols))
 
   if (!is.null(regressor_cols)) { # select only columns requested by user
-    data <- data %>% dplyr::select(regressor_cols)
+    data <- data %>% dplyr::select(dplyr::all_of(regressor_cols))
   }
 
   if (!is.null(from_spec_file)) {

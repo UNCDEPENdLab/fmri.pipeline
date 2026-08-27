@@ -38,11 +38,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       return(NULL)
     }
 
-    if (!is.null(model_names[1L])) {
-      feat_queue <- gpa$l1_model_setup$fsl %>% dplyr::filter(l1_model %in% !!model_names)
-    } else {
-      feat_queue <- gpa$l1_model_setup$fsl
-    }
+    feat_queue <- gpa$l1_model_setup$fsl
 
     feat_time   <- gpa$parallel$fsl$l1_feat_time
     feat_memgb  <- gpa$parallel$fsl$l1_feat_memgb
@@ -55,11 +51,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       return(NULL)
     }
 
-    if (!is.null(model_names[1L])) {
-      feat_queue <- gpa$l2_model_setup$fsl %>% dplyr::filter(l2_model %in% !!model_names)
-    } else {
-      feat_queue <- gpa$l2_model_setup$fsl
-    }
+    feat_queue <- gpa$l2_model_setup$fsl
     if ("l2_passthrough" %in% names(feat_queue)) {
       feat_queue <- feat_queue %>% dplyr::filter(!(.data$l2_passthrough %in% TRUE))
     }
@@ -75,11 +67,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
       return(NULL)
     }
 
-    if (!is.null(model_names[1L])) {
-      feat_queue <- gpa$l3_model_setup$fsl %>% dplyr::filter(l3_model %in% !!model_names)
-    } else {
-      feat_queue <- gpa$l3_model_setup$fsl
-    }
+    feat_queue <- gpa$l3_model_setup$fsl
 
     feat_time <- gpa$parallel$fsl$l3_feat_time
     # memory is for total job, not per cpu at l3
@@ -88,20 +76,44 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
     runsperproc <- 1 # number of feat calls per processor
   }
 
+  model_column <- paste0("l", level, "_model")
+  required_queue_columns <- c(
+    model_column, "feat_fsf", "feat_dir", "feat_complete", "feat_failed", "to_run"
+  )
+  if (!is.data.frame(feat_queue)) {
+    stop(
+      sprintf(
+        "gpa$l%d_model_setup$fsl is not a data.frame. Make sure setup_l%d_models() produced FSL inputs before calling run_feat_sepjobs().",
+        level, level
+      ),
+      call. = FALSE
+    )
+  }
+  missing_queue_columns <- setdiff(required_queue_columns, names(feat_queue))
+  if (length(missing_queue_columns) > 0L) {
+    stop(
+      sprintf(
+        paste0(
+          "gpa$l%d_model_setup$fsl is missing required column(s): %s. ",
+          "The setup step did not produce a valid FSL job table; inspect the setup_l%d_models log for the upstream error."
+        ),
+        level, paste(missing_queue_columns, collapse = ", "), level
+      ),
+      call. = FALSE
+    )
+  }
+  if (!is.null(model_names[1L])) {
+    feat_queue <- feat_queue %>%
+      dplyr::filter(.data[[model_column]] %in% model_names)
+  }
+
   fail_action <- gpa$glm_settings$fsl[[glue("failed_l{level}_folder_action")]]
   incomplete_action <- gpa$glm_settings$fsl[[glue("incomplete_l{level}_folder_action")]]
   if (is.null(fail_action)) fail_action <- "delete" #should be populated in finalize step, but just in case
   if (is.null(incomplete_action)) incomplete_action <- "delete"
 
-  if (!"feat_fsf" %in% names(feat_queue)) {
-    stop(paste0(
-      "Fatal error with queue of feat jobs to be run. There is no feat_fsf column in gpa$l",
-      level, "_model_setup$fsl. Make sure that the setup step has been run successfully first."
-    ))
-  }
-
   feat_job_df <- feat_queue %>%
-    dplyr::select(feat_fsf, feat_dir, feat_complete, feat_failed, to_run)
+    dplyr::select("feat_fsf", "feat_dir", "feat_complete", "feat_failed", "to_run")
 
   # location of scheduler scripts
   feat_output_directory <- file.path(gpa$output_locations$scheduler_scripts, paste0("feat_l", level))
@@ -149,7 +161,7 @@ run_feat_sepjobs <- function(gpa, level=1L, model_names=NULL, rerun=FALSE, wait_
   # TODO: keep this as a data.frame and return an amended lXX_model_setup to the caller that includes the job id and batch script
   to_run <- feat_job_df %>%
     dplyr::filter(to_run == TRUE) %>%
-    dplyr::pull(feat_fsf)
+    dplyr::pull("feat_fsf")
 
   if (length(to_run) == 0L) {
     lg$warn("No Feat level %d .fsf files to execute.", level)

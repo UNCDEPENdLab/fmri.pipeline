@@ -182,7 +182,7 @@ generate_mask_diagnostics <- function(input = NULL, reference_mask = NULL, refer
     t() %>% 
     data.frame() %>%
     dplyr::mutate(mask = mask_files) %>%
-    dplyr::select(mask, everything())
+    dplyr::select("mask", everything())
     
   # now compare each subject against the group and the reference
   if (isTRUE(generate_run_plots)) {

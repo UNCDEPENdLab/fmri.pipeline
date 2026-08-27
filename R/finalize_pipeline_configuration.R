@@ -772,7 +772,7 @@ finalize_confound_settings <- function(gpa, lg) {
   })
 
   if (length(unique(sapply(run_list, length))) == 1L) {
-    gpa$run_data <- data.table::rbindlist(run_list)
+    gpa$run_data <- data.table::rbindlist(run_list) |> data.table::setDF()
   } else {
     msg <- "Lengths of confound run_df elements have different lengths. Cannot recombine"
     lg$error(msg)

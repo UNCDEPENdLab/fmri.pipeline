@@ -859,6 +859,10 @@ get_additional_regressors <- function(additional_regressors, run_volumes, drop_v
 get_ts_multipliers <- function(ts_multipliers = NULL, run_data, shorten_ts) {
   if (is.null(ts_multipliers)) return(NULL) # NULL input -> NULL output
 
+  # build_design_matrix() normally receives the normalized result from
+  # validate_ts_multipliers(); retain this guard for direct/internal calls.
+  ts_multipliers <- normalize_ts_multiplier_tables(ts_multipliers)
+
   ts_multipliers_df <- data.frame()
 
   # if ts_multipliers is a data.frame with run_number

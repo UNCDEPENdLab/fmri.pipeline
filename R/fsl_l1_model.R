@@ -184,7 +184,7 @@ fsl_l1_model <- function(
   }
 
   # combined feat lookups with other columns
-  feat_info_df <- data.table::rbindlist(feat_info)
+  feat_info_df <- data.table::rbindlist(feat_info) |> data.table::setDF()
   stopifnot(nrow(feat_info_df) == nrow(feat_l1_df))
   feat_l1_df <- dplyr::bind_cols(feat_l1_df, feat_info_df)
   feat_l1_df$to_run <- !feat_l1_df$feat_complete

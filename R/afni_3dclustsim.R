@@ -104,7 +104,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
         data_long <- data %>%
           tidyr::pivot_longer(cols = !pthr, names_to = "athr", values_to = "nvoxels") %>%
           dplyr::mutate(athr = as.numeric(athr), nn = !!nn, sided = !!sided) %>%
-          dplyr::select(nn, sided, pthr, athr, nvoxels)
+          dplyr::select("nn", "sided", "pthr", "athr", "nvoxels")
         return(data_long)
       }
 
@@ -546,7 +546,7 @@ afni_3dclustsim <- R6::R6Class("afni_3dclustsim",
       }
 
       clust_nvox <- sim_calc %>%
-        pull(nvoxels) %>%
+        pull("nvoxels") %>%
         ceiling(.)
 
       arg_list <- list(

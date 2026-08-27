@@ -77,7 +77,7 @@ backproject_medusa <- function(coef_df, brain_mask, plot_cols=NULL, parcel_col="
       for (tt in 1:n_t) {
         this_val <- this_df %>%
           dplyr::filter(!!sym(time_col) == !!timevals[tt] & !!sym(parcel_col) == !!mm) %>%
-          pull(!!ii$pc)
+          pull(dplyr::all_of(ii$pc))
         if (length(this_val) != 1L) { browser() }
 
         to_fill <- imgpos %>% dplyr::filter(.data$roi == !!mm) %>% 

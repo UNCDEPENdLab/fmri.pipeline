@@ -205,12 +205,15 @@ populate_event_data <- function(eobj, trial_data) {
 
   if (is.numeric(eobj$duration)) {
     edata <- timing_rows %>%
-      dplyr::select(!!meta_cols, occurrence_id, onset = !!eobj$onset) %>%
+      dplyr::select(dplyr::all_of(meta_cols), "occurrence_id", onset = dplyr::all_of(eobj$onset)) %>%
       #setNames(c("onset")) %>%
       dplyr::mutate(duration = !!eobj$duration, event = !!eobj$name)
   } else {
     edata <- timing_rows %>%
-      dplyr::select(!!meta_cols, occurrence_id, onset = !!eobj$onset, duration = !!eobj$duration) %>%
+      dplyr::select(
+        dplyr::all_of(meta_cols), "occurrence_id",
+        onset = dplyr::all_of(eobj$onset), duration = dplyr::all_of(eobj$duration)
+      ) %>%
       #setNames(c("onset", "duration")) %>%
       dplyr::mutate(event = !!eobj$name)
   }
@@ -220,7 +223,7 @@ populate_event_data <- function(eobj, trial_data) {
       edata$isi <- eobj$isi
     } else {
       idata <- trial_data %>%
-        dplyr::select(!!eobj$isi) %>%
+        dplyr::select(dplyr::all_of(eobj$isi)) %>%
         setNames("isi")
       edata <- edata %>% bind_cols(idata) # add isi column
     }

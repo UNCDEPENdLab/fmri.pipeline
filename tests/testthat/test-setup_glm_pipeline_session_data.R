@@ -64,3 +64,40 @@ test_that("setup_glm_pipeline derives session_data internally from run and subje
   expect_false("run_condition" %in% names(gpa$session_data))
   expect_equal(gpa$session_data$scanner_day, c(0L, 14L, 0L, 14L))
 })
+
+test_that("setup_glm_pipeline copies incoming data.tables to data.frames", {
+  trial_data <- data.table::data.table(
+    id = c("sub1", "sub1"),
+    trial = 1:2,
+    onset = c(0, 4),
+    duration = 1,
+    condition = c("face", "house")
+  )
+  output_directory <- tempfile("setup_glm_dt_input_")
+
+  gpa <- setup_glm_pipeline(
+    analysis_name = basename(output_directory),
+    scheduler = "local",
+    output_directory = output_directory,
+    trial_data = trial_data,
+    tr = 1.5,
+    l1_models = NULL,
+    l2_models = NULL,
+    l3_models = NULL,
+    glm_software = "fsl",
+    n_expected_runs = 1L,
+    lgr_threshold = "off"
+  )
+
+  expect_true(data.table::is.data.table(trial_data))
+  expect_false("session" %in% names(trial_data))
+  expect_false("run_number" %in% names(trial_data))
+  expect_false(data.table::is.data.table(gpa$trial_data))
+  expect_false(data.table::is.data.table(gpa$run_data))
+  expect_false(data.table::is.data.table(gpa$subject_data))
+  expect_equal(gpa$trial_data$session, rep(1L, 2L))
+  expect_equal(gpa$trial_data$run_number, rep(1L, 2L))
+  expect_s3_class(gpa$trial_data, "bg_trial_data")
+  expect_s3_class(gpa$run_data, "bg_run_data")
+  expect_s3_class(gpa$subject_data, "bg_subject_data")
+})

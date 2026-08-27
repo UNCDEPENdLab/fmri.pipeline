@@ -57,7 +57,7 @@ event_lock_ts <- function(fmri_obj, event=NULL, time_before=-3, time_after=3,
   #loop over trials, retaining data within window around event of interest
   for (t in 1:length(trials)) {
 
-    evt_onset <- run_df %>% filter(!!sym(vm[["trial"]]) == trials[t]) %>% pull(!!event)
+    evt_onset <- run_df %>% filter(!!sym(vm[["trial"]]) == trials[t]) %>% pull(dplyr::all_of(event))
     stopifnot(length(evt_onset) == 1L) #would be a bizarre and problematic result
 
     evt_before <- -Inf
@@ -265,7 +265,7 @@ interpolate_fmri_epochs <- function(a_obj, evt_time="evt_time", time_before=-3, 
     #  https://math.stackexchange.com/questions/15596/mean-of-interpolated-data-or-interpolation-of-means-in-geostatistics
 
     interp_agg <- to_interpolate %>% 
-      group_by(across(evt_time)) %>%
+      group_by(across(dplyr::all_of(evt_time))) %>%
       dplyr::summarize(across("value", funs, na.rm=TRUE), .groups="drop")
 
     #rare, but if we have no data at tail end of run, we may not be able to interpolate

@@ -144,6 +144,10 @@ extract_glm_betas_in_mask <- function(gpa, mask_files, what=c("cope", "zstat"), 
         write_list()
     }
 
+    # Keep data.table semantics for the internal grouped write above, then
+    # normalize the fresh aggregation before returning through the public API.
+    data.table::setDF(res_list)
+
     return(res_list)
   }
 
@@ -321,7 +325,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
 
   stat_results <- stat_results %>%
     dplyr::select(
-      id, session, all_of(extra), feat_dir,
+      "id", "session", all_of(extra), "feat_dir",
       matches("l[1-3]_model"), matches("l[1-3]_cope_number"), matches("l[1-3]_cope_name"),
       tidyselect::any_of("l2_input_mode"), all_of(what)
     )
@@ -345,7 +349,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   m_coordinates <- as.data.frame(m_coordinates) %>%
     setNames(c("i", "j", "k", "x", "y", "z")) %>%
     dplyr::mutate(vnum = 1:n(), mask_value = mask_img[m_indices], mask_name = mask_name) %>%
-    dplyr::select(vnum, mask_value, everything())
+    dplyr::select("vnum", "mask_value", everything())
   mask_dim <- dim(mask_img)
 
   # extract each statistic requested
@@ -470,7 +474,7 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
   # unnest statistics for each image
   stat_expand <- stat_results %>%
     unnest(img_stats) %>%
-    dplyr::select(-img_exists)
+    dplyr::select(-"img_exists")
 
   return(stat_expand)
   #save(stat_expand, file="stat_expand.RData")

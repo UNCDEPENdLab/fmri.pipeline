@@ -160,7 +160,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       if (isTRUE(include_subclusters) && is.data.frame(private$pvt_subclust_df) && "roi_num" %in% names(private$pvt_subclust_df)) {
         clust_df <- clust_df %>%
           dplyr::bind_rows(private$pvt_subclust_df) %>%
-          dplyr::select(roi_num, subroi_num, everything()) %>%
+          dplyr::select("roi_num", "subroi_num", everything()) %>%
           dplyr::arrange(roi_num, subroi_num)
       }
 
@@ -626,7 +626,7 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
       names(clust_df) <- cols
 
       clust_df$roi_num <- seq_len(nrow(clust_df))
-      clust_df <- clust_df %>% dplyr::select(roi_num, tidyselect::everything()) # place roi_num first
+      clust_df <- clust_df %>% dplyr::select("roi_num", tidyselect::everything()) # place roi_num first
 
       parse_header_rows <- function(lines, clust_df) {
         attrib <- lapply(lines, function(x) {
@@ -866,9 +866,9 @@ afni_3dclusterize <- R6::R6Class("afni_3dclusterize",
             }
 
             subcluster_df <- best$get_clust_df(include_subclusters = FALSE) %>%
-              dplyr::rename(subroi_num = roi_num) %>%
+              dplyr::rename(subroi_num = "roi_num") %>%
               dplyr::mutate(roi_num = !!roi_val) %>%
-              dplyr::select(roi_num, subroi_num, everything())
+              dplyr::select("roi_num", "subroi_num", everything())
 
             # move mask and cluster table into same folder as input map
             dest_table <- glue("{file_sans_ext(private$pvt_input_file)}_roi{roi_val}_subclusters.1D")

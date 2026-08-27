@@ -169,9 +169,9 @@ read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, 
   })
   
   if (nrow(data) > 0L && isTRUE(drop_keys)) {
-    data <- data %>% dplyr::select(-id, -session)
+    data <- data %>% dplyr::select(-"id", -"session")
     if (!is.null(run_number)) {
-      data <- data %>% dplyr::select(-run_number)
+      data <- data %>% dplyr::select(-"run_number")
     }
   }
   

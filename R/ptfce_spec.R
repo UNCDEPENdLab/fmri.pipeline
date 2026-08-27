@@ -119,7 +119,7 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
 
         private$all_cope_df <- dplyr::bind_rows(purrr::list_flatten(lapply(private$gfeat_info, function(x) {
           lapply(x$cope_dirs, "[[", "cope_df")
-        }))) %>% dplyr::select(cope_number, contrast_name, z)
+        }))) %>% dplyr::select("cope_number", "contrast_name", "z")
 
         # TODO: need to support subsetting by cope number (e.g., cope3.feat) and zstat number (e.g., zstat1.nii.gz)
         # not currently supported (no high-priority use case)
@@ -129,9 +129,9 @@ ptfce_spec <- R6::R6Class("ptfce_spec",
               checkmate::assert_integerish(zstat_numbers)
               x$cope_df %>%
                 filter(cope_number %in% !!zstat_numbers) %>%
-                pull(z)
+                pull("z")
             } else {
-              x$cope_df %>% pull(z)
+              x$cope_df %>% pull("z")
             }
           })
         }))

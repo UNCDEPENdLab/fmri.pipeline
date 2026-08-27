@@ -88,7 +88,7 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
   }
 
   spm_job_df <- spm_queue %>%
-    dplyr::select(spm_dir, spm_complete, to_run)
+    dplyr::select("spm_dir", "spm_complete", "to_run")
 
   if (isTRUE(rerun)) {
     lg$info("rerun = TRUE in run_spm_sepjobs. All SPM directories will be marked for job execution.")
@@ -97,7 +97,7 @@ run_spm_sepjobs <- function(gpa, level = 1L, model_names = NULL, rerun = FALSE, 
 
   to_run_dirs <- spm_job_df %>%
     dplyr::filter(to_run == TRUE) %>%
-    dplyr::pull(spm_dir)
+    dplyr::pull("spm_dir")
 
   if (length(to_run_dirs) == 0L) {
     lg$warn("No SPM level %d directories to execute.", level)

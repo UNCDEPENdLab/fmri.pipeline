@@ -191,7 +191,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     idcols <- vm[c("id", "session", "run_number")]
 
     variation_df <- trial_data %>%
-      dplyr::select(-!!idcols) %>%
+      dplyr::select(-dplyr::all_of(idcols)) %>%
       aggregate(by = trial_data[, idcols], FUN = n_distinct)
 
     # should include the id and run columns
@@ -233,7 +233,7 @@ setup_glm_pipeline <- function(analysis_name = "glm_analysis", scheduler = "slur
     idcols <- vm[c("id", "session")]
 
     variation_df <- trial_data %>%
-      dplyr::select(-!!idcols) %>%
+      dplyr::select(-dplyr::all_of(idcols)) %>%
       aggregate(by = trial_data[, idcols], FUN = n_distinct)
 
     # should include the id column itself
@@ -725,6 +725,12 @@ setup_compute_environment <- function(gpa, preselect_action = NULL) {
 validate_input_data <- function(df, vm, lg, level = "trial") {
   if (is.null(df)) return(NULL) # allow quick NULL return on NULL input
   checkmate::assert_data_frame(df)
+
+  # Pipeline metadata uses ordinary data.frame subsetting semantics. Copy only
+  # incoming data.tables so validation cannot mutate the caller by reference.
+  if (data.table::is.data.table(df)) {
+    df <- as.data.frame(df)
+  }
 
   # having a grouped data.frame can cause problems (e.g., having the grouping variable unexpectedly come back as a column in select)
   if (is_grouped_df(df)) df <- df %>% ungroup()

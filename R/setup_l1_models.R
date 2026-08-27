@@ -307,11 +307,14 @@ prepare_subject_run_context <- function(subj_df, gpa, ctx) {
 
   slg$debug("Volumes in run_nifti: %s", paste(run_df$run_volumes, collapse = ", "))
 
+  # This is a fresh aggregation, so normalize it by reference before passing it
+  # to data.frame-oriented design helpers.
   m_events <- data.table::rbindlist(
     lapply(gpa$l1_models$events, function(this_event) {
       this_event$data %>% dplyr::filter(id == !!subj_id & session == !!subj_session)
     })
-  )
+  ) |>
+    data.table::setDF()
   dropped <- drop_runs_without_events(
     run_df = run_df,
     events = m_events,
@@ -821,8 +824,9 @@ prepare_pooled_spm_context <- function(subject_ctx, gpa, model_name, lg) {
     lapply(gpa$l1_models$events, function(this_event) {
       this_event$data %>% dplyr::filter(id == !!subject_ctx$subj_id)
     })
-  )
-  m_events_spm <- remap_run_numbers(as.data.frame(m_events_spm), what = "events")
+  ) |>
+    data.table::setDF()
+  m_events_spm <- remap_run_numbers(m_events_spm, what = "events")
 
   dropped <- drop_runs_without_events(
     run_df = pooled_run_df,
@@ -1049,13 +1053,16 @@ combine_l1_subject_results <- function(all_subj_l1_list) {
   spm_list <- lapply(all_subj_l1_list, "[[", "spm")
   spm_combined <- NULL
   if (!all(vapply(spm_list, is.null, logical(1)))) {
-    spm_combined <- rbindlist(spm_list, fill = TRUE)
+    spm_combined <- rbindlist(spm_list, fill = TRUE) |> data.table::setDF()
   }
 
+  fsl_combined <- rbindlist(lapply(all_subj_l1_list, "[[", "fsl"), fill = TRUE) |> data.table::setDF()
+  metadata_combined <- rbindlist(lapply(all_subj_l1_list, "[[", "metadata"), fill = TRUE) |> data.table::setDF()
+
   all_subj_l1_combined <- list(
-    fsl = rbindlist(lapply(all_subj_l1_list, "[[", "fsl"), fill = TRUE),
+    fsl = fsl_combined,
     spm = spm_combined,
-    metadata = rbindlist(lapply(all_subj_l1_list, "[[", "metadata"), fill = TRUE)
+    metadata = metadata_combined
   )
   class(all_subj_l1_combined) <- c("l1_setup", "list")
 

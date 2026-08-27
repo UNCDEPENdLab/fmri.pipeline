@@ -912,6 +912,10 @@ populate_last_events <- function(gpa, lg) {
     m_events$isi[na_isi] <- 0
   }
 
+  # The remaining processing follows ordinary data.frame/dplyr conventions.
+  # m_events is a fresh rbindlist result, so conversion by reference is safe.
+  data.table::setDF(m_events)
+
   last_events <- m_events %>%
     dplyr::group_by(.data$id, .data$session, .data$run_number) %>%
     dplyr::summarize(
@@ -1725,7 +1729,7 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
   # look for missingness on any predictor variable
   # https://stackoverflow.com/questions/64287986/create-variable-that-captures-if-there-are-missing-fields-in-4-string-variables
   data <- data %>%
-    dplyr::select(!!model_vars, !!id_cols) %>% # just keep model-relevant variables
+    dplyr::select(dplyr::all_of(model_vars), dplyr::all_of(id_cols)) %>% # just keep model-relevant variables
     dplyr::mutate(any_miss = rowSums(is.na(dplyr::pick(dplyr::any_of(model_vars)))) > 0)
     #dplyr::mutate(across(all_of(model_vars), ~ +(is.na(.))))
 
@@ -1746,7 +1750,7 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
 
   # Add metadata, for merging model matrix against identifying columns
   # This occurs before mean centering in case one of the id_cols is also in the model (e.g., run_number)
-  mobj$metadata <- data %>% dplyr::select(!!id_cols)
+  mobj$metadata <- data %>% dplyr::select(dplyr::all_of(id_cols))
 
   # apply just-in-time mean centering for requested variables
   if (!is.null(mobj$covariate_transform)) {
@@ -1781,7 +1785,7 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
   }
 
   # keep track of data used for fitting model for refitting in case of missing data
-  mobj$model_data <- data %>% dplyr::select(!!model_vars)
+  mobj$model_data <- data %>% dplyr::select(dplyr::all_of(model_vars))
 
   # fit model and populate model information
   mobj$lmfit <- lm(model_formula, data)
@@ -1845,7 +1849,7 @@ mobj_fit_lm <- function(mobj=NULL, model_formula=NULL, data, id_cols=NULL, lg=NU
 #   mobj$lmfit <- lm(model_formula, data = data)
 #   mobj$regressors <- colnames(mobj$model_matrix)
 #   mobj$model_matrix <- model.matrix(mobj$lmfit)
-#   mobj$metadata <- data %>% dplyr::select(id, session)
+#   mobj$metadata <- data %>% dplyr::select("id", "session")
 #   mobj$model_data <- data
 
 #   mobj <- get_contrasts_from_spec(mobj, mobj$lmfit)

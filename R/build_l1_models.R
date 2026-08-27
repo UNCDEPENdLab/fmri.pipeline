@@ -1131,7 +1131,7 @@ get_value_df <- function(signal, trial_data, wi_factors = NULL, event_data = NUL
   trial_set <- get_trial_set_from_signal(signal, trial_data)
   value_df <- trial_data %>%
     dplyr::mutate(occurrence_id = dplyr::row_number()) %>%
-    dplyr::select(id, session, run_number, trial, occurrence_id, !!wi_factors)
+    dplyr::select("id", "session", "run_number", "trial", "occurrence_id", dplyr::all_of(wi_factors))
 
   if (!is.null(trial_set)) {
     stopifnot(length(trial_set) == nrow(trial_data))
@@ -1153,7 +1153,7 @@ get_value_df <- function(signal, trial_data, wi_factors = NULL, event_data = NUL
     }
     value_df <- value_df %>% dplyr::filter(.data$occurrence_id %in% !!event_data$occurrence_id)
   } else {
-    value_df <- value_df %>% dplyr::select(-.data$occurrence_id)
+    value_df <- value_df %>% dplyr::select(-"occurrence_id")
   }
 
   return(value_df)

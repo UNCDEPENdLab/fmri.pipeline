@@ -33,6 +33,19 @@ test_that("run_feat_sepjobs returns an empty character vector when nothing needs
   expect_length(res, 0L)
 })
 
+test_that("run_feat_sepjobs diagnoses an invalid empty setup table", {
+  gpa <- create_mock_gpa(include_l1_models = TRUE)
+  gpa$l1_model_setup <- structure(
+    list(fsl = data.table::data.table()),
+    class = c("l1_setup", "list")
+  )
+
+  expect_error(
+    fmri.pipeline::run_feat_sepjobs(gpa, level = 1L, model_names = "facehouse"),
+    "setup step did not produce a valid FSL job table"
+  )
+})
+
 test_that("R_batch_job skips waiting when child_job_ids is empty", {
   batch_dir <- tempfile("batch_empty_children_")
   dir.create(batch_dir)

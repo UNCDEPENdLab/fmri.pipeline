@@ -73,7 +73,7 @@ afni_whereami <- R6::R6Class("afni_whereami",
 
       roi_df <- roi_df %>%
         dplyr::mutate(x = coords_l, y = coords_p, z = coords_i) %>%
-        dplyr::select(roi_num, x, y, z, everything())
+        dplyr::select("roi_num", "x", "y", "z", everything())
 
       return(roi_df)
     },

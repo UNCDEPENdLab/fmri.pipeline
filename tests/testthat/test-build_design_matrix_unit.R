@@ -847,6 +847,26 @@ test_that("occurrence keys align distinct press-level modulators within a trial"
   expect_equal(as.numeric(result$run_number1$value), c(2, 5))
 })
 
+test_that("occurrence keys align when pipeline inputs are data.tables", {
+  events <- data.table::data.table(
+    event = c("button_press", "button_press"),
+    id = "s1", session = 1L, run_number = 1L, trial = 1L,
+    occurrence_id = c(1L, 2L), onset = c(1.2, 3.7), duration = 0
+  )
+  values <- data.table::data.table(
+    id = "s1", session = 1L, run_number = 1L, trial = 1L,
+    occurrence_id = c(1L, 2L), value = c(2, 5)
+  )
+  signal <- list(name = "press_force", event = "button_press", value = values)
+
+  result <- fmri.pipeline:::align_signal_with_events(signal, events)
+
+  expect_equal(as.numeric(result$run_number1$onset), c(1.2, 3.7))
+  expect_equal(as.numeric(result$run_number1$value), c(2, 5))
+  expect_true(data.table::is.data.table(events))
+  expect_true(data.table::is.data.table(values))
+})
+
 test_that("missing occurrence-level modulator values omit only that occurrence", {
   timing_rows <- data.frame(
     id = "s1", session = 1, run_number = 1, trial = c(1, 1),
@@ -1775,6 +1795,44 @@ test_that("get_ts_multipliers handles data.frame input with run_number column", 
   expect_equal(nrow(result), 60)
   expect_lt(abs(mean(result$roi1[result$run_number == 1])), 1e-10)
   expect_lt(abs(mean(result$roi1[result$run_number == 2])), 1e-10)
+})
+
+test_that("time-series multiplier data.tables are copied and normalized", {
+  run_data <- data.frame(
+    run_number = 1:2,
+    run_volumes = c(3L, 3L),
+    drop_volumes = c(0L, 0L)
+  )
+  direct_dt <- data.table::data.table(
+    run_number = rep(1:2, each = 3L),
+    roi1 = 1:6
+  )
+  list_dt <- list(
+    data.table::data.table(roi1 = 1:3),
+    data.table::data.table(roi1 = 4:6)
+  )
+
+  normalized_direct <- fmri.pipeline:::validate_ts_multipliers(direct_dt, run_data)
+  normalized_list <- fmri.pipeline:::validate_ts_multipliers(list_dt, run_data)
+
+  expect_s3_class(normalized_direct, "data.frame")
+  expect_false(data.table::is.data.table(normalized_direct))
+  expect_true(all(vapply(normalized_list, is.data.frame, logical(1L))))
+  expect_false(any(vapply(normalized_list, data.table::is.data.table, logical(1L))))
+
+  # Defensive normalization must not alter caller-owned objects by reference.
+  expect_true(data.table::is.data.table(direct_dt))
+  expect_true(all(vapply(list_dt, data.table::is.data.table, logical(1L))))
+
+  direct_result <- fmri.pipeline:::get_ts_multipliers(direct_dt, run_data, shorten_ts = FALSE)
+  list_result <- fmri.pipeline:::get_ts_multipliers(list_dt, run_data, shorten_ts = FALSE)
+  expect_false(data.table::is.data.table(direct_result))
+  expect_false(data.table::is.data.table(list_result))
+  expect_equal(nrow(direct_result), 6L)
+  expect_equal(nrow(list_result), 6L)
+  expect_equal(direct_dt$roi1, 1:6)
+  expect_equal(list_dt[[1L]]$roi1, 1:3)
+  expect_equal(list_dt[[2L]]$roi1, 4:6)
 })
 
 test_that("get_ts_multipliers does not collapse single-column values to zero", {
