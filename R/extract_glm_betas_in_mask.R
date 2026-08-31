@@ -306,13 +306,25 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
       # calculate the expected image location for this contrast and subject based on row values in stat_results data.frame
       stat_results <- stat_results %>%
         mutate(
-          l2_cope_dir = ifelse(.data$l2_input_mode == "cope_files", "cope1.feat", NA_character_),
-          "{ww}" := dplyr::if_else(
-            .data$l2_input_mode == "l1_cope_file_passthrough" & ww == "cope",
-            .data$passthrough_cope_file,
-            glue_data(., "{feat_dir}/{l2_cope_dir}/stats/{ww}{l2_cope_number}.nii.gz"),
-            missing = NA_character_
-          )
+          "{ww}" := if (identical(ww, "cope")) {
+            dplyr::if_else(
+              .data$l2_input_mode == "l1_cope_file_passthrough",
+              .data$passthrough_cope_file,
+              file.path(
+                .data$feat_dir, "cope1.feat", "stats",
+                paste0(ww, .data$l2_cope_number, ".nii.gz")
+              )
+            )
+          } else {
+            dplyr::if_else(
+              .data$l2_input_mode == "l1_cope_file_passthrough",
+              NA_character_,
+              file.path(
+                .data$feat_dir, "cope1.feat", "stats",
+                paste0(ww, .data$l2_cope_number, ".nii.gz")
+              )
+            )
+          }
         )
     }
   } else if (level == 3L) {
@@ -354,8 +366,23 @@ extract_fsl_betas <- function(gpa, extract=NULL, level=NULL, what = c("cope", "z
 
   # extract each statistic requested
   stat_results <- stat_results %>%
-    tidyr::pivot_longer(cols = all_of(what), names_to = "statistic", values_to = "img") %>%
-    dplyr::mutate(img_exists = file.exists(img))
+    tidyr::pivot_longer(cols = all_of(what), names_to = "statistic", values_to = "img")
+
+  # A one-run L2 pass-through has no materialized L2 analysis from which to
+  # obtain inferential statistics. Its L1 cope is the only image promoted to
+  # the logical L2 row; other requested statistics remain L1 outputs and are
+  # already included by run-level extraction. This also prevents NA-valued
+  # pass-through paths from being treated as missing images.
+  if (level == 2L) {
+    stat_results <- stat_results %>%
+      dplyr::filter(
+        .data$l2_input_mode != "l1_cope_file_passthrough" |
+          .data$statistic == "cope"
+      )
+  }
+
+  stat_results <- stat_results %>%
+    dplyr::mutate(img_exists = file.exists(.data$img))
 
   miss_imgs <- stat_results %>% dplyr::filter(img_exists == FALSE)
   if (nrow(miss_imgs) > 0L) {

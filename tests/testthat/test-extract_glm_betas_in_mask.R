@@ -86,7 +86,7 @@ test_that("extract_fsl_betas resolves per-cope L2 cope-file outputs", {
   expect_equal(explicit_res$value[1], 4)
 })
 
-test_that("extract_fsl_betas resolves one-run L2 pass-through cope files", {
+test_that("extract_fsl_betas resolves only materialized one-run L2 pass-through statistics", {
   root <- tempfile("extract_l2_passthrough_")
   dir.create(root, recursive = TRUE)
 
@@ -96,6 +96,10 @@ test_that("extract_fsl_betas resolves one-run L2 pass-through cope files", {
   passthrough_cope <- file.path(root, "run1.feat", "stats", "cope1.nii.gz")
   dir.create(dirname(passthrough_cope), recursive = TRUE, showWarnings = FALSE)
   RNifti::writeNifti(array(7, dim = c(2, 2, 2)), passthrough_cope)
+  RNifti::writeNifti(
+    array(3, dim = c(2, 2, 2)),
+    file.path(dirname(passthrough_cope), "zstat1.nii.gz")
+  )
 
   l2_setup <- data.frame(
     id = "sub1",
@@ -130,18 +134,25 @@ test_that("extract_fsl_betas resolves one-run L2 pass-through cope files", {
   )
   class(gpa) <- c("glm_pipeline_arguments", "list")
 
+  lg <- lgr::get_logger("test/extract_l2_passthrough")
+  appender <- lgr::AppenderBuffer$new(threshold = "warn")
+  lg$add_appender(appender, name = "test_buffer")
+  on.exit(lg$remove_appender("test_buffer"), add = TRUE)
+
   res <- fmri.pipeline:::extract_fsl_betas(
     gpa,
     extract = data.frame(l1_model = "model1", l2_model = "l2_model1"),
     level = 2L,
-    what = "cope",
+    what = c("cope", "zstat"),
     mask_file = mask_file,
     ncores = 1L,
-    lg = lgr::get_logger("test/extract_l2_passthrough")
+    lg = lg
   )
 
   expect_equal(nrow(res), 1L)
   expect_equal(res$img[1], passthrough_cope)
   expect_equal(res$value[1], 7)
+  expect_equal(res$statistic[1], "cope")
   expect_equal(res$l2_input_mode[1], "l1_cope_file_passthrough")
+  expect_false(any(grepl("Missing expected images", appender$data$msg)))
 })
