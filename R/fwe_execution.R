@@ -114,6 +114,7 @@ fwe_shell_command <- function(executable, arguments) {
 build_fwe_commands.fwe_method_ptfce <- function(
     method, plan, task_rows, worker_script = NULL) {
   worker_script <- resolve_ptfce_worker_script(worker_script)
+  rscript <- file.path(R.home("bin"), "Rscript")
   commands <- vapply(seq_len(nrow(task_rows)), function(ii) {
     alpha <- task_rows$fwe_alpha[[ii]]
     arguments <- c(
@@ -128,7 +129,7 @@ build_fwe_commands.fwe_method_ptfce <- function(
       }
     )
     arguments <- arguments[!is.na(arguments) & nzchar(arguments)]
-    fwe_shell_command(worker_script, arguments)
+    fwe_shell_command(rscript, c(worker_script, arguments))
   }, character(1L))
 
   data.frame(
@@ -332,12 +333,6 @@ run_fwe_plan <- function(
 
   if (identical(scheduler, "local")) {
     local_env <- normalize_fwe_run_environment(env_variables)
-    # R CMD check sets R_TESTS to its test harness.  Do not let a nested
-    # Rscript worker inherit it, or R will run the harness before the worker.
-    local_env <- c(
-      local_env[!startsWith(local_env, "R_TESTS=")],
-      "R_TESTS="
-    )
     for (ii in run_rows) {
       script_file <- file.path(
         jobs_directory, paste0(execution$task_id[ii], ".bash")

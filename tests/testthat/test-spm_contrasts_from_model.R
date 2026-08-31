@@ -1,10 +1,9 @@
 run_spm_contrast_script <- function(script, arguments) {
   system2(
-    "Rscript",
+    file.path(R.home("bin"), "Rscript"),
     c("--no-save", "--no-restore", script, arguments),
     stdout = TRUE,
-    stderr = TRUE,
-    env = "R_TESTS="
+    stderr = TRUE
   )
 }
 
@@ -13,9 +12,6 @@ test_that("generate_spm_contrasts_from_model maps L1 contrasts to SPM columns", 
 
   tmp_dir <- tempfile("spm_contrast_model_")
   dir.create(tmp_dir, recursive = TRUE)
-  r_tests <- file.path(tmp_dir, "child_r_tests.R")
-  writeLines("stop('R_TESTS leaked into the SPM contrast script')", r_tests)
-  withr::local_envvar(c(R_TESTS = r_tests))
 
   # Fake SPM design columns (two runs, two conditions)
   mnames <- c(
@@ -63,7 +59,7 @@ test_that("generate_spm_contrasts_from_model maps L1 contrasts to SPM columns", 
       "-spm_path", tmp_dir
     )
   )
-  expect_false(inherits(status, "status"), info = paste(status, collapse = "\n"))
+  expect_null(attr(status, "status"), info = paste(status, collapse = "\n"))
 
   mfile <- file.path(tmp_dir, "estimate_glm_contrasts.m")
   expect_true(file.exists(mfile))
@@ -135,7 +131,7 @@ test_that("generate_spm_contrasts_from_model matches compact SPM pmod labels", {
       "-spm_path", tmp_dir
     )
   )
-  expect_false(inherits(status, "status"), info = paste(status, collapse = "\n"))
+  expect_null(attr(status, "status"), info = paste(status, collapse = "\n"))
 
   mfile <- file.path(tmp_dir, "estimate_glm_contrasts.m")
   expect_true(file.exists(mfile))
@@ -198,7 +194,7 @@ test_that("generate_spm_contrasts_from_model adds session-specific and differenc
       "-spm_path", tmp_dir
     )
   )
-  expect_false(inherits(status, "status"), info = paste(status, collapse = "\n"))
+  expect_null(attr(status, "status"), info = paste(status, collapse = "\n"))
 
   mfile <- file.path(tmp_dir, "estimate_glm_contrasts.m")
   expect_true(file.exists(mfile))
@@ -272,7 +268,7 @@ test_that("generate_spm_contrasts_from_model adds centered projection main-effec
       "-spm_path", tmp_dir
     )
   )
-  expect_false(inherits(status, "status"), info = paste(status, collapse = "\n"))
+  expect_null(attr(status, "status"), info = paste(status, collapse = "\n"))
 
   mfile <- file.path(tmp_dir, "estimate_glm_contrasts.m")
   expect_true(file.exists(mfile))

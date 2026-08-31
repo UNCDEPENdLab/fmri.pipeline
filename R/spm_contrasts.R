@@ -53,7 +53,8 @@ generate_spm_contrasts <- function(output_dir, condition_contrasts=TRUE, unit_co
   setup_script <- system.file("Rscript", "setup_spm_contrasts.R", package="fmri.pipeline")
   stopifnot(file.exists(setup_script))
 
-  rscript_cmd <- paste0("Rscript --no-save --no-restore ", setup_script,
+  rscript_cmd <- paste0(shQuote(file.path(R.home("bin"), "Rscript")),
+    " --no-save --no-restore ", setup_script,
     " -mat_file ", mattmp,
     " -condition_contrasts ", as.character(condition_contrasts),
     " -unit_contrasts ", as.character(unit_contrasts),
@@ -164,7 +165,8 @@ generate_spm_contrasts_from_model <- function(output_dir, mobj,
   setup_script <- system.file("Rscript", "setup_spm_contrasts_from_model.R", package="fmri.pipeline")
   stopifnot(file.exists(setup_script))
 
-  rscript_cmd <- paste0("Rscript --no-save --no-restore ", setup_script,
+  rscript_cmd <- paste0(shQuote(file.path(R.home("bin"), "Rscript")),
+    " --no-save --no-restore ", setup_script,
     " -mat_file ", mattmp,
     " -contrast_rds ", spec_path,
     " -average_across_runs ", as.character(average_across_runs),

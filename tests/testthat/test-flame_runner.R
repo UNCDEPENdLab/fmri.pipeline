@@ -63,7 +63,7 @@ test_that("flame_runner uses parallel and clamps to allocation", {
   ), flame_list)
 
   withr::local_envvar(c(
-    PATH = paste(stub_dir, "/bin:/usr/bin", sep = .Platform$path.sep),
+    PATH = stub_dir,
     PARALLEL_LOG = parallel_log,
     SLURM_CPUS_PER_TASK = NA_character_,
     SLURM_NTASKS = "2",
@@ -139,7 +139,7 @@ test_that("flame_runner uses xargs when parallel is unavailable", {
   ), flame_list)
 
   withr::local_envvar(c(
-    PATH = paste(stub_dir, "/bin:/usr/bin", sep = .Platform$path.sep),
+    PATH = stub_dir,
     XARGS_LOG = xargs_log
   ))
 
@@ -210,7 +210,7 @@ test_that("flame_runner retries failed FLAME12 slices with FLAME1", {
   )
 
   withr::local_envvar(c(
-    PATH = paste(stub_dir, "/bin:/usr/bin", sep = .Platform$path.sep),
+    PATH = stub_dir,
     FAKE_FLAMEO_LOG = attempt_log,
     FLAME_RUNNER_FALLBACK_LOG = fallback_log
   ))
@@ -267,7 +267,7 @@ test_that("flame_runner reports unrecovered non-FLAME12 failures", {
   flame_list <- file.path(tmp, "flame.list")
   writeLines("exit 9", flame_list)
 
-  withr::local_envvar(c(PATH = paste(stub_dir, "/bin:/usr/bin", sep = .Platform$path.sep)))
+  withr::local_envvar(c(PATH = stub_dir))
 
   flame_runner <- source_tree_file("inst", "bin", "flame_runner")
   expect_warning(
@@ -315,7 +315,7 @@ test_that("flame_runner falls back when xargs lacks -d support", {
   ), flame_list)
 
   withr::local_envvar(c(
-    PATH = paste(stub_dir, "/bin:/usr/bin", sep = .Platform$path.sep)
+    PATH = stub_dir
   ))
 
   flame_runner <- source_tree_file("inst", "bin", "flame_runner")

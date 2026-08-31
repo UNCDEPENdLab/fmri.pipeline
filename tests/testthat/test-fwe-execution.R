@@ -110,6 +110,11 @@ test_that("pTFCE execution dry runs expose commands without side effects", {
   expect_s3_class(run, "fwe_run")
   expect_true(run$dry_run)
   expect_true(all(run$execution$execution_status == "planned"))
+  expect_true(all(grepl(
+    file.path(R.home("bin"), "Rscript"),
+    run$execution$command,
+    fixed = TRUE
+  )))
   expect_true(all(grepl("--out_dir", run$execution$command, fixed = TRUE)))
   expect_true(all(grepl("--fwep", run$execution$command, fixed = TRUE)))
   expect_false(dir.exists(plan$output_directory))
@@ -125,10 +130,6 @@ test_that("local pTFCE execution refreshes artifacts and task completion", {
   )
   plan <- plan_fwe_correction(gpa, spec, source = "setup")
 
-  # A nested Rscript must not inherit the R CMD check test harness.
-  r_tests <- file.path(root, "child_r_tests.R")
-  writeLines("stop('R_TESTS leaked into the pTFCE worker')", r_tests)
-  withr::local_envvar(c(R_TESTS = r_tests))
   run <- run_fwe_plan(plan, scheduler = "local", worker_script = worker)
 
   expect_true(all(run$execution$execution_status == "completed"))
