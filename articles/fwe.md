@@ -673,7 +673,7 @@ functional ROIs that may have dissociable statistics, you also tend to
 lose many FWE-significant voxels from the thresholding process. One
 solution to this is to extract voxelwise statistics from an a priori
 atlas, as noted above. This is achieved in the pipeline using
-[`extract_glm_betas_in_mask()`](https://uncdependlab.github.io/fmri.pipeline/reference/extract_glm_betas_in_mask.md).
+[`extract_glm_betas_in_mask()`](https://hallquistlab.github.io/fmri.pipeline/reference/extract_glm_betas_in_mask.md).
 
 A related approach is to extract coefficients from the atlas only for
 parcels that are in the FWE-significant map. That is, we can check
@@ -717,4 +717,4 @@ cobj$get_outputs()
 ```
 
 You can now use the atlas subset files of interest as an input mask to
-[`extract_glm_betas_in_mask()`](https://uncdependlab.github.io/fmri.pipeline/reference/extract_glm_betas_in_mask.md).
+[`extract_glm_betas_in_mask()`](https://hallquistlab.github.io/fmri.pipeline/reference/extract_glm_betas_in_mask.md).

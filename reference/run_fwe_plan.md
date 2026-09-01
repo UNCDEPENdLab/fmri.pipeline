@@ -4,7 +4,7 @@ Execute ready tasks locally or submit them through Slurm or TORQUE.
 Completed tasks are skipped unless `force = TRUE`. Local execution is
 synchronous and returns a refreshed plan; scheduler execution returns
 submitted job IDs and can later be refreshed with
-[`refresh_fwe_plan()`](https://uncdependlab.github.io/fmri.pipeline/reference/refresh_fwe_plan.md).
+[`refresh_fwe_plan()`](https://hallquistlab.github.io/fmri.pipeline/reference/refresh_fwe_plan.md).
 
 ## Usage
 
@@ -59,13 +59,13 @@ run_fwe_plan(
 - commands_per_cpu, cpus_per_job, memgb_per_command, time_per_command:
 
   resource settings passed to
-  [`cluster_submit_shell_jobs()`](https://uncdependlab.github.io/fmri.pipeline/reference/cluster_submit_shell_jobs.md)
+  [`cluster_submit_shell_jobs()`](https://hallquistlab.github.io/fmri.pipeline/reference/cluster_submit_shell_jobs.md)
   for Slurm and TORQUE execution.
 
 - sched_args, env_variables, wait_jobs:
 
   optional scheduler settings passed to
-  [`cluster_submit_shell_jobs()`](https://uncdependlab.github.io/fmri.pipeline/reference/cluster_submit_shell_jobs.md).
+  [`cluster_submit_shell_jobs()`](https://hallquistlab.github.io/fmri.pipeline/reference/cluster_submit_shell_jobs.md).
   Named `env_variables` are also applied during local execution.
 
 - stop_on_error:

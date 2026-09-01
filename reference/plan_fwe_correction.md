@@ -45,7 +45,7 @@ plan_fwe_correction(
 - source, cache_dir, refresh_status:
 
   passed to
-  [`resolve_fwe_targets()`](https://uncdependlab.github.io/fmri.pipeline/reference/resolve_fwe_targets.md).
+  [`resolve_fwe_targets()`](https://hallquistlab.github.io/fmri.pipeline/reference/resolve_fwe_targets.md).
 
 - lg:
 

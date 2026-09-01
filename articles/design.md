@@ -218,7 +218,7 @@ additional levels:
 - Per level of analysis using `gpa$level_backends`
 - Per model using `execution_backend`
 - At run time using arguments to
-  [`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
+  [`run_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
 
 The intended precedence order is:
 
@@ -305,7 +305,7 @@ specifications:
 
 If you want to override backend selection without changing the saved
 `gpa` object, pass overrides directly to
-[`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md):
+[`run_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md):
 
 ``` r
 
@@ -343,7 +343,7 @@ The current behavior is intentionally flexible but conservative:
 - If a model has `execution_backend`, that model uses that backend even
   if the level default is different.
 - If
-  [`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
+  [`run_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
   receives `level_backends` or `backend_overrides`, those run-time
   values override the object.
 

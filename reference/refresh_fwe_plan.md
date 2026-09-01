@@ -15,7 +15,7 @@ refresh_fwe_plan(plan)
 - plan:
 
   an `fwe_plan` or path to an RDS plan written by
-  [`write_fwe_plan()`](https://uncdependlab.github.io/fmri.pipeline/reference/write_fwe_plan.md).
+  [`write_fwe_plan()`](https://hallquistlab.github.io/fmri.pipeline/reference/write_fwe_plan.md).
 
 ## Value
 

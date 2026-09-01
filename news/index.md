@@ -5,25 +5,25 @@
 ### Declarative FWE correction workflow
 
 - Added a serializable
-  [`fwe_spec()`](https://uncdependlab.github.io/fmri.pipeline/reference/fwe_spec.md)
+  [`fwe_spec()`](https://hallquistlab.github.io/fmri.pipeline/reference/fwe_spec.md)
   API for describing level-3 FWE corrections with semantic
   model/contrast selectors, method options, correction masks, and
   scheduler settings. Specifications can be read from and written to
   YAML.
 
 - Added pTFCE plan and execution support through
-  [`plan_fwe_correction()`](https://uncdependlab.github.io/fmri.pipeline/reference/plan_fwe_correction.md),
-  [`run_fwe_plan()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_fwe_plan.md),
+  [`plan_fwe_correction()`](https://hallquistlab.github.io/fmri.pipeline/reference/plan_fwe_correction.md),
+  [`run_fwe_plan()`](https://hallquistlab.github.io/fmri.pipeline/reference/run_fwe_plan.md),
   and
-  [`refresh_fwe_plan()`](https://uncdependlab.github.io/fmri.pipeline/reference/refresh_fwe_plan.md).
+  [`refresh_fwe_plan()`](https://hallquistlab.github.io/fmri.pipeline/reference/refresh_fwe_plan.md).
   A single specification can fan out across all selected level-3
   z-statistic maps, with explicit preflight status for required inputs
   and optional dry-run command inspection.
 
 - Added persistent FWE result snapshots and artifact manifests via
-  [`collect_fwe_results()`](https://uncdependlab.github.io/fmri.pipeline/reference/collect_fwe_results.md)
+  [`collect_fwe_results()`](https://hallquistlab.github.io/fmri.pipeline/reference/collect_fwe_results.md)
   and
-  [`fwe_result_artifacts()`](https://uncdependlab.github.io/fmri.pipeline/reference/fwe_result_artifacts.md),
+  [`fwe_result_artifacts()`](https://hallquistlab.github.io/fmri.pipeline/reference/fwe_result_artifacts.md),
   providing stable, semantically selectable output paths for downstream
   analyses.
 
@@ -76,7 +76,7 @@
   as a request for a literal `join_cols` column, causing every affected
   design build to fail and leaving an empty FSL setup table.
 
-- [`run_feat_sepjobs()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_feat_sepjobs.md)
+- [`run_feat_sepjobs()`](https://hallquistlab.github.io/fmri.pipeline/reference/run_feat_sepjobs.md)
   now validates its FSL setup table before model filtering and reports a
   clear upstream-setup diagnostic instead of the misleading
   `object 'l1_model' not found` error.
@@ -87,9 +87,9 @@
   boundaries without copying caller-owned objects or converting existing
   data.frames.
 
-- [`mixed_by()`](https://uncdependlab.github.io/fmri.pipeline/reference/mixed_by.md)
+- [`mixed_by()`](https://hallquistlab.github.io/fmri.pipeline/reference/mixed_by.md)
   and
-  [`fill_atlas_with_stats()`](https://uncdependlab.github.io/fmri.pipeline/reference/fill_atlas_with_stats.md)
+  [`fill_atlas_with_stats()`](https://hallquistlab.github.io/fmri.pipeline/reference/fill_atlas_with_stats.md)
   now isolate their internal `data.table` operations from caller-owned
   inputs. Keying, sorting, and conversion inside these functions no
   longer change an input object’s class, key, or row order by reference.
@@ -125,14 +125,14 @@
   at submission time
 - Preflight report logged at pipeline start showing resolved backends,
   producer mappings, and artifact satisfaction for each analysis level
-- [`harvest_l3_inputs()`](https://uncdependlab.github.io/fmri.pipeline/reference/harvest_l3_inputs.md)
+- [`harvest_l3_inputs()`](https://hallquistlab.github.io/fmri.pipeline/reference/harvest_l3_inputs.md)
   replaces the former
-  [`harvest_fsl_copes()`](https://uncdependlab.github.io/fmri.pipeline/reference/harvest_fsl_copes.md)
+  [`harvest_fsl_copes()`](https://hallquistlab.github.io/fmri.pipeline/reference/harvest_fsl_copes.md)
   with a dispatcher that routes to backend-specific harvesters based on
   the declared `producer_backend`
 - Run-time backend overrides via `level_backends` and
   `backend_overrides` arguments to
-  [`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
+  [`run_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
 
 ### FSL/FLAME backend reliability
 
@@ -171,7 +171,7 @@
   detection and `dataTable.txt` generation
 - Backend specification defaults (`default_glm_backend_specs`) for FSL,
   SPM, and AFNI
-- [`lookup_feat_outputs()`](https://uncdependlab.github.io/fmri.pipeline/reference/lookup_feat_outputs.md)
+- [`lookup_feat_outputs()`](https://hallquistlab.github.io/fmri.pipeline/reference/lookup_feat_outputs.md)
   now returns stable, level-specific `$l1`, `$l2`, and `$l3` tables by
   default, with an explicit `format = "long"` option. L2 passthroughs
   are represented as logical L2 rows and identify their L1

@@ -73,7 +73,7 @@ The preferred setup uses three explicit long-form data frames:
 
 Default identifier columns are `id`, `session`, and `run_number`. If
 your project uses different names, pass a named `vm` vector to
-[`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md).
+[`setup_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md).
 
 For BIDS-like derivatives, helper functions can create starter tables:
 
@@ -107,13 +107,13 @@ Install from GitHub:
 ``` r
 
 install.packages("remotes")
-remotes::install_github("UNCDEPENdLab/fmri.pipeline")
+remotes::install_github("HallquistLab/fmri.pipeline")
 ```
 
 Create the analysis object from explicit input tables:
 
 `session_data` is not a user-provided input;
-[`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
+[`setup_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
 derives `gpa$session_data` internally from `run_data` and
 `subject_data`.
 
@@ -302,7 +302,7 @@ analysis_name/
 
 The pipeline writes backend preflight information before submission,
 then tracks submitted jobs through the SQLite database.
-[`diagnose_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/diagnose_pipeline.md)
+[`diagnose_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/diagnose_pipeline.md)
 summarizes the job tree and helps locate failed or incomplete stages.
 
 ## Longitudinal workflows
@@ -329,17 +329,17 @@ YAML model file.
 
 The pkgdown site is the primary documentation entry point:
 
-- Package website: <https://uncdependlab.github.io/fmri.pipeline/>
+- Package website: <https://hallquistlab.github.io/fmri.pipeline/>
 - Quick start:
-  <https://uncdependlab.github.io/fmri.pipeline/articles/quickstart.html>
+  <https://hallquistlab.github.io/fmri.pipeline/articles/quickstart.html>
 - Design concepts:
-  <https://uncdependlab.github.io/fmri.pipeline/articles/design.html>
+  <https://hallquistlab.github.io/fmri.pipeline/articles/design.html>
 - Longitudinal analyses:
-  <https://uncdependlab.github.io/fmri.pipeline/articles/longitudinal.html>
+  <https://hallquistlab.github.io/fmri.pipeline/articles/longitudinal.html>
 - Pipeline diagnosis:
-  <https://uncdependlab.github.io/fmri.pipeline/articles/diagnosis.html>
+  <https://hallquistlab.github.io/fmri.pipeline/articles/diagnosis.html>
 - Reference index:
-  <https://uncdependlab.github.io/fmri.pipeline/reference/index.html>
+  <https://hallquistlab.github.io/fmri.pipeline/reference/index.html>
 
 ## Development status
 
@@ -351,4 +351,4 @@ specifications, explicit `subject_data`/`run_data`/`trial_data` tables,
 and small test runs before launching the full model grid.
 
 Issues and feature requests are tracked at
-<https://github.com/UNCDEPENdLab/fmri.pipeline/issues>.
+<https://github.com/HallquistLab/fmri.pipeline/issues>.

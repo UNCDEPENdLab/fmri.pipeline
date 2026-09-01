@@ -11,10 +11,10 @@ will later export to YAML.
 The recommended workflow is:
 
 1.  Create a `gpa` object with
-    [`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md).
+    [`setup_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md).
 2.  Run the interactive builders once.
 3.  Export the resulting model specification with
-    [`export_glm_config()`](https://uncdependlab.github.io/fmri.pipeline/reference/export_glm_config.md).
+    [`export_glm_config()`](https://hallquistlab.github.io/fmri.pipeline/reference/export_glm_config.md).
 4.  Review and edit the YAML file.
 5.  Use the YAML file for future reproducible runs.
 
@@ -64,12 +64,12 @@ file easier to version-control.
 
 The builders rely on the input data stored in `gpa`:
 
-- [`build_l1_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l1_models.md)
+- [`build_l1_models()`](https://hallquistlab.github.io/fmri.pipeline/reference/build_l1_models.md)
   uses `gpa$trial_data`, and optionally `gpa$ppi_data`.
-- [`build_l2_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l2_models.md)
+- [`build_l2_models()`](https://hallquistlab.github.io/fmri.pipeline/reference/build_l2_models.md)
   uses a Level 2 modeling frame composed from run-level and
   session-level information.
-- [`build_l3_models()`](https://uncdependlab.github.io/fmri.pipeline/reference/build_l3_models.md)
+- [`build_l3_models()`](https://hallquistlab.github.io/fmri.pipeline/reference/build_l3_models.md)
   uses `gpa$subject_data`.
 
 Before entering the builder, check that the relevant columns are present

@@ -145,7 +145,7 @@ mixed_by(
   compatibility with the historical output, `"rstanarm"` uses
   [`rstanarm::stan_lmer()`](https://mc-stan.org/rstanarm/reference/stan_glmer.html),
   and `"jlmer"` uses the package's
-  [`jlmer()`](https://uncdependlab.github.io/fmri.pipeline/reference/jlmer.md)
+  [`jlmer()`](https://hallquistlab.github.io/fmri.pipeline/reference/jlmer.md)
   function.
 
 - engine_args:

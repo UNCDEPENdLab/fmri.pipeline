@@ -3,7 +3,7 @@
 ## Overview of `diagnose_pipeline` Function
 
 The
-[`diagnose_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/diagnose_pipeline.md)
+[`diagnose_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/diagnose_pipeline.md)
 function provides the user quick access to job tracking data, output
 files, and log files to help diagnose faulty pipeline runs. To use the
 function, supply it with either a ‘gpa’ object or a path string to a

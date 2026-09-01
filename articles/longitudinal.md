@@ -431,7 +431,7 @@ not `id`, because the AFNI data table renames the subject column to
 
 For a normal analysis, build the pipeline object and model specs, then
 let
-[`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
+[`run_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
 handle the staged setup and execution:
 
 ``` r
@@ -1119,7 +1119,7 @@ estimated by AFNI `3dLMEr`, and `producer_backend: fsl` indicates that
 the Level 2 inputs it consumes were produced by FSL. These fields can
 also be set programmatically on the `gpa` object (see the **Choosing
 model backends** section of
-[`vignette("design")`](https://uncdependlab.github.io/fmri.pipeline/articles/design.md)).
+[`vignette("design")`](https://hallquistlab.github.io/fmri.pipeline/articles/design.md)).
 
 #### Example 2: Unequally spaced visits with a random slope for time
 

@@ -13,7 +13,7 @@ validate_fwe_artifact_manifest(x)
 - x:
 
   a data frame created by
-  [`collect_fwe_results()`](https://uncdependlab.github.io/fmri.pipeline/reference/collect_fwe_results.md).
+  [`collect_fwe_results()`](https://hallquistlab.github.io/fmri.pipeline/reference/collect_fwe_results.md).
 
 ## Value
 

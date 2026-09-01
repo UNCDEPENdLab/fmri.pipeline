@@ -49,7 +49,7 @@
 <li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="search.json">
 </form></li>
-<li class="nav-item"><a class="external-link nav-link" href="https://github.com/UNCDEPENdLab/fmri.pipeline/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
+<li class="nav-item"><a class="external-link nav-link" href="https://github.com/HallquistLab/fmri.pipeline/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul>
 </div>
 
@@ -151,11 +151,11 @@
 <p>Install from GitHub:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"UNCDEPENdLab/fmri.pipeline"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"HallquistLab/fmri.pipeline"</span><span class="op">)</span></span></code></pre></div>
 <p>Create the analysis object from explicit input tables:</p>
 <p><code>session_data</code> is not a user-provided input; <code><a href="reference/setup_glm_pipeline.html">setup_glm_pipeline()</a></code> derives <code>gpa$session_data</code> internally from <code>run_data</code> and <code>subject_data</code>.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/fmri.pipeline/">fmri.pipeline</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://hallquistlab.github.io/fmri.pipeline/">fmri.pipeline</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">gpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/setup_glm_pipeline.html">setup_glm_pipeline</a></span><span class="op">(</span></span>
 <span>  analysis_name <span class="op">=</span> <span class="st">"facehouse_longitudinal_demo"</span>,</span>
@@ -327,17 +327,17 @@
 </h2>
 <p>The pkgdown site is the primary documentation entry point:</p>
 <ul>
-<li>Package website: <a href="https://uncdependlab.github.io/fmri.pipeline/" class="uri">https://uncdependlab.github.io/fmri.pipeline/</a>
+<li>Package website: <a href="https://hallquistlab.github.io/fmri.pipeline/" class="uri">https://hallquistlab.github.io/fmri.pipeline/</a>
 </li>
-<li>Quick start: <a href="https://uncdependlab.github.io/fmri.pipeline/articles/quickstart.html" class="uri">https://uncdependlab.github.io/fmri.pipeline/articles/quickstart.html</a>
+<li>Quick start: <a href="https://hallquistlab.github.io/fmri.pipeline/articles/quickstart.html" class="uri">https://hallquistlab.github.io/fmri.pipeline/articles/quickstart.html</a>
 </li>
-<li>Design concepts: <a href="https://uncdependlab.github.io/fmri.pipeline/articles/design.html" class="uri">https://uncdependlab.github.io/fmri.pipeline/articles/design.html</a>
+<li>Design concepts: <a href="https://hallquistlab.github.io/fmri.pipeline/articles/design.html" class="uri">https://hallquistlab.github.io/fmri.pipeline/articles/design.html</a>
 </li>
-<li>Longitudinal analyses: <a href="https://uncdependlab.github.io/fmri.pipeline/articles/longitudinal.html" class="uri">https://uncdependlab.github.io/fmri.pipeline/articles/longitudinal.html</a>
+<li>Longitudinal analyses: <a href="https://hallquistlab.github.io/fmri.pipeline/articles/longitudinal.html" class="uri">https://hallquistlab.github.io/fmri.pipeline/articles/longitudinal.html</a>
 </li>
-<li>Pipeline diagnosis: <a href="https://uncdependlab.github.io/fmri.pipeline/articles/diagnosis.html" class="uri">https://uncdependlab.github.io/fmri.pipeline/articles/diagnosis.html</a>
+<li>Pipeline diagnosis: <a href="https://hallquistlab.github.io/fmri.pipeline/articles/diagnosis.html" class="uri">https://hallquistlab.github.io/fmri.pipeline/articles/diagnosis.html</a>
 </li>
-<li>Reference index: <a href="https://uncdependlab.github.io/fmri.pipeline/reference/index.html" class="uri">https://uncdependlab.github.io/fmri.pipeline/reference/index.html</a>
+<li>Reference index: <a href="https://hallquistlab.github.io/fmri.pipeline/reference/index.html" class="uri">https://hallquistlab.github.io/fmri.pipeline/reference/index.html</a>
 </li>
 </ul>
 </div>
@@ -345,14 +345,14 @@
 <h2 id="development-status">Development status<a class="anchor" aria-label="anchor" href="#development-status"></a>
 </h2>
 <p><code>fmri.pipeline</code> is under active development. FSL-centered analyses are the most established path. Backend resolution, SPM support, AFNI Level 3 workflows, longitudinal model specification, and diagnostic tooling are current areas of active work. For new projects, prefer YAML model specifications, explicit <code>subject_data</code>/<code>run_data</code>/<code>trial_data</code> tables, and small test runs before launching the full model grid.</p>
-<p>Issues and feature requests are tracked at <a href="https://github.com/UNCDEPENdLab/fmri.pipeline/issues" class="external-link uri">https://github.com/UNCDEPENdLab/fmri.pipeline/issues</a>.</p>
+<p>Issues and feature requests are tracked at <a href="https://github.com/HallquistLab/fmri.pipeline/issues" class="external-link uri">https://github.com/HallquistLab/fmri.pipeline/issues</a>.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">
 <h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">
-<li><a href="https://github.com/UNCDEPENdLab/fmri.pipeline/" class="external-link">Browse source code</a></li>
-<li><a href="https://github.com/UNCDEPENdLab/fmri.pipeline/issues" class="external-link">Report a bug</a></li>
+<li><a href="https://github.com/HallquistLab/fmri.pipeline/" class="external-link">Browse source code</a></li>
+<li><a href="https://github.com/HallquistLab/fmri.pipeline/issues" class="external-link">Report a bug</a></li>
 </ul>
 </div>
 

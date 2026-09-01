@@ -72,12 +72,12 @@ cluster_submit_shell_jobs(
 - sched_args:
 
   scheduler directives passed to
-  [`cluster_job_submit()`](https://uncdependlab.github.io/fmri.pipeline/reference/cluster_job_submit.md).
+  [`cluster_job_submit()`](https://hallquistlab.github.io/fmri.pipeline/reference/cluster_job_submit.md).
 
 - env_variables:
 
   named environment variables passed to
-  [`cluster_job_submit()`](https://uncdependlab.github.io/fmri.pipeline/reference/cluster_job_submit.md).
+  [`cluster_job_submit()`](https://hallquistlab.github.io/fmri.pipeline/reference/cluster_job_submit.md).
 
 - wait_jobs:
 

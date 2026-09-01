@@ -17,11 +17,11 @@ are resolved before jobs are launched.
 
 This guide is meant to get a new user from input tables to a submitted
 pipeline run. More detailed conceptual material is in
-[`vignette("design")`](https://uncdependlab.github.io/fmri.pipeline/articles/design.md),
+[`vignette("design")`](https://hallquistlab.github.io/fmri.pipeline/articles/design.md),
 longitudinal guidance is in
-[`vignette("longitudinal")`](https://uncdependlab.github.io/fmri.pipeline/articles/longitudinal.md),
+[`vignette("longitudinal")`](https://hallquistlab.github.io/fmri.pipeline/articles/longitudinal.md),
 and run diagnosis is in
-[`vignette("diagnosis")`](https://uncdependlab.github.io/fmri.pipeline/articles/diagnosis.md).
+[`vignette("diagnosis")`](https://hallquistlab.github.io/fmri.pipeline/articles/diagnosis.md).
 
 ## Model Combinations
 
@@ -61,7 +61,7 @@ nomenclature is stable across single-run and multi-run analyses.
 
 The preferred setup is to provide three long-form data frames:
 `trial_data`, `run_data`, and `subject_data`.
-[`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
+[`setup_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
 can derive `run_data` and `subject_data` from `trial_data` when needed,
 but explicit tables are easier to audit and usually clearer for new
 analyses. Do not provide a separate `session_data` table; the GPA object
@@ -86,7 +86,7 @@ The default identifier names are:
 | Run data directory                | `mr_dir`       |
 
 If your data use different names, pass a named `vm` vector to
-[`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md):
+[`setup_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md):
 
 ``` r
 
@@ -329,7 +329,7 @@ any analysis-specific task variables before running the pipeline.
 
 ## Create the `gpa` Object
 
-[`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
+[`setup_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
 validates inputs, normalizes column names, sets output locations,
 records scheduler and compute settings, and stores model specifications.
 If models are not available yet, pass `NULL` and build them afterward.
@@ -412,7 +412,7 @@ reproducible analysis, the recommended workflow is:
 
 1.  Build a model interactively once, if useful.
 2.  Export it with
-    [`export_glm_config()`](https://uncdependlab.github.io/fmri.pipeline/reference/export_glm_config.md).
+    [`export_glm_config()`](https://hallquistlab.github.io/fmri.pipeline/reference/export_glm_config.md).
 3.  Edit the YAML into a project-owned specification.
 4.  Rebuild future `gpa` objects from that specification.
 
@@ -428,7 +428,7 @@ export_glm_config(gpa, file = "clock_glm_spec.yaml")
 ```
 
 You can also ask
-[`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
+[`setup_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
 to prompt immediately by using `l1_models = "prompt"`,
 `l2_models = "prompt"`, or `l3_models = "prompt"`.
 
@@ -548,7 +548,7 @@ This guide shows minimal contrast settings. For a full explanation of
 diagonal contrasts, condition means, pairwise differences, cell means,
 overall response, simple slopes, emmeans weighting, and custom contrast
 entry, see
-[`vignette("interactive-model-builder")`](https://uncdependlab.github.io/fmri.pipeline/articles/interactive-model-builder.md).
+[`vignette("interactive-model-builder")`](https://hallquistlab.github.io/fmri.pipeline/articles/interactive-model-builder.md).
 
 For categorical predictors at Level 2 or Level 3, include reference
 levels when interpretation matters:
@@ -633,7 +633,7 @@ Current limitations are important:
   practice, AFNI Level 3 should usually specify `producer_backend: fsl`.
 
 When
-[`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
+[`run_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
 starts, it resolves backend selection, validates producer requirements,
 and logs a backend preflight report. If you see a backend or producer
 error, read that report first.
@@ -648,7 +648,7 @@ run_glm_pipeline(gpa)
 ```
 
 By default,
-[`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
+[`run_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
 prompts you to choose L1, L2, and L3 models. For scripted runs, pass
 model names explicitly:
 
@@ -822,10 +822,10 @@ manifest[, c("status", "job_id", "job_name", "scheduler_log", "batch_file")]
 - **Missing run files**: prefer explicit `run_nifti` paths and verify
   `file.exists(run_df$run_nifti)` before setup.
 - **TR not provided**: provide either `tr = <seconds>` in
-  [`setup_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
+  [`setup_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/setup_glm_pipeline.md)
   or a numeric `tr` column in `run_data`.
 - **Model specs not finalized**:
-  [`run_glm_pipeline()`](https://uncdependlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
+  [`run_glm_pipeline()`](https://hallquistlab.github.io/fmri.pipeline/reference/run_glm_pipeline.md)
   requires a valid `l1_model_set`. Build L1 models before submission.
 - **Confound column mismatch**: if confound files have no header, set
   `confound_input_colnames`. If they use fMRIPrep-style missing values,

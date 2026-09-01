@@ -8,7 +8,7 @@ articles:
   interactive-model-builder: interactive-model-builder.html
   longitudinal: longitudinal.html
   quickstart: quickstart.html
-last_built: 2026-08-31T17:50Z
+last_built: 2026-09-01T01:09Z
 urls:
-  reference: https://uncdependlab.github.io/fmri.pipeline/reference
-  article: https://uncdependlab.github.io/fmri.pipeline/articles
+  reference: https://hallquistlab.github.io/fmri.pipeline/reference
+  article: https://hallquistlab.github.io/fmri.pipeline/articles

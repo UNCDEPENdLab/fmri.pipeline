@@ -7,9 +7,9 @@ fMRI data.
 
 Useful links:
 
-- <https://uncdependlab.github.io/fmri.pipeline/>
+- <https://hallquistlab.github.io/fmri.pipeline/>
 
-- Report bugs at <https://github.com/UNCDEPENdLab/fmri.pipeline/issues>
+- Report bugs at <https://github.com/HallquistLab/fmri.pipeline/issues>
 
 ## Author
 

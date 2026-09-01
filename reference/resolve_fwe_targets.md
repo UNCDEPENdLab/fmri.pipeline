@@ -2,7 +2,7 @@
 
 Resolve semantic model and contrast selectors against the canonical FSL
 output inventory returned by
-[`lookup_feat_outputs()`](https://uncdependlab.github.io/fmri.pipeline/reference/lookup_feat_outputs.md).
+[`lookup_feat_outputs()`](https://hallquistlab.github.io/fmri.pipeline/reference/lookup_feat_outputs.md).
 Resolution never constructs FEAT paths independently.
 
 ## Usage
@@ -42,7 +42,7 @@ resolve_fwe_targets(
 - source, cache_dir, refresh_status:
 
   passed to
-  [`lookup_feat_outputs()`](https://uncdependlab.github.io/fmri.pipeline/reference/lookup_feat_outputs.md).
+  [`lookup_feat_outputs()`](https://hallquistlab.github.io/fmri.pipeline/reference/lookup_feat_outputs.md).
 
 - lg:
 
