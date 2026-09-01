@@ -115,9 +115,9 @@ build_fwe_commands.fwe_method_ptfce <- function(
     method, plan, task_rows, worker_script = NULL) {
   worker_script <- resolve_ptfce_worker_script(worker_script)
   rscript <- rscript_executable()
-  commands <- vapply(seq_len(nrow(task_rows)), function(ii) {
+  arguments <- lapply(seq_len(nrow(task_rows)), function(ii) {
     alpha <- task_rows$fwe_alpha[[ii]]
-    arguments <- c(
+    task_arguments <- c(
       "--zstat", task_rows$zstat_file[ii],
       "--mask", task_rows$correction_mask_file[ii],
       "--fsl_smoothest", task_rows$smoothness_file[ii],
@@ -128,15 +128,25 @@ build_fwe_commands.fwe_method_ptfce <- function(
         "--write_thresh_imgs"
       }
     )
-    arguments <- arguments[!is.na(arguments) & nzchar(arguments)]
-    fwe_shell_command(rscript, c(worker_script, arguments))
-  }, character(1L))
+    task_arguments <- task_arguments[
+      !is.na(task_arguments) & nzchar(task_arguments)
+    ]
+    c(worker_script, task_arguments)
+  })
+  commands <- vapply(
+    arguments,
+    function(task_arguments) fwe_shell_command(rscript, task_arguments),
+    character(1L)
+  )
 
-  data.frame(
+  result <- data.frame(
     task_id = task_rows$task_id,
+    executable = rep(rscript, nrow(task_rows)),
     command = unname(commands),
     stringsAsFactors = FALSE
   )
+  result$arguments <- I(arguments)
+  result
 }
 
 normalize_fwe_run_scheduler <- function(scheduler) {
@@ -333,6 +343,11 @@ run_fwe_plan <- function(
 
   if (identical(scheduler, "local")) {
     local_env <- normalize_fwe_run_environment(env_variables)
+    # A child R process must not run the parent R CMD check harness.
+    local_env <- c(
+      local_env[!startsWith(local_env, "R_TESTS=")],
+      "R_TESTS="
+    )
     for (ii in run_rows) {
       script_file <- file.path(
         jobs_directory, paste0(execution$task_id[ii], ".bash")
@@ -343,8 +358,16 @@ run_fwe_plan <- function(
       )
       Sys.chmod(script_file, mode = "0755")
       execution$script_file[ii] <- script_file
+      command_row <- match(
+        execution$task_id[ii], command_table$task_id
+      )
+      process_arguments <- vapply(
+        command_table$arguments[[command_row]],
+        shQuote,
+        character(1L)
+      )
       execution$exit_status[ii] <- suppressWarnings(system2(
-        "bash", script_file,
+        command_table$executable[command_row], process_arguments,
         stdout = execution$log_file[ii],
         stderr = execution$log_file[ii],
         env = local_env
