@@ -20,14 +20,11 @@
 #'   "bush2015", which implements a resampling approach as well, or "reglin"/"regularized_linear",
 #'   which estimates a continuous latent activity time series using regularized linear deconvolution
 #'   with optional HRF tuning.
-#' @param decon_settings A list of settings passed to the deconvolution algorithm. If you have a compiled deconvolvefilter binary,
-#'   pass it as \code{bush2011_binary}, which will be used in deconvolution.
+#' @param decon_settings A list of settings passed to the deconvolution algorithm.
 #' @param afni_dir Full path to directory containing AFNI binaries (this function uses 3dMaskdump).
 #'
-#' @details The Bush 2011 algorithm is implemented in a compiled binary called deconvolvefilter
-#'   (https://github.com/UNCDEPENdLab/deconvolution-filtering) that is much faster than the pure R (or original MATLAB) version.
-#'   We recommend using this for whole-brain deconvolution. The package includes a binary for
-#'   the Linux x86_64 architecture.
+#' @details The Bush 2011 algorithm uses the package's internal RcppArmadillo
+#'   implementation and does not require an external executable.
 #'
 #'   If you want to use subject metadata to name the output file, use \code{this_subj} in your \code{out_file_expression}, which will give you access to a one-row
 #'   data.frame containing the metadata for the current subject in the loop.
@@ -59,9 +56,8 @@
 #' @importFrom checkmate assert_file_exists
 #' @importFrom foreach %do% foreach
 #' @importFrom dplyr mutate across select left_join
-#' @importFrom readr write_delim write_csv
+#' @importFrom readr write_csv
 #' @importFrom stats setNames
-#' @importFrom tibble as_tibble
 #' @export
 voxelwise_deconvolution <- function(
   niftis, add_metadata=NULL, out_dir=getwd(), out_file_expression=NULL,
@@ -77,6 +73,10 @@ voxelwise_deconvolution <- function(
   checkmate::assert_data_frame(add_metadata, nrows=length(niftis), null.ok=TRUE)
   sapply(atlas_files, checkmate::assert_file_exists)
   checkmate::assert_numeric(TR, lower=0.01)
+  algorithm <- match.arg(
+    algorithm,
+    c("bush2011", "bush2015", "reglin", "regularized_linear")
+  )
 
   if (!is.null(decon_settings$kernel)) {
     hrf_pad <- length(decon_settings$kernel)
@@ -114,10 +114,6 @@ voxelwise_deconvolution <- function(
   } else {
     registerDoSEQ()
   }
-
-  # Whether to write a file with the input to deconvolve_nlreg to an external file. 
-  # Needed if we are using the external binary, but not the internal C++ function
-  from_file <- ifelse(algorithm == "bush2011_external", TRUE, FALSE)
 
   #loop over atlas files
   for (ai in seq_along(atlas_files)) {
@@ -204,24 +200,11 @@ voxelwise_deconvolution <- function(
       # pct signal change around 0
       #to_deconvolve <- t(apply(to_deconvolve, 1, function(x) { x/mean(x)*100 - 100 }))
 
-      if (isTRUE(from_file)) {
-        temp_i <- tempfile()
-        temp_o <- tempfile()
-
-        # to_deconvolve %>%  as_tibble() %>% write_delim(path=temp_i, col_names=FALSE)
-
-        # zero pad tail end (based on various readings, but not original paper)
-        # this was decided on because we see the deconvolved signal dropping to 0.5 for all voxels
-
-        to_deconvolve %>%
-          cbind(matrix(0, nrow = nrow(to_deconvolve), ncol = hrf_pad)) %>%
-          as_tibble() %>%
-          write_delim(file = temp_i, col_names = FALSE)
-      } else {
-        alg_input <- to_deconvolve %>%
-          cbind(matrix(0, nrow = nrow(to_deconvolve), ncol = hrf_pad)) %>%
-          as.matrix()
-      }
+      # Zero pad the tail end to keep the deconvolved signal stable at the
+      # boundary and trim the same padding after deconvolution.
+      alg_input <- to_deconvolve %>%
+        cbind(matrix(0, nrow = nrow(to_deconvolve), ncol = hrf_pad)) %>%
+        as.matrix()
 
       #test1 <- deconvolve_nlreg(to_deconvolve[117,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
       #test2 <- deconvolve_nlreg(to_deconvolve[118,], kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon)
@@ -278,49 +261,9 @@ voxelwise_deconvolution <- function(
           })
 
         deconv_mat <- t(deconv_mat)
-      } else if (algorithm == "bush2011_external") {
-        #use C++ implementation of Bush 2011 algorithm, if possible
-        decon_bin <- NULL #default to pure R algorithm
-        if (is.null(decon_settings$bush2011_binary)) {
-          ss <- Sys.info()
-          if (ss["sysname"] == "Linux") {
-            if (ss["machine"] == "x86_64") {
-              #decon_bin <- system.file("bin", "linux_x64", "deconvolvefilter", package = "fmri.pipeline")
-              decon_bin <- "/proj/mnhallqlab/users/michael/fmri.pipeline/inst/bin/linux_x64/deconvolvefilter"
-              # decon_bin <- "~/ll/users/michael/fmri.pipeline/inst/bin/linux_x64/deconvolvefilter"
-            }
-          }
-        } else {
-          decon_bin <- decon_settings$bush2011_binary
-        }
-        
-        if (is.null(decon_bin)) {
-          alg_input <- as.matrix(data.table::fread(temp_i))
-          deconv_mat <- foreach(vox_ts=iter(alg_input, by="row"), .combine="rbind", .packages=c("fmri.pipeline")) %do% {
-            reg <- tryCatch(deconvolve_nlreg(as.vector(vox_ts), kernel=decon_settings$kernel, nev_lr=decon_settings$nev_lr, epsilon=decon_settings$epsilon),
-                            error=function(e) { cat("Problem deconvolving: ", niftis[si], as.character(e), "\n", file=log_file, append=TRUE); return(rep(NA, length(vox_ts))) })
-            return(reg)
-          }
-        } else {
-          checkmate::assert_file_exists(decon_bin)
-
-          #fo argument is 1/TR: https://github.com/UNCDEPENdLab/deconvolution-filtering/blob/f26df0ea1eb30f2019795f17f93e713517a220e4/ref/backup/deconvolve_filter.m
-          #Looking at spm_hrf, it generates a vector of 33 values for the HRF for 1s TR. deconvolvefilter pads the time series at the beginning by this length
-          #if you don't return a convolved result, it doesn't do the trimming for you...
-          res <- system(paste0(decon_bin, " -i=", temp_i, " -o=", temp_o, " -convolved=0 -fo=", 1/TR, " -thread=2 >/dev/null 2>/dev/null"), intern=FALSE)
-          if (res != 0) {
-            cat("Problem deconvolving: ", niftis[si], "\n", file=log_file, append=TRUE)
-            deconv_mat <- matrix(NA, nrow=nrow(to_deconvolve), ncol=ncol(to_deconvolve))
-          } else {
-            deconv_mat <- as.matrix(read.table(temp_o, header=FALSE)) %>% unname()  #remove names to avoid confusion in melt
-            
-            #NB. 17Apr2019. I modified the compiled C++ program to chop the leading zeros itself for all outputs (rather than leaving the leading hrf_pad)
-            #deconv_mat <- deconv_mat[,c(-1*1:hrf_pad, seq(-ncol(deconv_mat), -ncol(deconv_mat)+hrf_pad-1))] #trim leading and trailing padding
-          }
-        }
       }
       
-      #trim hrf end-padding for both C++ and R variants
+      # Trim the HRF end-padding for all variants.
       deconv_mat <- deconv_mat[, c(seq(-ncol(deconv_mat), -ncol(deconv_mat)+hrf_pad-1))] #trim trailing padding added above
 
       # melt this for combination

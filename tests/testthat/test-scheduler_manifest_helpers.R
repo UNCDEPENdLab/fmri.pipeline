@@ -20,6 +20,7 @@ test_that("scheduler log filenames include scheduler, job id, job name, and extr
 })
 
 test_that("job manifest shell helper writes a tsv row in the artifact directory", {
+  skip_on_os("windows")
   tmp <- withr::local_tempdir()
   artifact_dir <- file.path(tmp, "model.feat")
   script <- file.path(tmp, "manifest_test.sh")

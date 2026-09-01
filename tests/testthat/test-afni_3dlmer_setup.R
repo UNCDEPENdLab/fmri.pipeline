@@ -117,7 +117,7 @@ test_that("afni_3dlmer_setup builds 3dLMEr tables from refit model covariates", 
   expect_true(any(grepl(">> \"$log_file\" 2>&1", script_lines, fixed = TRUE)))
   expect_true(any(grepl("-qVars 'age'", script_lines, fixed = TRUE)))
   expect_true(any(grepl("-model 'age+group+(1|Subj)'", script_lines, fixed = TRUE)))
-  expect_true(any(grepl(paste("-dataTable", shQuote("@dataTable.txt")), script_lines, fixed = TRUE)))
+  expect_true(any(grepl(paste("-dataTable", shQuote("@dataTable.txt", type = "sh")), script_lines, fixed = TRUE)))
 })
 
 test_that("afni_3dlmer_setup builds an intersection mask from FSL L2 inputs when no explicit mask is set", {
@@ -219,5 +219,5 @@ test_that("afni_3dlmer_setup builds an intersection mask from FSL L2 inputs when
   expect_identical(sum(mask_img != 0), 6L)
 
   script_lines <- readLines(res$data$afni_script[1L])
-  expect_true(any(grepl(paste("-mask", shQuote(res$data$mask_file[1L])), script_lines, fixed = TRUE)))
+  expect_true(any(grepl(paste("-mask", shQuote(res$data$mask_file[1L], type = "sh")), script_lines, fixed = TRUE)))
 })

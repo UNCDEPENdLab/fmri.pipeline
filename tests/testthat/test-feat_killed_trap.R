@@ -5,6 +5,12 @@
 #   2. Skip directories that already have .feat_complete
 #   3. Write .feat_fail only to directories that are still in-flight or not started
 
+if (identical(.Platform$OS.type, "windows")) {
+  test_that("feat_killed trap tests require Bash signal semantics", {
+    skip("requires Bash signal and trap semantics")
+  })
+} else {
+
 # ---------------------------------------------------------------------------
 # Helper: build a minimal bash script that defines all_odirs and feat_killed,
 # then immediately calls feat_killed (simulating SIGTERM delivery).
@@ -140,3 +146,4 @@ test_that("feat_killed skips completed L3 .gfeat dir", {
   expect_true(file.exists(file.path(odirs, ".feat_complete")))
   expect_false(file.exists(file.path(odirs, ".feat_fail")))
 })
+}

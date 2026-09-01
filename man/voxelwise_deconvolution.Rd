@@ -55,8 +55,7 @@ have been dropped from the NIfTI data prior to deconvolution.}
 which estimates a continuous latent activity time series using regularized linear deconvolution
 with optional HRF tuning.}
 
-\item{decon_settings}{A list of settings passed to the deconvolution algorithm. If you have a compiled deconvolvefilter binary,
-pass it as \code{bush2011_binary}, which will be used in deconvolution.}
+\item{decon_settings}{A list of settings passed to the deconvolution algorithm.}
 
 \item{afni_dir}{Full path to directory containing AFNI binaries (this function uses 3dMaskdump).}
 }
@@ -67,10 +66,8 @@ Nothing (invisible NULL).
 Function to perform voxelwise deconvolution on an fMRI dataset using the fMRI model arguments object
 }
 \details{
-The Bush 2011 algorithm is implemented in a compiled binary called deconvolvefilter
-  (https://github.com/UNCDEPENdLab/deconvolution-filtering) that is much faster than the pure R (or original MATLAB) version.
-  We recommend using this for whole-brain deconvolution. The package includes a binary for
-  the Linux x86_64 architecture.
+The Bush 2011 algorithm uses the package's internal RcppArmadillo
+implementation and does not require an external executable.
 
   If you want to use subject metadata to name the output file, use \code{this_subj} in your \code{out_file_expression}, which will give you access to a one-row
   data.frame containing the metadata for the current subject in the loop.

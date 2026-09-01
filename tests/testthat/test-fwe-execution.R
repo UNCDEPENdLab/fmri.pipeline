@@ -120,6 +120,28 @@ test_that("pTFCE execution dry runs expose commands without side effects", {
   expect_false(dir.exists(plan$output_directory))
 })
 
+test_that("pTFCE commands retain structured arguments for local execution", {
+  root <- tempfile("fwe_execute_arguments_")
+  gpa <- make_fwe_execution_test_gpa(root)
+  worker <- make_fake_ptfce_worker(root)
+  spec <- fwe_spec(
+    "structured", targets = list(l3_cope_name = "group")
+  )
+  plan <- plan_fwe_correction(gpa, spec, source = "setup")
+
+  commands <- build_fwe_commands(
+    plan$spec$method, plan, plan$tasks, worker_script = worker
+  )
+
+  expect_identical(commands$executable, rscript_executable())
+  expect_length(commands$arguments, 1L)
+  expect_identical(
+    commands$arguments[[1L]][1L],
+    normalizePath(worker, mustWork = TRUE)
+  )
+  expect_true("--zstat" %in% commands$arguments[[1L]])
+})
+
 test_that("local pTFCE execution refreshes artifacts and task completion", {
   root <- tempfile("fwe_execute_local_")
   gpa <- make_fwe_execution_test_gpa(root)
@@ -130,8 +152,12 @@ test_that("local pTFCE execution refreshes artifacts and task completion", {
   )
   plan <- plan_fwe_correction(gpa, spec, source = "setup")
 
+  r_tests <- file.path(root, "child_r_tests.R")
+  writeLines("stop('R_TESTS leaked into the pTFCE worker')", r_tests)
+  withr::local_envvar(c(R_TESTS = r_tests))
   run <- run_fwe_plan(plan, scheduler = "local", worker_script = worker)
 
+  expect_identical(Sys.getenv("R_TESTS"), r_tests)
   expect_true(all(run$execution$execution_status == "completed"))
   expect_true(all(run$execution$exit_status == 0L))
   expect_true(all(file.exists(run$execution$script_file)))
@@ -269,6 +295,15 @@ test_that("local execution safely applies named environment variables", {
     fmri.pipeline:::normalize_fwe_run_environment(c("BAD-NAME" = "x")),
     "invalid environment variable name"
   )
+
+  variable <- "FMRI_PIPELINE_SCOPED_ENV_TEST"
+  withr::local_envvar(stats::setNames("before", variable))
+  observed <- fmri.pipeline:::with_fwe_run_environment(
+    stats::setNames("during", variable),
+    Sys.getenv(variable)
+  )
+  expect_identical(observed, "during")
+  expect_identical(Sys.getenv(variable), "before")
 })
 
 test_that("result collection updates a partial persistent manifest", {

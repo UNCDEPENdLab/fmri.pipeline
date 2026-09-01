@@ -1,3 +1,9 @@
+if (identical(.Platform$OS.type, "windows")) {
+  test_that("FLAME runner behavioral tests require POSIX shell semantics", {
+    skip("requires executable shell scripts and POSIX process semantics")
+  })
+} else {
+
 test_that("flame_runner uses parallel and clamps to allocation", {
   tmp <- withr::local_tempdir()
   stub_dir <- file.path(tmp, "stubs_parallel")
@@ -324,3 +330,4 @@ test_that("flame_runner falls back when xargs lacks -d support", {
   expect_true(file.exists(out_file))
   expect_equal(length(readLines(out_file)), 2)
 })
+}

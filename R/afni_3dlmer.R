@@ -536,14 +536,16 @@ build_3dlmer_command <- function(prefix, model_formula, qVars = NULL, glt_codes 
 
   model_formula <- sanitize_3dlmer_model_formula(model_formula)
 
-  cmd <- glue::glue("3dLMEr -prefix {shQuote(prefix)} -model {shQuote(model_formula)}")
+  cmd <- glue::glue(
+    "3dLMEr -prefix {shQuote(prefix, type = 'sh')} -model {shQuote(model_formula, type = 'sh')}"
+  )
 
   if (!is.null(qVars) && length(qVars) > 0) {
-    cmd <- paste(cmd, glue::glue("-qVars {shQuote(paste(qVars, collapse=\",\"))}"))
+    cmd <- paste(cmd, glue::glue("-qVars {shQuote(paste(qVars, collapse=\",\"), type = 'sh')}"))
   }
 
   if (!is.null(mask)) {
-    cmd <- paste(cmd, glue::glue("-mask {shQuote(mask)}"))
+    cmd <- paste(cmd, glue::glue("-mask {shQuote(mask, type = 'sh')}"))
   }
 
   if (njobs > 1) {
@@ -558,11 +560,11 @@ build_3dlmer_command <- function(prefix, model_formula, qVars = NULL, glt_codes 
       glt_name <- glt_table$label_afni[i]
       glt_code <- glt_table$code[i]
       # glt_code should already be in AFNI format: "Factor : 1*Level1 -1*Level2"
-      cmd <- paste(cmd, glue::glue("-gltCode {glt_name} {shQuote(glt_code)}"))
+      cmd <- paste(cmd, glue::glue("-gltCode {glt_name} {shQuote(glt_code, type = 'sh')}"))
     }
   }
 
-  cmd <- paste(cmd, glue::glue("-dataTable {shQuote(paste0('@', data_table_file))}"))
+  cmd <- paste(cmd, glue::glue("-dataTable {shQuote(paste0('@', data_table_file), type = 'sh')}"))
 
   return(cmd)
 }
@@ -602,7 +604,7 @@ write_3dlmer_files <- function(output_dir, dt, cmd, script_name = "run_3dlmer.sh
     "",
     "{",
     "  printf '%s\\n' \"[$start_time] Starting AFNI 3dLMEr\"",
-    paste0("  printf '%s\\n' ", shQuote(paste("Command:", cmd))),
+    paste0("  printf '%s\\n' ", shQuote(paste("Command:", cmd), type = "sh")),
     paste0("  ", cmd),
     "} >> \"$log_file\" 2>&1",
     "exit_code=$?",

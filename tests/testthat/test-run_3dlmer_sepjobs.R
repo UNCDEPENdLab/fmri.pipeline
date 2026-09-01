@@ -65,6 +65,7 @@ test_that("run_3dlmer_sepjobs writes slurm logs to the active pipeline batch dir
   expect_length(output_line, 1L)
   expect_true(startsWith(output_line, paste0("#SBATCH --output=", batch_dir)))
   expect_true(startsWith(error_line, paste0("#SBATCH --error=", batch_dir)))
-  expect_true(grepl(batch_dir, runtime_line, fixed = TRUE))
+  escaped_batch_dir <- gsub("\\\\", "\\\\\\\\", batch_dir)
+  expect_true(grepl(escaped_batch_dir, runtime_line, fixed = TRUE))
   expect_false(grepl(launch_dir, output_line, fixed = TRUE))
 })

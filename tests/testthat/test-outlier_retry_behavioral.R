@@ -3,6 +3,12 @@
 # These tests exercise the actual bash and R logic rather than grepping source
 # code for string patterns.
 
+if (identical(.Platform$OS.type, "windows")) {
+  test_that("outlier retry behavioral tests require POSIX shell semantics", {
+    skip("requires executable shell scripts and POSIX process semantics")
+  })
+} else {
+
 retry_script <- source_tree_file("inst", "bash", "run_feat_with_outlier_retry.sh")
 
 # ===========================================================================
@@ -522,3 +528,4 @@ test_that("get_feat_status logs retry warning details", {
   expect_true(any(grepl("auto-retried", logged)))
   expect_true(any(grepl("Excessive number", logged)))
 })
+}
