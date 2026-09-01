@@ -1,3 +1,9 @@
+if (identical(.Platform$OS.type, "windows")) {
+  test_that("compute environment executable tests require POSIX scripts", {
+    skip("requires executable POSIX shell scripts")
+  })
+} else {
+
 make_fake_executable <- function(bin_dir, name, body = "echo fake") {
   path <- file.path(bin_dir, name)
   writeLines(c("#!/bin/sh", body), path)
@@ -31,6 +37,7 @@ test_that("test_compute_environment does not require 3dLMEr for generic AFNI mod
     fmri.pipeline:::test_compute_environment(gpa, what = "afni", stop_on_fail = TRUE)
   )
 })
+}
 
 test_that("test_compute_environment requires 3dLMEr only for 3dlmer model sets", {
   bin_dir <- tempfile("fake_3dlmer_bin_")
