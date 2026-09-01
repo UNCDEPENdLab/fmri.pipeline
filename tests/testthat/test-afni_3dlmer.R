@@ -13,12 +13,12 @@ test_that("build_3dlmer_command constructs valid strings", {
   )
   
   expect_match(cmd, "3dLMEr")
-  expect_true(grepl(paste("-prefix", shQuote("myset")), cmd, fixed = TRUE))
-  expect_true(grepl(paste("-model", shQuote("Group*Session+(1|Subj)")), cmd, fixed = TRUE))
-  expect_true(grepl(paste("-qVars", shQuote("Age")), cmd, fixed = TRUE))
-  expect_true(grepl(paste("-gltCode", "con1", shQuote("Group : 1*patient -1*control")), cmd, fixed = TRUE))
-  expect_true(grepl(paste("-dataTable", shQuote("@dt.txt")), cmd, fixed = TRUE))
-  expect_true(grepl(paste("-mask", shQuote("mask.nii.gz")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-prefix", shQuote("myset", type = "sh")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-model", shQuote("Group*Session+(1|Subj)", type = "sh")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-qVars", shQuote("Age", type = "sh")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-gltCode", "con1", shQuote("Group : 1*patient -1*control", type = "sh")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-dataTable", shQuote("@dt.txt", type = "sh")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-mask", shQuote("mask.nii.gz", type = "sh")), cmd, fixed = TRUE))
   expect_true(grepl("-jobs 4", cmd, fixed = TRUE))
 })
 
@@ -127,13 +127,13 @@ test_that("build_3dlmer_command quotes shell paths and sanitizes GLT names", {
     mask = "/tmp/masks/main mask.nii.gz"
   )
 
-  expect_true(grepl(paste("-prefix", shQuote("/tmp/lmer outputs/my set")), cmd, fixed = TRUE))
-  expect_true(grepl(paste("-mask", shQuote("/tmp/masks/main mask.nii.gz")), cmd, fixed = TRUE))
-  expect_true(grepl(paste("-dataTable", shQuote("@data Table.txt")), cmd, fixed = TRUE))
-  expect_true(grepl(paste("-qVars", shQuote("Age,Days")), cmd, fixed = TRUE))
-  expect_true(grepl(paste("-gltCode", "Group_A_B", shQuote("Group : 1*A -1*B")), cmd, fixed = TRUE))
-  expect_true(grepl(paste("-gltCode", "glt_1_follow_up_contrast", shQuote("Days : 1")), cmd, fixed = TRUE))
-  expect_true(grepl(paste("-gltCode", "Group_A_B_1", shQuote("Group : -1*A 1*B")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-prefix", shQuote("/tmp/lmer outputs/my set", type = "sh")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-mask", shQuote("/tmp/masks/main mask.nii.gz", type = "sh")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-dataTable", shQuote("@data Table.txt", type = "sh")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-qVars", shQuote("Age,Days", type = "sh")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-gltCode", "Group_A_B", shQuote("Group : 1*A -1*B", type = "sh")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-gltCode", "glt_1_follow_up_contrast", shQuote("Days : 1", type = "sh")), cmd, fixed = TRUE))
+  expect_true(grepl(paste("-gltCode", "Group_A_B_1", shQuote("Group : -1*A 1*B", type = "sh")), cmd, fixed = TRUE))
 })
 
 test_that("build_3dlmer_datatable handles factor merging", {

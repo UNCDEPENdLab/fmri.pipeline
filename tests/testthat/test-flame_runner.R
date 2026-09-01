@@ -156,7 +156,6 @@ test_that("flame_runner uses xargs when parallel is unavailable", {
   expect_true(file.exists(out_file))
   expect_equal(length(readLines(out_file)), 2)
 })
-}
 
 test_that("flame_runner retries failed FLAME12 slices with FLAME1", {
   tmp <- withr::local_tempdir()
@@ -331,3 +330,4 @@ test_that("flame_runner falls back when xargs lacks -d support", {
   expect_true(file.exists(out_file))
   expect_equal(length(readLines(out_file)), 2)
 })
+}

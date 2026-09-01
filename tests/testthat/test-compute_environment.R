@@ -37,7 +37,6 @@ test_that("test_compute_environment does not require 3dLMEr for generic AFNI mod
     fmri.pipeline:::test_compute_environment(gpa, what = "afni", stop_on_fail = TRUE)
   )
 })
-}
 
 test_that("test_compute_environment requires 3dLMEr only for 3dlmer model sets", {
   bin_dir <- tempfile("fake_3dlmer_bin_")
@@ -58,3 +57,4 @@ test_that("test_compute_environment requires 3dLMEr only for 3dlmer model sets",
     fmri.pipeline:::test_compute_environment(gpa, what = "afni", stop_on_fail = TRUE)
   )
 })
+}
