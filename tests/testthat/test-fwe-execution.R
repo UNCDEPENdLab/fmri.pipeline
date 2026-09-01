@@ -154,6 +154,7 @@ test_that("local pTFCE execution refreshes artifacts and task completion", {
   withr::local_envvar(c(R_TESTS = r_tests))
   run <- run_fwe_plan(plan, scheduler = "local", worker_script = worker)
 
+  expect_identical(Sys.getenv("R_TESTS"), r_tests)
   expect_true(all(run$execution$execution_status == "completed"))
   expect_true(all(run$execution$exit_status == 0L))
   expect_true(all(file.exists(run$execution$script_file)))
@@ -291,6 +292,15 @@ test_that("local execution safely applies named environment variables", {
     fmri.pipeline:::normalize_fwe_run_environment(c("BAD-NAME" = "x")),
     "invalid environment variable name"
   )
+
+  variable <- "FMRI_PIPELINE_SCOPED_ENV_TEST"
+  withr::local_envvar(stats::setNames("before", variable))
+  observed <- fmri.pipeline:::with_fwe_run_environment(
+    stats::setNames("during", variable),
+    Sys.getenv(variable)
+  )
+  expect_identical(observed, "during")
+  expect_identical(Sys.getenv(variable), "before")
 })
 
 test_that("result collection updates a partial persistent manifest", {

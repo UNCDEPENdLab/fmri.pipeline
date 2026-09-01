@@ -180,6 +180,29 @@ normalize_fwe_run_environment <- function(env_variables) {
   paste0(names(env_variables)[specified], "=", values)
 }
 
+with_fwe_run_environment <- function(env_variables, code) {
+  if (length(env_variables) == 0L) return(force(code))
+
+  variable_names <- names(env_variables)
+  previous_values <- Sys.getenv(variable_names, unset = NA_character_)
+  names(previous_values) <- variable_names
+  on.exit({
+    previously_unset <- is.na(previous_values)
+    if (any(previously_unset)) {
+      Sys.unsetenv(variable_names[previously_unset])
+    }
+    if (any(!previously_unset)) {
+      do.call(
+        Sys.setenv,
+        as.list(previous_values[!previously_unset])
+      )
+    }
+  }, add = TRUE)
+
+  do.call(Sys.setenv, as.list(env_variables))
+  force(code)
+}
+
 new_fwe_run <- function(plan, scheduler, dry_run, force, execution,
                         job_ids, started_at, finished_at) {
   job_ids <- as.character(job_ids)
@@ -342,37 +365,40 @@ run_fwe_plan <- function(
   dir.create(logs_directory, recursive = TRUE, showWarnings = FALSE)
 
   if (identical(scheduler, "local")) {
-    local_env <- normalize_fwe_run_environment(env_variables)
+    # Validate names and values before changing the current process.
+    normalize_fwe_run_environment(env_variables)
+    local_env <- env_variables[!is.na(env_variables)]
     # A child R process must not run the parent R CMD check harness.
     local_env <- c(
-      local_env[!startsWith(local_env, "R_TESTS=")],
-      "R_TESTS="
+      local_env[names(local_env) != "R_TESTS"],
+      R_TESTS = ""
     )
-    for (ii in run_rows) {
-      script_file <- file.path(
-        jobs_directory, paste0(execution$task_id[ii], ".bash")
-      )
-      writeLines(
-        c("#!/bin/bash", "set -euo pipefail", execution$command[ii]),
-        script_file
-      )
-      Sys.chmod(script_file, mode = "0755")
-      execution$script_file[ii] <- script_file
-      command_row <- match(
-        execution$task_id[ii], command_table$task_id
-      )
-      process_arguments <- vapply(
-        command_table$arguments[[command_row]],
-        shQuote,
-        character(1L)
-      )
-      execution$exit_status[ii] <- suppressWarnings(system2(
-        command_table$executable[command_row], process_arguments,
-        stdout = execution$log_file[ii],
-        stderr = execution$log_file[ii],
-        env = local_env
-      ))
-    }
+    with_fwe_run_environment(local_env, {
+      for (ii in run_rows) {
+        script_file <- file.path(
+          jobs_directory, paste0(execution$task_id[ii], ".bash")
+        )
+        writeLines(
+          c("#!/bin/bash", "set -euo pipefail", execution$command[ii]),
+          script_file
+        )
+        Sys.chmod(script_file, mode = "0755")
+        execution$script_file[ii] <- script_file
+        command_row <- match(
+          execution$task_id[ii], command_table$task_id
+        )
+        process_arguments <- vapply(
+          command_table$arguments[[command_row]],
+          shQuote,
+          character(1L)
+        )
+        execution$exit_status[ii] <- suppressWarnings(system2(
+          command_table$executable[command_row], process_arguments,
+          stdout = execution$log_file[ii],
+          stderr = execution$log_file[ii]
+        ))
+      }
+    })
     plan <- refresh_fwe_plan(plan)
     refreshed_status <- plan$tasks$status[
       match(execution$task_id[run_rows], plan$tasks$task_id)
