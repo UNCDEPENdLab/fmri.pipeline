@@ -21,7 +21,7 @@ test_that("FLAME fallback TSV records are promoted to lgr estimation logs", {
   script <- source_tree_file("inst", "bin", "log_flame_runner_fallbacks.R")
 
   status <- system2(
-    file.path(R.home("bin"), "Rscript"),
+    rscript_executable(),
     c(
       script,
       "--feat_dir", feat_dir,

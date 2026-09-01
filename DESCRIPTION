@@ -9,7 +9,7 @@ Maintainer: Michael Hallquist <michael.hallquist@gmail.com>
 Description: Setup of GLM and deconvolution analyses for large-scale fMRI analyses
   of fMRI data.
 License: GPL-3
-BugReports: https://github.com/UNCDEPENdLab/fmri.pipeline/issues
+BugReports: https://github.com/HallquistLab/fmri.pipeline/issues
 Encoding: UTF-8
 LazyLoad: yes
 LazyData: yes
@@ -84,6 +84,6 @@ LinkingTo:
     RcppArmadillo,
     RNifti
 Config/testthat/edition: 3
-URL: https://uncdependlab.github.io/fmri.pipeline/
+URL: https://hallquistlab.github.io/fmri.pipeline/
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0

@@ -114,7 +114,7 @@ fwe_shell_command <- function(executable, arguments) {
 build_fwe_commands.fwe_method_ptfce <- function(
     method, plan, task_rows, worker_script = NULL) {
   worker_script <- resolve_ptfce_worker_script(worker_script)
-  rscript <- file.path(R.home("bin"), "Rscript")
+  rscript <- rscript_executable()
   commands <- vapply(seq_len(nrow(task_rows)), function(ii) {
     alpha <- task_rows$fwe_alpha[[ii]]
     arguments <- c(
