@@ -1,6 +1,6 @@
 run_spm_contrast_script <- function(script, arguments) {
   system2(
-    file.path(R.home("bin"), "Rscript"),
+    rscript_executable(),
     c("--no-save", "--no-restore", script, arguments),
     stdout = TRUE,
     stderr = TRUE

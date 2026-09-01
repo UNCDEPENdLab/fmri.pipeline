@@ -111,7 +111,7 @@ test_that("pTFCE execution dry runs expose commands without side effects", {
   expect_true(run$dry_run)
   expect_true(all(run$execution$execution_status == "planned"))
   expect_true(all(grepl(
-    file.path(R.home("bin"), "Rscript"),
+    rscript_executable(),
     run$execution$command,
     fixed = TRUE
   )))

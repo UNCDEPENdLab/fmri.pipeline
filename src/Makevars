@@ -9,4 +9,4 @@ CXX_STD = CXX14
 
 # turn off debug messages in RNifti
 PKG_CXXFLAGS = -DNDEBUG
-PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS)
+PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)

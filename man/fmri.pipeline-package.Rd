@@ -11,8 +11,8 @@ Setup of GLM and deconvolution analyses for large-scale fMRI analyses of fMRI da
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://uncdependlab.github.io/fmri.pipeline/}
-  \item Report bugs at \url{https://github.com/UNCDEPENdLab/fmri.pipeline/issues}
+  \item \url{https://hallquistlab.github.io/fmri.pipeline/}
+  \item Report bugs at \url{https://github.com/HallquistLab/fmri.pipeline/issues}
 }
 
 }

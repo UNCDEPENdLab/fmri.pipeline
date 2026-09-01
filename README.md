@@ -71,7 +71,7 @@ Install from GitHub:
 
 ```r
 install.packages("remotes")
-remotes::install_github("UNCDEPENdLab/fmri.pipeline")
+remotes::install_github("HallquistLab/fmri.pipeline")
 ```
 
 Create the analysis object from explicit input tables:
@@ -268,15 +268,15 @@ The repository includes a worked face/house demonstration in `longitudinal_fmri_
 
 The pkgdown site is the primary documentation entry point:
 
-- Package website: <https://uncdependlab.github.io/fmri.pipeline/>
-- Quick start: <https://uncdependlab.github.io/fmri.pipeline/articles/quickstart.html>
-- Design concepts: <https://uncdependlab.github.io/fmri.pipeline/articles/design.html>
-- Longitudinal analyses: <https://uncdependlab.github.io/fmri.pipeline/articles/longitudinal.html>
-- Pipeline diagnosis: <https://uncdependlab.github.io/fmri.pipeline/articles/diagnosis.html>
-- Reference index: <https://uncdependlab.github.io/fmri.pipeline/reference/index.html>
+- Package website: <https://hallquistlab.github.io/fmri.pipeline/>
+- Quick start: <https://hallquistlab.github.io/fmri.pipeline/articles/quickstart.html>
+- Design concepts: <https://hallquistlab.github.io/fmri.pipeline/articles/design.html>
+- Longitudinal analyses: <https://hallquistlab.github.io/fmri.pipeline/articles/longitudinal.html>
+- Pipeline diagnosis: <https://hallquistlab.github.io/fmri.pipeline/articles/diagnosis.html>
+- Reference index: <https://hallquistlab.github.io/fmri.pipeline/reference/index.html>
 
 ## Development status
 
 `fmri.pipeline` is under active development. FSL-centered analyses are the most established path. Backend resolution, SPM support, AFNI Level 3 workflows, longitudinal model specification, and diagnostic tooling are current areas of active work. For new projects, prefer YAML model specifications, explicit `subject_data`/`run_data`/`trial_data` tables, and small test runs before launching the full model grid.
 
-Issues and feature requests are tracked at <https://github.com/UNCDEPENdLab/fmri.pipeline/issues>.
+Issues and feature requests are tracked at <https://github.com/HallquistLab/fmri.pipeline/issues>.
