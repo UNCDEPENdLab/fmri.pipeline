@@ -135,7 +135,10 @@ test_that("pTFCE commands retain structured arguments for local execution", {
 
   expect_identical(commands$executable, rscript_executable())
   expect_length(commands$arguments, 1L)
-  expect_identical(commands$arguments[[1L]][1L], worker)
+  expect_identical(
+    commands$arguments[[1L]][1L],
+    normalizePath(worker, mustWork = TRUE)
+  )
   expect_true("--zstat" %in% commands$arguments[[1L]])
 })
 
