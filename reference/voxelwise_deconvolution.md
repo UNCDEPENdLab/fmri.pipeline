@@ -95,9 +95,7 @@ voxelwise_deconvolution(
 
 - decon_settings:
 
-  A list of settings passed to the deconvolution algorithm. If you have
-  a compiled deconvolvefilter binary, pass it as `bush2011_binary`,
-  which will be used in deconvolution.
+  A list of settings passed to the deconvolution algorithm.
 
 - afni_dir:
 
@@ -110,12 +108,8 @@ Nothing (invisible NULL).
 
 ## Details
 
-The Bush 2011 algorithm is implemented in a compiled binary called
-deconvolvefilter
-(https://github.com/UNCDEPENdLab/deconvolution-filtering) that is much
-faster than the pure R (or original MATLAB) version. We recommend using
-this for whole-brain deconvolution. The package includes a binary for
-the Linux x86_64 architecture.
+The Bush 2011 algorithm uses the package's internal RcppArmadillo
+implementation and does not require an external executable.
 
 If you want to use subject metadata to name the output file, use
 `this_subj` in your `out_file_expression`, which will give you access to

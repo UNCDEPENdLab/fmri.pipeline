@@ -128,8 +128,7 @@ with optional HRF tuning.</p></dd>
 
 
 <dt id="arg-decon-settings">decon_settings<a class="anchor" aria-label="anchor" href="#arg-decon-settings"></a></dt>
-<dd><p>A list of settings passed to the deconvolution algorithm. If you have a compiled deconvolvefilter binary,
-pass it as <code>bush2011_binary</code>, which will be used in deconvolution.</p></dd>
+<dd><p>A list of settings passed to the deconvolution algorithm.</p></dd>
 
 
 <dt id="arg-afni-dir">afni_dir<a class="anchor" aria-label="anchor" href="#arg-afni-dir"></a></dt>
@@ -142,10 +141,8 @@ pass it as <code>bush2011_binary</code>, which will be used in deconvolution.</p
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The Bush 2011 algorithm is implemented in a compiled binary called deconvolvefilter
-  (https://github.com/UNCDEPENdLab/deconvolution-filtering) that is much faster than the pure R (or original MATLAB) version.
-  We recommend using this for whole-brain deconvolution. The package includes a binary for
-  the Linux x86_64 architecture.</p>
+    <p>The Bush 2011 algorithm uses the package's internal RcppArmadillo
+implementation and does not require an external executable.</p>
 <p>If you want to use subject metadata to name the output file, use <code>this_subj</code> in your <code>out_file_expression</code>, which will give you access to a one-row
   data.frame containing the metadata for the current subject in the loop.</p>
     </div>
